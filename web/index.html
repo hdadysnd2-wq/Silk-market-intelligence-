@@ -136,7 +136,12 @@
       <label><input type="checkbox" id="t_trends" /> Google Trends</label>
       <label><input type="checkbox" id="t_tariffs" /> الرسوم (WITS)</label>
       <label><input type="checkbox" id="t_faostat" /> FAOSTAT</label>
+      <label><input type="checkbox" id="t_maps" /> Google Maps</label>
+      <label><input type="checkbox" id="t_websearch" /> بحث الويب</label>
+      <label><input type="checkbox" id="t_volza" /> Volza</label>
+      <label><input type="checkbox" id="t_explee" /> explee</label>
     </div>
+    <div class="hint" id="sources"></div>
     <details class="adv">
       <summary>إعدادات متقدمة (رابط الباك-إند)</summary>
       <div style="margin-top:10px" class="row">
@@ -205,7 +210,9 @@
     var product=($("product").value||"").trim();
     if(!product){out.innerHTML='<section class="panel err">اكتب اسم المنتج.</section>';return;}
     var body={product:product,year:$("year").value?parseInt($("year").value,10):null,
-      with_trends:$("t_trends").checked,with_tariffs:$("t_tariffs").checked,with_faostat:$("t_faostat").checked};
+      with_trends:$("t_trends").checked,with_tariffs:$("t_tariffs").checked,with_faostat:$("t_faostat").checked,
+      with_maps:$("t_maps").checked,with_websearch:$("t_websearch").checked,
+      with_volza:$("t_volza").checked,with_explee:$("t_explee").checked};
     $("go").disabled=true;
     out.innerHTML='<section class="panel"><div class="skl" style="width:40%"></div>'+
       '<div class="skl" style="width:90%;margin-top:14px"></div><div class="skl" style="width:75%;margin-top:10px"></div>'+
@@ -321,6 +328,19 @@
           quality_flags:["تركّز المنافسين: لا بيانات"]}
       ]};
   }
+  // ---- sources line: show the 9-layer wiring + which keys are present ----
+  function loadSources(){
+    fetch(base()+"/sources").then(function(r){return r.json();}).then(function(list){
+      if(!list||!list.length)return;
+      var s=$("sources");if(!s)return;
+      s.innerHTML="المصادر: "+list.map(function(L){
+        var mark=L.key_env?(L.key_present?" ✓":" ✗"):"";
+        return esc(L.name)+" ("+esc(L.type)+")"+mark;
+      }).join(" · ");
+    }).catch(function(){});
+  }
+  loadSources();
+
   if(/[?&]demo=1/.test(location.search)){
     $("product").value="تمور";$("year").value=2023;
     render(demoData(),true);

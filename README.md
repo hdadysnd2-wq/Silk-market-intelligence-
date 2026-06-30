@@ -45,10 +45,30 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 
 ---
 
-## المصادر · Data sources (no API key)
+## المصادر · Data sources — الطبقات التسع · the 9 layers
 
-- **UN Comtrade** — `https://comtradeapi.un.org/public/v1/preview/C/A/HS` — الاستيراد/التصدير بالـ HS Code.
-- **World Bank** — `https://api.worldbank.org/v2/country/{iso3}/indicator/{code}` — الدخل، PPP، السكان.
+كل المصادر **موصولة** (`wired`). المجانية تعمل بلا مفتاح (أو بمفتاح اختياري يرفع الحد)؛
+المدفوعة تتطلب مفتاحًا وإلا تتدهور بأمان إلى `value=None` بلا اختلاق. خريطة الحالة الحيّة عبر `GET /sources`.
+
+All layers are wired. Free layers work keyless (or with an optional key that raises limits);
+paid layers require a key and otherwise degrade gracefully to `value=None` (no fabrication).
+Live status map: `GET /sources`.
+
+| # | الطبقة · Layer | النوع · Type | الوحدة · Module | مفتاح البيئة · Key env |
+|---|---|---|---|---|
+| 1 | UN Comtrade | مجاني · free | `silk_data_layer.py` | — (اختياري `COMTRADE_API_KEY`) |
+| 2 | World Bank | مجاني · free | `silk_data_layer.py` | — (لا مفتاح) |
+| 3 | FAOSTAT | مجاني · free | `silk_faostat_agent.py` | — (اختياري) |
+| 4 | WITS (الرسوم · tariffs) | مجاني · free | `silk_tariffs_agent.py` | — (لا مفتاح) |
+| 5 | Google Trends | مجاني · free | `silk_trends_agent.py` | — (`pip install pytrends`) |
+| 6 | Google Maps | مجاني · free | `silk_maps_agent.py` | `GOOGLE_MAPS_API_KEY` |
+| 7 | Web Search (Serper) | مجاني · free | `silk_websearch_agent.py` | `SEARCH_API_KEY` |
+| 8 | Volza | مدفوع · paid | `silk_volza_agent.py` | `VOLZA_API_KEY` |
+| 9 | explee | مدفوع · paid | `silk_explee_agent.py` | `EXPLEE_API_KEY` |
+
+> النهايات المرجعية · reference endpoints:
+> **UN Comtrade** `https://comtradeapi.un.org/public/v1/preview/C/A/HS` ·
+> **World Bank** `https://api.worldbank.org/v2/country/{iso3}/indicator/{code}`.
 
 ---
 
@@ -79,6 +99,8 @@ analyze("تمور",
 ```
 
 - `with_trends` / `with_tariffs` / `with_faostat` **سياق إضافي فقط** — يُرفقون `row['trends']` / `row['tariff']` / `row['faostat']` ولا يغيّرون `total_score`.
+- `with_maps` / `with_volza` / `with_explee` يُرفقون `row['maps']` / `row['volza']` / `row['explee']` لأعلى الأسواق؛ و`with_websearch` يُرفق `result['websearch']` على المستوى الأعلى. كلّها **إضافية** لا تغيّر `total_score`.
+- المدفوعان (Volza, explee) يتطلبان مفتاحًا؛ بدونه يُرجعان `value=None, confidence=0.0` بلا اختلاق.
 - جميع الطبقات تتدهور بأمان بلا شبكة (قيمة `None` موسومة بمصدرها، بلا اختلاق رقم).
 
 ### تشغيل الواجهة · Run the UI
@@ -112,8 +134,9 @@ docker run -p 8000:8000 silk-api
 | Method · Path | الوظيفة · Role |
 |---|---|
 | `GET /health` | حالة الخدمة + توفّر الحزم الاختيارية. |
+| `GET /sources` | خريطة حالة الطبقات التسع (`name, type, wired, key_env, key_present`). |
 | `GET /resolve/{name}` | يصنّف اسم منتج إلى HS6 (مع المصدر/الثقة). |
-| `POST /analyze` | يشغّل `analyze` كاملًا (`{product, year, with_trends, with_tariffs, persist}`). |
+| `POST /analyze` | يشغّل `analyze` كاملًا (`{product, year, with_trends, with_tariffs, with_faostat, with_maps, with_websearch, with_volza, with_explee, persist}`). |
 | `GET /analyses` | يسرد التحليلات المحفوظة. |
 | `GET /analyses/{id}` | يعيد تحليلًا محفوظًا، أو 404. |
 

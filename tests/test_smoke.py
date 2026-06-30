@@ -121,6 +121,41 @@ def test_cache_returns_none_offline():
     assert out is None
 
 
+def test_new_agents_import_and_no_fabrication_keyless():
+    # الوكلاء الأربعة الجدد يُستوردون بلا شبكة/مفتاح، وكل نداء بلا مفتاح => value=None.
+    import silk_maps_agent, silk_websearch_agent, silk_volza_agent, silk_explee_agent
+
+    with _block_network():
+        for key in ("GOOGLE_MAPS_API_KEY", "SEARCH_API_KEY",
+                    "VOLZA_API_KEY", "EXPLEE_API_KEY"):
+            os.environ.pop(key, None)  # ensure keyless
+        dps = [
+            silk_maps_agent.find_places("dates morocco")[0],
+            silk_websearch_agent.web_search("dates demand")[0],
+            silk_volza_agent.importers_by_name("080410", "156")[0],
+            silk_explee_agent.discover_buyers("dates packaging", "DEU")[0],
+        ]
+    for dp in dps:
+        assert dp.value is None and dp.confidence == 0.0  # no fabrication keyless
+
+
+def test_engine_paid_layers_offline():
+    # الطبقات الأربع الجديدة مفعّلة بلا شبكة/مفتاح: لا تعطّل، يبقى التصنيف سليمًا.
+    with _block_network():
+        for key in ("GOOGLE_MAPS_API_KEY", "SEARCH_API_KEY",
+                    "VOLZA_API_KEY", "EXPLEE_API_KEY"):
+            os.environ.pop(key, None)
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
+                             year=2022, with_maps=True, with_websearch=True,
+                             with_volza=True, with_explee=True)
+    assert res["classified"] is True and res["hs_code"] == "080410"
+    row = res["markets"][0]
+    # طبقات السياق مرفقة (None بلا مفتاح/شبكة، لا اختلاق) — attached, None offline.
+    assert "maps" in row and "volza" in row and "explee" in row
+    assert "websearch" in res                            # top-level web search
+    assert row["total_score"] == 0.0                     # additive, score unchanged
+
+
 def test_hs_codes_grew_and_resolve_dates():
     # نمت رموز HS وما زال التمر يُصنّف صحيحًا — table grew; dates still resolve.
     assert len(resolver.load_hs_codes()) >= 157
