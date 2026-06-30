@@ -64,6 +64,11 @@
   .drow:last-child{border-bottom:0} .drow:hover{background:var(--mist)}
   .drow .nm{font-size:14.5px;font-weight:500} .drow .an{font-size:11px;color:var(--blue);background:var(--blue-50);padding:2px 7px;border-radius:6px}
   .counter{font-size:14px;color:var(--muted)} .counter b{color:var(--ink);font-weight:600}
+  .yearsel{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
+  .yearsel select{font-family:var(--ar);font-size:14px;color:var(--ink);background:#fff;border:1px solid var(--line);
+    border-radius:40px;padding:8px 14px;cursor:pointer;transition:.16s var(--ease)}
+  .yearsel select:hover{border-color:var(--blue)} .yearsel select:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 4px rgba(35,72,226,.1)}
+  .yrchip{font-size:12px;color:var(--blue);background:var(--blue-50);padding:3px 9px;border-radius:40px;margin-inline-end:8px}
   .sorts{display:flex;gap:8px}
   .sortbtn{background:#fff;border:1px solid var(--line);border-radius:40px;padding:8px 15px;font-size:13.5px;color:var(--muted);transition:.16s var(--ease)}
   .sortbtn.on{background:var(--blue);color:#fff;border-color:var(--blue)}
@@ -104,6 +109,26 @@
   .scell{display:flex;align-items:center;gap:9px} .sval{font-family:var(--en);font-weight:700;color:var(--blue);font-size:15px;min-width:30px}
   .track{flex:1;height:7px;background:var(--mist);border-radius:5px;overflow:hidden} .fill{height:100%;background:var(--blue);border-radius:5px}
   .confpill{font-size:12px;color:var(--muted);background:var(--mist);padding:3px 9px;border-radius:40px;white-space:nowrap}
+  .aiblk{margin:14px 0;padding:14px 16px;background:var(--blue-50);border:1px solid #D6DEFB;border-radius:11px}
+  .aihd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .aibadge{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.06em;color:#fff;background:var(--blue);padding:4px 10px;border-radius:40px}
+  .aiconf{font-size:12.5px;color:var(--muted)}
+  .aitext{margin-top:9px;font-size:14px;line-height:1.65;color:var(--ink)}
+  .aiby{margin-top:7px;font-size:11.5px;color:var(--muted-2);font-family:var(--mono)}
+  .plblk{margin:12px 0;padding-top:12px;border-top:1px solid var(--line)}
+  .plhd{font-size:13px;color:var(--muted)} .plhd b{color:var(--blue)}
+  .pllist{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px}
+  .pllist li{font-size:13.5px;color:var(--ink)}
+  .prate{color:#d4a72c;font-size:12px} .pstore{color:var(--muted-2);font-size:12px}
+  .pprice{font-family:var(--en);font-weight:700;color:var(--blue)}
+  .cshare{font-family:var(--en);font-weight:700;color:var(--blue);font-size:13px}
+  .needkey{margin-top:7px;font-size:12.5px;line-height:1.6;color:var(--muted);background:var(--mist);
+    border:1px dashed var(--line);border-radius:9px;padding:9px 12px}
+  .pstore[href]{color:var(--blue);text-decoration:none} .pstore[href]:hover{text-decoration:underline}
+  .ovl{position:fixed;inset:0;background:rgba(12,14,26,.55);display:grid;place-items:center;z-index:50;padding:24px}
+  .ovbox{background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:84vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .ovhd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .ovbody{padding:20px;overflow:auto;font-size:14.5px;line-height:1.8;color:var(--ink)}
   .srcstrip{padding:11px 18px;background:var(--mist);font-size:12.5px;color:var(--muted-2);font-family:var(--mono)}
 
   /* detail */
@@ -179,6 +204,7 @@
         </div>
         <div class="drop hidden" id="drop"></div>
       </div>
+      <label class="yearsel"><span>سنة البيانات</span><select id="year"></select></label>
       <span class="counter hidden" id="counter"></span>
     </div>
     <div class="sorts hidden" id="sorts">
@@ -232,6 +258,7 @@
   // ---------- state ----------
   var S={product:"",hs:"",sort:"score",selId:null,running:false,query:"",open:false,
     view:"dashboard",result:null,
+    year:parseInt(localStorage.getItem("silk_year")||"2023",10),
     keys:JSON.parse(localStorage.getItem("silk_settings_keys")||"{}"),
     toggles:JSON.parse(localStorage.getItem("silk_settings_toggles")||"{}")};
   function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"");}
@@ -268,6 +295,19 @@
     S.query=this.value;clearTimeout(searchT);searchT=setTimeout(doSearch,160);
   });
   $("search").addEventListener("focus",function(){if(S.query)doSearch();});
+
+  // ---------- year selector ----------
+  (function initYears(){
+    var YEARS=[2024,2023,2022,2021,2020,2019,2018];
+    if(YEARS.indexOf(S.year)<0)S.year=2023;
+    $("year").innerHTML=YEARS.map(function(y){
+      return '<option value="'+y+'"'+(y===S.year?' selected':'')+'>'+y+'</option>';
+    }).join("");
+  })();
+  $("year").addEventListener("change",function(){
+    S.year=parseInt(this.value,10);localStorage.setItem("silk_year",String(S.year));
+    if(S.product&&!S.running)runAnalysis();  // أعد التحليل لسنة البيانات الجديدة
+  });
   document.addEventListener("click",function(e){if(!e.target.closest(".search")){$("drop").classList.add("hidden");}});
   function doSearch(){
     fetch(base()+"/index?q="+encodeURIComponent(S.query)+"&limit=12")
@@ -299,7 +339,11 @@
     if(!S.product){$("search").focus();return;}
     S.running=true;renderNodes();updateChrome();
     $("resultArea").innerHTML='<section class="card" style="padding:22px"><div class="skl" style="width:30%"></div><div class="skl" style="width:90%;margin-top:14px"></div><div class="skl" style="width:80%;margin-top:10px"></div></section>';
-    var body={product:S.product,with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,with_faostat:!!S.keys.FAOSTAT};
+    var body={product:S.product,year:S.year,
+      with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,
+      with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS,
+      with_localprice:!!S.keys.LOCALPRICE,with_volza:!!S.keys.VOLZA,
+      with_explee:!!S.keys.EXPLEE,with_ai:!!S.keys.CLAUDE};
     fetch(base()+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
       .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t);}catch(_){}
         if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?t:(typeof de==="string"?de:JSON.stringify(de))));}return d;});})
@@ -309,12 +353,16 @@
 
   // ---------- map engine result -> dashboard model ----------
   function dpv(c){return c&&typeof c==="object"?c.value:c;}
+  function realVals(list){return (list||[]).map(function(f){return f&&f.value;}).filter(function(v){return v!=null;});}
   function mapResult(res){
     if(!res||res.classified===false)return {classified:false,product:res&&res.product,note:res&&res.note};
     var markets=(res.markets||[]).map(function(m,i){
       var c=m.components||{};
       var score=m.total_score==null?null:Math.round(m.total_score*100);
       var conf=m.confidence==null?null:(m.confidence>=.66?"عالية":m.confidence>=.33?"متوسطة":"منخفضة");
+      var factories=realVals(m.maps);          // مصانع/موزعون بالاسم — named players
+      var prices=realVals(m.localprice);       // أسعار التجزئة الفعلية — real prices
+      var ai=m.jury&&m.jury.ai?m.jury.ai:null; // حكم كلود — Claude's verdict
       return {
         id:m.iso3+"-"+i,country:m.country,code:iso2(m.iso3),
         import_value:dpv(c.market_size),
@@ -323,11 +371,18 @@
         income_ppp:m.income_ppp!=null?m.income_ppp:null,
         population:m.population!=null?m.population:null,
         top_competitor:m.top_competitor||null,
+        competitors:m.competitors||[],// [{partner,share,value_usd}] — المنتجات/الدول المنافسة
+        factories:factories,        // [{name,rating,...}]
+        prices:prices,              // [{title,price,currency,store,...}]
+        ai:ai,                      // {verdict,confidence,reasoning,by}
         note:(m.jury&&m.jury.verdict)?m.jury.verdict:(m.recommendation||""),
         sources:Object.keys(c).map(function(k){return c[k]&&c[k].source;}).filter(Boolean)
       };
     });
-    return {classified:true,product:res.product,hs:res.hs_code,markets:markets};
+    return {classified:true,product:res.product,hs:res.hs_code,
+      year:res.year,report:res.report||null,
+      culture:realVals(res.websearch),   // ثقافة المستهلك — web-search findings
+      markets:markets};
   }
   function verdict(score){return score==null?{t:"بحاجة تحقّق",c:"v-low"}:score>=82?{t:"مرشّح قوي",c:"v-strong"}:score>=70?{t:"مرشّح",c:"v-mid"}:{t:"بحاجة تحقّق",c:"v-low"};}
   function fmtUSD(v){if(v==null)return "—";var n=Number(v);if(n>=1e9)return "$"+(n/1e9).toFixed(1)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(1)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(0)+"K";return "$"+n.toLocaleString("en-US");}
@@ -370,16 +425,95 @@
         '<div class="stat"><div class="l">السكان</div><div class="v num">'+fmtNum(sel.population)+'</div></div>'+
       '</div>'+
       '<div class="drow2">المنافس المهيمن: <b>'+esc(sel.top_competitor||"—")+'</b></div>'+
+      aiBlock(sel)+competitorsBlock(sel)+playersBlock(sel)+pricesBlock(sel)+cultureBlock()+
       (sel.note?'<div class="note">'+esc(sel.note)+'</div>':'')+
       '<div class="srcs">'+(sel.sources||[]).map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'+
-      '<div class="dbtns"><button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button><button class="primary" id="exportBtn">تصدير التقرير</button></div>'+
+      '<div class="dbtns"><button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button>'+
+        (S.result.report?'<button class="ghostbtn" id="reportBtn">تقرير كلود</button>':'')+
+        '<button class="primary" id="exportBtn">تصدير CSV</button></div>'+
     '</section>';
     $("resultArea").innerHTML='<div class="main"><section class="card rank-card">'+rows+'</section>'+detail+'</div>';
-    $("counter").classList.remove("hidden");$("counter").innerHTML='<b>'+ms.length+'</b> أسواق مرشّحة';
+    $("counter").classList.remove("hidden");
+    $("counter").innerHTML='<b>'+ms.length+'</b> أسواق مرشّحة'+(S.result.year?' <span class="yrchip">بيانات '+S.result.year+'</span>':'');
     $("sorts").classList.remove("hidden");
     $("resultArea").querySelectorAll(".rrow").forEach(function(b){b.addEventListener("click",function(){S.selId=this.getAttribute("data-id");render();});});
     var ex=$("exportBtn");if(ex)ex.addEventListener("click",exportCsv);
     var deep=$("deepBtn");if(deep)deep.addEventListener("click",function(){S.view="settings";applyView();});
+    var rb=$("reportBtn");if(rb)rb.addEventListener("click",showReport);
+  }
+  // حُكم كلود (الحَكَم) — Claude's preliminary verdict over the agents' findings.
+  function aiBlock(sel){
+    if(!sel.ai)return "";var a=sel.ai;
+    var vmap={"GO":"v-strong","WATCH":"v-mid","NO-GO":"v-low"};
+    var cls=vmap[(a.verdict||"").toUpperCase()]||"v-mid";
+    var conf=a.confidence==null?"":' · ثقة '+a.confidence;
+    return '<div class="aiblk"><div class="aihd"><span class="aibadge">كلود · الحَكَم</span>'+
+      '<span class="verdict '+cls+'">'+esc(a.verdict||"—")+'</span><span class="aiconf">'+esc(conf)+'</span></div>'+
+      (a.reasoning?'<div class="aitext">'+esc(a.reasoning)+'</div>':'')+
+      (a.by?'<div class="aiby">'+esc(a.by)+' · قرار أوّلي</div>':'')+'</div>';
+  }
+  // مصانع/موزّعون بالاسم (Google Maps) — named factories/distributors + count.
+  function playersBlock(sel){
+    var f=sel.factories||[];if(!f.length)return "";
+    var names=f.slice(0,6).map(function(p){
+      var r=p.rating!=null?' <span class="prate">★'+p.rating+'</span>':'';
+      return '<li>'+esc(p.name||"—")+r+'</li>';}).join("");
+    return '<div class="plblk"><div class="plhd">مصانع وموزّعون بالاسم — <b>'+f.length+'</b> (Google Maps)</div>'+
+      '<ul class="pllist">'+names+'</ul></div>';
+  }
+  // كتلة «يتطلب مفتاح / لا بيانات» — honest status instead of a blank section.
+  function needBlock(title,msg){
+    return '<div class="plblk"><div class="plhd">'+title+'</div>'+
+      '<div class="needkey">'+msg+'</div></div>';
+  }
+  // المنتجات/الدول المنافسة (Comtrade، مجاني) — competing suppliers + shares.
+  function competitorsBlock(sel){
+    var c=sel.competitors||[];
+    if(!c.length)return needBlock("المنتجات المنافسة (الدول المورّدة)",
+      "لا بيانات منافسين لهذا السوق/السنة — جرّب سنة أخرى أو أضِف مفتاح Comtrade المجاني لرفع الحدّ.");
+    var rows=c.slice(0,5).map(function(x){
+      var sh=x.share!=null?x.share+"%":"—";
+      return '<li>'+esc(x.partner||"—")+' <span class="cshare">'+esc(sh)+'</span> '+
+        '<span class="pstore">'+fmtUSD(x.value_usd)+'</span></li>';}).join("");
+    return '<div class="plblk"><div class="plhd">المنتجات المنافسة — <b>'+c.length+'</b> دولة مورّدة (Comtrade)</div>'+
+      '<ul class="pllist">'+rows+'</ul></div>';
+  }
+  // أسعار السوق المحلي الفعلية — actual in-market retail prices (needs key).
+  function pricesBlock(sel){
+    var p=sel.prices||[];
+    if(!p.length)return needBlock("أسعار السوق المحلي (متاجر التجزئة)",
+      "يتطلب مفتاح أسعار السوق المحلي (LOCALPRICE_API_KEY) — أمازون/نون/جوميا. المنصة لا تختلق سعرًا.");
+    var rows=p.slice(0,5).map(function(x){
+      var cur=x.currency?' '+esc(x.currency):'';
+      var st=x.store?' <span class="pstore">'+esc(x.store)+'</span>':'';
+      return '<li><span class="pprice">'+esc(x.price)+cur+'</span> '+esc((x.title||"").slice(0,48))+st+'</li>';
+    }).join("");
+    return '<div class="plblk"><div class="plhd">أسعار السوق المحلي — <b>'+p.length+'</b> (متاجر التجزئة)</div>'+
+      '<ul class="pllist">'+rows+'</ul></div>';
+  }
+  // ثقافة المستهلك ونبض السوق (بحث الويب) — consumer culture (product-level, needs key).
+  function cultureBlock(){
+    var c=(S.result&&S.result.culture)||[];
+    if(!c.length)return needBlock("ثقافة المستهلك ونبض السوق",
+      "يتطلب مفتاح بحث الويب (SEARCH_API_KEY)؛ ويلخّصها كلود فوق النتائج. المنصة لا تختلق رؤى.");
+    var rows=c.slice(0,5).map(function(x){
+      var t=(x&&(x.title||x.snippet||x))||"";
+      var link=x&&x.link?' <a href="'+esc(x.link)+'" target="_blank" rel="noopener" class="pstore">المصدر</a>':'';
+      return '<li>'+esc(String(t).slice(0,90))+link+'</li>';}).join("");
+    return '<div class="plblk"><div class="plhd">ثقافة المستهلك ونبض السوق — <b>'+c.length+'</b> (بحث الويب)</div>'+
+      '<ul class="pllist">'+rows+'</ul></div>';
+  }
+  // عرض تقرير كلود المبدئي — show Claude's written market-entry report.
+  function showReport(){
+    if(!S.result||!S.result.report)return;
+    var html=esc(S.result.report).replace(/\n/g,"<br>");
+    var ov=document.createElement("div");ov.className="ovl";
+    ov.innerHTML='<div class="ovbox"><div class="ovhd"><span class="aibadge">تقرير كلود · مُعِدّ التقرير</span>'+
+      '<button class="ghostbtn" id="ovClose">إغلاق</button></div><div class="ovbody">'+html+'</div></div>';
+    document.body.appendChild(ov);
+    function close(){ov.remove();}
+    ov.addEventListener("click",function(e){if(e.target===ov)close();});
+    $("ovClose").addEventListener("click",close);
   }
   function renderReady(){
     $("counter").classList.add("hidden");$("sorts").classList.add("hidden");
@@ -405,9 +539,11 @@
     {key:null,ic:"chart",nm:"World Bank",ds:"الدخل، القوة الشرائية، السكان.",st:"متصل · بدون مفتاح",cls:"st-on"},
     {toggle:"trends",ic:"chart",nm:"Google Trends",ds:"الطلب والموسمية (pytrends).",st:"قيد الربط",on:"مفعّل"},
     {key:"WITS",ic:"ship",nm:"WITS / WTO",ds:"الرسوم الجمركية المطبّقة.",st:"اختياري",cls:"st-opt",ph:"اختياري"},
-    {key:"FAOSTAT",ic:"factory",nm:"FAOSTAT",ds:"الاستهلاك للفرد (غذائي).",st:"يحتاج مفتاح",cls:"st-off"}
+    {key:"FAOSTAT",ic:"factory",nm:"FAOSTAT",ds:"الاستهلاك للفرد (غذائي).",st:"يحتاج مفتاح",cls:"st-off"},
+    {key:"MAPS",ic:"factory",nm:"Google Maps",ds:"المصانع والموزّعون والمنافسون بأسمائهم وتقييماتهم.",st:"يحتاج مفتاح",cls:"st-off"}
   ];
   var PAID=[
+    {key:"LOCALPRICE",ic:"package",nm:"أسعار السوق المحلي",ds:"الأسعار الفعلية والأكثر مبيعاً (أمازون، نون، جوميا).",st:"غير مفعّل",cls:"st-off"},
     {key:"VOLZA",ic:"ship",nm:"Volza",ds:"المستوردون بالاسم من بوالص الشحن.",st:"غير مفعّل",cls:"st-off"},
     {key:"EXPLEE",ic:"package",nm:"explee",ds:"مشترون وجهات اتصال B2B (امتثال GDPR/PDPL).",st:"غير مفعّل",cls:"st-off"}
   ];
@@ -455,10 +591,24 @@
   // ---------- demo preview (?demo=1) ----------
   function demoResult(){
     function C(v,s){return {value:v,source:s};}
-    return {classified:true,product:"تمور",hs:"080410",markets:[
-      {id:"MA-0",country:"المغرب",code:"MA",import_value:241000000,saudi_share:12,score:87,confidence:"عالية",income_ppp:9500,population:37000000,top_competitor:"تونس",note:"أكبر سوق استيراد عالمي للتمور؛ مفتوح ومنافسة معتدلة — مرشّح قوي.",sources:["UN Comtrade","World Bank"]},
-      {id:"EG-1",country:"مصر",code:"EG",import_value:23849784,saudi_share:44,score:74,confidence:"عالية",income_ppp:14800,population:111000000,top_competitor:"العراق",note:"السعودية ثاني أكبر مورّد (44%)؛ سوق ضخم ومفتوح.",sources:["UN Comtrade","World Bank"]},
-      {id:"AE-2",country:"الإمارات",code:"AE",import_value:96000000,saudi_share:22,score:63,confidence:"متوسطة",income_ppp:75000,population:9400000,top_competitor:"إيران",note:"سوق إعادة تصدير؛ منافسة قوية — بحاجة تحقّق.",sources:["UN Comtrade","World Bank"]}
+    return {classified:true,product:"تمور",hs:"080410",year:2023,
+      culture:[{title:"ارتفاع الطلب على التمور الفاخرة قبل رمضان بنسبة تتجاوز ٤٠٪ (عرض توضيحي)",link:"https://example.com"},{title:"تفضيل المستهلك المغربي للتمور المعبّأة ذات المنشأ الموثّق",link:"https://example.com"}],
+      report:"تقرير أوّلي (عرض توضيحي): تتصدّر المغرب ومصر قائمة الأسواق المرشّحة لتصدير التمور السعودية. "+
+        "المغرب أكبر سوق استيراد عالمي مع منافسة معتدلة، فيما تتميّز مصر بحضور سعودي قائم (حصة 44%) وسوق ضخم. "+
+        "تنبيه: هذا عرض توضيحي بأرقام تجريبية؛ التقرير الحقيقي يُكتب بكلود فوق بيانات الوكلاء الفعلية فقط.",markets:[
+      {id:"MA-0",country:"المغرب",code:"MA",import_value:241000000,saudi_share:12,score:87,confidence:"عالية",income_ppp:9500,population:37000000,top_competitor:"تونس",
+        ai:{verdict:"GO",confidence:0.82,reasoning:"سوق استيراد ضخم ومنافسة معتدلة وحضور سعودي قابل للنمو — دخول واعد (عرض توضيحي).",by:"Claude (claude-opus-4-8)"},
+        competitors:[{partner:"تونس",share:31.4,value_usd:75700000},{partner:"الجزائر",share:22.1,value_usd:53200000},{partner:"السعودية",share:12.0,value_usd:28900000},{partner:"الإمارات",share:9.3,value_usd:22400000},{partner:"إيران",share:7.8,value_usd:18800000}],
+        factories:[{name:"Maroc Dattes SARL",rating:4.3},{name:"Coopérative Tafilalet",rating:4.6},{name:"Atlas Fruits Co.",rating:4.1}],
+        prices:[{title:"تمور المجهول 1kg",price:89,currency:"MAD",store:"Jumia"},{title:"تمور سكري فاخر",price:120,currency:"MAD",store:"Marjane"}],
+        note:"أكبر سوق استيراد عالمي للتمور؛ مفتوح ومنافسة معتدلة — مرشّح قوي.",sources:["UN Comtrade","World Bank","Google Maps","Local retail"]},
+      {id:"EG-1",country:"مصر",code:"EG",import_value:23849784,saudi_share:44,score:74,confidence:"عالية",income_ppp:14800,population:111000000,top_competitor:"العراق",
+        ai:{verdict:"WATCH",confidence:0.7,reasoning:"حضور سعودي قوي (44%) وسوق كبير، لكن المنافسة العراقية مرتفعة — راقب الهامش (عرض توضيحي).",by:"Claude (claude-opus-4-8)"},
+        factories:[],prices:[],
+        note:"السعودية ثاني أكبر مورّد (44%)؛ سوق ضخم ومفتوح.",sources:["UN Comtrade","World Bank"]},
+      {id:"AE-2",country:"الإمارات",code:"AE",import_value:96000000,saudi_share:22,score:63,confidence:"متوسطة",income_ppp:75000,population:9400000,top_competitor:"إيران",
+        ai:null,factories:[],prices:[],
+        note:"سوق إعادة تصدير؛ منافسة قوية — بحاجة تحقّق.",sources:["UN Comtrade","World Bank"]}
     ]};
   }
 

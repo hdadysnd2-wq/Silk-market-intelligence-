@@ -139,6 +139,51 @@ def test_new_agents_import_and_no_fabrication_keyless():
         assert dp.value is None and dp.confidence == 0.0  # no fabrication keyless
 
 
+def test_market_imports_one_call_size_and_competitors():
+    # نداء Comtrade واحد يعطي حجم السوق (صفّ العالم) والمنافسين معًا — no 2nd call.
+    import silk_data_layer_v2 as v2
+
+    fake = [
+        {"partnerCode": 0, "primaryValue": 241000000.0},   # World = market size
+        {"partnerCode": 788, "primaryValue": 75700000.0},  # Tunisia
+        {"partnerCode": 682, "primaryValue": 28900000.0},  # Saudi
+    ]
+    orig = v2.comtrade_trade
+    v2.comtrade_trade = lambda *a, **k: [dict(r) for r in fake]
+    try:
+        mi = v2.market_imports("080410", "504", 2023)
+    finally:
+        v2.comtrade_trade = orig
+    assert mi["total_usd"] == 241000000.0            # World row -> market size
+    assert len(mi["competitors"]) == 2               # partners only (World dropped)
+    assert mi["competitors"][0].value["partner"]     # named, ranked desc
+    shares = sum(c.value["share"] for c in mi["competitors"])
+    assert 99.0 <= shares <= 101.0                   # shares ~100% of suppliers
+
+
+def test_localprice_agent_no_fabrication_keyless():
+    # وكيل أسعار السوق المحلي يُستورد بلا شبكة/مفتاح، وكل نداء بلا مفتاح => value=None.
+    import silk_localprice_agent as lp
+
+    os.environ.pop("LOCALPRICE_API_KEY", None)
+    with _block_network():
+        rep = lp.LocalPriceAgent().run({"query": "تمور", "market": "ma"})
+    assert rep.failed is True
+    dp = rep.findings[0]
+    assert dp.value is None and dp.confidence == 0.0  # no fabricated price
+
+
+def test_engine_localprice_layer_offline():
+    # طبقة السعر المحلي مفعّلة بلا شبكة/مفتاح: لا تعطّل، تبقى النتيجة مبدئية بلا اختلاق.
+    os.environ.pop("LOCALPRICE_API_KEY", None)
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
+                             year=2023, with_localprice=True)
+    assert res["classified"] is True and res["year"] == 2023
+    assert "localprice" in res["markets"][0]            # context attached
+    assert res["markets"][0]["total_score"] == 0.0      # additive, score unchanged
+
+
 def test_engine_paid_layers_offline():
     # الطبقات الأربع الجديدة مفعّلة بلا شبكة/مفتاح: لا تعطّل، يبقى التصنيف سليمًا.
     with _block_network():
