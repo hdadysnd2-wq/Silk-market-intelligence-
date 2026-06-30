@@ -50,6 +50,7 @@ def create_app():
         year: int | None = None
         with_trends: bool = False
         with_tariffs: bool = False
+        with_faostat: bool = False
         persist: bool = False
 
     def _json(payload: object):
@@ -81,7 +82,8 @@ def create_app():
         """حلّل منتجًا عبر الأسواق — run the full engine.analyze pipeline."""
         result = silk_engine.analyze(
             req.product, year=req.year, with_trends=req.with_trends,
-            with_tariffs=req.with_tariffs, persist=req.persist)
+            with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
+            persist=req.persist)
         return _json(result)
 
     @app.get("/analyses")

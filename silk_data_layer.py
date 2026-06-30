@@ -7,11 +7,31 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 from dataclasses import dataclass
 
 import requests
 
 log = logging.getLogger(__name__)
+
+
+def _load_dotenv(path: str = ".env") -> None:
+    """حمّل مفاتيح من .env إن وُجد — minimal stdlib .env loader (no dependency).
+
+    Fills only env vars that are not already set. Missing file is fine (offline).
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip().strip('"\''))
+    except FileNotFoundError:
+        pass
+
+
+_load_dotenv()
 
 # نقاط النهاية — base URLs of the two real sources.
 ENDPOINTS = {
@@ -20,6 +40,10 @@ ENDPOINTS = {
 }
 
 _TIMEOUT = 30
+
+# مفتاح Comtrade الاختياري — optional free key; raises the keyless preview cap to
+# ~500 requests/day. Set COMTRADE_API_KEY in the environment or a .env file.
+COMTRADE_KEY = os.environ.get("COMTRADE_API_KEY", "").strip()
 
 
 @dataclass
@@ -121,6 +145,8 @@ def comtrade_trade(
         "flowCode": flow,
         "partnerCode": str(partner),
     }
+    if COMTRADE_KEY:
+        params["subscription-key"] = COMTRADE_KEY  # higher daily limit when set
     try:
         payload = _cached_get(ENDPOINTS["comtrade"], params)
         if payload is None:  # cache miss + fetch failed -> same graceful [] as before
