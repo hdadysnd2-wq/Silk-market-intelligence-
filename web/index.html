@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>سِلك — ذكاء الأسواق</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --ink:#e2e8f0; --mut:#94a3b8; --acc:#38bdf8; --ok:#34d399; --warn:#fbbf24; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--ink); }
+    .wrap { max-width:900px; margin:0 auto; padding:24px 16px 64px; }
+    h1 { font-size:1.5rem; margin:.2em 0; }
+    .sub { color:var(--mut); margin:0 0 20px; font-size:.9rem; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+    label { display:block; font-size:.8rem; color:var(--mut); margin:8px 0 4px; }
+    input[type=text], input[type=number] { width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:var(--ink); }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .row > div { flex:1; min-width:140px; }
+    .opts { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:.85rem; color:var(--mut); }
+    button { margin-top:14px; padding:11px 20px; border:0; border-radius:8px; background:var(--acc); color:#03131f; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:default; }
+    .banner { background:#422006; border:1px solid #854d0e; color:var(--warn); padding:10px 12px; border-radius:8px; font-size:.85rem; }
+    table { width:100%; border-collapse:collapse; margin-top:8px; font-size:.9rem; }
+    th, td { text-align:right; padding:8px; border-bottom:1px solid var(--line); }
+    th { color:var(--mut); font-weight:600; }
+    .score { color:var(--ok); font-weight:700; }
+    details { margin-top:6px; }
+    summary { cursor:pointer; color:var(--acc); font-size:.85rem; }
+    .comp { font-size:.82rem; color:var(--mut); padding:4px 0; border-bottom:1px dashed var(--line); }
+    .comp b { color:var(--ink); }
+    .err { color:#f87171; }
+    .muted { color:var(--mut); font-size:.8rem; }
+    code { background:#0b1220; padding:1px 5px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>منصة سِلك لذكاء الأسواق</h1>
+    <p class="sub">ترتيب أسواق التصدير ببيانات حقيقية (UN Comtrade + World Bank). كل رقم موسوم بمصدره ودرجة ثقته · نتيجة أوّلية.</p>
+
+    <div class="card">
+      <label>رابط الباك-إند (API) — اتركه <b>فارغًا</b> إن كانت الواجهة على نفس خدمة Render</label>
+      <div class="row">
+        <div style="flex:3"><input type="text" id="api" placeholder="فارغ = نفس الخدمة (Render) · أو https://your-api.onrender.com" /></div>
+        <div style="flex:0"><button id="ping" type="button">فحص الاتصال</button></div>
+      </div>
+      <div id="health" class="muted"></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div style="flex:3">
+          <label>اسم المنتج (عربي/إنجليزي)</label>
+          <input type="text" id="product" placeholder="مثال: تمور" />
+        </div>
+        <div style="flex:1">
+          <label>السنة (اختياري)</label>
+          <input type="number" id="year" placeholder="2022" />
+        </div>
+      </div>
+      <div class="opts">
+        <label><input type="checkbox" id="t_trends" /> Google Trends</label>
+        <label><input type="checkbox" id="t_tariffs" /> الرسوم (WITS)</label>
+        <label><input type="checkbox" id="t_faostat" /> FAOSTAT</label>
+      </div>
+      <button id="go" type="button">حلّل السوق</button>
+    </div>
+
+    <div id="out"></div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var out = $("out");
+
+  // احفظ رابط API محليًا — persist API base URL.
+  $("api").value = localStorage.getItem("silk_api") || "";
+  $("api").addEventListener("change", function () {
+    localStorage.setItem("silk_api", base());
+  });
+  function base() { return ($("api").value || "").trim().replace(/\/+$/, ""); }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c];
+    });
+  }
+  function num(v) {
+    if (v == null) return "—";
+    return typeof v === "number" ? v.toLocaleString("en-US") : esc(v);
+  }
+
+  $("ping").addEventListener("click", function () {
+    $("health").textContent = "…جارٍ الفحص";
+    fetch(base() + "/health").then(function (r) { return r.json(); }).then(function (j) {
+      $("health").innerHTML = '<span style="color:var(--ok)">متصل ✓</span> — الحزم: ' + esc(JSON.stringify(j.deps || {}));
+    }).catch(function (e) {
+      $("health").innerHTML = '<span class="err">تعذّر الاتصال: ' + esc(e.message) +
+        ' (تحقق من الرابط، أو من أن الباك-إند يفعّل CORS).</span>';
+    });
+  });
+
+  $("go").addEventListener("click", function () {
+    var b = base(), product = ($("product").value || "").trim();
+    if (!product) { out.innerHTML = '<div class="card err">اكتب اسم المنتج.</div>'; return; }
+    var body = {
+      product: product,
+      year: $("year").value ? parseInt($("year").value, 10) : null,
+      with_trends: $("t_trends").checked,
+      with_tariffs: $("t_tariffs").checked,
+      with_faostat: $("t_faostat").checked
+    };
+    $("go").disabled = true;
+    out.innerHTML = '<div class="card muted">…جارٍ التحليل (قد يأخذ ثوانٍ لجلب البيانات الحقيقية)</div>';
+    fetch(b + "/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(render).catch(function (e) {
+      out.innerHTML = '<div class="card err">فشل الطلب: ' + esc(e.message) +
+        '<div class="muted">غالبًا: الباك-إند غير منشور، الرابط خاطئ، أو CORS غير مفعّل.</div></div>';
+    }).finally(function () { $("go").disabled = false; });
+  });
+
+  function compRow(name, dp) {
+    if (!dp) return "";
+    var label = { market_size: "حجم الاستيراد ($)", saudi_position: "حصة السعودية", demand_capacity: "الطلب (دخل/سكان)", competition: "تركّز المنافسين" }[name] || name;
+    var val = dp.value == null ? '<span class="muted">لا بيانات</span>' : num(dp.value);
+    return '<div class="comp"><b>' + esc(label) + ':</b> ' + val +
+      ' <span class="muted">— ' + esc(dp.source || "") + " · ثقة " + (dp.confidence != null ? dp.confidence : "?") +
+      (dp.note ? " · " + esc(dp.note) : "") + "</span></div>";
+  }
+
+  function render(res) {
+    if (!res || res.classified === false) {
+      out.innerHTML = '<div class="card">تعذّر تصنيف المنتج إلى رمز HS. ' +
+        '<span class="muted">' + esc((res && res.note) || "جرّب اسمًا أوضح.") + "</span></div>";
+      return;
+    }
+    var html = '<div class="card">';
+    html += '<div class="banner">نتيجة أوّلية (PRELIMINARY) — القيم الفارغة تعني «لا بيانات» لا «طلب صفري».</div>';
+    html += "<p><b>المنتج:</b> " + esc(res.product) + " &nbsp;·&nbsp; <b>رمز HS:</b> <code>" +
+      esc(res.hs_code) + "</code> (ثقة " + esc(res.hs_confidence) + ")";
+    if (res.year) html += " &nbsp;·&nbsp; <b>السنة:</b> " + esc(res.year);
+    html += "</p>";
+    var markets = res.markets || [];
+    if (!markets.length) {
+      html += '<p class="muted">لا أسواق في النتيجة.</p></div>';
+      out.innerHTML = html; return;
+    }
+    html += "<table><thead><tr><th>#</th><th>السوق</th><th>النقاط</th><th>الثقة</th><th>تفاصيل</th></tr></thead><tbody>";
+    markets.forEach(function (m, i) {
+      var comps = m.components || {};
+      var details = Object.keys(comps).map(function (k) { return compRow(k, comps[k]); }).join("");
+      if (m.jury) {
+        details += '<div class="comp"><b>حكم اللجنة:</b> ' + esc(m.jury.verdict || "") +
+          ' <span class="muted">(ثقة ' + esc(m.jury.confidence) + ")</span></div>";
+      }
+      if (m.recommendation) details += '<div class="comp">' + esc(m.recommendation) + "</div>";
+      if (m.quality_flags && m.quality_flags.length) {
+        details += '<div class="comp" style="color:var(--warn)">تنبيهات جودة: ' + esc(m.quality_flags.join("؛ ")) + "</div>";
+      }
+      html += "<tr><td>" + (i + 1) + "</td><td>" + esc(m.country) +
+        '</td><td class="score">' + (m.total_score != null ? m.total_score : "—") +
+        "</td><td>" + (m.confidence != null ? m.confidence : "—") +
+        "</td><td><details><summary>عرض</summary>" + details + "</details></td></tr>";
+    });
+    html += "</tbody></table>";
+    if (res.note) html += '<p class="muted">' + esc(res.note) + "</p>";
+    html += "</div>";
+    out.innerHTML = html;
+  }
+})();
+</script>
+</body>
+</html>

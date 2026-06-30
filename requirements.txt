@@ -1,2 +1,10 @@
 requests>=2.31
 pandas>=2.0
+# واجهة REST عبر FastAPI (api.py / النشر على Render):  uvicorn api:app
+fastapi>=0.110
+uvicorn>=0.29
+# --- اختياري · OPTIONAL (core library imports & runs without these) ---
+# واجهة Streamlit (for app.py):  streamlit run app.py
+# streamlit>=1.30
+# وكيل Google Trends (silk_trends_agent):
+# pytrends>=4.9
