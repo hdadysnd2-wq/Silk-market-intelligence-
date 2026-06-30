@@ -1,0 +1,18 @@
+# نشر الباك-إند على Render — Render blueprint for the FastAPI backend.
+# في Render: New + > Blueprint > اربط المستودع. سيقرأ هذا الملف تلقائيًا.
+services:
+  - type: web
+    name: silk-market-intelligence-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt fastapi uvicorn
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      # اختياري: قيّد الأصول المسموح لها بالنداء (دومين Netlify). افتراضيًا * .
+      # - key: CORS_ORIGINS
+      #   value: https://sage-pavlova-c221b1.netlify.app
+      # اختياري: مفتاح Comtrade لرفع الحد اليومي.
+      # - key: COMTRADE_API_KEY
+      #   sync: false

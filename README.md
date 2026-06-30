@@ -119,6 +119,17 @@ docker run -p 8000:8000 silk-api
 
 **CI** (`.github/workflows/ci.yml`): يثبّت `requests pandas pytest` ويشغّل `python -m pytest tests/ -q` عند كل push / PR.
 
+### النشر · Deployment (Netlify + Render)
+
+البنية: **الواجهة الثابتة** (`web/`) على Netlify، و**الباك-إند Python** على Render/Railway (Netlify لا يشغّل بايثون).
+
+1. **الباك-إند → Render:** New + > Blueprint > اربط المستودع (يقرأ `render.yaml`)، أو يدويًا
+   build: `pip install -r requirements.txt fastapi uvicorn` و start: `uvicorn api:app --host 0.0.0.0 --port $PORT`.
+   خُذ الرابط الناتج (مثل `https://...onrender.com`). (Railway يقرأ `Procfile`.)
+2. **الواجهة → Netlify:** انشر مجلّد `web/` (يقرأ `netlify.toml`، `publish = "web"`).
+3. في الصفحة المنشورة: الصق رابط الباك-إند في حقل «رابط الباك-إند»، ثم حلّل.
+4. **CORS:** مفعّل في `api.py`؛ للإنتاج قيّده بدومين Netlify عبر `CORS_ORIGINS` في بيئة Render.
+
 ---
 
 ## مهارة ponytail المثبّتة · Installed skill

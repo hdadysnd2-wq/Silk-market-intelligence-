@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import os
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ def create_app():
     """أنشئ تطبيق FastAPI — build the FastAPI app, or raise if fastapi is absent."""
     try:
         from fastapi import FastAPI, HTTPException
+        from fastapi.middleware.cors import CORSMiddleware
         from fastapi.responses import JSONResponse
         from pydantic import BaseModel
     except ImportError as exc:  # pragma: no cover - exercised only without dep
@@ -43,6 +45,13 @@ def create_app():
     app = FastAPI(title="Silk Market Intelligence API",
                   description="Real public-data export-market analysis "
                               "(UN Comtrade + World Bank). Preliminary, never fabricated.")
+
+    # CORS: يسمح لواجهة Netlify بالنداء — allow the static frontend to call the API.
+    # افتراضيًا أي أصل؛ قيّده بـ CORS_ORIGINS (مفصولة بفواصل) في الإنتاج.
+    _origins = os.environ.get("CORS_ORIGINS", "*").strip()
+    allow = ["*"] if _origins == "*" else [o.strip() for o in _origins.split(",") if o.strip()]
+    app.add_middleware(CORSMiddleware, allow_origins=allow,
+                       allow_methods=["*"], allow_headers=["*"])
 
     class AnalyzeRequest(BaseModel):
         """طلب تحليل منتج — analyze request body."""
