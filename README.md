@@ -38,7 +38,8 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `app.py` | واجهة Streamlit اختيارية فوق المحرّك (تُستورد Streamlit بكسل داخليًا). |
 | `tools/fetch_hs_codes.py` | أداة تشغيل: تجلب مرجع HS من Comtrade وتوسّع `data/hs_codes.csv` برموز حقيقية. |
 | `Dockerfile` · `.github/workflows/ci.yml` | تعبئة الخدمة (Docker) + تكامل مستمر (CI) يشغّل اختبارات الدخان. |
-| `data/hs_codes.csv` | بذرة رموز HS6 الحقيقية لمنتجات سِلك (عربي/إنجليزي + كلمات مفتاحية). |
+| `data/hs_codes.csv` | جدول التصنيف للمُصنّف: **5,627 صفاً** = بذرة منسّقة (عربي/إنجليزي + كلمات مفتاحية) + كامل رموز HS6 المدموجة. |
+| `data/hs_reference.csv` | المرجع الكامل الخام من Comtrade (6,940 رمزاً، كل المستويات 2/4/6) للتدقيق والتوسيع. |
 
 كل قرار من المنصة **أوّلي لا نهائي**: تصفّي الأسواق وترتّبها، ثم تُستثمر الدراسة العميقة على المرشّحين فقط.
 
