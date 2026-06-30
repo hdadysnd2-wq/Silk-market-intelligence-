@@ -6,8 +6,6 @@ never crash, never fabricate). Module-level `app` is None when fastapi is missin
 
 Run:  python3 api.py   (needs `pip install fastapi uvicorn`).
 """
-from __future__ import annotations
-
 import dataclasses
 import logging
 import os
