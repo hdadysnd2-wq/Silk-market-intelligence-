@@ -33,17 +33,26 @@ def _load_dotenv(path: str = ".env") -> None:
 
 _load_dotenv()
 
-# نقاط النهاية — base URLs of the two real sources.
+# نقاط النهاية — base URLs of the real sources. Comtrade has TWO surfaces:
+#   • preview (/public/v1/preview/...) — بلا مفتاح، محدود الصفوف ومخنوق الطلبات.
+#   • data    (/data/v1/get/...)       — مع مفتاح، البيانات الكاملة و~500 طلب/يوم.
+# نختار الإنتاج تلقائيًّا متى توفّر المفتاح؛ كلاهما بنفس المسار C/A/HS والمعاملات.
 ENDPOINTS = {
     "comtrade": "https://comtradeapi.un.org/public/v1/preview/C/A/HS",
+    "comtrade_data": "https://comtradeapi.un.org/data/v1/get/C/A/HS",
     "world_bank": "https://api.worldbank.org/v2",
 }
 
 _TIMEOUT = 30
 
-# مفتاح Comtrade الاختياري — optional free key; raises the keyless preview cap to
-# ~500 requests/day. Set COMTRADE_API_KEY in the environment or a .env file.
+# مفتاح Comtrade الاختياري — optional free key; switches to the full /data/v1/get
+# endpoint and raises the cap to ~500 requests/day. Set COMTRADE_API_KEY in env/.env.
 COMTRADE_KEY = os.environ.get("COMTRADE_API_KEY", "").strip()
+
+
+def _comtrade_url() -> str:
+    """اختر سطح كومتريد — full data endpoint when a key is set, else preview."""
+    return ENDPOINTS["comtrade_data"] if COMTRADE_KEY else ENDPOINTS["comtrade"]
 
 
 @dataclass
@@ -149,11 +158,12 @@ def comtrade_trade(
     if partner not in (None, "all", "ALL"):
         params["partnerCode"] = str(partner)
     if COMTRADE_KEY:
-        params["subscription-key"] = COMTRADE_KEY  # higher daily limit when set
+        params["subscription-key"] = COMTRADE_KEY  # full /data endpoint + higher cap
+    url = _comtrade_url()
     try:
-        payload = _cached_get(ENDPOINTS["comtrade"], params)
+        payload = _cached_get(url, params)
         if payload is None:  # cache miss + fetch failed -> same graceful [] as before
-            r = requests.get(ENDPOINTS["comtrade"], params=params, timeout=_TIMEOUT)
+            r = requests.get(url, params=params, timeout=_TIMEOUT)
             r.raise_for_status()
             payload = r.json()
         data = payload.get("data") or []
