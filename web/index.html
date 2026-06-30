@@ -1,185 +1,329 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>سِلك — ذكاء الأسواق</title>
-  <style>
-    :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --ink:#e2e8f0; --mut:#94a3b8; --acc:#38bdf8; --ok:#34d399; --warn:#fbbf24; }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:system-ui,"Segoe UI",Tahoma,sans-serif; background:var(--bg); color:var(--ink); }
-    .wrap { max-width:900px; margin:0 auto; padding:24px 16px 64px; }
-    h1 { font-size:1.5rem; margin:.2em 0; }
-    .sub { color:var(--mut); margin:0 0 20px; font-size:.9rem; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
-    label { display:block; font-size:.8rem; color:var(--mut); margin:8px 0 4px; }
-    input[type=text], input[type=number] { width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:#0b1220; color:var(--ink); }
-    .row { display:flex; gap:12px; flex-wrap:wrap; }
-    .row > div { flex:1; min-width:140px; }
-    .opts { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:.85rem; color:var(--mut); }
-    button { margin-top:14px; padding:11px 20px; border:0; border-radius:8px; background:var(--acc); color:#03131f; font-weight:700; cursor:pointer; }
-    button:disabled { opacity:.6; cursor:default; }
-    .banner { background:#422006; border:1px solid #854d0e; color:var(--warn); padding:10px 12px; border-radius:8px; font-size:.85rem; }
-    table { width:100%; border-collapse:collapse; margin-top:8px; font-size:.9rem; }
-    th, td { text-align:right; padding:8px; border-bottom:1px solid var(--line); }
-    th { color:var(--mut); font-weight:600; }
-    .score { color:var(--ok); font-weight:700; }
-    details { margin-top:6px; }
-    summary { cursor:pointer; color:var(--acc); font-size:.85rem; }
-    .comp { font-size:.82rem; color:var(--mut); padding:4px 0; border-bottom:1px dashed var(--line); }
-    .comp b { color:var(--ink); }
-    .err { color:#f87171; }
-    .muted { color:var(--mut); font-size:.8rem; }
-    code { background:#0b1220; padding:1px 5px; border-radius:4px; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>سِلك · ذكاء الأسواق</title>
+<style>
+  :root{
+    --bg:#0b1120; --bg2:#0e1729; --card:#131d33; --card2:#16213b; --line:#26324d;
+    --ink:#eaf0fb; --mut:#93a1bd; --dim:#6b7896;
+    --acc:#3b82f6; --acc2:#22d3ee; --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+    --grad:linear-gradient(135deg,#3b82f6,#22d3ee);
+    --r:14px; --sh:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:"Segoe UI",system-ui,Tahoma,Arial,sans-serif;background:
+    radial-gradient(1200px 600px at 90% -10%,#11244a 0%,transparent 55%),var(--bg);
+    color:var(--ink);line-height:1.5;min-height:100vh}
+  a{color:var(--acc2)}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 16px 72px}
+
+  header{display:flex;align-items:center;gap:14px;padding:22px 4px 18px}
+  .logo{width:44px;height:44px;border-radius:12px;background:var(--grad);
+    display:grid;place-items:center;font-weight:800;color:#06101f;font-size:20px;box-shadow:var(--sh)}
+  header h1{font-size:1.45rem;margin:0;letter-spacing:-.3px}
+  header .tag{color:var(--mut);font-size:.82rem;margin-top:2px}
+
+  .panel{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);
+    border-radius:var(--r);box-shadow:var(--sh);padding:18px;margin-bottom:18px}
+  .panel h2{font-size:.8rem;color:var(--dim);font-weight:700;text-transform:uppercase;
+    letter-spacing:.12em;margin:0 0 12px}
+
+  label{display:block;font-size:.78rem;color:var(--mut);margin:0 0 6px}
+  input[type=text],input[type=number]{width:100%;padding:13px 14px;border-radius:11px;
+    border:1px solid var(--line);background:#0a1326;color:var(--ink);font-size:1rem;outline:none;transition:.15s}
+  input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(59,130,246,.18)}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:150px}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px}
+  .chip{padding:6px 13px;border-radius:999px;border:1px solid var(--line);background:#0e1a30;
+    color:var(--mut);font-size:.85rem;cursor:pointer;transition:.15s}
+  .chip:hover{color:var(--ink);border-color:var(--acc);background:#102444}
+
+  .opts{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:.86rem;color:var(--mut)}
+  .opts label{display:flex;align-items:center;gap:7px;margin:0;cursor:pointer}
+  details.adv{margin-top:12px}
+  details.adv>summary{cursor:pointer;color:var(--dim);font-size:.8rem;list-style:none}
+  details.adv>summary::-webkit-details-marker{display:none}
+
+  .btn{margin-top:16px;padding:13px 26px;border:0;border-radius:11px;background:var(--grad);
+    color:#04101f;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:0 8px 20px rgba(34,211,238,.22);transition:.15s}
+  .btn:hover{filter:brightness(1.06)}
+  .btn:disabled{opacity:.55;cursor:default;filter:none}
+  .btn.ghost{background:#0e1a30;border:1px solid var(--line);color:var(--ink);box-shadow:none;font-weight:600;font-size:.85rem;padding:9px 16px;margin:0}
+
+  .hint{font-size:.78rem;color:var(--dim);margin-top:8px}
+  .err{color:var(--bad)}
+
+  /* results */
+  .summary{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+  .summary .lead{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .hs{font-family:ui-monospace,Menlo,monospace;background:#0a1326;border:1px solid var(--line);
+    padding:5px 10px;border-radius:9px;color:var(--acc2);font-size:.95rem}
+  .badge{font-size:.72rem;padding:4px 10px;border-radius:999px;font-weight:700}
+  .badge.prelim{background:rgba(251,191,36,.14);color:var(--warn);border:1px solid rgba(251,191,36,.3)}
+  .badge.live{background:rgba(52,211,153,.14);color:var(--ok);border:1px solid rgba(52,211,153,.3)}
+  .badge.demo{background:rgba(59,130,246,.16);color:#93c5fd;border:1px solid rgba(59,130,246,.35)}
+
+  .reco{background:linear-gradient(180deg,#10233f,#0d1b30);border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;margin-top:14px;font-size:.95rem}
+  .reco b{color:var(--acc2)}
+
+  /* chart */
+  .chartwrap{margin-top:6px;overflow-x:auto}
+  .barrow{display:grid;grid-template-columns:140px 1fr 110px;align-items:center;gap:10px;margin:7px 0;font-size:.85rem}
+  .barrow .nm{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .track{height:14px;background:#0a1326;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+  .fill{height:100%;background:var(--grad);border-radius:8px}
+  .barrow .val{color:var(--mut);text-align:left;font-variant-numeric:tabular-nums}
+
+  /* market cards */
+  .mkts{display:grid;gap:12px;margin-top:6px}
+  .mk{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .mk .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .mk .who{display:flex;align-items:center;gap:10px;font-weight:700}
+  .rank{width:26px;height:26px;border-radius:8px;background:#0a1326;border:1px solid var(--line);
+    display:grid;place-items:center;font-size:.8rem;color:var(--mut)}
+  .flag{font-size:1.3rem}
+  .scorepill{display:flex;align-items:center;gap:8px}
+  .scorepill .s{font-weight:800;color:var(--acc2);font-variant-numeric:tabular-nums}
+  .conf{display:inline-flex;gap:3px;vertical-align:middle}
+  .dot{width:7px;height:7px;border-radius:50%;background:#2a3a59}
+  .comps{margin-top:10px;display:grid;gap:7px}
+  .comp{display:flex;justify-content:space-between;gap:10px;font-size:.84rem;border-top:1px dashed var(--line);padding-top:7px}
+  .comp .k{color:var(--mut)}
+  .comp .v{text-align:left}
+  .src{font-size:.7rem;color:var(--dim)}
+  .nodata{color:var(--dim)}
+  .flags{margin-top:8px;font-size:.78rem;color:var(--warn)}
+  .verdict{margin-top:8px;font-size:.82rem;color:var(--mut)}
+
+  .skl{height:14px;background:linear-gradient(90deg,#15233f,#1c2c4d,#15233f);
+    background-size:200% 100%;border-radius:7px;animation:sh 1.2s infinite}
+  @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .center{text-align:center;color:var(--mut);padding:18px}
+  footer{color:var(--dim);font-size:.76rem;text-align:center;margin-top:26px}
+  @media(max-width:560px){.barrow{grid-template-columns:96px 1fr 78px}}
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>منصة سِلك لذكاء الأسواق</h1>
-    <p class="sub">ترتيب أسواق التصدير ببيانات حقيقية (UN Comtrade + World Bank). كل رقم موسوم بمصدره ودرجة ثقته · نتيجة أوّلية.</p>
-
-    <div class="card">
-      <label>رابط الباك-إند (API) — اتركه <b>فارغًا</b> إن كانت الواجهة على نفس خدمة Render</label>
-      <div class="row">
-        <div style="flex:3"><input type="text" id="api" placeholder="فارغ = نفس الخدمة (Render) · أو https://your-api.onrender.com" /></div>
-        <div style="flex:0"><button id="ping" type="button">فحص الاتصال</button></div>
-      </div>
-      <div id="health" class="muted"></div>
+<div class="wrap">
+  <header>
+    <div class="logo">س</div>
+    <div>
+      <h1>سِلك · ذكاء الأسواق</h1>
+      <div class="tag">ترتيب أسواق التصدير ببيانات حقيقية — UN Comtrade + World Bank · كل رقم موسوم بمصدره وثقته</div>
     </div>
+  </header>
 
-    <div class="card">
-      <div class="row">
-        <div style="flex:3">
-          <label>اسم المنتج (عربي/إنجليزي)</label>
-          <input type="text" id="product" placeholder="مثال: تمور" />
-        </div>
-        <div style="flex:1">
-          <label>السنة (اختياري)</label>
-          <input type="number" id="year" placeholder="2022" />
-        </div>
+  <section class="panel">
+    <h2>تحليل منتج</h2>
+    <div class="row">
+      <div style="flex:3">
+        <label>اسم المنتج (عربي / إنجليزي)</label>
+        <input id="product" type="text" placeholder="مثال: تمور" autocomplete="off" />
       </div>
-      <div class="opts">
-        <label><input type="checkbox" id="t_trends" /> Google Trends</label>
-        <label><input type="checkbox" id="t_tariffs" /> الرسوم (WITS)</label>
-        <label><input type="checkbox" id="t_faostat" /> FAOSTAT</label>
+      <div style="flex:1">
+        <label>السنة</label>
+        <input id="year" type="number" placeholder="2022" />
       </div>
-      <button id="go" type="button">حلّل السوق</button>
     </div>
+    <div class="chips" id="chips"></div>
+    <div class="opts">
+      <label><input type="checkbox" id="t_trends" /> Google Trends</label>
+      <label><input type="checkbox" id="t_tariffs" /> الرسوم (WITS)</label>
+      <label><input type="checkbox" id="t_faostat" /> FAOSTAT</label>
+    </div>
+    <details class="adv">
+      <summary>إعدادات متقدمة (رابط الباك-إند)</summary>
+      <div style="margin-top:10px" class="row">
+        <div style="flex:3"><input id="api" type="text" placeholder="فارغ = نفس الخدمة (Render) · أو https://your-api.onrender.com" /></div>
+        <div style="flex:0"><button class="btn ghost" id="ping" type="button">فحص الاتصال</button></div>
+      </div>
+      <div class="hint" id="health"></div>
+    </details>
+    <button class="btn" id="go" type="button">حلّل السوق ←</button>
+  </section>
 
-    <div id="out"></div>
-  </div>
+  <div id="out"></div>
+
+  <footer>منصة سِلك لذكاء الأسواق · النتائج أوّلية ومبنية على بيانات عامة حقيقية · القيم الفارغة = لا بيانات (لا تُختلق)</footer>
+</div>
 
 <script>
-(function () {
+(function(){
   "use strict";
-  var $ = function (id) { return document.getElementById(id); };
-  var out = $("out");
+  var $=function(id){return document.getElementById(id);};
+  var out=$("out");
+  var EXAMPLES=["تمور","زعفران","عسل","زيت زيتون","قهوة","تمر","رمان","زعتر"];
 
-  // احفظ رابط API محليًا — persist API base URL.
-  $("api").value = localStorage.getItem("silk_api") || "";
-  $("api").addEventListener("change", function () {
-    localStorage.setItem("silk_api", base());
-  });
-  function base() { return ($("api").value || "").trim().replace(/\/+$/, ""); }
-
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>]/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c];
-    });
-  }
-  function num(v) {
-    if (v == null) return "—";
-    return typeof v === "number" ? v.toLocaleString("en-US") : esc(v);
-  }
-
-  $("ping").addEventListener("click", function () {
-    $("health").textContent = "…جارٍ الفحص";
-    fetch(base() + "/health").then(function (r) { return r.json(); }).then(function (j) {
-      $("health").innerHTML = '<span style="color:var(--ok)">متصل ✓</span> — الحزم: ' + esc(JSON.stringify(j.deps || {}));
-    }).catch(function (e) {
-      $("health").innerHTML = '<span class="err">تعذّر الاتصال: ' + esc(e.message) +
-        ' (تحقق من الرابط، أو من أن الباك-إند يفعّل CORS).</span>';
-    });
+  $("chips").innerHTML=EXAMPLES.map(function(e){return '<span class="chip" data-e="'+e+'">'+e+'</span>';}).join("");
+  $("chips").addEventListener("click",function(ev){
+    var c=ev.target.closest(".chip"); if(!c)return;
+    $("product").value=c.getAttribute("data-e"); $("go").click();
   });
 
-  $("go").addEventListener("click", function () {
-    var b = base(), product = ($("product").value || "").trim();
-    if (!product) { out.innerHTML = '<div class="card err">اكتب اسم المنتج.</div>'; return; }
-    var body = {
-      product: product,
-      year: $("year").value ? parseInt($("year").value, 10) : null,
-      with_trends: $("t_trends").checked,
-      with_tariffs: $("t_tariffs").checked,
-      with_faostat: $("t_faostat").checked
-    };
-    $("go").disabled = true;
-    out.innerHTML = '<div class="card muted">…جارٍ التحليل (قد يأخذ ثوانٍ لجلب البيانات الحقيقية)</div>';
-    fetch(b + "/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    }).then(function (r) {
-      return r.text().then(function (text) {
-        var data = null; try { data = JSON.parse(text); } catch (_) {}
-        if (!r.ok) {
-          var d = data && data.detail;
-          var msg = d == null ? text : (typeof d === "string" ? d : JSON.stringify(d));
-          throw new Error("HTTP " + r.status + " — " + msg);
-        }
-        return data;
+  $("api").value=localStorage.getItem("silk_api")||"";
+  $("api").addEventListener("change",function(){localStorage.setItem("silk_api",base());});
+  function base(){return ($("api").value||"").trim().replace(/\/+$/,"");}
+
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+  function fmtUSD(v){if(v==null)return null;var n=Number(v);
+    if(n>=1e9)return "$"+(n/1e9).toFixed(1)+"B"; if(n>=1e6)return "$"+(n/1e6).toFixed(1)+"M";
+    if(n>=1e3)return "$"+(n/1e3).toFixed(0)+"K"; return "$"+n.toLocaleString("en-US");}
+  function num(v){return v==null?"—":(typeof v==="number"?v.toLocaleString("en-US"):esc(v));}
+
+  var FLAG={SAU:"🇸🇦",ARE:"🇦🇪",EGY:"🇪🇬",MAR:"🇲🇦",DZA:"🇩🇿",TUN:"🇹🇳",KWT:"🇰🇼",QAT:"🇶🇦",
+    BHR:"🇧🇭",OMN:"🇴🇲",JOR:"🇯🇴",IRQ:"🇮🇶",LBN:"🇱🇧",TUR:"🇹🇷",IND:"🇮🇳",PAK:"🇵🇰",IDN:"🇮🇩",
+    MYS:"🇲🇾",CHN:"🇨🇳",USA:"🇺🇸",GBR:"🇬🇧",DEU:"🇩🇪",FRA:"🇫🇷",NLD:"🇳🇱",ESP:"🇪🇸",ITA:"🇮🇹",
+    CAN:"🇨🇦",NGA:"🇳🇬",KEN:"🇰🇪",ZAF:"🇿🇦",ETH:"🇪🇹",SDN:"🇸🇩",YEM:"🇾🇪",BGD:"🇧🇩",SGP:"🇸🇬",
+    JPN:"🇯🇵",KOR:"🇰🇷",RUS:"🇷🇺",BRA:"🇧🇷"};
+  function flag(iso){return FLAG[iso]||"🏳️";}
+
+  function confDots(c){c=c||0;var n=Math.round(c*5),h="";
+    for(var i=0;i<5;i++)h+='<span class="dot" style="background:'+(i<n?"var(--ok)":"#2a3a59")+'"></span>';
+    return '<span class="conf" title="ثقة '+c+'">'+h+'</span>';}
+
+  function dpv(dp){return dp&&typeof dp==="object"?dp.value:dp;}
+
+  // ---- connection check ----
+  $("ping").addEventListener("click",function(){
+    $("health").textContent="…جارٍ الفحص";
+    fetch(base()+"/health").then(function(r){return r.json();}).then(function(j){
+      var d=j.deps||{};
+      $("health").innerHTML='<span style="color:var(--ok)">متصل ✓</span> — '+
+        Object.keys(d).map(function(k){return k+(d[k]?" ✓":" ✗");}).join(" · ");
+    }).catch(function(e){$("health").innerHTML='<span class="err">تعذّر الاتصال: '+esc(e.message)+'</span>';});
+  });
+
+  // ---- analyze ----
+  $("go").addEventListener("click",function(){
+    var product=($("product").value||"").trim();
+    if(!product){out.innerHTML='<section class="panel err">اكتب اسم المنتج.</section>';return;}
+    var body={product:product,year:$("year").value?parseInt($("year").value,10):null,
+      with_trends:$("t_trends").checked,with_tariffs:$("t_tariffs").checked,with_faostat:$("t_faostat").checked};
+    $("go").disabled=true;
+    out.innerHTML='<section class="panel"><div class="skl" style="width:40%"></div>'+
+      '<div class="skl" style="width:90%;margin-top:14px"></div><div class="skl" style="width:75%;margin-top:10px"></div>'+
+      '<div class="center">…جارٍ جلب البيانات الحقيقية</div></section>';
+    fetch(base()+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+      .then(function(r){return r.text().then(function(t){
+        var data=null;try{data=JSON.parse(t);}catch(_){}
+        if(!r.ok){var d=data&&data.detail;throw new Error("HTTP "+r.status+" — "+(d==null?t:(typeof d==="string"?d:JSON.stringify(d))));}
+        return data;});})
+      .then(function(res){render(res,false);})
+      .catch(function(e){out.innerHTML='<section class="panel err">فشل الطلب: '+esc(e.message)+'</section>';})
+      .finally(function(){$("go").disabled=false;});
+  });
+
+  // ---- render ----
+  function render(res,isDemo){
+    if(!res||res.classified===false){
+      out.innerHTML='<section class="panel center">تعذّر تصنيف المنتج إلى رمز HS. '+
+        '<div class="hint">'+esc((res&&res.note)||"جرّب اسمًا أوضح.")+'</div></section>';return;
+    }
+    var markets=(res.markets||[]).slice();
+    var statusBadge=isDemo?'<span class="badge demo">معاينة · بيانات مثال</span>':'<span class="badge prelim">نتيجة أوّلية</span>';
+
+    var h='<section class="panel">';
+    h+='<div class="summary"><div class="lead">'+
+        '<div style="font-size:1.15rem;font-weight:800">'+esc(res.product)+'</div>'+
+        '<span class="hs">HS '+esc(res.hs_code)+'</span>'+
+        '<span class="hint">ثقة التصنيف '+esc(res.hs_confidence)+(res.year?' · سنة '+esc(res.year):'')+'</span>'+
+      '</div>'+statusBadge+'</div>';
+
+    // best recommendation
+    var best=markets[0];
+    if(best){h+='<div class="reco">أعلى سوق مرشّح: <b>'+flag(best.iso3)+' '+esc(best.country)+
+      '</b> — نقاط '+esc(best.total_score)+'. '+esc(best.recommendation||"")+'</div>';}
+
+    // chart: import market size
+    var sizes=markets.map(function(m){return {nm:m.country,iso:m.iso3,v:dpv(m.components&&m.components.market_size)};})
+      .filter(function(x){return x.v!=null;});
+    if(sizes.length){
+      var max=Math.max.apply(null,sizes.map(function(x){return x.v;}));
+      h+='<h2 style="margin-top:18px">حجم الاستيراد حسب السوق</h2><div class="chartwrap">';
+      sizes.forEach(function(x){
+        var w=max>0?Math.max(3,Math.round(x.v/max*100)):0;
+        h+='<div class="barrow"><div class="nm">'+flag(x.iso)+' '+esc(x.nm)+'</div>'+
+           '<div class="track"><div class="fill" style="width:'+w+'%"></div></div>'+
+           '<div class="val">'+esc(fmtUSD(x.v))+'</div></div>';
       });
-    }).then(render).catch(function (e) {
-      out.innerHTML = '<div class="card err">فشل الطلب: ' + esc(e.message) + "</div>";
-    }).finally(function () { $("go").disabled = false; });
-  });
+      h+='</div>';
+    }
 
-  function compRow(name, dp) {
-    if (!dp) return "";
-    var label = { market_size: "حجم الاستيراد ($)", saudi_position: "حصة السعودية", demand_capacity: "الطلب (دخل/سكان)", competition: "تركّز المنافسين" }[name] || name;
-    var val = dp.value == null ? '<span class="muted">لا بيانات</span>' : num(dp.value);
-    return '<div class="comp"><b>' + esc(label) + ':</b> ' + val +
-      ' <span class="muted">— ' + esc(dp.source || "") + " · ثقة " + (dp.confidence != null ? dp.confidence : "?") +
-      (dp.note ? " · " + esc(dp.note) : "") + "</span></div>";
+    // market cards
+    h+='<h2 style="margin-top:18px">الأسواق مرتّبة</h2><div class="mkts">';
+    var LBL={market_size:"حجم الاستيراد",saudi_position:"حصة السعودية",demand_capacity:"الطلب (دخل/سكان)",competition:"تركّز المنافسين"};
+    markets.forEach(function(m,i){
+      var comps=m.components||{};
+      h+='<div class="mk"><div class="top"><div class="who"><span class="rank">'+(i+1)+'</span>'+
+         '<span class="flag">'+flag(m.iso3)+'</span> '+esc(m.country)+'</div>'+
+         '<div class="scorepill"><span class="s">'+(m.total_score!=null?m.total_score:"—")+'</span>'+confDots(m.confidence)+'</div></div>';
+      h+='<div class="comps">';
+      Object.keys(LBL).forEach(function(k){
+        var dp=comps[k]; if(dp===undefined)return;
+        var v=dpv(dp);
+        var disp=v==null?'<span class="nodata">لا بيانات</span>':(k==="market_size"?fmtUSD(v):num(v));
+        h+='<div class="comp"><span class="k">'+LBL[k]+'</span><span class="v">'+disp+
+           ' <span class="src">'+esc((dp&&dp.source)||"")+'</span></span></div>';
+      });
+      h+='</div>';
+      if(m.jury){h+='<div class="verdict">حكم اللجنة: '+esc(m.jury.verdict||"")+' · ثقة '+esc(m.jury.confidence)+'</div>';}
+      if(m.quality_flags&&m.quality_flags.length){h+='<div class="flags">⚠ '+esc(m.quality_flags.join(" · "))+'</div>';}
+      h+='</div>';
+    });
+    h+='</div>';
+
+    h+='<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">'+
+       '<button class="btn ghost" id="csv" type="button">تصدير CSV</button>'+
+       '<button class="btn ghost" onclick="window.print()" type="button">طباعة / PDF</button></div>';
+    if(res.note)h+='<div class="hint" style="margin-top:10px">'+esc(res.note)+'</div>';
+    h+='</section>';
+    out.innerHTML=h;
+
+    var csvBtn=$("csv");
+    if(csvBtn)csvBtn.addEventListener("click",function(){exportCsv(res);});
   }
 
-  function render(res) {
-    if (!res || res.classified === false) {
-      out.innerHTML = '<div class="card">تعذّر تصنيف المنتج إلى رمز HS. ' +
-        '<span class="muted">' + esc((res && res.note) || "جرّب اسمًا أوضح.") + "</span></div>";
-      return;
-    }
-    var html = '<div class="card">';
-    html += '<div class="banner">نتيجة أوّلية (PRELIMINARY) — القيم الفارغة تعني «لا بيانات» لا «طلب صفري».</div>';
-    html += "<p><b>المنتج:</b> " + esc(res.product) + " &nbsp;·&nbsp; <b>رمز HS:</b> <code>" +
-      esc(res.hs_code) + "</code> (ثقة " + esc(res.hs_confidence) + ")";
-    if (res.year) html += " &nbsp;·&nbsp; <b>السنة:</b> " + esc(res.year);
-    html += "</p>";
-    var markets = res.markets || [];
-    if (!markets.length) {
-      html += '<p class="muted">لا أسواق في النتيجة.</p></div>';
-      out.innerHTML = html; return;
-    }
-    html += "<table><thead><tr><th>#</th><th>السوق</th><th>النقاط</th><th>الثقة</th><th>تفاصيل</th></tr></thead><tbody>";
-    markets.forEach(function (m, i) {
-      var comps = m.components || {};
-      var details = Object.keys(comps).map(function (k) { return compRow(k, comps[k]); }).join("");
-      if (m.jury) {
-        details += '<div class="comp"><b>حكم اللجنة:</b> ' + esc(m.jury.verdict || "") +
-          ' <span class="muted">(ثقة ' + esc(m.jury.confidence) + ")</span></div>";
-      }
-      if (m.recommendation) details += '<div class="comp">' + esc(m.recommendation) + "</div>";
-      if (m.quality_flags && m.quality_flags.length) {
-        details += '<div class="comp" style="color:var(--warn)">تنبيهات جودة: ' + esc(m.quality_flags.join("؛ ")) + "</div>";
-      }
-      html += "<tr><td>" + (i + 1) + "</td><td>" + esc(m.country) +
-        '</td><td class="score">' + (m.total_score != null ? m.total_score : "—") +
-        "</td><td>" + (m.confidence != null ? m.confidence : "—") +
-        "</td><td><details><summary>عرض</summary>" + details + "</details></td></tr>";
-    });
-    html += "</tbody></table>";
-    if (res.note) html += '<p class="muted">' + esc(res.note) + "</p>";
-    html += "</div>";
-    out.innerHTML = html;
+  function exportCsv(res){
+    var rows=[["rank","country","iso3","total_score","confidence","market_size_usd","saudi_position","demand_capacity","competition"]];
+    (res.markets||[]).forEach(function(m,i){var c=m.components||{};
+      rows.push([i+1,m.country,m.iso3,m.total_score,m.confidence,
+        dpv(c.market_size),dpv(c.saudi_position),dpv(c.demand_capacity),dpv(c.competition)]);});
+    var csv=rows.map(function(r){return r.map(function(x){return x==null?"":'"'+String(x).replace(/"/g,'""')+'"';}).join(",");}).join("\n");
+    var a=document.createElement("a");
+    a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
+    a.download="silk_"+(res.product||"analysis")+".csv";a.click();
+  }
+
+  // ---- design preview (?demo=1): real documented sample numbers, clearly labeled ----
+  function demoData(){
+    function dp(v,s,c,n){return {value:v,source:s,confidence:c,note:n||"",retrieved_at:"2024"};}
+    return {product:"تمور",hs_code:"080410",hs_confidence:1.0,year:2023,preliminary:true,classified:true,
+      note:"بيانات مثال موثّقة من دليل المصادر — معاينة تصميم، ليست تحليلًا مباشرًا.",
+      markets:[
+        {country:"المغرب",iso3:"MAR",total_score:0.82,confidence:0.75,recommendation:"سوق كبير ومفتوح — مرشّح قوي.",
+          components:{market_size:dp(241000000,"UN Comtrade",0.9),saudi_position:dp(0.08,"UN Comtrade",0.8,"حصة 8%"),
+            demand_capacity:dp(8400,"World Bank",0.9,"PPP/فرد"),competition:dp(0.31,"UN Comtrade",0.85,"HHI")},
+          jury:{verdict:"GO (مبدئي)",confidence:0.74}},
+        {country:"مصر",iso3:"EGY",total_score:0.69,confidence:0.75,recommendation:"السعودية ثاني أكبر مورّد (حصة 45%) — السوق مفتوح.",
+          components:{market_size:dp(17500000,"UN Comtrade",0.9,"6,224 طن"),saudi_position:dp(0.45,"UN Comtrade",0.9,"حصة 45%"),
+            demand_capacity:dp(3338,"World Bank",0.9,"دخل الفرد $"),competition:dp(0.40,"UN Comtrade",0.85,"HHI")},
+          jury:{verdict:"GO (مبدئي)",confidence:0.7}},
+        {country:"الإمارات",iso3:"ARE",total_score:0.58,confidence:0.5,recommendation:"سوق إعادة تصدير — تحقّق من المنافسة.",
+          components:{market_size:dp(96000000,"UN Comtrade",0.9),saudi_position:dp(0.22,"UN Comtrade",0.8,"حصة 22%"),
+            demand_capacity:dp(75000,"World Bank",0.9,"PPP/فرد"),competition:dp(null,null,0.0)},
+          quality_flags:["تركّز المنافسين: لا بيانات"]}
+      ]};
+  }
+  if(/[?&]demo=1/.test(location.search)){
+    $("product").value="تمور";$("year").value=2023;
+    render(demoData(),true);
   }
 })();
 </script>
