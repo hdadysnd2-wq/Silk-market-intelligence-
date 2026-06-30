@@ -34,6 +34,7 @@ def create_app():
         from fastapi import FastAPI, HTTPException
         from fastapi.middleware.cors import CORSMiddleware
         from fastapi.responses import JSONResponse
+        from fastapi.staticfiles import StaticFiles
         from pydantic import BaseModel
     except ImportError as exc:  # pragma: no cover - exercised only without dep
         raise RuntimeError(_PIP_HINT) from exc
@@ -108,6 +109,13 @@ def create_app():
             raise HTTPException(status_code=404,
                                 detail=f"analysis {analysis_id} not found")
         return _json(found)
+
+    # الواجهة الثابتة على نفس الخدمة — serve the static frontend at "/" so one
+    # Render service hosts BOTH the API and the UI (same origin, no CORS needed).
+    # Registered last so the API routes above take precedence over static files.
+    web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+    if os.path.isdir(web_dir):
+        app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
 
     return app
 

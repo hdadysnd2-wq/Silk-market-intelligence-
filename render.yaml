@@ -5,7 +5,7 @@ services:
     name: silk-market-intelligence-api
     runtime: python
     plan: free
-    branch: claude/initial-build        # ينشر من فرع العمل (main لا يحوي الكود بعد)
+    branch: main                        # بعد دمج PR #1، الكود على main
     healthCheckPath: /health
     buildCommand: pip install -r requirements.txt fastapi uvicorn
     startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT

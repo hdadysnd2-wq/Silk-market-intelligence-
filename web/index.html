@@ -39,9 +39,9 @@
     <p class="sub">ترتيب أسواق التصدير ببيانات حقيقية (UN Comtrade + World Bank). كل رقم موسوم بمصدره ودرجة ثقته · نتيجة أوّلية.</p>
 
     <div class="card">
-      <label>رابط الباك-إند (API) — مثل <code>https://your-api.onrender.com</code></label>
+      <label>رابط الباك-إند (API) — اتركه <b>فارغًا</b> إن كانت الواجهة على نفس خدمة Render</label>
       <div class="row">
-        <div style="flex:3"><input type="text" id="api" placeholder="https://your-api.onrender.com" /></div>
+        <div style="flex:3"><input type="text" id="api" placeholder="فارغ = نفس الخدمة (Render) · أو https://your-api.onrender.com" /></div>
         <div style="flex:0"><button id="ping" type="button">فحص الاتصال</button></div>
       </div>
       <div id="health" class="muted"></div>
@@ -93,7 +93,6 @@
   }
 
   $("ping").addEventListener("click", function () {
-    if (!base()) { $("health").innerHTML = '<span class="err">أدخل رابط الباك-إند أولًا.</span>'; return; }
     $("health").textContent = "…جارٍ الفحص";
     fetch(base() + "/health").then(function (r) { return r.json(); }).then(function (j) {
       $("health").innerHTML = '<span style="color:var(--ok)">متصل ✓</span> — الحزم: ' + esc(JSON.stringify(j.deps || {}));
@@ -105,7 +104,6 @@
 
   $("go").addEventListener("click", function () {
     var b = base(), product = ($("product").value || "").trim();
-    if (!b) { out.innerHTML = '<div class="card err">أدخل رابط الباك-إند أولًا.</div>'; return; }
     if (!product) { out.innerHTML = '<div class="card err">اكتب اسم المنتج.</div>'; return; }
     var body = {
       product: product,

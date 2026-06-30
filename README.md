@@ -119,16 +119,16 @@ docker run -p 8000:8000 silk-api
 
 **CI** (`.github/workflows/ci.yml`): يثبّت `requests pandas pytest` ويشغّل `python -m pytest tests/ -q` عند كل push / PR.
 
-### النشر · Deployment (Netlify + Render)
+### النشر · Deployment (Render — خدمة واحدة)
 
-البنية: **الواجهة الثابتة** (`web/`) على Netlify، و**الباك-إند Python** على Render/Railway (Netlify لا يشغّل بايثون).
+خدمة Render واحدة تقدّم **الواجهة + الـ API معًا** (`api.py` يضيف `web/` على `/`)، فلا حاجة لـ Netlify ولا لصق رابط:
 
-1. **الباك-إند → Render:** New + > Blueprint > اربط المستودع (يقرأ `render.yaml`)، أو يدويًا
-   build: `pip install -r requirements.txt fastapi uvicorn` و start: `uvicorn api:app --host 0.0.0.0 --port $PORT`.
-   خُذ الرابط الناتج (مثل `https://...onrender.com`). (Railway يقرأ `Procfile`.)
-2. **الواجهة → Netlify:** انشر مجلّد `web/` (يقرأ `netlify.toml`، `publish = "web"`).
-3. في الصفحة المنشورة: الصق رابط الباك-إند في حقل «رابط الباك-إند»، ثم حلّل.
-4. **CORS:** مفعّل في `api.py`؛ للإنتاج قيّده بدومين Netlify عبر `CORS_ORIGINS` في بيئة Render.
+1. Render → **New +** → **Web Service** (أو Blueprint يقرأ `render.yaml`)، اربط المستودع، فرع `claude/initial-build`.
+   - Build: `pip install -r requirements.txt`  ·  Start: `uvicorn api:app --host 0.0.0.0 --port $PORT`  ·  Python 3.11 (`.python-version`).
+2. افتح رابط الخدمة (مثل `https://...onrender.com`) → **تظهر الواجهة مباشرةً**. اترك حقل «رابط الباك-إند» فارغًا (نفس الخدمة) → اكتب المنتج → حلّل.
+3. تحقّق من `/<الرابط>/health` → `{"status":"ok"}`.
+
+> بديل اختياري: نشر الواجهة وحدها على Netlify (`netlify.toml`, `publish = web`) ووضع رابط الـ API في الحقل؛ حينها فعّل `CORS_ORIGINS` بدومين Netlify (CORS مهيّأ في `api.py`).
 
 ---
 
