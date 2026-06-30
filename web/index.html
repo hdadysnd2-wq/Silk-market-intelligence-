@@ -122,6 +122,7 @@
   .prate{color:#d4a72c;font-size:12px} .pstore{color:var(--muted-2);font-size:12px}
   .pprice{font-family:var(--en);font-weight:700;color:var(--blue)}
   .cshare{font-family:var(--en);font-weight:700;color:var(--blue);font-size:13px}
+  .ssrc{font-family:var(--mono);font-size:10.5px;color:var(--blue);background:var(--blue-50);padding:2px 7px;border-radius:6px}
   .needkey{margin-top:7px;font-size:12.5px;line-height:1.6;color:var(--muted);background:var(--mist);
     border:1px dashed var(--line);border-radius:9px;padding:9px 12px}
   .pstore[href]{color:var(--blue);text-decoration:none} .pstore[href]:hover{text-decoration:underline}
@@ -363,6 +364,11 @@
       var factories=realVals(m.maps);          // مصانع/موزعون بالاسم — named players
       var prices=realVals(m.localprice);       // أسعار التجزئة الفعلية — real prices
       var ai=m.jury&&m.jury.ai?m.jury.ai:null; // حكم كلود — Claude's verdict
+      // الموردون وتجار الجملة (Maps + Volza + explee) — consolidated named businesses
+      var suppliers=[];
+      factories.forEach(function(p){suppliers.push({name:p.name||p,source:"Google Maps",detail:p.rating?("★"+p.rating):(p.address||"مصنع/موزّع")});});
+      realVals(m.volza).forEach(function(v){suppliers.push({name:typeof v==="object"?(v.name||v.importer):v,source:"Volza",detail:"مستورد (بوالص شحن)"});});
+      realVals(m.explee).forEach(function(v){suppliers.push({name:typeof v==="object"?(v.name||v.company):v,source:"Explee",detail:"مورّد / جهة B2B"});});
       return {
         id:m.iso3+"-"+i,country:m.country,code:iso2(m.iso3),
         import_value:dpv(c.market_size),
@@ -371,9 +377,10 @@
         income_ppp:m.income_ppp!=null?m.income_ppp:null,
         population:m.population!=null?m.population:null,
         top_competitor:m.top_competitor||null,
-        competitors:m.competitors||[],// [{partner,share,value_usd}] — المنتجات/الدول المنافسة
+        competitors:m.competitors||[],// [{partner,share,value_usd}] — الدول المنافسة وحصصها
         factories:factories,        // [{name,rating,...}]
-        prices:prices,              // [{title,price,currency,store,...}]
+        suppliers:suppliers,        // [{name,source,detail}] — الموردون وتجار الجملة
+        prices:prices,              // [{title,price,currency,store,...}] — منتجات منافسة + أسعار
         ai:ai,                      // {verdict,confidence,reasoning,by}
         note:(m.jury&&m.jury.verdict)?m.jury.verdict:(m.recommendation||""),
         sources:Object.keys(c).map(function(k){return c[k]&&c[k].source;}).filter(Boolean)
@@ -425,7 +432,7 @@
         '<div class="stat"><div class="l">السكان</div><div class="v num">'+fmtNum(sel.population)+'</div></div>'+
       '</div>'+
       '<div class="drow2">المنافس المهيمن: <b>'+esc(sel.top_competitor||"—")+'</b></div>'+
-      aiBlock(sel)+competitorsBlock(sel)+playersBlock(sel)+pricesBlock(sel)+cultureBlock()+
+      aiBlock(sel)+competitorsBlock(sel)+pricesBlock(sel)+suppliersBlock(sel)+cultureBlock()+
       (sel.note?'<div class="note">'+esc(sel.note)+'</div>':'')+
       '<div class="srcs">'+(sel.sources||[]).map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'+
       '<div class="dbtns"><button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button>'+
@@ -452,14 +459,16 @@
       (a.reasoning?'<div class="aitext">'+esc(a.reasoning)+'</div>':'')+
       (a.by?'<div class="aiby">'+esc(a.by)+' · قرار أوّلي</div>':'')+'</div>';
   }
-  // مصانع/موزّعون بالاسم (Google Maps) — named factories/distributors + count.
-  function playersBlock(sel){
-    var f=sel.factories||[];if(!f.length)return "";
-    var names=f.slice(0,6).map(function(p){
-      var r=p.rating!=null?' <span class="prate">★'+p.rating+'</span>':'';
-      return '<li>'+esc(p.name||"—")+r+'</li>';}).join("");
-    return '<div class="plblk"><div class="plhd">مصانع وموزّعون بالاسم — <b>'+f.length+'</b> (Google Maps)</div>'+
-      '<ul class="pllist">'+names+'</ul></div>';
+  // الموردون وتجار الجملة (Google Maps + Volza + explee) — consolidated named businesses.
+  function suppliersBlock(sel){
+    var s=sel.suppliers||[];
+    if(!s.length)return needBlock("الموردون وتجار الجملة والمصانع",
+      "يتطلب مفتاح Google Maps (موزّعون/مصانع) و/أو Volza (مستوردون من بوالص الشحن) و/أو Explee (جهات B2B). المنصة لا تختلق أسماء شركات.");
+    var rows=s.slice(0,8).map(function(p){
+      return '<li>'+esc(p.name||"—")+' <span class="pstore">'+esc(p.detail||"")+'</span> '+
+        '<span class="ssrc">'+esc(p.source)+'</span></li>';}).join("");
+    return '<div class="plblk"><div class="plhd">الموردون وتجار الجملة والمصانع — <b>'+s.length+'</b></div>'+
+      '<ul class="pllist">'+rows+'</ul></div>';
   }
   // كتلة «يتطلب مفتاح / لا بيانات» — honest status instead of a blank section.
   function needBlock(title,msg){
@@ -475,20 +484,20 @@
       var sh=x.share!=null?x.share+"%":"—";
       return '<li>'+esc(x.partner||"—")+' <span class="cshare">'+esc(sh)+'</span> '+
         '<span class="pstore">'+fmtUSD(x.value_usd)+'</span></li>';}).join("");
-    return '<div class="plblk"><div class="plhd">المنتجات المنافسة — <b>'+c.length+'</b> دولة مورّدة (Comtrade)</div>'+
+    return '<div class="plblk"><div class="plhd">الدول المنافسة وحصصها — <b>'+c.length+'</b> دولة مورّدة (Comtrade)</div>'+
       '<ul class="pllist">'+rows+'</ul></div>';
   }
   // أسعار السوق المحلي الفعلية — actual in-market retail prices (needs key).
   function pricesBlock(sel){
     var p=sel.prices||[];
-    if(!p.length)return needBlock("أسعار السوق المحلي (متاجر التجزئة)",
-      "يتطلب مفتاح أسعار السوق المحلي (LOCALPRICE_API_KEY) — أمازون/نون/جوميا. المنصة لا تختلق سعرًا.");
+    if(!p.length)return needBlock("المنتجات المنافسة وأسعارها في المتاجر المحلية",
+      "يتطلب مفتاح أسعار السوق المحلي (LOCALPRICE_API_KEY) — أمازون/نون/جوميا. كل قائمة = منتج منافس بسعره ومتجره. المنصة لا تختلق سعرًا.");
     var rows=p.slice(0,5).map(function(x){
       var cur=x.currency?' '+esc(x.currency):'';
       var st=x.store?' <span class="pstore">'+esc(x.store)+'</span>':'';
       return '<li><span class="pprice">'+esc(x.price)+cur+'</span> '+esc((x.title||"").slice(0,48))+st+'</li>';
     }).join("");
-    return '<div class="plblk"><div class="plhd">أسعار السوق المحلي — <b>'+p.length+'</b> (متاجر التجزئة)</div>'+
+    return '<div class="plblk"><div class="plhd">المنتجات المنافسة وأسعارها — <b>'+p.length+'</b> (المتاجر المحلية)</div>'+
       '<ul class="pllist">'+rows+'</ul></div>';
   }
   // ثقافة المستهلك ونبض السوق (بحث الويب) — consumer culture (product-level, needs key).
@@ -600,6 +609,7 @@
         ai:{verdict:"GO",confidence:0.82,reasoning:"سوق استيراد ضخم ومنافسة معتدلة وحضور سعودي قابل للنمو — دخول واعد (عرض توضيحي).",by:"Claude (claude-opus-4-8)"},
         competitors:[{partner:"تونس",share:31.4,value_usd:75700000},{partner:"الجزائر",share:22.1,value_usd:53200000},{partner:"السعودية",share:12.0,value_usd:28900000},{partner:"الإمارات",share:9.3,value_usd:22400000},{partner:"إيران",share:7.8,value_usd:18800000}],
         factories:[{name:"Maroc Dattes SARL",rating:4.3},{name:"Coopérative Tafilalet",rating:4.6},{name:"Atlas Fruits Co.",rating:4.1}],
+        suppliers:[{name:"Maroc Dattes SARL",source:"Google Maps",detail:"★4.3"},{name:"Coopérative Tafilalet",source:"Google Maps",detail:"★4.6"},{name:"Atlas Import & Distribution",source:"Volza",detail:"مستورد (بوالص شحن)"},{name:"Dattes du Sud SARL",source:"Explee",detail:"مورّد / جهة B2B"}],
         prices:[{title:"تمور المجهول 1kg",price:89,currency:"MAD",store:"Jumia"},{title:"تمور سكري فاخر",price:120,currency:"MAD",store:"Marjane"}],
         note:"أكبر سوق استيراد عالمي للتمور؛ مفتوح ومنافسة معتدلة — مرشّح قوي.",sources:["UN Comtrade","World Bank","Google Maps","Local retail"]},
       {id:"EG-1",country:"مصر",code:"EG",import_value:23849784,saudi_share:44,score:74,confidence:"عالية",income_ppp:14800,population:111000000,top_competitor:"العراق",
