@@ -90,8 +90,10 @@ def create_app():
         with_faostat: bool = False
         with_maps: bool = False
         with_websearch: bool = False
+        with_localprice: bool = False
         with_volza: bool = False
         with_explee: bool = False
+        with_ai: bool = False
         persist: bool = False
 
     def _json(payload: object):
@@ -130,8 +132,9 @@ def create_app():
             req.product, year=req.year, with_trends=req.with_trends,
             with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
             with_maps=req.with_maps, with_websearch=req.with_websearch,
+            with_localprice=req.with_localprice,
             with_volza=req.with_volza, with_explee=req.with_explee,
-            persist=req.persist)
+            with_ai=req.with_ai, persist=req.persist)
         return _json(result)
 
     @app.get("/sources")
@@ -149,8 +152,10 @@ def create_app():
             ("Google Trends", "free", None),
             ("Google Maps", "free", "GOOGLE_MAPS_API_KEY"),
             ("Web Search", "free", "SEARCH_API_KEY"),
+            ("Local retail prices", "paid", "LOCALPRICE_API_KEY"),
             ("Volza", "paid", "VOLZA_API_KEY"),
             ("explee", "paid", "EXPLEE_API_KEY"),
+            ("Claude (AI judge)", "ai", "ANTHROPIC_API_KEY"),
         ]
         return _json([
             {"name": name, "type": kind, "wired": True, "key_env": key_env,

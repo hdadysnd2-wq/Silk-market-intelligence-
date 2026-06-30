@@ -26,7 +26,9 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             year: int | None = None, *, with_trends: bool = False,
             with_tariffs: bool = False, with_faostat: bool = False,
             with_maps: bool = False, with_websearch: bool = False,
+            with_localprice: bool = False,
             with_volza: bool = False, with_explee: bool = False,
+            with_ai: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
             check_quality: bool = True) -> dict:
     """حلّل منتجًا عبر الأسواق — full preliminary market analysis for one product.
@@ -43,6 +45,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
       with_tariffs  — attach a WITS applied-tariff finding per top market (row['tariff']).
       with_faostat  — attach a FAOSTAT per-capita supply finding per top market (row['faostat']).
       with_maps     — attach Google Maps named businesses per top market (row['maps']).
+      with_localprice— attach actual in-market retail prices per top market (row['localprice']).
       with_websearch— attach web-search results for the product (result['websearch']).
       with_volza    — attach Volza named importers (PAID) per top market (row['volza']).
       with_explee   — attach Explee buyers/contacts (PAID) per top market (row['explee']).
@@ -81,6 +84,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                 "iso3": row["iso3"], "year": year}
         reports = manager.distribute(task)
         row["jury"] = JuryCommittee.evaluate(reports)
+        if with_ai:  # الطبقة 3: كلود يَحكم على مخرجات الوكلاء — Claude judges the findings
+            _ai_verdict(row, product_name, reports)
 
     # 3b) طبقات سياق إضافية (لا تغيّر النقاط) — additive context layers (no score change).
     if with_trends:
@@ -91,6 +96,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_faostat(ranked[:_ENRICH_TOP], product_name, year)
     if with_maps:
         _enrich_maps(ranked[:_ENRICH_TOP], product_name)
+    if with_localprice:
+        _enrich_localprice(ranked[:_ENRICH_TOP], product_name)
     if with_volza:
         _enrich_volza(ranked[:_ENRICH_TOP], hs.value)
     if with_explee:
@@ -110,11 +117,36 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     }
     if with_websearch:
         result["websearch"] = _websearch(product_name)
+    if with_ai:  # الطبقة 3: كلود يكتب التقرير المبدئي — Claude writes the report
+        rep = _ai_report(result)
+        if rep:
+            result["report"] = rep
     if check_quality:
         _annotate_quality(result)
     if persist:
         _persist(result, db_path)
     return result
+
+
+def _ai_verdict(row: dict, product: str, reports: list) -> None:
+    """الطبقة 3 — حكم كلود على صفّ السوق — attach Claude's verdict (graceful None)."""
+    try:
+        import silk_ai_judge  # lazy: optional layer, key-gated
+        v = silk_ai_judge.ai_verdict(product, row.get("country") or row.get("iso3"), reports)
+        if v:
+            row.setdefault("jury", {})["ai"] = v
+    except Exception as e:  # noqa: BLE001 — never crash analysis
+        log.warning("AI verdict failed for %s: %s", row.get("iso3"), e)
+
+
+def _ai_report(result: dict):
+    """الطبقة 3 — تقرير كلود المبدئي — Claude's written report (None if unavailable)."""
+    try:
+        import silk_ai_judge  # lazy
+        return silk_ai_judge.ai_report(result)
+    except Exception as e:  # noqa: BLE001
+        log.warning("AI report failed: %s", e)
+        return None
 
 
 def _enrich_trends(rows: list[dict], product_name: str) -> None:
@@ -170,6 +202,21 @@ def _enrich_maps(rows: list[dict], product_name: str) -> None:
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("maps enrichment failed for %s: %s", row.get("iso3"), e)
             row["maps"] = []
+
+
+def _enrich_localprice(rows: list[dict], product_name: str) -> None:
+    """أضف أسعار التجزئة المحلية لكل سوق — attach actual in-market retail prices
+    (الأكثر مبيعاً والأسعار الفعلية، docx 'المتاجر المحلية'). Graceful None offline."""
+    from silk_localprice_agent import LocalPriceAgent  # lazy: optional layer
+    agent = LocalPriceAgent()
+    for row in rows:
+        try:
+            query = f"{product_name} {row.get('country', '')}".strip()
+            rep = agent.run({"query": query, "market": row.get("iso2")})
+            row["localprice"] = rep.findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("localprice enrichment failed for %s: %s", row.get("iso3"), e)
+            row["localprice"] = []
 
 
 def _enrich_volza(rows: list[dict], hs_code: str) -> None:

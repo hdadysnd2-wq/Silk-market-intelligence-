@@ -90,19 +90,22 @@ def _saudi_position_component(comps: list[DataPoint]) -> DataPoint:
 
 
 def _demand_capacity_component(iso3: str, year: int) -> DataPoint:
-    """طاقة الطلب — PPP income x population (fall back to GDP/cap)."""
+    """طاقة الطلب — القوة الشرائية للفرد (ثراء السوق، لا حجمه).
+
+    purchasing power PER CAPITA (PPP, GDP/cap fallback). NOT multiplied by
+    population — multiplying by population made the largest economies (USA, China)
+    dominate every product. Per-capita wealth measures willingness/ability to pay,
+    so ranking now differentiates by product (market size already captures volume).
+    """
     inc = ppp_per_capita(iso3, year)
     if inc.value is None:
         inc = gdp_per_capita(iso3, year)
-    pop = population(iso3, year)
-    if inc.value is None or pop.value is None:
+    if inc.value is None:
         return DataPoint(None, "World Bank", 0.0,
-                         note=f"missing income/population for {iso3}",
+                         note=f"no income data for {iso3} {year}",
                          retrieved_at=_today())
-    # حاصل الضرب = حجم السوق الكامن — income x people = latent purchasing power.
-    return DataPoint(float(inc.value) * float(pop.value), "World Bank", 0.9,
-                     note=f"{inc.note}; pop={int(pop.value)}",
-                     retrieved_at=_today())
+    return DataPoint(float(inc.value), "World Bank", 0.9,
+                     note=inc.note, retrieved_at=_today())
 
 
 def _top_competitor(comps: list[DataPoint]) -> str | None:

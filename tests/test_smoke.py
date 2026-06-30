@@ -139,6 +139,29 @@ def test_new_agents_import_and_no_fabrication_keyless():
         assert dp.value is None and dp.confidence == 0.0  # no fabrication keyless
 
 
+def test_localprice_agent_no_fabrication_keyless():
+    # وكيل أسعار السوق المحلي يُستورد بلا شبكة/مفتاح، وكل نداء بلا مفتاح => value=None.
+    import silk_localprice_agent as lp
+
+    os.environ.pop("LOCALPRICE_API_KEY", None)
+    with _block_network():
+        rep = lp.LocalPriceAgent().run({"query": "تمور", "market": "ma"})
+    assert rep.failed is True
+    dp = rep.findings[0]
+    assert dp.value is None and dp.confidence == 0.0  # no fabricated price
+
+
+def test_engine_localprice_layer_offline():
+    # طبقة السعر المحلي مفعّلة بلا شبكة/مفتاح: لا تعطّل، تبقى النتيجة مبدئية بلا اختلاق.
+    os.environ.pop("LOCALPRICE_API_KEY", None)
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
+                             year=2023, with_localprice=True)
+    assert res["classified"] is True and res["year"] == 2023
+    assert "localprice" in res["markets"][0]            # context attached
+    assert res["markets"][0]["total_score"] == 0.0      # additive, score unchanged
+
+
 def test_engine_paid_layers_offline():
     # الطبقات الأربع الجديدة مفعّلة بلا شبكة/مفتاح: لا تعطّل، يبقى التصنيف سليمًا.
     with _block_network():

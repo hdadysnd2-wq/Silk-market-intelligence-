@@ -1,0 +1,143 @@
+"""الطبقة 3 — كلود حَكَمًا ومُعِدّ تقرير · Layer 3: Claude as judge + report writer.
+
+البنية ثلاث طبقات: (1) بيانات مجانية حقيقية، (2) وكلاء يجمعونها، (3) كلود يَحكم
+على مخرجات الوكلاء ويكتب التقرير. Claude only REASONS over the agents' real,
+provenance-tagged findings — it never invents data (founding principle). Optional:
+needs ANTHROPIC_API_KEY; without it everything degrades to the deterministic jury.
+
+`import silk_ai_judge` works offline / keyless; `requests` is imported lazily.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+
+log = logging.getLogger(__name__)
+
+_ENDPOINT = "https://api.anthropic.com/v1/messages"
+_VERSION = "2023-06-01"
+_MODEL = os.environ.get("SILK_AI_MODEL", "claude-opus-4-8")
+_TIMEOUT = 60
+
+# مبدأ الحَكَم — non-negotiable judging principle handed to the model every call.
+_PRINCIPLE = (
+    "أنت حَكَم دخول أسواق التصدير في منصة سِلك (منتجات سعودية). مبدأ غير قابل "
+    "للتفاوض: لا تخترع أي بيانات أو أرقام. احكم فقط استنادًا إلى الحقائق المعطاة، "
+    "وكل حقيقة موسومة بمصدرها ودرجة ثقتها. إن نقص مصدر فصرّح بأن البيانات ناقصة "
+    "بدل تقدير رقم. القرار أوّلي لا نهائي. اكتب بالعربية، موجزًا ومبنيًّا على الأدلة."
+)
+
+
+def available() -> bool:
+    """هل مفتاح كلود متوفّر؟ — is the AI layer usable right now?"""
+    return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+
+
+def _call(system: str, user: str, max_tokens: int = 1600) -> str | None:
+    """نداء Messages API — one Claude call; None on missing key / any failure."""
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        import requests  # lazy: keep core import offline-safe
+        resp = requests.post(
+            _ENDPOINT, timeout=_TIMEOUT,
+            headers={"x-api-key": key, "anthropic-version": _VERSION,
+                     "content-type": "application/json"},
+            json={"model": _MODEL, "max_tokens": max_tokens, "system": system,
+                  "messages": [{"role": "user", "content": user}]},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("stop_reason") == "refusal":  # safety decline -> no fabrication
+            log.warning("AI judge: request refused by the model")
+            return None
+        text = "".join(b.get("text", "") for b in data.get("content", [])
+                       if b.get("type") == "text").strip()
+        return text or None
+    except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
+        log.warning("AI judge call failed: %s", e)
+        return None
+
+
+def _facts(reports: list) -> str:
+    """حوّل تقارير الوكلاء إلى حقائق نصّية موسومة — agents' findings as tagged facts."""
+    lines: list[str] = []
+    for rep in reports or []:
+        name = getattr(rep, "agent_name", "agent")
+        if getattr(rep, "failed", False):
+            lines.append(f"- [{name}] لا بيانات: {getattr(rep, 'summary', '')}")
+            continue
+        for dp in getattr(rep, "findings", []) or []:
+            val = getattr(dp, "value", None)
+            if val is None:
+                lines.append(f"- [{name}] قيمة غير متوفّرة ({getattr(dp, 'note', '')})")
+            else:
+                lines.append(
+                    f"- [{name}] {val} | المصدر: {getattr(dp, 'source', '?')} | "
+                    f"ثقة {getattr(dp, 'confidence', '?')} | {getattr(dp, 'note', '')}")
+    return "\n".join(lines) or "(لا حقائق)"
+
+
+def ai_verdict(product: str, market: str, reports: list) -> dict | None:
+    """حُكم كلود على سوق — Claude's preliminary verdict over the agents' findings.
+
+    Returns {verdict, confidence, reasoning, by:"Claude (...)"} or None when the AI
+    layer is unavailable (caller then keeps the deterministic jury). Never fabricates.
+    """
+    facts = _facts(reports)
+    user = (
+        f"المنتج: {product}\nالسوق: {market}\n\nحقائق الوكلاء (لا تتجاوزها):\n{facts}\n\n"
+        "أصدر حكمًا أوّليًّا على دخول هذا السوق. أعد JSON فقط بهذا الشكل:\n"
+        '{"verdict":"GO|WATCH|NO-GO","confidence":0.0-1.0,"reasoning":"سبب موجز مبني على الحقائق"}'
+    )
+    out = _call(_PRINCIPLE, user, max_tokens=700)
+    if not out:
+        return None
+    try:
+        start, end = out.find("{"), out.rfind("}")
+        obj = json.loads(out[start:end + 1]) if start >= 0 else {}
+    except Exception:  # noqa: BLE001 — non-JSON reply still useful as reasoning
+        obj = {"verdict": "WATCH", "reasoning": out}
+    return {
+        "verdict": obj.get("verdict", "WATCH"),
+        "confidence": obj.get("confidence"),
+        "reasoning": obj.get("reasoning", ""),
+        "by": f"Claude ({_MODEL})",
+        "preliminary": True,
+    }
+
+
+def ai_report(result: dict) -> str | None:
+    """تقرير تصدير مبدئي — a written market-entry report over the full analysis.
+
+    Summarizes ranked markets + provenance into a readable recommendation. Strictly
+    grounded in `result`; flags gaps rather than inventing numbers. None if no key.
+    """
+    if not available():
+        return None
+    markets = result.get("markets", [])[:8]
+    rows = []
+    for i, m in enumerate(markets, 1):
+        comps = m.get("components", {})
+        def cv(k):
+            c = comps.get(k)
+            return (c.get("value") if isinstance(c, dict) else c)
+        rows.append(
+            f"{i}. {m.get('country')} — نقاط {m.get('total_score')} ثقة {m.get('confidence')}؛ "
+            f"استيراد {cv('market_size')}$، حصة السعودية {cv('saudi_position')}%، "
+            f"دخل/PPP {m.get('income_ppp')}، سكان {m.get('population')}، "
+            f"منافس مهيمن {m.get('top_competitor')}")
+    user = (
+        f"المنتج: {result.get('product')} (HS {result.get('hs_code')}).\n"
+        f"الأسواق مرتّبة:\n" + "\n".join(rows) + "\n\n"
+        "اكتب تقريرًا أوّليًّا موجزًا (٤–٧ فقرات): أفضل ١–٣ أسواق ولماذا (بالأدلة)، "
+        "تحذيرات وفجوات البيانات، وخطوة تالية مقترحة. لا تخترع أرقامًا غير معطاة.")
+    return _call(_PRINCIPLE, user, max_tokens=1600)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    print("AI judge available (ANTHROPIC_API_KEY set)?", available())
+    print("verdict (keyless ->) :", ai_verdict("تمور", "مصر", []))
