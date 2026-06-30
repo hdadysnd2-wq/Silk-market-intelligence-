@@ -3,348 +3,473 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>سِلك · ذكاء الأسواق</title>
+<title>منصة سِلك · ذكاء الأسواق</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0b1120; --bg2:#0e1729; --card:#131d33; --card2:#16213b; --line:#26324d;
-    --ink:#eaf0fb; --mut:#93a1bd; --dim:#6b7896;
-    --acc:#3b82f6; --acc2:#22d3ee; --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
-    --grad:linear-gradient(135deg,#3b82f6,#22d3ee);
-    --r:14px; --sh:0 10px 30px rgba(0,0,0,.35);
+    --blue:#2348E2; --blue-deep:#1633A8; --blue-400:#5C73EE; --blue-50:#EEF1FD;
+    --ink:#0C0E1A; --mist:#F5F6FB; --line:#E6E8F0; --muted:#6E7180; --muted-2:#8A8FA3; --white:#fff;
+    --ar:"IBM Plex Sans Arabic",system-ui,Tahoma,sans-serif;
+    --en:"IBM Plex Sans",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --sh:0 1px 3px rgba(12,14,26,.06),0 6px 20px rgba(12,14,26,.06);
+    --ease:cubic-bezier(.22,.61,.36,1);
   }
+  @keyframes silkPulse{0%,100%{opacity:.35}50%{opacity:1}}
   *{box-sizing:border-box}
-  html,body{margin:0}
-  body{font-family:"Segoe UI",system-ui,Tahoma,Arial,sans-serif;background:
-    radial-gradient(1200px 600px at 90% -10%,#11244a 0%,transparent 55%),var(--bg);
-    color:var(--ink);line-height:1.5;min-height:100vh}
-  a{color:var(--acc2)}
-  .wrap{max-width:1040px;margin:0 auto;padding:0 16px 72px}
+  body{margin:0;background:var(--white);color:var(--ink);font-family:var(--ar);
+    font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .mono{font-family:var(--mono)} .en{font-family:var(--en)}
+  .wrap{max-width:1240px;margin:0 auto;padding:0 28px}
+  .num{font-family:var(--en);font-variant-numeric:tabular-nums}
+  button{font-family:inherit;cursor:pointer}
+  .hidden{display:none!important}
 
-  header{display:flex;align-items:center;gap:14px;padding:22px 4px 18px}
-  .logo{width:44px;height:44px;border-radius:12px;background:var(--grad);
-    display:grid;place-items:center;font-weight:800;color:#06101f;font-size:20px;box-shadow:var(--sh)}
-  header h1{font-size:1.45rem;margin:0;letter-spacing:-.3px}
-  header .tag{color:var(--mut);font-size:.82rem;margin-top:2px}
+  /* header */
+  header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);
+    backdrop-filter:saturate(140%) blur(8px);border-bottom:1px solid var(--line)}
+  .hrow{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 0}
+  .brand{display:flex;align-items:center;gap:16px}
+  .mark{width:38px;height:38px;border-radius:11px;background:var(--blue);display:grid;place-items:center;
+    color:#fff;font-weight:700;font-size:19px;box-shadow:0 4px 12px rgba(35,72,226,.3)}
+  .sep{width:1px;height:34px;background:var(--line)}
+  .btitle{font-size:18px;font-weight:600;line-height:1.1}
+  .bsub{font-size:13.5px;color:var(--muted)}
+  .live{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;font-weight:500;
+    letter-spacing:.12em;color:var(--muted)}
+  .live .d{width:7px;height:7px;border-radius:50%;background:#2ea043;box-shadow:0 0 0 3px rgba(46,160,67,.15)}
+  .ghostbtn{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);
+    color:var(--ink);border-radius:10px;padding:9px 14px;font-size:14px;font-weight:500;transition:.18s var(--ease)}
+  .ghostbtn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-50)}
+  .primary{display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;border:0;
+    border-radius:12px;padding:11px 20px;font-size:14.5px;font-weight:600;box-shadow:0 6px 16px rgba(35,72,226,.24);
+    transition:.18s var(--ease)}
+  .primary:hover{background:var(--blue-deep)} .primary:disabled{opacity:.5;box-shadow:none}
 
-  .panel{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--line);
-    border-radius:var(--r);box-shadow:var(--sh);padding:18px;margin-bottom:18px}
-  .panel h2{font-size:.8rem;color:var(--dim);font-weight:700;text-transform:uppercase;
-    letter-spacing:.12em;margin:0 0 12px}
+  .head-right{display:flex;align-items:center;gap:14px}
 
-  label{display:block;font-size:.78rem;color:var(--mut);margin:0 0 6px}
-  input[type=text],input[type=number]{width:100%;padding:13px 14px;border-radius:11px;
-    border:1px solid var(--line);background:#0a1326;color:var(--ink);font-size:1rem;outline:none;transition:.15s}
-  input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(59,130,246,.18)}
-  .row{display:flex;gap:14px;flex-wrap:wrap}
-  .row>div{flex:1;min-width:150px}
+  /* control bar */
+  .ctrl{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:26px 0 18px;flex-wrap:wrap}
+  .search{position:relative;width:360px;max-width:100%}
+  .sbox{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:40px;
+    padding:11px 16px;box-shadow:var(--sh);transition:.18s var(--ease)}
+  .sbox:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px rgba(35,72,226,.1)}
+  .sbox input{border:0;outline:0;flex:1;font-family:var(--ar);font-size:15px;background:transparent;color:var(--ink)}
+  .hschip{font-family:var(--mono);font-size:12px;background:var(--blue-50);color:var(--blue);padding:3px 8px;border-radius:7px}
+  .drop{position:absolute;top:calc(100% + 8px);right:0;left:0;background:#fff;border:1px solid var(--line);
+    border-radius:14px;box-shadow:0 12px 34px rgba(12,14,26,.14);z-index:40;overflow:hidden;max-height:340px;overflow-y:auto}
+  .drow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .drow:last-child{border-bottom:0} .drow:hover{background:var(--mist)}
+  .drow .nm{font-size:14.5px;font-weight:500} .drow .an{font-size:11px;color:var(--blue);background:var(--blue-50);padding:2px 7px;border-radius:6px}
+  .counter{font-size:14px;color:var(--muted)} .counter b{color:var(--ink);font-weight:600}
+  .sorts{display:flex;gap:8px}
+  .sortbtn{background:#fff;border:1px solid var(--line);border-radius:40px;padding:8px 15px;font-size:13.5px;color:var(--muted);transition:.16s var(--ease)}
+  .sortbtn.on{background:var(--blue);color:#fff;border-color:var(--blue)}
 
-  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px}
-  .chip{padding:6px 13px;border-radius:999px;border:1px solid var(--line);background:#0e1a30;
-    color:var(--mut);font-size:.85rem;cursor:pointer;transition:.15s}
-  .chip:hover{color:var(--ink);border-color:var(--acc);background:#102444}
+  /* card */
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh)}
+  .card.featured{position:relative;overflow:hidden}
+  .card.featured::after{content:"";position:absolute;inset:auto 0 0 0;height:6px;background:var(--blue)}
+  .ttl{font-family:var(--mono);font-size:12.5px;font-weight:600;letter-spacing:.08em;color:var(--blue);text-transform:uppercase}
 
-  .opts{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:.86rem;color:var(--mut)}
-  .opts label{display:flex;align-items:center;gap:7px;margin:0;cursor:pointer}
-  details.adv{margin-top:12px}
-  details.adv>summary{cursor:pointer;color:var(--dim);font-size:.8rem;list-style:none}
-  details.adv>summary::-webkit-details-marker{display:none}
+  /* pipeline */
+  .pipe{padding:18px 20px;margin-bottom:18px}
+  .pipe-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+  .status{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;padding:5px 12px;border-radius:40px}
+  .status.ok{background:rgba(46,160,67,.1);color:#1a7f37} .status.run{background:var(--blue-50);color:var(--blue)}
+  .nodes{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  .node{display:flex;flex-direction:column;gap:7px;transition:opacity .3s var(--ease)}
+  .running .node{opacity:.55} .running .node .dot{animation:silkPulse 1s infinite}
+  .nicon{width:38px;height:38px;border-radius:10px;background:var(--blue-50);display:grid;place-items:center;color:var(--blue)}
+  .nname{font-size:14px;font-weight:600} .ndesc{font-size:13px;color:var(--muted);line-height:1.4}
+  .nfoot{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted-2)}
+  .dot{width:7px;height:7px;border-radius:50%}
+  @media(max-width:900px){.nodes{grid-template-columns:repeat(3,1fr)}}
 
-  .btn{margin-top:16px;padding:13px 26px;border:0;border-radius:11px;background:var(--grad);
-    color:#04101f;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:0 8px 20px rgba(34,211,238,.22);transition:.15s}
-  .btn:hover{filter:brightness(1.06)}
-  .btn:disabled{opacity:.55;cursor:default;filter:none}
-  .btn.ghost{background:#0e1a30;border:1px solid var(--line);color:var(--ink);box-shadow:none;font-weight:600;font-size:.85rem;padding:9px 16px;margin:0}
+  /* main grid */
+  .main{display:grid;grid-template-columns:1.85fr 1fr;gap:18px;align-items:start}
+  @media(max-width:980px){.main{grid-template-columns:1fr}}
 
-  .hint{font-size:.78rem;color:var(--dim);margin-top:8px}
-  .err{color:var(--bad)}
+  .rank-card{padding:6px 0}
+  .rhead,.rrow{display:grid;grid-template-columns:42px 1.4fr .95fr .85fr 1.5fr auto;align-items:center;gap:10px;padding:11px 18px}
+  .rhead{font-size:12.5px;color:var(--muted-2);border-bottom:1px solid var(--line)}
+  .rrow{width:100%;text-align:right;background:transparent;border:0;border-bottom:1px solid var(--line);transition:.15s var(--ease)}
+  .rrow:hover{background:var(--mist)} .rrow.sel{background:var(--blue-50);box-shadow:inset 2px 0 0 var(--blue)}
+  .rk{font-family:var(--en);font-size:20px;font-weight:700;color:var(--blue)}
+  .cty{display:flex;align-items:center;gap:9px} .ccode{font-family:var(--mono);font-size:11.5px;background:var(--mist);padding:3px 7px;border-radius:6px;color:var(--muted)}
+  .cname{font-size:15.5px;font-weight:600} .rval{font-size:15px;font-weight:600}
+  .share{font-size:14.5px;color:var(--muted)} .share.hi{color:var(--blue);font-weight:600}
+  .scell{display:flex;align-items:center;gap:9px} .sval{font-family:var(--en);font-weight:700;color:var(--blue);font-size:15px;min-width:30px}
+  .track{flex:1;height:7px;background:var(--mist);border-radius:5px;overflow:hidden} .fill{height:100%;background:var(--blue);border-radius:5px}
+  .confpill{font-size:12px;color:var(--muted);background:var(--mist);padding:3px 9px;border-radius:40px;white-space:nowrap}
+  .srcstrip{padding:11px 18px;background:var(--mist);font-size:12.5px;color:var(--muted-2);font-family:var(--mono)}
 
-  /* results */
-  .summary{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
-  .summary .lead{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-  .hs{font-family:ui-monospace,Menlo,monospace;background:#0a1326;border:1px solid var(--line);
-    padding:5px 10px;border-radius:9px;color:var(--acc2);font-size:.95rem}
-  .badge{font-size:.72rem;padding:4px 10px;border-radius:999px;font-weight:700}
-  .badge.prelim{background:rgba(251,191,36,.14);color:var(--warn);border:1px solid rgba(251,191,36,.3)}
-  .badge.live{background:rgba(52,211,153,.14);color:var(--ok);border:1px solid rgba(52,211,153,.3)}
-  .badge.demo{background:rgba(59,130,246,.16);color:#93c5fd;border:1px solid rgba(59,130,246,.35)}
+  /* detail */
+  .detail{padding:20px;position:sticky;top:90px}
+  .dtop{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .verdict{font-size:12.5px;font-weight:600;padding:4px 11px;border-radius:40px}
+  .v-strong{background:rgba(46,160,67,.12);color:#1a7f37} .v-mid{background:var(--blue-50);color:var(--blue)} .v-low{background:#fdecec;color:#b42318}
+  .dcountry{font-size:30px;font-weight:700;line-height:1.1;margin:8px 0 2px}
+  .bigscore{display:flex;align-items:baseline;gap:6px;margin:10px 0 16px}
+  .bigscore .n{font-family:var(--en);font-size:72px;font-weight:700;color:var(--blue);line-height:.9}
+  .bigscore .o{font-size:18px;color:var(--muted-2)}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .stat{background:var(--mist);border-radius:10px;padding:12px}
+  .stat .l{font-size:12.5px;color:var(--muted)} .stat .v{font-size:18px;font-weight:600;margin-top:3px}
+  .drow2{font-size:14px;color:var(--muted);margin:10px 0} .drow2 b{color:var(--ink)}
+  .note{font-size:14.5px;color:var(--ink);background:var(--blue-50);border-radius:10px;padding:13px;margin:14px 0;line-height:1.6}
+  .srcs{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}
+  .srcs span{font-family:var(--mono);font-size:11.5px;background:var(--mist);color:var(--muted);padding:4px 9px;border-radius:7px}
+  .dbtns{display:flex;gap:10px;margin-top:14px}
 
-  .reco{background:linear-gradient(180deg,#10233f,#0d1b30);border:1px solid var(--line);
-    border-radius:12px;padding:14px 16px;margin-top:14px;font-size:.95rem}
-  .reco b{color:var(--acc2)}
+  /* ready */
+  .ready{padding:28px;text-align:center;max-width:680px;margin:0 auto}
+  .ready .hs{font-family:var(--mono);font-size:13px;background:var(--blue-50);color:var(--blue);padding:5px 12px;border-radius:8px;display:inline-block;margin-bottom:14px}
+  .ready h2{font-size:24px;margin:0 0 8px} .ready p{color:var(--muted);margin:0 0 18px}
+  .ready .foot{font-size:13px;color:var(--muted-2);margin-top:16px}
 
-  /* chart */
-  .chartwrap{margin-top:6px;overflow-x:auto}
-  .barrow{display:grid;grid-template-columns:140px 1fr 110px;align-items:center;gap:10px;margin:7px 0;font-size:.85rem}
-  .barrow .nm{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .track{height:14px;background:#0a1326;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
-  .fill{height:100%;background:var(--grad);border-radius:8px}
-  .barrow .val{color:var(--mut);text-align:left;font-variant-numeric:tabular-nums}
-
-  /* market cards */
-  .mkts{display:grid;gap:12px;margin-top:6px}
-  .mk{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-  .mk .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .mk .who{display:flex;align-items:center;gap:10px;font-weight:700}
-  .rank{width:26px;height:26px;border-radius:8px;background:#0a1326;border:1px solid var(--line);
-    display:grid;place-items:center;font-size:.8rem;color:var(--mut)}
-  .flag{font-size:1.3rem}
-  .scorepill{display:flex;align-items:center;gap:8px}
-  .scorepill .s{font-weight:800;color:var(--acc2);font-variant-numeric:tabular-nums}
-  .conf{display:inline-flex;gap:3px;vertical-align:middle}
-  .dot{width:7px;height:7px;border-radius:50%;background:#2a3a59}
-  .comps{margin-top:10px;display:grid;gap:7px}
-  .comp{display:flex;justify-content:space-between;gap:10px;font-size:.84rem;border-top:1px dashed var(--line);padding-top:7px}
-  .comp .k{color:var(--mut)}
-  .comp .v{text-align:left}
-  .src{font-size:.7rem;color:var(--dim)}
-  .nodata{color:var(--dim)}
-  .flags{margin-top:8px;font-size:.78rem;color:var(--warn)}
-  .verdict{margin-top:8px;font-size:.82rem;color:var(--mut)}
-
-  .skl{height:14px;background:linear-gradient(90deg,#15233f,#1c2c4d,#15233f);
-    background-size:200% 100%;border-radius:7px;animation:sh 1.2s infinite}
-  @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
-  .center{text-align:center;color:var(--mut);padding:18px}
-  footer{color:var(--dim);font-size:.76rem;text-align:center;margin-top:26px}
-  @media(max-width:560px){.barrow{grid-template-columns:96px 1fr 78px}}
+  /* settings */
+  .settings{max-width:860px;margin:26px auto 60px}
+  .settings h1{font-size:26px;margin:0 0 6px} .settings .sub{color:var(--muted);margin-bottom:24px}
+  .sec-ttl{font-family:var(--mono);font-size:12.5px;font-weight:600;letter-spacing:.08em;color:var(--blue);text-transform:uppercase;margin:24px 0 12px}
+  .srccard{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:#fff;box-shadow:var(--sh)}
+  .srccard .ic{width:46px;height:46px;border-radius:11px;background:var(--mist);display:grid;place-items:center;color:var(--blue);flex:none}
+  .srccard .body{flex:1;min-width:0} .srccard .nm{font-size:16.5px;font-weight:600} .srccard .ds{font-size:14px;color:var(--muted)}
+  .stbadge{font-size:12px;padding:3px 10px;border-radius:40px;white-space:nowrap}
+  .st-on{background:rgba(46,160,67,.12);color:#1a7f37} .st-off{background:var(--mist);color:var(--muted)} .st-opt{background:var(--blue-50);color:var(--blue)}
+  .keyin{font-family:var(--mono);font-size:13px;border:1px solid var(--line);border-radius:9px;padding:9px 12px;width:230px;max-width:40vw;outline:0}
+  .keyin:focus{border-color:var(--blue)}
+  .switch{width:46px;height:26px;border-radius:40px;background:var(--line);position:relative;border:0;transition:.2s var(--ease);flex:none}
+  .switch.on{background:var(--blue)} .switch .k{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s var(--ease)}
+  .switch.on .k{right:23px}
+  .skl{height:14px;background:linear-gradient(90deg,#eef0f6,#f6f7fb,#eef0f6);background-size:200% 100%;border-radius:6px;animation:silkPulse 1.2s infinite}
+  .err{color:#b42318;background:#fdecec;border-radius:10px;padding:12px;font-size:14px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="logo">س</div>
-    <div>
-      <h1>سِلك · ذكاء الأسواق</h1>
-      <div class="tag">ترتيب أسواق التصدير ببيانات حقيقية — UN Comtrade + World Bank · كل رقم موسوم بمصدره وثقته</div>
+<header>
+  <div class="wrap hrow">
+    <div class="brand">
+      <div class="mark">س</div>
+      <div class="sep"></div>
+      <div>
+        <div class="btitle">منصة سِلك · ذكاء الأسواق</div>
+        <div class="bsub">تصفية وترتيب أسواق التصدير — قرار أوّلي مبنيّ على مصدر موثّق</div>
+      </div>
     </div>
-  </header>
+    <div class="head-right">
+      <span class="live"><span class="d"></span>MULTI-AGENT · LIVE</span>
+      <button class="ghostbtn" id="viewToggle"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2.8v2.4M12 18.8v2.4M4.3 4.3l1.7 1.7M18 18l1.7 1.7M2.8 12h2.4M18.8 12h2.4M4.3 19.7l1.7-1.7M18 6l1.7-1.7"></path></svg><span id="viewLabel">الإعدادات</span></button>
+      <button class="primary" id="runBtn">وزِّع المهام على الوكلاء</button>
+    </div>
+  </div>
+</header>
 
-  <section class="panel">
-    <h2>تحليل منتج</h2>
-    <div class="row">
-      <div style="flex:3">
-        <label>اسم المنتج (عربي / إنجليزي)</label>
-        <input id="product" type="text" placeholder="مثال: تمور" autocomplete="off" />
+<!-- ===== DASHBOARD ===== -->
+<main id="dashboard" class="wrap" style="padding-top:6px;padding-bottom:60px">
+  <div class="ctrl">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div class="search">
+        <div class="sbox">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+          <input id="search" placeholder="ابحث عن منتج… (تمور، زعفران، عسل)" autocomplete="off" />
+          <span class="hschip" id="hschip" style="display:none"></span>
+        </div>
+        <div class="drop hidden" id="drop"></div>
       </div>
-      <div style="flex:1">
-        <label>السنة</label>
-        <input id="year" type="number" placeholder="2022" />
-      </div>
+      <span class="counter hidden" id="counter"></span>
     </div>
-    <div class="chips" id="chips"></div>
-    <div class="opts">
-      <label><input type="checkbox" id="t_trends" /> Google Trends</label>
-      <label><input type="checkbox" id="t_tariffs" /> الرسوم (WITS)</label>
-      <label><input type="checkbox" id="t_faostat" /> FAOSTAT</label>
-      <label><input type="checkbox" id="t_maps" /> Google Maps</label>
-      <label><input type="checkbox" id="t_websearch" /> بحث الويب</label>
-      <label><input type="checkbox" id="t_volza" /> Volza</label>
-      <label><input type="checkbox" id="t_explee" /> explee</label>
+    <div class="sorts hidden" id="sorts">
+      <button class="sortbtn on" data-sort="score">الأعلى نقاطاً</button>
+      <button class="sortbtn" data-sort="imports">حجم الاستيراد</button>
+      <button class="sortbtn" data-sort="share">حصة السعودية</button>
     </div>
-    <div class="hint" id="sources"></div>
-    <details class="adv">
-      <summary>إعدادات متقدمة (رابط الباك-إند)</summary>
-      <div style="margin-top:10px" class="row">
-        <div style="flex:3"><input id="api" type="text" placeholder="فارغ = نفس الخدمة (Render) · أو https://your-api.onrender.com" /></div>
-        <div style="flex:0"><button class="btn ghost" id="ping" type="button">فحص الاتصال</button></div>
-      </div>
-      <div class="hint" id="health"></div>
-    </details>
-    <button class="btn" id="go" type="button">حلّل السوق ←</button>
+  </div>
+
+  <!-- agent pipeline -->
+  <section class="card pipe" id="pipe">
+    <div class="pipe-head">
+      <div class="ttl">AGENT PIPELINE · خط الوكلاء</div>
+      <span class="status ok" id="pipeStatus">القرار الأوّلي جاهز</span>
+    </div>
+    <div class="nodes" id="nodes"></div>
   </section>
 
-  <div id="out"></div>
+  <div id="resultArea"></div>
+</main>
 
-  <footer>منصة سِلك لذكاء الأسواق · النتائج أوّلية ومبنية على بيانات عامة حقيقية · القيم الفارغة = لا بيانات (لا تُختلق)</footer>
-</div>
+<!-- ===== SETTINGS ===== -->
+<main id="settings" class="wrap hidden">
+  <div class="settings">
+    <h1>الإعدادات والمصادر</h1>
+    <div class="sub">المفاتيح تُحفظ محلياً في متصفحك. لتفعيلها فعلياً على الخادم، أضِفها في Render → Environment بنفس الأسماء.</div>
+    <div id="settingsBody"></div>
+  </div>
+</main>
 
 <script>
 (function(){
   "use strict";
   var $=function(id){return document.getElementById(id);};
-  var out=$("out");
-  var EXAMPLES=["تمور","زعفران","عسل","زيت زيتون","قهوة","تمر","رمان","زعتر"];
+  var ICONS={
+    globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18"/>',
+    chart:'<path d="M4 19V5M4 19h16M8 16v-5M12 16V8M16 16v-8"/>',
+    factory:'<path d="M3 21V10l5 3V10l5 3V7l5 3v11zM3 21h18"/>',
+    package:'<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/>',
+    doc:'<path d="M7 3h7l4 4v14H7zM14 3v4h4"/>',
+    ship:'<path d="M3 14l9-4 9 4-2 6H5zM12 3v7M8 6h8"/>',
+    truck:'<path d="M3 6h11v9H3zM14 9h4l3 3v3h-7zM7 18a2 2 0 100-4 2 2 0 000 4zM18 18a2 2 0 100-4 2 2 0 000 4z"/>',
+    plane:'<path d="M10 3l1.5 7L21 14v2l-9-2-1 5 2 2v1l-3-1-3 1v-1l2-2-1-5-9 2v-2l9.5-4L10 3z"/>'
+  };
+  function svg(name){return '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[name]||ICONS.doc)+'</svg>';}
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
 
-  $("chips").innerHTML=EXAMPLES.map(function(e){return '<span class="chip" data-e="'+e+'">'+e+'</span>';}).join("");
-  $("chips").addEventListener("click",function(ev){
-    var c=ev.target.closest(".chip"); if(!c)return;
-    $("product").value=c.getAttribute("data-e"); $("go").click();
+  var ISO2={SAU:"SA",ARE:"AE",EGY:"EG",MAR:"MA",DZA:"DZ",TUN:"TN",KWT:"KW",QAT:"QA",BHR:"BH",OMN:"OM",JOR:"JO",IRQ:"IQ",LBN:"LB",TUR:"TR",IND:"IN",PAK:"PK",IDN:"ID",MYS:"MY",CHN:"CN",USA:"US",GBR:"GB",DEU:"DE",FRA:"FR",NLD:"NL",ESP:"ES",ITA:"IT",CAN:"CA",NGA:"NG",KEN:"KE",ZAF:"ZA",ETH:"ET",SDN:"SD",YEM:"YE",BGD:"BD",SGP:"SG",JPN:"JP",KOR:"KR",RUS:"RU",BRA:"BR"};
+  function iso2(i){return ISO2[i]||(i||"").slice(0,2);}
+
+  // ---------- state ----------
+  var S={product:"",hs:"",sort:"score",selId:null,running:false,query:"",open:false,
+    view:"dashboard",result:null,
+    keys:JSON.parse(localStorage.getItem("silk_settings_keys")||"{}"),
+    toggles:JSON.parse(localStorage.getItem("silk_settings_toggles")||"{}")};
+  function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"");}
+  function saveKeys(){localStorage.setItem("silk_settings_keys",JSON.stringify(S.keys));}
+  function saveToggles(){localStorage.setItem("silk_settings_toggles",JSON.stringify(S.toggles));}
+
+  // ---------- pipeline render ----------
+  var NODES=[
+    {ic:"doc",nm:"المدير الموزِّع",ds:"يقسّم الطلب إلى مهام",foot:"تنسيق",col:"#5C73EE"},
+    {ic:"globe",nm:"وكيل التجارة",ds:"UN Comtrade · الاستيراد والموردون",foot:"ثقة عالية",col:"#2ea043"},
+    {ic:"chart",nm:"وكيل الاقتصاد",ds:"World Bank · الدخل والقوة الشرائية",foot:"ثقة عالية",col:"#2ea043"},
+    {ic:"factory",nm:"وكيل المنافسة",ds:"Comtrade · حصص المنافسين",foot:"ثقة متوسطة",col:"#d4a72c"},
+    {ic:"chart",nm:"وكيل الطلب",ds:"Google Trends · الطلب والموسمية",foot:"قيد الربط",col:"#8A8FA3"},
+    {ic:"package",nm:"لجنة التحكيم",ds:"تجمّع وتوزن النتائج وتُصدر القرار",foot:"قرار أوّلي",col:"#2348E2"}
+  ];
+  function renderNodes(){
+    var trends=S.toggles.trends;
+    $("nodes").innerHTML=NODES.map(function(n,i){
+      var foot=n.foot,col=n.col;
+      if(i===4&&trends){foot="مفعّل";col="#2ea043";}
+      return '<div class="node"><div class="nicon">'+svg(n.ic)+'</div>'+
+        '<div class="nname">'+n.nm+'</div><div class="ndesc">'+n.ds+'</div>'+
+        '<div class="nfoot"><span class="dot" style="background:'+col+'"></span>'+foot+'</div></div>';
+    }).join("");
+    $("pipe").classList.toggle("running",S.running);
+    var st=$("pipeStatus");
+    if(S.running){st.className="status run";st.textContent="جارٍ توزيع المهام…";}
+    else{st.className="status ok";st.textContent="القرار الأوّلي جاهز";}
+  }
+
+  // ---------- search ----------
+  var searchT;
+  $("search").addEventListener("input",function(){
+    S.query=this.value;clearTimeout(searchT);searchT=setTimeout(doSearch,160);
   });
-
-  $("api").value=localStorage.getItem("silk_api")||"";
-  $("api").addEventListener("change",function(){localStorage.setItem("silk_api",base());});
-  function base(){return ($("api").value||"").trim().replace(/\/+$/,"");}
-
-  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){
-    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
-  function fmtUSD(v){if(v==null)return null;var n=Number(v);
-    if(n>=1e9)return "$"+(n/1e9).toFixed(1)+"B"; if(n>=1e6)return "$"+(n/1e6).toFixed(1)+"M";
-    if(n>=1e3)return "$"+(n/1e3).toFixed(0)+"K"; return "$"+n.toLocaleString("en-US");}
-  function num(v){return v==null?"—":(typeof v==="number"?v.toLocaleString("en-US"):esc(v));}
-
-  var FLAG={SAU:"🇸🇦",ARE:"🇦🇪",EGY:"🇪🇬",MAR:"🇲🇦",DZA:"🇩🇿",TUN:"🇹🇳",KWT:"🇰🇼",QAT:"🇶🇦",
-    BHR:"🇧🇭",OMN:"🇴🇲",JOR:"🇯🇴",IRQ:"🇮🇶",LBN:"🇱🇧",TUR:"🇹🇷",IND:"🇮🇳",PAK:"🇵🇰",IDN:"🇮🇩",
-    MYS:"🇲🇾",CHN:"🇨🇳",USA:"🇺🇸",GBR:"🇬🇧",DEU:"🇩🇪",FRA:"🇫🇷",NLD:"🇳🇱",ESP:"🇪🇸",ITA:"🇮🇹",
-    CAN:"🇨🇦",NGA:"🇳🇬",KEN:"🇰🇪",ZAF:"🇿🇦",ETH:"🇪🇹",SDN:"🇸🇩",YEM:"🇾🇪",BGD:"🇧🇩",SGP:"🇸🇬",
-    JPN:"🇯🇵",KOR:"🇰🇷",RUS:"🇷🇺",BRA:"🇧🇷"};
-  function flag(iso){return FLAG[iso]||"🏳️";}
-
-  function confDots(c){c=c||0;var n=Math.round(c*5),h="";
-    for(var i=0;i<5;i++)h+='<span class="dot" style="background:'+(i<n?"var(--ok)":"#2a3a59")+'"></span>';
-    return '<span class="conf" title="ثقة '+c+'">'+h+'</span>';}
-
-  function dpv(dp){return dp&&typeof dp==="object"?dp.value:dp;}
-
-  // ---- connection check ----
-  $("ping").addEventListener("click",function(){
-    $("health").textContent="…جارٍ الفحص";
-    fetch(base()+"/health").then(function(r){return r.json();}).then(function(j){
-      var d=j.deps||{};
-      $("health").innerHTML='<span style="color:var(--ok)">متصل ✓</span> — '+
-        Object.keys(d).map(function(k){return k+(d[k]?" ✓":" ✗");}).join(" · ");
-    }).catch(function(e){$("health").innerHTML='<span class="err">تعذّر الاتصال: '+esc(e.message)+'</span>';});
+  $("search").addEventListener("focus",function(){if(S.query)doSearch();});
+  document.addEventListener("click",function(e){if(!e.target.closest(".search")){$("drop").classList.add("hidden");}});
+  function doSearch(){
+    fetch(base()+"/index?q="+encodeURIComponent(S.query)+"&limit=12")
+      .then(function(r){return r.json();}).then(function(list){
+        if(!Array.isArray(list)||!list.length){$("drop").classList.add("hidden");return;}
+        $("drop").innerHTML=list.map(function(it){
+          return '<div class="drow" data-n="'+esc(it.name)+'" data-hs="'+esc(it.hs)+'">'+
+            '<span class="nm">'+esc(it.name)+'</span>'+
+            (it.analyzed?'<span class="an">محلَّل</span>':'')+
+            '<span class="hschip">'+esc(it.hs)+'</span></div>';
+        }).join("");
+        $("drop").classList.remove("hidden");
+      }).catch(function(){$("drop").classList.add("hidden");});
+  }
+  $("drop").addEventListener("click",function(e){
+    var row=e.target.closest(".drow");if(!row)return;
+    selectProduct(row.getAttribute("data-n"),row.getAttribute("data-hs"));
   });
+  function selectProduct(name,hs){
+    S.product=name;S.hs=hs;S.result=null;S.selId=null;S.query="";
+    $("search").value="";$("drop").classList.add("hidden");
+    $("hschip").style.display="";$("hschip").textContent=hs;
+    renderReady();updateChrome();
+  }
 
-  // ---- analyze ----
-  $("go").addEventListener("click",function(){
-    var product=($("product").value||"").trim();
-    if(!product){out.innerHTML='<section class="panel err">اكتب اسم المنتج.</section>';return;}
-    var body={product:product,year:$("year").value?parseInt($("year").value,10):null,
-      with_trends:$("t_trends").checked,with_tariffs:$("t_tariffs").checked,with_faostat:$("t_faostat").checked,
-      with_maps:$("t_maps").checked,with_websearch:$("t_websearch").checked,
-      with_volza:$("t_volza").checked,with_explee:$("t_explee").checked};
-    $("go").disabled=true;
-    out.innerHTML='<section class="panel"><div class="skl" style="width:40%"></div>'+
-      '<div class="skl" style="width:90%;margin-top:14px"></div><div class="skl" style="width:75%;margin-top:10px"></div>'+
-      '<div class="center">…جارٍ جلب البيانات الحقيقية</div></section>';
+  // ---------- run analysis ----------
+  $("runBtn").addEventListener("click",runAnalysis);
+  function runAnalysis(){
+    if(!S.product){$("search").focus();return;}
+    S.running=true;renderNodes();updateChrome();
+    $("resultArea").innerHTML='<section class="card" style="padding:22px"><div class="skl" style="width:30%"></div><div class="skl" style="width:90%;margin-top:14px"></div><div class="skl" style="width:80%;margin-top:10px"></div></section>';
+    var body={product:S.product,with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,with_faostat:!!S.keys.FAOSTAT};
     fetch(base()+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
-      .then(function(r){return r.text().then(function(t){
-        var data=null;try{data=JSON.parse(t);}catch(_){}
-        if(!r.ok){var d=data&&data.detail;throw new Error("HTTP "+r.status+" — "+(d==null?t:(typeof d==="string"?d:JSON.stringify(d))));}
-        return data;});})
-      .then(function(res){render(res,false);})
-      .catch(function(e){out.innerHTML='<section class="panel err">فشل الطلب: '+esc(e.message)+'</section>';})
-      .finally(function(){$("go").disabled=false;});
-  });
+      .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t);}catch(_){}
+        if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?t:(typeof de==="string"?de:JSON.stringify(de))));}return d;});})
+      .then(function(res){S.running=false;S.result=mapResult(res);S.selId=S.result&&S.result.markets[0]&&S.result.markets[0].id;renderNodes();render();updateChrome();})
+      .catch(function(e){S.running=false;renderNodes();$("resultArea").innerHTML='<section class="card err" style="margin-top:4px">فشل الطلب: '+esc(e.message)+'</section>';});
+  }
 
-  // ---- render ----
-  function render(res,isDemo){
-    if(!res||res.classified===false){
-      out.innerHTML='<section class="panel center">تعذّر تصنيف المنتج إلى رمز HS. '+
-        '<div class="hint">'+esc((res&&res.note)||"جرّب اسمًا أوضح.")+'</div></section>';return;
-    }
-    var markets=(res.markets||[]).slice();
-    var statusBadge=isDemo?'<span class="badge demo">معاينة · بيانات مثال</span>':'<span class="badge prelim">نتيجة أوّلية</span>';
-
-    var h='<section class="panel">';
-    h+='<div class="summary"><div class="lead">'+
-        '<div style="font-size:1.15rem;font-weight:800">'+esc(res.product)+'</div>'+
-        '<span class="hs">HS '+esc(res.hs_code)+'</span>'+
-        '<span class="hint">ثقة التصنيف '+esc(res.hs_confidence)+(res.year?' · سنة '+esc(res.year):'')+'</span>'+
-      '</div>'+statusBadge+'</div>';
-
-    // best recommendation
-    var best=markets[0];
-    if(best){h+='<div class="reco">أعلى سوق مرشّح: <b>'+flag(best.iso3)+' '+esc(best.country)+
-      '</b> — نقاط '+esc(best.total_score)+'. '+esc(best.recommendation||"")+'</div>';}
-
-    // chart: import market size
-    var sizes=markets.map(function(m){return {nm:m.country,iso:m.iso3,v:dpv(m.components&&m.components.market_size)};})
-      .filter(function(x){return x.v!=null;});
-    if(sizes.length){
-      var max=Math.max.apply(null,sizes.map(function(x){return x.v;}));
-      h+='<h2 style="margin-top:18px">حجم الاستيراد حسب السوق</h2><div class="chartwrap">';
-      sizes.forEach(function(x){
-        var w=max>0?Math.max(3,Math.round(x.v/max*100)):0;
-        h+='<div class="barrow"><div class="nm">'+flag(x.iso)+' '+esc(x.nm)+'</div>'+
-           '<div class="track"><div class="fill" style="width:'+w+'%"></div></div>'+
-           '<div class="val">'+esc(fmtUSD(x.v))+'</div></div>';
-      });
-      h+='</div>';
-    }
-
-    // market cards
-    h+='<h2 style="margin-top:18px">الأسواق مرتّبة</h2><div class="mkts">';
-    var LBL={market_size:"حجم الاستيراد",saudi_position:"حصة السعودية",demand_capacity:"الطلب (دخل/سكان)",competition:"تركّز المنافسين"};
-    markets.forEach(function(m,i){
-      var comps=m.components||{};
-      h+='<div class="mk"><div class="top"><div class="who"><span class="rank">'+(i+1)+'</span>'+
-         '<span class="flag">'+flag(m.iso3)+'</span> '+esc(m.country)+'</div>'+
-         '<div class="scorepill"><span class="s">'+(m.total_score!=null?m.total_score:"—")+'</span>'+confDots(m.confidence)+'</div></div>';
-      h+='<div class="comps">';
-      Object.keys(LBL).forEach(function(k){
-        var dp=comps[k]; if(dp===undefined)return;
-        var v=dpv(dp);
-        var disp=v==null?'<span class="nodata">لا بيانات</span>':(k==="market_size"?fmtUSD(v):num(v));
-        h+='<div class="comp"><span class="k">'+LBL[k]+'</span><span class="v">'+disp+
-           ' <span class="src">'+esc((dp&&dp.source)||"")+'</span></span></div>';
-      });
-      h+='</div>';
-      if(m.jury){h+='<div class="verdict">حكم اللجنة: '+esc(m.jury.verdict||"")+' · ثقة '+esc(m.jury.confidence)+'</div>';}
-      if(m.quality_flags&&m.quality_flags.length){h+='<div class="flags">⚠ '+esc(m.quality_flags.join(" · "))+'</div>';}
-      h+='</div>';
+  // ---------- map engine result -> dashboard model ----------
+  function dpv(c){return c&&typeof c==="object"?c.value:c;}
+  function mapResult(res){
+    if(!res||res.classified===false)return {classified:false,product:res&&res.product,note:res&&res.note};
+    var markets=(res.markets||[]).map(function(m,i){
+      var c=m.components||{};
+      var score=m.total_score==null?null:Math.round(m.total_score*100);
+      var conf=m.confidence==null?null:(m.confidence>=.66?"عالية":m.confidence>=.33?"متوسطة":"منخفضة");
+      return {
+        id:m.iso3+"-"+i,country:m.country,code:iso2(m.iso3),
+        import_value:dpv(c.market_size),
+        saudi_share:dpv(c.saudi_position),
+        score:score,confidence:conf,
+        income_ppp:m.income_ppp!=null?m.income_ppp:null,
+        population:m.population!=null?m.population:null,
+        top_competitor:m.top_competitor||null,
+        note:(m.jury&&m.jury.verdict)?m.jury.verdict:(m.recommendation||""),
+        sources:Object.keys(c).map(function(k){return c[k]&&c[k].source;}).filter(Boolean)
+      };
     });
-    h+='</div>';
-
-    h+='<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">'+
-       '<button class="btn ghost" id="csv" type="button">تصدير CSV</button>'+
-       '<button class="btn ghost" onclick="window.print()" type="button">طباعة / PDF</button></div>';
-    if(res.note)h+='<div class="hint" style="margin-top:10px">'+esc(res.note)+'</div>';
-    h+='</section>';
-    out.innerHTML=h;
-
-    var csvBtn=$("csv");
-    if(csvBtn)csvBtn.addEventListener("click",function(){exportCsv(res);});
+    return {classified:true,product:res.product,hs:res.hs_code,markets:markets};
   }
+  function verdict(score){return score==null?{t:"بحاجة تحقّق",c:"v-low"}:score>=82?{t:"مرشّح قوي",c:"v-strong"}:score>=70?{t:"مرشّح",c:"v-mid"}:{t:"بحاجة تحقّق",c:"v-low"};}
+  function fmtUSD(v){if(v==null)return "—";var n=Number(v);if(n>=1e9)return "$"+(n/1e9).toFixed(1)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(1)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(0)+"K";return "$"+n.toLocaleString("en-US");}
+  function fmtNum(v){if(v==null)return "—";var n=Number(v);if(isNaN(n))return esc(v);if(n>=1e6)return (n/1e6).toFixed(1)+"M";if(n>=1e3)return (n/1e3).toFixed(0)+"K";return n.toLocaleString("en-US");}
 
-  function exportCsv(res){
-    var rows=[["rank","country","iso3","total_score","confidence","market_size_usd","saudi_position","demand_capacity","competition"]];
-    (res.markets||[]).forEach(function(m,i){var c=m.components||{};
-      rows.push([i+1,m.country,m.iso3,m.total_score,m.confidence,
-        dpv(c.market_size),dpv(c.saudi_position),dpv(c.demand_capacity),dpv(c.competition)]);});
+  // ---------- render ----------
+  function sorted(markets){
+    var k=S.sort==="imports"?"import_value":S.sort==="share"?"saudi_share":"score";
+    return markets.slice().sort(function(a,b){return (b[k]||0)-(a[k]||0);});
+  }
+  function render(){
+    if(!S.result){renderReady();return;}
+    if(!S.result.classified){$("resultArea").innerHTML='<section class="card ready"><h2>تعذّر تصنيف المنتج</h2><p>'+esc(S.result.note||"جرّب اسماً أوضح.")+'</p></section>';return;}
+    var ms=sorted(S.result.markets);
+    var sel=ms.filter(function(m){return m.id===S.selId;})[0]||ms[0];S.selId=sel.id;
+    // ranking list
+    var rows='<div class="rhead"><div>#</div><div>السوق</div><div>الاستيراد</div><div>حصة السعودية</div><div>النقاط</div><div>الثقة</div></div>';
+    ms.forEach(function(m,i){
+      var sh=m.saudi_share==null?"—":m.saudi_share+"%";
+      rows+='<button class="rrow'+(m.id===sel.id?' sel':'')+'" data-id="'+m.id+'">'+
+        '<div class="rk">'+(i+1)+'</div>'+
+        '<div class="cty"><span class="ccode">'+esc(m.code)+'</span><span class="cname">'+esc(m.country)+'</span></div>'+
+        '<div class="rval num">'+fmtUSD(m.import_value)+'</div>'+
+        '<div class="share'+(m.saudi_share>=30?' hi':'')+' num">'+sh+'</div>'+
+        '<div class="scell"><span class="sval">'+(m.score==null?"—":m.score)+'</span><span class="track"><span class="fill" style="width:'+(m.score||0)+'%"></span></span></div>'+
+        '<div><span class="confpill">'+(m.confidence||"—")+'</span></div></button>';
+    });
+    var srcSet={};S.result.markets.forEach(function(m){(m.sources||[]).forEach(function(s){srcSet[s]=1;});});
+    rows+='<div class="srcstrip">المصادر: '+(Object.keys(srcSet).join(" · ")||"—")+'</div>';
+    // detail
+    var v=verdict(sel.score);
+    var detail='<section class="card featured detail">'+
+      '<div class="dtop"><span class="ccode mono">'+esc(sel.code)+'</span><span class="confpill">المرتبة '+(ms.indexOf(sel)+1)+'</span><span class="verdict '+v.c+'">'+v.t+'</span></div>'+
+      '<div class="dcountry">'+esc(sel.country)+'</div>'+
+      '<div class="bigscore"><span class="n">'+(sel.score==null?"—":sel.score)+'</span><span class="o">/100</span></div>'+
+      '<div class="stats">'+
+        '<div class="stat"><div class="l">قيمة الاستيراد</div><div class="v num">'+fmtUSD(sel.import_value)+'</div></div>'+
+        '<div class="stat"><div class="l">حصة السعودية</div><div class="v num">'+(sel.saudi_share==null?"—":sel.saudi_share+"%")+'</div></div>'+
+        '<div class="stat"><div class="l">دخل الفرد (PPP)</div><div class="v num">'+fmtUSD(sel.income_ppp)+'</div></div>'+
+        '<div class="stat"><div class="l">السكان</div><div class="v num">'+fmtNum(sel.population)+'</div></div>'+
+      '</div>'+
+      '<div class="drow2">المنافس المهيمن: <b>'+esc(sel.top_competitor||"—")+'</b></div>'+
+      (sel.note?'<div class="note">'+esc(sel.note)+'</div>':'')+
+      '<div class="srcs">'+(sel.sources||[]).map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'+
+      '<div class="dbtns"><button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button><button class="primary" id="exportBtn">تصدير التقرير</button></div>'+
+    '</section>';
+    $("resultArea").innerHTML='<div class="main"><section class="card rank-card">'+rows+'</section>'+detail+'</div>';
+    $("counter").classList.remove("hidden");$("counter").innerHTML='<b>'+ms.length+'</b> أسواق مرشّحة';
+    $("sorts").classList.remove("hidden");
+    $("resultArea").querySelectorAll(".rrow").forEach(function(b){b.addEventListener("click",function(){S.selId=this.getAttribute("data-id");render();});});
+    var ex=$("exportBtn");if(ex)ex.addEventListener("click",exportCsv);
+    var deep=$("deepBtn");if(deep)deep.addEventListener("click",function(){S.view="settings";applyView();});
+  }
+  function renderReady(){
+    $("counter").classList.add("hidden");$("sorts").classList.add("hidden");
+    if(!S.product){$("resultArea").innerHTML='<section class="card ready"><h2>ابدأ بالبحث عن منتج</h2><p>اكتب اسم منتج سعودي (تمور، زعفران، عسل…) لتصفية أسواق تصديره وترتيبها.</p></section>';return;}
+    $("resultArea").innerHTML='<section class="card featured ready">'+
+      '<div class="hs">HS '+esc(S.hs)+'</div>'+
+      '<h2>'+esc(S.product)+' — جاهز للتحليل</h2>'+
+      '<p>المُصنّف حلّ المنتج إلى رمز HS. وزِّع المهام على الوكلاء لجمع البيانات الحيّة وترتيب الأسواق.</p>'+
+      '<button class="primary" onclick="document.getElementById(\'runBtn\').click()">وزِّع المهام على الوكلاء</button>'+
+      '<div class="foot">النظام لا يُنشئ بيانات — تظهر النتائج فور اتصال الوكلاء بمصدر حقيقي.</div></section>';
+  }
+  function exportCsv(){
+    if(!S.result||!S.result.classified)return;
+    var rows=[["rank","country","code","import_usd","saudi_share_pct","score","confidence","income_ppp","population","top_competitor"]];
+    sorted(S.result.markets).forEach(function(m,i){rows.push([i+1,m.country,m.code,m.import_value,m.saudi_share,m.score,m.confidence,m.income_ppp,m.population,m.top_competitor]);});
     var csv=rows.map(function(r){return r.map(function(x){return x==null?"":'"'+String(x).replace(/"/g,'""')+'"';}).join(",");}).join("\n");
-    var a=document.createElement("a");
-    a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
-    a.download="silk_"+(res.product||"analysis")+".csv";a.click();
+    var a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download="silk_"+(S.result.product||"report")+".csv";a.click();
   }
 
-  // ---- design preview (?demo=1): real documented sample numbers, clearly labeled ----
-  function demoData(){
-    function dp(v,s,c,n){return {value:v,source:s,confidence:c,note:n||"",retrieved_at:"2024"};}
-    return {product:"تمور",hs_code:"080410",hs_confidence:1.0,year:2023,preliminary:true,classified:true,
-      note:"بيانات مثال موثّقة من دليل المصادر — معاينة تصميم، ليست تحليلًا مباشرًا.",
-      markets:[
-        {country:"المغرب",iso3:"MAR",total_score:0.82,confidence:0.75,recommendation:"سوق كبير ومفتوح — مرشّح قوي.",
-          components:{market_size:dp(241000000,"UN Comtrade",0.9),saudi_position:dp(0.08,"UN Comtrade",0.8,"حصة 8%"),
-            demand_capacity:dp(8400,"World Bank",0.9,"PPP/فرد"),competition:dp(0.31,"UN Comtrade",0.85,"HHI")},
-          jury:{verdict:"GO (مبدئي)",confidence:0.74}},
-        {country:"مصر",iso3:"EGY",total_score:0.69,confidence:0.75,recommendation:"السعودية ثاني أكبر مورّد (حصة 45%) — السوق مفتوح.",
-          components:{market_size:dp(17500000,"UN Comtrade",0.9,"6,224 طن"),saudi_position:dp(0.45,"UN Comtrade",0.9,"حصة 45%"),
-            demand_capacity:dp(3338,"World Bank",0.9,"دخل الفرد $"),competition:dp(0.40,"UN Comtrade",0.85,"HHI")},
-          jury:{verdict:"GO (مبدئي)",confidence:0.7}},
-        {country:"الإمارات",iso3:"ARE",total_score:0.58,confidence:0.5,recommendation:"سوق إعادة تصدير — تحقّق من المنافسة.",
-          components:{market_size:dp(96000000,"UN Comtrade",0.9),saudi_position:dp(0.22,"UN Comtrade",0.8,"حصة 22%"),
-            demand_capacity:dp(75000,"World Bank",0.9,"PPP/فرد"),competition:dp(null,null,0.0)},
-          quality_flags:["تركّز المنافسين: لا بيانات"]}
-      ]};
+  // ---------- settings ----------
+  var FREE=[
+    {key:null,ic:"globe",nm:"UN Comtrade",ds:"الاستيراد/التصدير بالـ HS — العمود الفقري.",st:"متصل · بدون مفتاح",cls:"st-on"},
+    {key:null,ic:"chart",nm:"World Bank",ds:"الدخل، القوة الشرائية، السكان.",st:"متصل · بدون مفتاح",cls:"st-on"},
+    {toggle:"trends",ic:"chart",nm:"Google Trends",ds:"الطلب والموسمية (pytrends).",st:"قيد الربط",on:"مفعّل"},
+    {key:"WITS",ic:"ship",nm:"WITS / WTO",ds:"الرسوم الجمركية المطبّقة.",st:"اختياري",cls:"st-opt",ph:"اختياري"},
+    {key:"FAOSTAT",ic:"factory",nm:"FAOSTAT",ds:"الاستهلاك للفرد (غذائي).",st:"يحتاج مفتاح",cls:"st-off"}
+  ];
+  var PAID=[
+    {key:"VOLZA",ic:"ship",nm:"Volza",ds:"المستوردون بالاسم من بوالص الشحن.",st:"غير مفعّل",cls:"st-off"},
+    {key:"EXPLEE",ic:"package",nm:"explee",ds:"مشترون وجهات اتصال B2B (امتثال GDPR/PDPL).",st:"غير مفعّل",cls:"st-off"}
+  ];
+  function srcCard(s){
+    var has=s.key&&S.keys[s.key];
+    var badge,cls;
+    if(s.toggle){var on=!!S.toggles[s.toggle];badge=on?s.on:s.st;cls=on?"st-on":"st-off";}
+    else if(s.key){badge=has?"متصل":s.st;cls=has?"st-on":(s.cls||"st-off");}
+    else{badge=s.st;cls=s.cls;}
+    var ctrl="";
+    if(s.toggle){ctrl='<button class="switch'+(S.toggles[s.toggle]?" on":"")+'" data-toggle="'+s.toggle+'"><span class="k"></span></button>';}
+    else if(s.key){ctrl='<input class="keyin" type="password" data-key="'+s.key+'" value="'+esc(S.keys[s.key]||"")+'" placeholder="'+(s.ph||(s.key==="CLAUDE"?"sk-ant-…":"مفتاح API"))+'" />';}
+    return '<div class="srccard"><div class="ic">'+svg(s.ic)+'</div>'+
+      '<div class="body"><div class="nm">'+s.nm+'</div><div class="ds">'+s.ds+'</div></div>'+
+      '<span class="stbadge '+cls+'">'+badge+'</span>'+ctrl+'</div>';
   }
-  // ---- sources line: show the 9-layer wiring + which keys are present ----
-  function loadSources(){
-    fetch(base()+"/sources").then(function(r){return r.json();}).then(function(list){
-      if(!list||!list.length)return;
-      var s=$("sources");if(!s)return;
-      s.innerHTML="المصادر: "+list.map(function(L){
-        var mark=L.key_env?(L.key_present?" ✓":" ✗"):"";
-        return esc(L.name)+" ("+esc(L.type)+")"+mark;
-      }).join(" · ");
-    }).catch(function(){});
+  function renderSettings(){
+    var ai=[{key:"CLAUDE",ic:"doc",nm:"Claude (Anthropic)",ds:"تلخيص ذكي للنتائج (طبقة اختيارية).",st:"يحتاج مفتاح",cls:"st-off",ph:"sk-ant-…"}];
+    $("settingsBody").innerHTML=
+      '<div class="sec-ttl">الذكاء الاصطناعي · AI</div>'+ai.map(srcCard).join("")+
+      '<div class="sec-ttl">مصادر مجانية · FREE</div>'+FREE.map(srcCard).join("")+
+      '<div class="sec-ttl">مصادر مدفوعة · PAID</div>'+PAID.map(srcCard).join("");
+    $("settingsBody").querySelectorAll(".keyin").forEach(function(inp){
+      inp.addEventListener("input",function(){S.keys[this.getAttribute("data-key")]=this.value;saveKeys();renderSettings();});
+    });
+    $("settingsBody").querySelectorAll(".switch").forEach(function(b){
+      b.addEventListener("click",function(){var t=this.getAttribute("data-toggle");S.toggles[t]=!S.toggles[t];saveToggles();renderSettings();renderNodes();});
+    });
   }
-  loadSources();
 
+  // ---------- view + chrome ----------
+  function applyView(){
+    var dash=S.view==="dashboard";
+    $("dashboard").classList.toggle("hidden",!dash);
+    $("settings").classList.toggle("hidden",dash);
+    $("viewLabel").textContent=dash?"الإعدادات":"اللوحة";
+    $("runBtn").classList.toggle("hidden",!dash);
+    if(!dash)renderSettings();
+  }
+  function updateChrome(){$("runBtn").disabled=!S.product||S.running;}
+  $("viewToggle").addEventListener("click",function(){S.view=S.view==="dashboard"?"settings":"dashboard";applyView();});
+  $("sorts").addEventListener("click",function(e){var b=e.target.closest(".sortbtn");if(!b)return;
+    S.sort=b.getAttribute("data-sort");$("sorts").querySelectorAll(".sortbtn").forEach(function(x){x.classList.toggle("on",x===b);});render();});
+
+  // ---------- demo preview (?demo=1) ----------
+  function demoResult(){
+    function C(v,s){return {value:v,source:s};}
+    return {classified:true,product:"تمور",hs:"080410",markets:[
+      {id:"MA-0",country:"المغرب",code:"MA",import_value:241000000,saudi_share:12,score:87,confidence:"عالية",income_ppp:9500,population:37000000,top_competitor:"تونس",note:"أكبر سوق استيراد عالمي للتمور؛ مفتوح ومنافسة معتدلة — مرشّح قوي.",sources:["UN Comtrade","World Bank"]},
+      {id:"EG-1",country:"مصر",code:"EG",import_value:23849784,saudi_share:44,score:74,confidence:"عالية",income_ppp:14800,population:111000000,top_competitor:"العراق",note:"السعودية ثاني أكبر مورّد (44%)؛ سوق ضخم ومفتوح.",sources:["UN Comtrade","World Bank"]},
+      {id:"AE-2",country:"الإمارات",code:"AE",import_value:96000000,saudi_share:22,score:63,confidence:"متوسطة",income_ppp:75000,population:9400000,top_competitor:"إيران",note:"سوق إعادة تصدير؛ منافسة قوية — بحاجة تحقّق.",sources:["UN Comtrade","World Bank"]}
+    ]};
+  }
+
+  // ---------- init ----------
+  renderNodes();
   if(/[?&]demo=1/.test(location.search)){
-    $("product").value="تمور";$("year").value=2023;
-    render(demoData(),true);
-  }
+    S.product="تمور";S.hs="080410";S.result=demoResult();S.selId="MA-0";
+    $("hschip").style.display="";$("hschip").textContent="080410";
+    render();
+  }else{renderReady();}
+  updateChrome();
 })();
 </script>
 </body>
