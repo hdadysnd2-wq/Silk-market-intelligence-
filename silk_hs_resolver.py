@@ -18,6 +18,7 @@ from __future__ import annotations
 import csv
 import datetime
 import difflib
+import functools
 import logging
 import os
 
@@ -48,8 +49,13 @@ def _abspath(path: str) -> str:
     return path if os.path.isabs(path) else os.path.join(_HERE, path)
 
 
+@functools.lru_cache(maxsize=1)
 def load_hs_codes(path: str = "data/hs_codes.csv") -> list[dict]:
-    """حمّل بذرة رموز HS من CSV — load the curated HS seed as a list of dict rows."""
+    """حمّل بذرة رموز HS من CSV — load the curated HS seed as a list of dict rows.
+
+    Cached: the 5,600+ row CSV is parsed once and reused across resolve() calls.
+    extend_from_comtrade_rows() clears the cache after it appends new rows.
+    """
     fp = _abspath(path)
     try:
         with open(fp, newline="", encoding="utf-8") as f:
@@ -141,6 +147,7 @@ def extend_from_comtrade_rows(rows: list[dict],
             for r in new:
                 w.writerow({k: r.get(k, "") for k in
                             ("hs_code", "name_en", "name_ar", "keywords")})
+        load_hs_codes.cache_clear()  # file changed -> drop stale cached rows
         return len(new)
     except Exception as exc:
         log.warning("failed to extend HS seed %s: %s", fp, exc)

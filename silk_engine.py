@@ -10,7 +10,6 @@ gracefully (no data / fetch failed), never crash, never invent numbers.
 """
 from __future__ import annotations
 
-import datetime
 import logging
 
 from silk_hs_resolver import resolve
@@ -21,11 +20,6 @@ log = logging.getLogger(__name__)
 
 _DEFAULT_YEAR = 2022      # آخر سنة كاملة موثوقة في Comtrade — stable full year
 _ENRICH_TOP = 3           # كم سوقًا نُثريه بالوكلاء — top markets to deep-enrich
-
-
-def _today() -> str:
-    """تاريخ اليوم — ISO date string."""
-    return datetime.date.today().isoformat()
 
 
 def analyze(product_name: str, countries: list[dict] | None = None,

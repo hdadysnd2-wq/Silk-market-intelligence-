@@ -7,13 +7,12 @@ confidence=0.0) + warning. Never guesses a rate (founding principle).
 """
 from __future__ import annotations
 
-import datetime
 import logging
 import xml.etree.ElementTree as ET
 
 import requests
 
-from silk_data_layer import DataPoint, ISO3_TO_M49, M49_TO_ISO3
+from silk_data_layer import DataPoint, ISO3_TO_M49, M49_TO_ISO3, _today
 from silk_agents import Agent, AgentReport
 
 log = logging.getLogger(__name__)
@@ -25,15 +24,10 @@ _TIMEOUT = 30
 _DEFAULT_YEAR = 2021  # WITS tariff data lags; recent years are often empty.
 
 
-def _today() -> str:
-    """تاريخ اليوم — today's ISO date."""
-    return datetime.date.today().isoformat()
-
-
 def _hs6(hs_code: str) -> str:
     """رمز HS بست خانات — WITS keys on 6-digit HS (zero-padded, trimmed)."""
     digits = "".join(ch for ch in str(hs_code) if ch.isdigit())
-    return (digits + "000000")[:6] if digits else digits
+    return (digits + "000000")[:6] if digits else ""  # "" signals invalid HS
 
 
 def applied_tariff(

@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import time
+from urllib.parse import urlencode
 
 log = logging.getLogger(__name__)
 
@@ -21,8 +22,7 @@ _TIMEOUT = 30
 
 def _key(url: str, params: dict | None) -> str:
     """مفتاح التخزين — sha1 of url + sorted params."""
-    items = sorted((params or {}).items())
-    raw = url + "?" + "&".join(f"{k}={v}" for k, v in items)
+    raw = url + "?" + urlencode(sorted((params or {}).items()))
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 

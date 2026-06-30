@@ -117,7 +117,7 @@ def _competition_component(comps: list[DataPoint]) -> DataPoint:
                      retrieved_at=_today())
 
 
-def _normalize(raw: dict[str, float], key: str, value: float) -> float:
+def _normalize(raw: dict[str, float], value: float) -> float:
     """طبّع 0..1 — min-max normalize one component across all rows."""
     vals = [v for v in raw.values() if v is not None]
     if not vals:
@@ -166,7 +166,7 @@ def rank_markets(hs_code: str, countries: list[dict] = COUNTRIES,
             dp = row["components"][name]
             if dp.value is None:
                 continue  # مفقود => يُتخطى، لا قيمة وهمية — skip, no fake value
-            norm = _normalize(raw_tables[name], name, float(dp.value))
+            norm = _normalize(raw_tables[name], float(dp.value))
             if name == "competition":
                 norm = 1.0 - norm  # تركّز أعلى = أصعب — invert: less concentrated better
             score += w * norm
