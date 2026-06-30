@@ -11,12 +11,11 @@ import logging
 
 from silk_data_layer import (
     DataPoint,
-    comtrade_trade,
     gdp_per_capita,
     population,
     _today,
 )
-from silk_data_layer_v2 import ppp_per_capita, market_competitors
+from silk_data_layer_v2 import ppp_per_capita, market_imports
 
 log = logging.getLogger(__name__)
 
@@ -62,18 +61,31 @@ WEIGHTS: dict[str, float] = {
 }
 
 
-def _market_size_component(hs_code: str, m49: str, year: int) -> DataPoint:
-    """حجم السوق — total imports of this HS by the market (World partner)."""
-    recs = comtrade_trade(hs_code, m49, year, flow="M", partner=0)
-    val = next((r.get("primaryValue") for r in recs
-                if r.get("primaryValue") is not None), None)
-    if val is None:
+def _market_size_component(total_usd: object, hs_code: str, m49: str,
+                           year: int) -> DataPoint:
+    """حجم السوق — total imports of this HS by the market, derived from the SAME
+    Comtrade call as the competitors (no extra request). None => no data."""
+    if total_usd is None:
         return DataPoint(None, "UN Comtrade", 0.0,
                          note=f"no import total HS{hs_code} -> {m49} {year}",
                          retrieved_at=_today())
-    return DataPoint(float(val), "UN Comtrade", 0.9,
+    return DataPoint(float(total_usd), "UN Comtrade", 0.9,
                      note=f"total imports HS{hs_code} {year} (USD)",
                      retrieved_at=_today())
+
+
+def _competitor_list(comps: list[DataPoint], top: int = 5) -> list[dict]:
+    """قائمة المنافسين للوحة — top suppliers (name + share + value) for the UI.
+
+    `comps` is ranked desc; returns plain dicts (never fabricated; [] if none)."""
+    out: list[dict] = []
+    for c in comps[:top]:
+        if c.value:
+            out.append({"partner": c.value.get("partner"),
+                        "code": c.value.get("code"),
+                        "value_usd": c.value.get("value_usd"),
+                        "share": c.value.get("share")})
+    return out
 
 
 def _saudi_position_component(comps: list[DataPoint]) -> DataPoint:
@@ -156,9 +168,11 @@ def rank_markets(hs_code: str, countries: list[dict] = COUNTRIES,
     rows: list[dict] = []
     for c in countries:
         iso3, m49 = c["iso3"], c["m49"]
-        comps = market_competitors(hs_code, m49, year)
+        # نداء Comtrade واحد لكل سوق يعطي الحجم والمنافسين معًا — ONE call: size + rivals.
+        mi = market_imports(hs_code, m49, year)
+        comps = mi["competitors"]
         comp_dps = {
-            "market_size": _market_size_component(hs_code, m49, year),
+            "market_size": _market_size_component(mi["total_usd"], hs_code, m49, year),
             "saudi_position": _saudi_position_component(comps),
             "demand_capacity": _demand_capacity_component(iso3, year),
             "competition": _competition_component(comps),
@@ -173,6 +187,7 @@ def rank_markets(hs_code: str, countries: list[dict] = COUNTRIES,
             "iso3": iso3, "m49": m49, "components": comp_dps,
             "income_ppp": inc.value,
             "population": pop.value,
+            "competitors": _competitor_list(comps),
             "top_competitor": _top_competitor(comps),
         })
 
@@ -209,6 +224,7 @@ def rank_markets(hs_code: str, countries: list[dict] = COUNTRIES,
             "components": row["components"],
             "income_ppp": row["income_ppp"],
             "population": row["population"],
+            "competitors": row["competitors"],
             "top_competitor": row["top_competitor"],
         })
 

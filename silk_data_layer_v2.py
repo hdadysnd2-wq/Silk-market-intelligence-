@@ -23,42 +23,56 @@ def ppp_per_capita(iso3: str, year: int | None = None) -> DataPoint:
     return world_bank(iso3, "NY.GDP.PCAP.PP.CD", year)
 
 
-def market_competitors(hs_code: str, market_m49: object, year: int) -> list[DataPoint]:
-    """المنافسون في السوق — suppliers of an HS code to a market, ranked by value.
+def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
+    """واردات سوق ومنافسوه من نداء Comtrade واحد — ONE call: total imports + suppliers.
 
-    Each DataPoint.value is a dict {partner, code, value_usd, share}; ranked
-    descending by value_usd, share = % of total imports. [] on failure.
+    يجمع الكفاءة: الردّ نفسه يحوي صفّ «العالم» (إجمالي الواردات = حجم السوق) وصفوف
+    الشركاء (المنافسون). فتغني هذه الدالة عن نداءٍ ثانٍ لحجم السوق، وتقلّ نداءات
+    Comtrade للنصف — أهمّ سبب لغياب النتائج بلا مفتاح (سقف المعاينة منخفض).
+
+    Returns {"total_usd": float|None, "competitors": [DataPoint{partner,code,
+    value_usd,share}]} — competitors ranked desc by value, share = % of suppliers
+    total. Empty/failed -> {"total_usd": None, "competitors": []}. Never fabricates.
     """
     recs = comtrade_trade(hs_code, market_m49, year, flow="M", partner="all")
     if not recs:
-        log.warning("market_competitors: no data (%s -> market %s, %s)",
+        log.warning("market_imports: no data (%s -> market %s, %s)",
                     hs_code, market_m49, year)
-        return []
-    # جمع حسب الشريك — aggregate per partner, drop the World total row.
+        return {"total_usd": None, "competitors": []}
+    # جمع حسب الشريك مع التقاط صفّ العالم — aggregate per partner; capture World row.
+    world: float | None = None
     totals: dict[str, float] = {}
     for rec in recs:
         code = str(rec.get("partnerCode"))
-        if code == "0":  # World aggregate, not a competitor
+        val = float(rec.get("primaryValue") or 0)
+        if code == "0":  # World aggregate = total market imports (market size)
+            world = val
             continue
-        val = rec.get("primaryValue") or 0
-        totals[code] = totals.get(code, 0.0) + float(val)
+        totals[code] = totals.get(code, 0.0) + val
     grand = sum(totals.values())
-    if grand <= 0:
-        log.warning("market_competitors: zero total imports (%s, market %s, %s)",
-                    hs_code, market_m49, year)
-        return []
-    ranked = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
-    out: list[DataPoint] = []
-    for code, val in ranked:
-        share = round(100 * val / grand, 2)
-        out.append(DataPoint(
-            value={"partner": partner_name(code), "code": code,
-                   "value_usd": val, "share": share},
-            source="UN Comtrade", confidence=0.9,
-            note=f"HS{hs_code} imports to {market_m49} {year}; share {share}%",
-            retrieved_at=_today(),
-        ))
-    return out
+    # حجم السوق: صفّ العالم إن وُجد، وإلا مجموع الشركاء (لا اختلاق) — market size.
+    total_usd = world if (world and world > 0) else (grand if grand > 0 else None)
+    competitors: list[DataPoint] = []
+    if grand > 0:
+        for code, val in sorted(totals.items(), key=lambda kv: kv[1], reverse=True):
+            share = round(100 * val / grand, 2)
+            competitors.append(DataPoint(
+                value={"partner": partner_name(code), "code": code,
+                       "value_usd": val, "share": share},
+                source="UN Comtrade", confidence=0.9,
+                note=f"HS{hs_code} imports to {market_m49} {year}; share {share}%",
+                retrieved_at=_today(),
+            ))
+    return {"total_usd": total_usd, "competitors": competitors}
+
+
+def market_competitors(hs_code: str, market_m49: object, year: int) -> list[DataPoint]:
+    """المنافسون في السوق — suppliers of an HS code to a market, ranked by value.
+
+    Thin wrapper over market_imports() (kept for the agents). Each DataPoint.value
+    is {partner, code, value_usd, share}, ranked desc; [] on failure.
+    """
+    return market_imports(hs_code, market_m49, year)["competitors"]
 
 
 if __name__ == "__main__":

@@ -121,6 +121,10 @@
   .pllist li{font-size:13.5px;color:var(--ink)}
   .prate{color:#d4a72c;font-size:12px} .pstore{color:var(--muted-2);font-size:12px}
   .pprice{font-family:var(--en);font-weight:700;color:var(--blue)}
+  .cshare{font-family:var(--en);font-weight:700;color:var(--blue);font-size:13px}
+  .needkey{margin-top:7px;font-size:12.5px;line-height:1.6;color:var(--muted);background:var(--mist);
+    border:1px dashed var(--line);border-radius:9px;padding:9px 12px}
+  .pstore[href]{color:var(--blue);text-decoration:none} .pstore[href]:hover{text-decoration:underline}
   .ovl{position:fixed;inset:0;background:rgba(12,14,26,.55);display:grid;place-items:center;z-index:50;padding:24px}
   .ovbox{background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:84vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
   .ovhd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
@@ -367,6 +371,7 @@
         income_ppp:m.income_ppp!=null?m.income_ppp:null,
         population:m.population!=null?m.population:null,
         top_competitor:m.top_competitor||null,
+        competitors:m.competitors||[],// [{partner,share,value_usd}] — المنتجات/الدول المنافسة
         factories:factories,        // [{name,rating,...}]
         prices:prices,              // [{title,price,currency,store,...}]
         ai:ai,                      // {verdict,confidence,reasoning,by}
@@ -375,7 +380,9 @@
       };
     });
     return {classified:true,product:res.product,hs:res.hs_code,
-      year:res.year,report:res.report||null,markets:markets};
+      year:res.year,report:res.report||null,
+      culture:realVals(res.websearch),   // ثقافة المستهلك — web-search findings
+      markets:markets};
   }
   function verdict(score){return score==null?{t:"بحاجة تحقّق",c:"v-low"}:score>=82?{t:"مرشّح قوي",c:"v-strong"}:score>=70?{t:"مرشّح",c:"v-mid"}:{t:"بحاجة تحقّق",c:"v-low"};}
   function fmtUSD(v){if(v==null)return "—";var n=Number(v);if(n>=1e9)return "$"+(n/1e9).toFixed(1)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(1)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(0)+"K";return "$"+n.toLocaleString("en-US");}
@@ -418,7 +425,7 @@
         '<div class="stat"><div class="l">السكان</div><div class="v num">'+fmtNum(sel.population)+'</div></div>'+
       '</div>'+
       '<div class="drow2">المنافس المهيمن: <b>'+esc(sel.top_competitor||"—")+'</b></div>'+
-      aiBlock(sel)+playersBlock(sel)+pricesBlock(sel)+
+      aiBlock(sel)+competitorsBlock(sel)+playersBlock(sel)+pricesBlock(sel)+cultureBlock()+
       (sel.note?'<div class="note">'+esc(sel.note)+'</div>':'')+
       '<div class="srcs">'+(sel.sources||[]).map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'+
       '<div class="dbtns"><button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button>'+
@@ -427,7 +434,7 @@
     '</section>';
     $("resultArea").innerHTML='<div class="main"><section class="card rank-card">'+rows+'</section>'+detail+'</div>';
     $("counter").classList.remove("hidden");
-    $("counter").innerHTML=(S.result.year?'<span class="yrchip">بيانات '+S.result.year+'</span>':'')+'<b>'+ms.length+'</b> أسواق مرشّحة';
+    $("counter").innerHTML='<b>'+ms.length+'</b> أسواق مرشّحة'+(S.result.year?' <span class="yrchip">بيانات '+S.result.year+'</span>':'');
     $("sorts").classList.remove("hidden");
     $("resultArea").querySelectorAll(".rrow").forEach(function(b){b.addEventListener("click",function(){S.selId=this.getAttribute("data-id");render();});});
     var ex=$("exportBtn");if(ex)ex.addEventListener("click",exportCsv);
@@ -454,15 +461,46 @@
     return '<div class="plblk"><div class="plhd">مصانع وموزّعون بالاسم — <b>'+f.length+'</b> (Google Maps)</div>'+
       '<ul class="pllist">'+names+'</ul></div>';
   }
-  // أسعار السوق المحلي الفعلية — actual in-market retail prices.
+  // كتلة «يتطلب مفتاح / لا بيانات» — honest status instead of a blank section.
+  function needBlock(title,msg){
+    return '<div class="plblk"><div class="plhd">'+title+'</div>'+
+      '<div class="needkey">'+msg+'</div></div>';
+  }
+  // المنتجات/الدول المنافسة (Comtrade، مجاني) — competing suppliers + shares.
+  function competitorsBlock(sel){
+    var c=sel.competitors||[];
+    if(!c.length)return needBlock("المنتجات المنافسة (الدول المورّدة)",
+      "لا بيانات منافسين لهذا السوق/السنة — جرّب سنة أخرى أو أضِف مفتاح Comtrade المجاني لرفع الحدّ.");
+    var rows=c.slice(0,5).map(function(x){
+      var sh=x.share!=null?x.share+"%":"—";
+      return '<li>'+esc(x.partner||"—")+' <span class="cshare">'+esc(sh)+'</span> '+
+        '<span class="pstore">'+fmtUSD(x.value_usd)+'</span></li>';}).join("");
+    return '<div class="plblk"><div class="plhd">المنتجات المنافسة — <b>'+c.length+'</b> دولة مورّدة (Comtrade)</div>'+
+      '<ul class="pllist">'+rows+'</ul></div>';
+  }
+  // أسعار السوق المحلي الفعلية — actual in-market retail prices (needs key).
   function pricesBlock(sel){
-    var p=sel.prices||[];if(!p.length)return "";
+    var p=sel.prices||[];
+    if(!p.length)return needBlock("أسعار السوق المحلي (متاجر التجزئة)",
+      "يتطلب مفتاح أسعار السوق المحلي (LOCALPRICE_API_KEY) — أمازون/نون/جوميا. المنصة لا تختلق سعرًا.");
     var rows=p.slice(0,5).map(function(x){
       var cur=x.currency?' '+esc(x.currency):'';
       var st=x.store?' <span class="pstore">'+esc(x.store)+'</span>':'';
       return '<li><span class="pprice">'+esc(x.price)+cur+'</span> '+esc((x.title||"").slice(0,48))+st+'</li>';
     }).join("");
     return '<div class="plblk"><div class="plhd">أسعار السوق المحلي — <b>'+p.length+'</b> (متاجر التجزئة)</div>'+
+      '<ul class="pllist">'+rows+'</ul></div>';
+  }
+  // ثقافة المستهلك ونبض السوق (بحث الويب) — consumer culture (product-level, needs key).
+  function cultureBlock(){
+    var c=(S.result&&S.result.culture)||[];
+    if(!c.length)return needBlock("ثقافة المستهلك ونبض السوق",
+      "يتطلب مفتاح بحث الويب (SEARCH_API_KEY)؛ ويلخّصها كلود فوق النتائج. المنصة لا تختلق رؤى.");
+    var rows=c.slice(0,5).map(function(x){
+      var t=(x&&(x.title||x.snippet||x))||"";
+      var link=x&&x.link?' <a href="'+esc(x.link)+'" target="_blank" rel="noopener" class="pstore">المصدر</a>':'';
+      return '<li>'+esc(String(t).slice(0,90))+link+'</li>';}).join("");
+    return '<div class="plblk"><div class="plhd">ثقافة المستهلك ونبض السوق — <b>'+c.length+'</b> (بحث الويب)</div>'+
       '<ul class="pllist">'+rows+'</ul></div>';
   }
   // عرض تقرير كلود المبدئي — show Claude's written market-entry report.
@@ -554,11 +592,13 @@
   function demoResult(){
     function C(v,s){return {value:v,source:s};}
     return {classified:true,product:"تمور",hs:"080410",year:2023,
+      culture:[{title:"ارتفاع الطلب على التمور الفاخرة قبل رمضان بنسبة تتجاوز ٤٠٪ (عرض توضيحي)",link:"https://example.com"},{title:"تفضيل المستهلك المغربي للتمور المعبّأة ذات المنشأ الموثّق",link:"https://example.com"}],
       report:"تقرير أوّلي (عرض توضيحي): تتصدّر المغرب ومصر قائمة الأسواق المرشّحة لتصدير التمور السعودية. "+
         "المغرب أكبر سوق استيراد عالمي مع منافسة معتدلة، فيما تتميّز مصر بحضور سعودي قائم (حصة 44%) وسوق ضخم. "+
         "تنبيه: هذا عرض توضيحي بأرقام تجريبية؛ التقرير الحقيقي يُكتب بكلود فوق بيانات الوكلاء الفعلية فقط.",markets:[
       {id:"MA-0",country:"المغرب",code:"MA",import_value:241000000,saudi_share:12,score:87,confidence:"عالية",income_ppp:9500,population:37000000,top_competitor:"تونس",
         ai:{verdict:"GO",confidence:0.82,reasoning:"سوق استيراد ضخم ومنافسة معتدلة وحضور سعودي قابل للنمو — دخول واعد (عرض توضيحي).",by:"Claude (claude-opus-4-8)"},
+        competitors:[{partner:"تونس",share:31.4,value_usd:75700000},{partner:"الجزائر",share:22.1,value_usd:53200000},{partner:"السعودية",share:12.0,value_usd:28900000},{partner:"الإمارات",share:9.3,value_usd:22400000},{partner:"إيران",share:7.8,value_usd:18800000}],
         factories:[{name:"Maroc Dattes SARL",rating:4.3},{name:"Coopérative Tafilalet",rating:4.6},{name:"Atlas Fruits Co.",rating:4.1}],
         prices:[{title:"تمور المجهول 1kg",price:89,currency:"MAD",store:"Jumia"},{title:"تمور سكري فاخر",price:120,currency:"MAD",store:"Marjane"}],
         note:"أكبر سوق استيراد عالمي للتمور؛ مفتوح ومنافسة معتدلة — مرشّح قوي.",sources:["UN Comtrade","World Bank","Google Maps","Local retail"]},
