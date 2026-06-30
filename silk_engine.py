@@ -29,7 +29,9 @@ def _today() -> str:
 
 
 def analyze(product_name: str, countries: list[dict] | None = None,
-            year: int | None = None) -> dict:
+            year: int | None = None, *, with_trends: bool = False,
+            with_tariffs: bool = False, persist: bool = False,
+            db_path: str = "data/silk.db", check_quality: bool = True) -> dict:
     """حلّل منتجًا عبر الأسواق — full preliminary market analysis for one product.
 
     Returns an EngineResult dict:
@@ -38,6 +40,15 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     Each market row adds a one-line `recommendation`; the top markets also carry
     an agents `jury` verdict. If the product cannot be classified, returns
     classified=False with markets=[] — it never guesses an HS code.
+
+    Optional, default-OFF enrichments (old behavior is unchanged with defaults):
+      with_trends   — attach a Google Trends finding per top market (row['trends']).
+      with_tariffs  — attach a WITS applied-tariff finding per top market (row['tariff']).
+                      Both are ADDITIVE context — they never change total_score.
+      persist       — init_db + save_analysis(db_path); attaches result['analysis_id'].
+      check_quality — annotate each market with quality_flags (flags only, no number edits).
+      db_path       — SQLite path for persist.
+    All optional layers degrade gracefully offline (provenance-tagged None, no fabrication).
     """
     year = year or _DEFAULT_YEAR
     countries = countries or COUNTRIES
@@ -45,13 +56,18 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     # 1) صنّف المنتج إلى رمز HS — resolve product -> HS6 (carry its confidence).
     hs = resolve(product_name)
     if hs.value is None:
-        return {
+        result = {
             "product": product_name, "hs_code": None, "hs_confidence": 0.0,
             "hs_note": hs.note, "year": year, "preliminary": True,
             "classified": False, "markets": [],
             "note": "تعذّر تصنيف المنتج إلى رمز HS — could not classify product; "
                     "no HS code guessed.",
         }
+        if check_quality:
+            _annotate_quality(result)
+        if persist:
+            _persist(result, db_path)
+        return result
 
     # 2) رتّب الأسواق المرشّحة لهذا الرمز — rank candidate markets.
     ranked = rank_markets(hs.value, countries=countries, year=year)
@@ -64,11 +80,17 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         reports = manager.distribute(task)
         row["jury"] = JuryCommittee.evaluate(reports)
 
+    # 3b) طبقات سياق إضافية (لا تغيّر النقاط) — additive context layers (no score change).
+    if with_trends:
+        _enrich_trends(ranked[:_ENRICH_TOP], product_name)
+    if with_tariffs:
+        _enrich_tariffs(ranked[:_ENRICH_TOP], hs.value, year)
+
     # 4) سطر توصية لكل سوق — one-line recommendation per market.
     for row in ranked:
         row["recommendation"] = _recommend(row)
 
-    return {
+    result = {
         "product": product_name, "hs_code": hs.value,
         "hs_confidence": hs.confidence, "hs_note": hs.note,
         "year": year, "preliminary": True, "classified": True,
@@ -76,6 +98,57 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         "note": "نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. "
                 "Preliminary, real public data only; gaps flagged, not estimated.",
     }
+    if check_quality:
+        _annotate_quality(result)
+    if persist:
+        _persist(result, db_path)
+    return result
+
+
+def _enrich_trends(rows: list[dict], product_name: str) -> None:
+    """أضف إشارة جوجل تريندز لكل سوق — attach Trends findings (graceful None offline)."""
+    from silk_trends_agent import TrendsAgent  # lazy: optional layer
+    agent = TrendsAgent()
+    for row in rows:
+        try:
+            rep = agent.run({"keyword": product_name, "geo": row.get("iso2")})
+            row["trends"] = rep.findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("trends enrichment failed for %s: %s", row.get("iso3"), e)
+            row["trends"] = []
+
+
+def _enrich_tariffs(rows: list[dict], hs_code: str, year: int) -> None:
+    """أضف التعريفة المطبّقة لكل سوق — attach tariff finding (graceful None offline)."""
+    from silk_tariffs_agent import TariffsAgent  # lazy: optional layer
+    agent = TariffsAgent()
+    for row in rows:
+        try:
+            rep = agent.run({"hs_code": hs_code, "iso3": row.get("iso3"),
+                             "year": year})
+            row["tariff"] = rep.findings[0] if rep.findings else None
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("tariff enrichment failed for %s: %s", row.get("iso3"), e)
+            row["tariff"] = None
+
+
+def _annotate_quality(result: dict) -> None:
+    """علّم تنبيهات الجودة — attach quality flags (flags only, never edits numbers)."""
+    try:
+        from silk_quality import annotate_result
+        annotate_result(result)
+    except Exception as e:  # noqa: BLE001 — quality is non-essential context
+        log.warning("quality annotation skipped: %s", e)
+
+
+def _persist(result: dict, db_path: str) -> None:
+    """خزّن النتيجة — init_db + save_analysis; attaches result['analysis_id']."""
+    try:
+        from silk_storage import init_db, save_analysis
+        init_db(db_path)
+        result["analysis_id"] = save_analysis(result, db_path)
+    except Exception as e:  # noqa: BLE001 — persistence must not crash analysis
+        log.warning("persist skipped: %s", e)
 
 
 def _recommend(row: dict) -> str:
