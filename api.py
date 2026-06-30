@@ -59,6 +59,10 @@ def create_app():
         with_trends: bool = False
         with_tariffs: bool = False
         with_faostat: bool = False
+        with_maps: bool = False
+        with_websearch: bool = False
+        with_volza: bool = False
+        with_explee: bool = False
         persist: bool = False
 
     def _json(payload: object):
@@ -91,8 +95,34 @@ def create_app():
         result = silk_engine.analyze(
             req.product, year=req.year, with_trends=req.with_trends,
             with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
+            with_maps=req.with_maps, with_websearch=req.with_websearch,
+            with_volza=req.with_volza, with_explee=req.with_explee,
             persist=req.persist)
         return _json(result)
+
+    @app.get("/sources")
+    def sources():
+        """خريطة حالة المصادر التسع — 9-layer data-source status map.
+
+        For each layer: {name, type (free/paid), wired, key_env, key_present}.
+        key_present reflects whether the key env var is actually set right now.
+        """
+        layers = [
+            ("UN Comtrade", "free", None),
+            ("World Bank", "free", None),
+            ("FAOSTAT", "free", None),
+            ("WITS", "free", None),
+            ("Google Trends", "free", None),
+            ("Google Maps", "free", "GOOGLE_MAPS_API_KEY"),
+            ("Web Search", "free", "SEARCH_API_KEY"),
+            ("Volza", "paid", "VOLZA_API_KEY"),
+            ("explee", "paid", "EXPLEE_API_KEY"),
+        ]
+        return _json([
+            {"name": name, "type": kind, "wired": True, "key_env": key_env,
+             "key_present": bool(os.environ.get(key_env)) if key_env else False}
+            for name, kind, key_env in layers
+        ])
 
     @app.get("/analyses")
     def analyses():

@@ -25,6 +25,8 @@ _ENRICH_TOP = 3           # كم سوقًا نُثريه بالوكلاء — to
 def analyze(product_name: str, countries: list[dict] | None = None,
             year: int | None = None, *, with_trends: bool = False,
             with_tariffs: bool = False, with_faostat: bool = False,
+            with_maps: bool = False, with_websearch: bool = False,
+            with_volza: bool = False, with_explee: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
             check_quality: bool = True) -> dict:
     """حلّل منتجًا عبر الأسواق — full preliminary market analysis for one product.
@@ -40,7 +42,11 @@ def analyze(product_name: str, countries: list[dict] | None = None,
       with_trends   — attach a Google Trends finding per top market (row['trends']).
       with_tariffs  — attach a WITS applied-tariff finding per top market (row['tariff']).
       with_faostat  — attach a FAOSTAT per-capita supply finding per top market (row['faostat']).
-                      All three are ADDITIVE context — they never change total_score.
+      with_maps     — attach Google Maps named businesses per top market (row['maps']).
+      with_websearch— attach web-search results for the product (result['websearch']).
+      with_volza    — attach Volza named importers (PAID) per top market (row['volza']).
+      with_explee   — attach Explee buyers/contacts (PAID) per top market (row['explee']).
+                      All of these are ADDITIVE context — they never change total_score.
       persist       — init_db + save_analysis(db_path); attaches result['analysis_id'].
       check_quality — annotate each market with quality_flags (flags only, no number edits).
       db_path       — SQLite path for persist.
@@ -83,6 +89,12 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_tariffs(ranked[:_ENRICH_TOP], hs.value, year)
     if with_faostat:
         _enrich_faostat(ranked[:_ENRICH_TOP], product_name, year)
+    if with_maps:
+        _enrich_maps(ranked[:_ENRICH_TOP], product_name)
+    if with_volza:
+        _enrich_volza(ranked[:_ENRICH_TOP], hs.value)
+    if with_explee:
+        _enrich_explee(ranked[:_ENRICH_TOP], product_name)
 
     # 4) سطر توصية لكل سوق — one-line recommendation per market.
     for row in ranked:
@@ -96,6 +108,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         "note": "نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. "
                 "Preliminary, real public data only; gaps flagged, not estimated.",
     }
+    if with_websearch:
+        result["websearch"] = _websearch(product_name)
     if check_quality:
         _annotate_quality(result)
     if persist:
@@ -142,6 +156,58 @@ def _enrich_faostat(rows: list[dict], product_name: str, year: int) -> None:
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("faostat enrichment failed for %s: %s", row.get("iso3"), e)
             row["faostat"] = None
+
+
+def _enrich_maps(rows: list[dict], product_name: str) -> None:
+    """أضف لاعبي السوق بالاسم — attach Google Maps businesses (graceful None offline)."""
+    from silk_maps_agent import MapsAgent  # lazy: optional layer
+    agent = MapsAgent()
+    for row in rows:
+        try:
+            query = f"{product_name} {row.get('country', '')}".strip()
+            rep = agent.run({"query": query})
+            row["maps"] = rep.findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("maps enrichment failed for %s: %s", row.get("iso3"), e)
+            row["maps"] = []
+
+
+def _enrich_volza(rows: list[dict], hs_code: str) -> None:
+    """أضف المستوردين بالاسم (فولزا، مدفوع) — attach Volza importers (graceful None)."""
+    from silk_volza_agent import VolzaAgent  # lazy: optional paid layer
+    agent = VolzaAgent()
+    for row in rows:
+        try:
+            rep = agent.run({"hs_code": hs_code, "market": row.get("m49"),
+                             "partner": "SAU"})
+            row["volza"] = rep.findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("volza enrichment failed for %s: %s", row.get("iso3"), e)
+            row["volza"] = []
+
+
+def _enrich_explee(rows: list[dict], product_name: str) -> None:
+    """أضف المشترين وجهات الاتصال (Explee، مدفوع) — attach Explee buyers (graceful None)."""
+    from silk_explee_agent import ExpleeAgent  # lazy: optional paid layer
+    agent = ExpleeAgent()
+    for row in rows:
+        try:
+            rep = agent.run({"query": product_name, "market": row.get("iso3", "")})
+            row["explee"] = rep.findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("explee enrichment failed for %s: %s", row.get("iso3"), e)
+            row["explee"] = []
+
+
+def _websearch(product_name: str) -> list:
+    """نتائج بحث الويب للمنتج — top-level web-search findings (graceful None offline)."""
+    from silk_websearch_agent import WebSearchAgent  # lazy: optional layer
+    try:
+        rep = WebSearchAgent().run({"query": product_name, "num": 5})
+        return rep.findings
+    except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+        log.warning("websearch enrichment failed: %s", e)
+        return []
 
 
 def _annotate_quality(result: dict) -> None:
