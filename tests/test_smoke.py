@@ -2,13 +2,31 @@
 Offline smoke tests: imports, HS classification, and the no-fabrication principle.
 Run:  python3 -m pytest tests/ -q   (or)  python3 tests/test_smoke.py
 """
+import contextlib
 import os
+import socket
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import silk_hs_resolver as resolver
 import silk_engine as engine
+
+
+@contextlib.contextmanager
+def _block_network():
+    """اقطع الشبكة مؤقتًا — force outbound sockets to fail so 'no data => 0.0'
+    holds even where the CI has internet. Restores socket.socket on exit."""
+    real = socket.socket
+
+    def _no_net(*a, **k):  # noqa: ANN002, ANN003
+        raise OSError("network disabled for hermetic test")
+
+    socket.socket = _no_net
+    try:
+        yield
+    finally:
+        socket.socket = real
 
 
 def test_all_modules_import():
@@ -25,7 +43,8 @@ def test_resolver_real_hs_codes():
 
 def test_engine_pipeline_offline_no_fabrication():
     # بلا شبكة: المحرّك يصنّف المنتج لكن لا يخترع أرقام أسواق
-    res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}], year=2022)
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}], year=2022)
     assert res["classified"] is True
     assert res["hs_code"] == "080410"
     assert res["preliminary"] is True
@@ -69,15 +88,43 @@ def test_engine_optional_layers_offline():
     import tempfile
 
     db = os.path.join(tempfile.mkdtemp(), "engine.db")
-    res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
-                         year=2022, with_trends=True, with_tariffs=True,
-                         persist=True, db_path=db)
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
+                             year=2022, with_trends=True, with_tariffs=True,
+                             persist=True, db_path=db)
     assert res["classified"] is True and res["hs_code"] == "080410"
     assert "quality_flags" in res["markets"][0]      # quality on by default
     assert "analysis_id" in res                       # persisted
     # طبقات السياق مرفقة (قيم None بلا شبكة، لا اختلاق) — context attached, None offline.
     assert "trends" in res["markets"][0] and "tariff" in res["markets"][0]
     assert res["markets"][0]["total_score"] == 0.0    # additive context, score unchanged
+
+
+def test_api_imports_without_fastapi():
+    # api.py يُستورد بلا fastapi — import works offline; app may be None.
+    import api
+    assert hasattr(api, "create_app") and hasattr(api, "app")
+
+
+def test_faostat_agent_imports():
+    # وكيل فاوستات يُستورد بلا شبكة — offline import + graceful None on unknown area.
+    import silk_faostat_agent as fao
+    dp = fao.per_capita_supply("XXX", "Dates")
+    assert dp.value is None and dp.confidence == 0.0  # no fabrication
+
+
+def test_cache_returns_none_offline():
+    # ذاكرة التخزين تُعيد None بلا شبكة — cached_get degrades to None offline.
+    import silk_cache
+    with _block_network():
+        out = silk_cache.cached_get("https://example.invalid/none", {"a": "1"})
+    assert out is None
+
+
+def test_hs_codes_grew_and_resolve_dates():
+    # نمت رموز HS وما زال التمر يُصنّف صحيحًا — table grew; dates still resolve.
+    assert len(resolver.load_hs_codes()) >= 157
+    assert resolver.resolve("تمور").value == "080410"
 
 
 if __name__ == "__main__":

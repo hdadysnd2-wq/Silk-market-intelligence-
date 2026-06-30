@@ -38,6 +38,21 @@ def _today() -> str:
     return datetime.date.today().isoformat()
 
 
+def _cached_get(url: str, params: dict) -> object:
+    """جلب مع تخزين مؤقت اختياري — try the on-disk cache, else None (caller falls back).
+
+    Transparent: returns parsed JSON when cache/fetch succeeds, None otherwise so
+    the caller keeps its existing direct-GET + graceful-failure behavior. Never
+    raises; offline this just returns None (same end result as before).
+    """
+    try:
+        from silk_cache import cached_get
+        return cached_get(url, params)
+    except Exception as e:  # noqa: BLE001 — cache is best-effort, never break the layer
+        log.warning("cache layer unavailable (%s); using direct fetch", e)
+        return None
+
+
 # M49 numeric (str) -> ISO3, for World Bank lookups of trade partners.
 M49_TO_ISO3 = {
     "682": "SAU", "784": "ARE", "634": "QAT", "414": "KWT", "512": "OMN",
@@ -107,9 +122,12 @@ def comtrade_trade(
         "partnerCode": str(partner),
     }
     try:
-        r = requests.get(ENDPOINTS["comtrade"], params=params, timeout=_TIMEOUT)
-        r.raise_for_status()
-        data = r.json().get("data") or []
+        payload = _cached_get(ENDPOINTS["comtrade"], params)
+        if payload is None:  # cache miss + fetch failed -> same graceful [] as before
+            r = requests.get(ENDPOINTS["comtrade"], params=params, timeout=_TIMEOUT)
+            r.raise_for_status()
+            payload = r.json()
+        data = payload.get("data") or []
     except Exception as e:  # noqa: BLE001 — never raise to caller
         log.warning("Comtrade fetch failed (%s, reporter=%s, %s): %s",
                     hs_code, reporter_m49, year, e)
@@ -128,9 +146,11 @@ def world_bank(iso3: str, indicator: str, year: int | None = None) -> DataPoint:
     if year is not None:
         params["date"] = str(year)
     try:
-        r = requests.get(url, params=params, timeout=_TIMEOUT)
-        r.raise_for_status()
-        payload = r.json()
+        payload = _cached_get(url, params)
+        if payload is None:  # cache miss + fetch failed -> fall back to direct GET
+            r = requests.get(url, params=params, timeout=_TIMEOUT)
+            r.raise_for_status()
+            payload = r.json()
         records = payload[1] if isinstance(payload, list) and len(payload) > 1 else []
         for rec in records:  # WB returns newest-first; take first non-null
             if rec.get("value") is not None:

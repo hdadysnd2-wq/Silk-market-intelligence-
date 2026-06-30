@@ -32,7 +32,12 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `silk_tariffs_agent.py` | وكيل اختياري: التعريفة الجمركية المطبّقة (%) من World Bank WITS. لا يخمّن نسبة عند الفشل. |
 | `silk_quality.py` | فحوص جودة (stdlib): يوسم الصفوف بتنبيهات (حجم شبه صفري، نواقص، قيم خارج المدى) — **لا يغيّر أرقامًا**. |
 | `silk_storage.py` | تخزين النتائج في SQLite (stdlib): `save_analysis`/`get_analysis`/`list_analyses`. ملف `.db` متجاهَل في git. |
+| `silk_faostat_agent.py` | وكيل اختياري: نصيب الفرد من العرض الغذائي (FAOSTAT). يتدهور بأمان عند المصادقة/الفشل (لا يخمّن رقمًا). |
+| `silk_cache.py` | ذاكرة تخزين مؤقت على القرص لطلبات GET (stdlib؛ `requests` بكسل). يُستخدم شفّافًا في طبقة البيانات. |
+| `api.py` | واجهة REST عبر FastAPI فوق المحرّك (تُستورد FastAPI بكسل؛ `app=None` بدونها). |
 | `app.py` | واجهة Streamlit اختيارية فوق المحرّك (تُستورد Streamlit بكسل داخليًا). |
+| `tools/fetch_hs_codes.py` | أداة تشغيل: تجلب مرجع HS من Comtrade وتوسّع `data/hs_codes.csv` برموز حقيقية. |
+| `Dockerfile` · `.github/workflows/ci.yml` | تعبئة الخدمة (Docker) + تكامل مستمر (CI) يشغّل اختبارات الدخان. |
 | `data/hs_codes.csv` | بذرة رموز HS6 الحقيقية لمنتجات سِلك (عربي/إنجليزي + كلمات مفتاحية). |
 
 كل قرار من المنصة **أوّلي لا نهائي**: تصفّي الأسواق وترتّبها، ثم تُستثمر الدراسة العميقة على المرشّحين فقط.
@@ -72,7 +77,7 @@ analyze("تمور",
         check_quality=True)  # يضيف quality_flags (تنبيهات فقط، لا يغيّر أرقامًا)
 ```
 
-- `with_trends` / `with_tariffs` **سياق إضافي فقط** — يُرفقان `row['trends']` و `row['tariff']` ولا يغيّران `total_score`.
+- `with_trends` / `with_tariffs` / `with_faostat` **سياق إضافي فقط** — يُرفقون `row['trends']` / `row['tariff']` / `row['faostat']` ولا يغيّرون `total_score`.
 - جميع الطبقات تتدهور بأمان بلا شبكة (قيمة `None` موسومة بمصدرها، بلا اختلاق رقم).
 
 ### تشغيل الواجهة · Run the UI
@@ -83,6 +88,35 @@ streamlit run app.py
 ```
 
 الحزم الاختيارية: `streamlit` (للواجهة) و `pytrends` (لوكيل الاتجاهات). النواة تعمل وتُستورد بدونهما.
+
+### تشغيل الخدمة (API) · Run the backend (API)
+
+واجهة REST عبر FastAPI فوق المحرّك. تُستورد `api.py` بلا الحزمة (`app=None`)؛ التشغيل يحتاج `fastapi`+`uvicorn`.
+
+```bash
+pip install fastapi uvicorn      # حزم اختيارية
+uvicorn api:app --host 0.0.0.0 --port 8000
+# أو مباشرة:  python3 api.py
+```
+
+عبر Docker · with Docker:
+
+```bash
+docker build -t silk-api .
+docker run -p 8000:8000 silk-api
+```
+
+النهايات · Endpoints:
+
+| Method · Path | الوظيفة · Role |
+|---|---|
+| `GET /health` | حالة الخدمة + توفّر الحزم الاختيارية. |
+| `GET /resolve/{name}` | يصنّف اسم منتج إلى HS6 (مع المصدر/الثقة). |
+| `POST /analyze` | يشغّل `analyze` كاملًا (`{product, year, with_trends, with_tariffs, persist}`). |
+| `GET /analyses` | يسرد التحليلات المحفوظة. |
+| `GET /analyses/{id}` | يعيد تحليلًا محفوظًا، أو 404. |
+
+**CI** (`.github/workflows/ci.yml`): يثبّت `requests pandas pytest` ويشغّل `python -m pytest tests/ -q` عند كل push / PR.
 
 ---
 
@@ -104,8 +138,10 @@ streamlit run app.py
 
 ## الحالة · Status
 
-**مُنجَز:** النواة (طبقة بيانات + مُصنّف HS + وكلاء + مُرتّب + محرّك) + طبقات: Google Trends،
-الرسوم الجمركية (WITS)، تخزين SQLite، فحوص الجودة، وواجهة Streamlit.
+**مُنجَز:** النواة (طبقة بيانات + مُصنّف HS + وكلاء + مُرتّب + محرّك) + طبقات Google Trends،
+الرسوم الجمركية (WITS)، FAOSTAT، فحوص الجودة، تخزين SQLite، وذاكرة تخزين مؤقت + واجهتا Streamlit
+و**FastAPI** + تعبئة Docker وتكامل مستمر (CI). اختبارات الدخان: 10/10.
 
-**خطوات لاحقة مقترحة:** حل FAOSTAT (الاستهلاك للفرد)، لفّ الوكلاء بـ CrewAI، واجهة FastAPI،
-ودمج المصادر المدفوعة (Volza/explee) للأسواق الناجية من التصفية الأولية فقط.
+**خطوات لاحقة مقترحة:** اختبار حيّ شامل ببيانات الإنترنت، توسيع `hs_codes.csv` للقائمة الكاملة عبر
+`tools/fetch_hs_codes.py`، لفّ الوكلاء بـ CrewAI، ودمج المصادر المدفوعة (Volza/explee) للأسواق الناجية
+من التصفية الأولية فقط.

@@ -30,8 +30,9 @@ def _today() -> str:
 
 def analyze(product_name: str, countries: list[dict] | None = None,
             year: int | None = None, *, with_trends: bool = False,
-            with_tariffs: bool = False, persist: bool = False,
-            db_path: str = "data/silk.db", check_quality: bool = True) -> dict:
+            with_tariffs: bool = False, with_faostat: bool = False,
+            persist: bool = False, db_path: str = "data/silk.db",
+            check_quality: bool = True) -> dict:
     """حلّل منتجًا عبر الأسواق — full preliminary market analysis for one product.
 
     Returns an EngineResult dict:
@@ -44,7 +45,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     Optional, default-OFF enrichments (old behavior is unchanged with defaults):
       with_trends   — attach a Google Trends finding per top market (row['trends']).
       with_tariffs  — attach a WITS applied-tariff finding per top market (row['tariff']).
-                      Both are ADDITIVE context — they never change total_score.
+      with_faostat  — attach a FAOSTAT per-capita supply finding per top market (row['faostat']).
+                      All three are ADDITIVE context — they never change total_score.
       persist       — init_db + save_analysis(db_path); attaches result['analysis_id'].
       check_quality — annotate each market with quality_flags (flags only, no number edits).
       db_path       — SQLite path for persist.
@@ -85,6 +87,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_trends(ranked[:_ENRICH_TOP], product_name)
     if with_tariffs:
         _enrich_tariffs(ranked[:_ENRICH_TOP], hs.value, year)
+    if with_faostat:
+        _enrich_faostat(ranked[:_ENRICH_TOP], product_name, year)
 
     # 4) سطر توصية لكل سوق — one-line recommendation per market.
     for row in ranked:
@@ -130,6 +134,20 @@ def _enrich_tariffs(rows: list[dict], hs_code: str, year: int) -> None:
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("tariff enrichment failed for %s: %s", row.get("iso3"), e)
             row["tariff"] = None
+
+
+def _enrich_faostat(rows: list[dict], product_name: str, year: int) -> None:
+    """أضف نصيب الفرد من فاوستات لكل سوق — attach FAOSTAT finding (graceful None offline)."""
+    from silk_faostat_agent import FaostatAgent  # lazy: optional layer
+    agent = FaostatAgent()
+    for row in rows:
+        try:
+            rep = agent.run({"iso3": row.get("iso3"), "item": product_name,
+                             "year": year})
+            row["faostat"] = rep.findings[0] if rep.findings else None
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("faostat enrichment failed for %s: %s", row.get("iso3"), e)
+            row["faostat"] = None
 
 
 def _annotate_quality(result: dict) -> None:
