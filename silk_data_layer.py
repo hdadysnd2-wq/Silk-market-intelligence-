@@ -143,8 +143,11 @@ def comtrade_trade(
         "period": str(year),
         "cmdCode": str(hs_code),
         "flowCode": flow,
-        "partnerCode": str(partner),
     }
+    # partner=0 => World total (one row). "all"/None => OMIT partnerCode so Comtrade
+    # returns every partner (the API rejects partnerCode=all as invalid).
+    if partner not in (None, "all", "ALL"):
+        params["partnerCode"] = str(partner)
     if COMTRADE_KEY:
         params["subscription-key"] = COMTRADE_KEY  # higher daily limit when set
     try:
