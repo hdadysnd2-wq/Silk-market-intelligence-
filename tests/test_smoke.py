@@ -162,6 +162,28 @@ def test_hs_codes_grew_and_resolve_dates():
     assert resolver.resolve("تمور").value == "080410"
 
 
+def test_rank_markets_has_dashboard_fields():
+    # حقول لوحة المعلومات الإضافية موجودة (قد تكون None بلا شبكة، لا اختلاق).
+    import silk_market_ranker as ranker
+
+    with _block_network():
+        ranked = ranker.rank_markets("080410",
+                                     countries=[{"iso3": "ARE", "m49": "784"}],
+                                     year=2022)
+    row = ranked[0]
+    for key in ("income_ppp", "population", "top_competitor"):
+        assert key in row  # additive key present (value may be None offline)
+
+
+def test_index_helper_matches_dates():
+    # مساعد /index يطابق "تمور" ويرجع رمز التمر 080410 — offline, no network.
+    import api
+
+    out = api._index_search("تمور", limit=20)
+    assert any(item["hs"] == "080410" for item in out)
+    assert out and set(out[0].keys()) == {"name", "hs", "analyzed"}
+
+
 if __name__ == "__main__":
     import logging
 

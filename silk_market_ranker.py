@@ -105,6 +105,18 @@ def _demand_capacity_component(iso3: str, year: int) -> DataPoint:
                      retrieved_at=_today())
 
 
+def _top_competitor(comps: list[DataPoint]) -> str | None:
+    """أكبر مورّد غير سعودي — name of the largest NON-Saudi supplier, else None.
+
+    `comps` is already ranked descending by value_usd, so the first competitor
+    whose code != Saudi M49 is the largest non-Saudi supplier. Never fabricates.
+    """
+    for c in comps:
+        if c.value and c.value.get("code") != _SAUDI_M49:
+            return c.value.get("partner")
+    return None
+
+
 def _competition_component(comps: list[DataPoint]) -> DataPoint:
     """المنافسة — Herfindahl concentration of suppliers (lower share top = easier)."""
     if not comps:
@@ -148,7 +160,18 @@ def rank_markets(hs_code: str, countries: list[dict] = COUNTRIES,
             "demand_capacity": _demand_capacity_component(iso3, year),
             "competition": _competition_component(comps),
         }
-        rows.append({"iso3": iso3, "m49": m49, "components": comp_dps})
+        # حقول إضافية خام للوحة المعلومات — additive raw fields for the dashboard
+        # UI (raw value or None, never fabricated). Reuse `comps` already fetched.
+        inc = ppp_per_capita(iso3, year)
+        if inc.value is None:
+            inc = gdp_per_capita(iso3, year)
+        pop = population(iso3, year)
+        rows.append({
+            "iso3": iso3, "m49": m49, "components": comp_dps,
+            "income_ppp": inc.value,
+            "population": pop.value,
+            "top_competitor": _top_competitor(comps),
+        })
 
     # 2) جداول القيم الخام لكل مكوّن عبر الدول — per-component raw value tables.
     raw_tables: dict[str, dict[str, float]] = {k: {} for k in WEIGHTS}
@@ -181,6 +204,9 @@ def rank_markets(hs_code: str, countries: list[dict] = COUNTRIES,
             "iso3": iso3, "m49": row["m49"],
             "total_score": total, "confidence": confidence,
             "components": row["components"],
+            "income_ppp": row["income_ppp"],
+            "population": row["population"],
+            "top_competitor": row["top_competitor"],
         })
 
     out.sort(key=lambda r: (r["total_score"], r["confidence"]), reverse=True)

@@ -26,6 +26,35 @@ def _to_jsonable(obj: object) -> object:
     return obj
 
 
+def _index_search(q: str = "", limit: int = 20) -> list[dict]:
+    """فهرس بحث المنتجات للوحة المعلومات — product search index for the dashboard
+    combobox. Returns [{"name", "hs", "analyzed"}]; empty q -> a small default
+    list. Pure/offline (the HS CSV load is lru_cached). Never fabricates.
+    """
+    import silk_hs_resolver as resolver
+
+    def _row(r: dict) -> dict:
+        return {"name": r.get("name_ar") or r.get("name_en"),
+                "hs": r.get("hs_code"), "analyzed": False}
+
+    rows = resolver.load_hs_codes()
+    q = (q or "").strip().lower()
+    if not q:
+        return [_row(r) for r in rows[:12]]
+
+    out: list[dict] = []
+    for r in rows:
+        hay = " ".join([
+            (r.get("name_ar") or ""), (r.get("name_en") or ""),
+            (r.get("keywords") or ""),
+        ]).lower()
+        if q in hay:
+            out.append(_row(r))
+        if len(out) >= max(1, limit):
+            break
+    return out
+
+
 def create_app():
     """أنشئ تطبيق FastAPI — build the FastAPI app, or raise if fastapi is absent."""
     try:
@@ -88,6 +117,11 @@ def create_app():
         return _json({"hs_code": dp.value, "confidence": dp.confidence,
                       "note": dp.note, "source": dp.source,
                       "retrieved_at": dp.retrieved_at})
+
+    @app.get("/index")
+    def index(q: str = "", limit: int = 20):
+        """فهرس المنتجات للبحث — product search index for the dashboard combobox."""
+        return _json(_index_search(q, limit))
 
     @app.post("/analyze")
     def analyze(req: AnalyzeRequest):
