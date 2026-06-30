@@ -139,6 +139,20 @@ def test_new_agents_import_and_no_fabrication_keyless():
         assert dp.value is None and dp.confidence == 0.0  # no fabrication keyless
 
 
+def test_comtrade_endpoint_switches_with_key():
+    # بلا مفتاح -> معاينة محدودة؛ مع مفتاح -> endpoint الإنتاج الكامل /data/v1/get.
+    import silk_data_layer as d
+
+    saved = d.COMTRADE_KEY
+    try:
+        d.COMTRADE_KEY = ""
+        assert d._comtrade_url().endswith("/public/v1/preview/C/A/HS")
+        d.COMTRADE_KEY = "SAMPLEKEY"
+        assert d._comtrade_url().endswith("/data/v1/get/C/A/HS")
+    finally:
+        d.COMTRADE_KEY = saved
+
+
 def test_market_imports_one_call_size_and_competitors():
     # نداء Comtrade واحد يعطي حجم السوق (صفّ العالم) والمنافسين معًا — no 2nd call.
     import silk_data_layer_v2 as v2
