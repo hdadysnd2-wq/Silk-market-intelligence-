@@ -1,0 +1,75 @@
+# منصة سِلك لذكاء الأسواق — Silk Market Intelligence
+
+> نظام **متعدد الوكلاء** لتحليل أسواق التصدير/الاستيراد لشركة سِلك (منتجات سعودية)،
+> يجمّع ويحلّل **بيانات حقيقية فقط** ويوسم كل معلومة بمصدرها ودرجة ثقتها.
+
+A multi-agent system that ranks export markets for Saudi products using **real public data only**
+(UN Comtrade + World Bank). Every value is tagged with its source and a confidence score.
+
+---
+
+## المبدأ التأسيسي · Founding principle
+
+النظام **لا يخلق بيانات** — بل يجمّع ويحلّل المتاح آلياً. الوكيل بلا مصدر حقيقي = خيال مقنع.
+عند فشل المصدر، تُعاد قيمة فارغة موسومة (`value=None, confidence=0.0`) مع تحذير — **ولا يُخترع رقم**.
+
+The system never fabricates data. On a source failure it returns a provenance-tagged empty value
+(`DataPoint(value=None, confidence=0.0, note=...)`) and logs a warning — it never invents a number.
+
+---
+
+## البنية · Architecture
+
+| الملف · File | الوظيفة · Role |
+|---|---|
+| `silk_data_layer.py` | الطبقة الأساس: ربط UN Comtrade + World Bank، وتعريف `DataPoint` (المصدر/الثقة). |
+| `silk_data_layer_v2.py` | + القوة الشرائية (PPP) + المنافسون بالاسم وحصصهم. |
+| `silk_hs_resolver.py` | تصنيف HS تلقائي من اسم المنتج (عربي/إنجليزي) عبر `difflib` + الكلمات المفتاحية. |
+| `silk_agents.py` | بنية الوكلاء: مدير + 3 وكلاء باحثين (تجارة/اقتصاد/منافسة) + لجنة تحكيم. |
+| `silk_market_ranker.py` | محرّك الترتيب: يقارن عدة دول لرمز HS ويرتّبها بنقاط شفّافة قابلة للتدقيق. |
+| `silk_engine.py` | **المحرّك الكامل**: يقبل أي منتج بالاسم → يصنّفه → يرتّب أسواقه. ابدأ من هنا. |
+| `data/hs_codes.csv` | بذرة رموز HS6 الحقيقية لمنتجات سِلك (عربي/إنجليزي + كلمات مفتاحية). |
+
+كل قرار من المنصة **أوّلي لا نهائي**: تصفّي الأسواق وترتّبها، ثم تُستثمر الدراسة العميقة على المرشّحين فقط.
+
+---
+
+## المصادر · Data sources (no API key)
+
+- **UN Comtrade** — `https://comtradeapi.un.org/public/v1/preview/C/A/HS` — الاستيراد/التصدير بالـ HS Code.
+- **World Bank** — `https://api.worldbank.org/v2/country/{iso3}/indicator/{code}` — الدخل، PPP، السكان.
+
+---
+
+## التشغيل · Quick start
+
+```bash
+pip install -r requirements.txt
+python3 silk_engine.py        # عرض توضيحي: يصنّف منتجاً ويرتّب أسواقه
+```
+
+> ملاحظة: التشغيل يتطلب وصولاً للإنترنت ليجلب البيانات الحقيقية. بلا إنترنت يعمل الكود لكن يُظهر
+> "لا بيانات / فشل الجلب" بدل أرقام مُختلَقة (إثباتاً لسلامة المبدأ).
+
+---
+
+## مهارة ponytail المثبّتة · Installed skill
+
+المشروع مهيّأ لتفعيل إضافة **[ponytail](https://github.com/DietrichGebert/ponytail)** تلقائياً
+عبر `.claude/settings.json` (تُسجّل السوق وتفعّل `ponytail@ponytail`). تشجّع على أقل كود ممكن
+(YAGNI، المكتبة القياسية أولاً). عند فتح المشروع في Claude Code قد يُطلب منك الموافقة على تثبيتها،
+أو ثبّتها يدوياً:
+
+```
+/plugin marketplace add DietrichGebert/ponytail
+/plugin install ponytail@ponytail
+```
+
+أوامرها: `/ponytail-review` · `/ponytail-audit` · `/ponytail-debt` · `/ponytail-gain` · `/ponytail-help`.
+
+---
+
+## الحالة · Status
+
+نواة عاملة مبنية على بيانات حقيقية. خطوات لاحقة مقترحة: وكيل Google Trends، الرسوم الجمركية (WITS)،
+واجهة Streamlit/FastAPI، وتخزين النتائج (SQLite).
