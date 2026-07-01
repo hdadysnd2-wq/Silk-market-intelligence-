@@ -76,20 +76,10 @@ def _execute_job(job_id: str, request: dict) -> None:
     try:
         result = _run_analysis(request)
         silk_cache.set_cached_analysis(_cache_key(request), result)
-        _remember(result)  # RAG memory (best-effort; no-op without embeddings key)
         silk_db.update_job(job_id, "finished", result_json=json.dumps(result))
     except Exception as e:  # noqa: BLE001 — a job failure must not crash the worker
         log.warning("analysis job %s failed: %s", job_id, e)
         silk_db.update_job(job_id, "failed", error=str(e))
-
-
-def _remember(result: dict) -> None:
-    """خزّن التقرير في الذاكرة التراكمية — best-effort RAG store; never crashes."""
-    try:
-        import silk_vectors
-        silk_vectors.remember_report(result)
-    except Exception as e:  # noqa: BLE001 — memory is optional context
-        log.warning("RAG remember skipped: %s", e)
 
 
 def _rq_queue():

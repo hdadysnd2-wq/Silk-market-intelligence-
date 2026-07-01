@@ -90,24 +90,8 @@ def _build_schema():
         Column("created_at", DateTime, nullable=False),
         Column("updated_at", DateTime, nullable=False),
     )
-    # ذاكرة تراكمية (RAG) — cumulative report memory. Embedding is stored as a
-    # portable JSON text array so it works on both Postgres and SQLite; a native
-    # pgvector column + ANN index is the production optimization (see silk_vectors).
-    market_vectors = Table(
-        "market_vectors", metadata,
-        Column("id", Integer, primary_key=True, autoincrement=True),
-        Column("product", String(255), nullable=True),
-        Column("hs_code", String(16), nullable=True),
-        Column("market", String(128), nullable=True),
-        Column("year", Integer, nullable=True),
-        Column("summary", Text, nullable=True),
-        Column("embedding", Text, nullable=False),   # JSON array of floats
-        Column("dim", Integer, nullable=False),
-        Column("created_at", DateTime, nullable=False),
-    )
     return metadata, {"users": users, "magic_links": magic_links,
-                      "sessions": sessions, "jobs": jobs,
-                      "market_vectors": market_vectors}
+                      "sessions": sessions, "jobs": jobs}
 
 
 def get_engine():
@@ -254,63 +238,6 @@ def count_jobs_this_month(user_id: int) -> int:
             .where(jobs.c.user_id == user_id).where(jobs.c.created_at >= start)
         ).fetchone()
     return int(row[0]) if row else 0
-
-
-# ── cumulative memory vectors (RAG) ────────────────────────────────────────
-
-def try_enable_pgvector() -> bool:
-    """فعّل pgvector إن أمكن — best-effort CREATE EXTENSION vector on Postgres.
-
-    Returns True if the extension is available afterward. On SQLite or when the
-    DB role can't create extensions, returns False and the layer falls back to a
-    portable JSON column + Python cosine (see silk_vectors). Never raises.
-    """
-    engine = get_engine()
-    if engine.dialect.name != "postgresql":
-        return False
-    try:
-        from sqlalchemy import text
-        with engine.begin() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        return True
-    except Exception as e:  # noqa: BLE001 — extension may be unavailable/forbidden
-        log.warning("pgvector unavailable (%s); using JSON+cosine fallback", e)
-        return False
-
-
-def store_market_vector(product, hs_code, market, year, summary,
-                        embedding: list, ) -> int:
-    """خزّن ناقل تقرير — persist a report embedding for later similarity search."""
-    import json as _json
-    from sqlalchemy import insert
-    engine = get_engine()
-    mv = _t("market_vectors")
-    with engine.begin() as conn:
-        cur = conn.execute(insert(mv).values(
-            product=product, hs_code=hs_code, market=market, year=year,
-            summary=summary, embedding=_json.dumps(list(embedding)),
-            dim=len(embedding), created_at=_now()))
-        return int(cur.inserted_primary_key[0])
-
-
-def list_market_vectors(limit: int = 500) -> list[dict]:
-    """اسرد نواقل التقارير — recent stored vectors (newest first) as dicts."""
-    import json as _json
-    from sqlalchemy import select
-    engine = get_engine()
-    mv = _t("market_vectors")
-    with engine.begin() as conn:
-        rows = conn.execute(select(mv).order_by(mv.c.id.desc()).limit(limit)
-                            ).mappings().fetchall()
-    out = []
-    for r in rows:
-        d = dict(r)
-        try:
-            d["embedding"] = _json.loads(d["embedding"])
-        except Exception:  # noqa: BLE001 — skip a corrupt row rather than crash
-            continue
-        out.append(d)
-    return out
 
 
 if __name__ == "__main__":
