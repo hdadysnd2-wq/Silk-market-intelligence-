@@ -29,6 +29,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_localprice: bool = False, own_price: float | None = None,
             with_market_size: bool = False, with_demographics: bool = False,
             with_competition: bool = False, with_compliance: bool = False,
+            with_culture: bool = False,
             with_volza: bool = False, with_explee: bool = False,
             with_ai: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
@@ -64,6 +65,11 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                       authority page), both dynamic web search. Retail price
                       (with_localprice) and applied tariff % (with_tariffs) are
                       the pre-existing Group-D members. Additive; no score change.
+      with_culture  — attach Group-E context per top market: row['cultural']
+                      (consumption habits/lifestyle), row['business_culture']
+                      (negotiation/payment/etiquette), row['exhibitions'] (trade
+                      fairs), all dynamic web search. Google Trends (with_trends)
+                      is the pre-existing Group-E member. Additive; no score change.
       with_maps     — attach Google Maps named businesses per top market (row['maps']).
       with_localprice— attach actual in-market retail prices per top market (row['localprice']).
       own_price     — YOUR product's price; with with_localprice, attaches a
@@ -127,6 +133,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_competition(ranked[:_ENRICH_TOP], product_name)
     if with_compliance:
         _enrich_compliance(ranked[:_ENRICH_TOP], product_name)
+    if with_culture:
+        _enrich_culture(ranked[:_ENRICH_TOP], product_name)
     if with_maps:
         _enrich_maps(ranked[:_ENRICH_TOP], product_name)
     if with_localprice:
@@ -343,6 +351,37 @@ def _enrich_compliance(rows: list[dict], product_name: str) -> None:
         except Exception as e:  # noqa: BLE001
             log.warning("customs enrichment failed for %s: %s", row.get("iso3"), e)
             row["customs_web"] = []
+
+
+def _enrich_culture(rows: list[dict], product_name: str) -> None:
+    """أضف سياق المجموعة هـ — attach Group-E context per market: consumer culture,
+    business culture, exhibitions (all web search). Graceful None offline/keyless;
+    additive (no score change)."""
+    from silk_culture_agent import (CulturalAgent, BusinessCultureAgent,
+                                    ExhibitionsAgent)  # lazy: optional layer
+    cult_agent = CulturalAgent()
+    biz_agent = BusinessCultureAgent()
+    exh_agent = ExhibitionsAgent()
+    for row in rows:
+        country = row.get("country", "")
+        try:
+            row["cultural"] = cult_agent.run(
+                {"product": product_name, "country": country}).findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("cultural enrichment failed for %s: %s", row.get("iso3"), e)
+            row["cultural"] = []
+        try:
+            row["business_culture"] = biz_agent.run(
+                {"country": country, "product": product_name}).findings
+        except Exception as e:  # noqa: BLE001
+            log.warning("business_culture enrichment failed for %s: %s", row.get("iso3"), e)
+            row["business_culture"] = []
+        try:
+            row["exhibitions"] = exh_agent.run(
+                {"product": product_name, "country": country}).findings
+        except Exception as e:  # noqa: BLE001
+            log.warning("exhibitions enrichment failed for %s: %s", row.get("iso3"), e)
+            row["exhibitions"] = []
 
 
 def _enrich_maps(rows: list[dict], product_name: str) -> None:

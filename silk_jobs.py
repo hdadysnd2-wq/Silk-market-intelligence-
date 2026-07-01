@@ -34,7 +34,8 @@ def _cache_key(request: dict) -> dict:
         "product", "year", "with_trends", "with_tariffs", "with_faostat",
         "with_maps", "with_websearch", "with_localprice", "own_price",
         "with_market_size", "with_demographics", "with_competition",
-        "with_compliance", "with_volza", "with_explee", "with_ai",
+        "with_compliance", "with_culture",
+        "with_volza", "with_explee", "with_ai",
     )}
 
 
@@ -55,6 +56,7 @@ def _run_analysis(request: dict) -> dict:
         with_demographics=bool(request.get("with_demographics")),
         with_competition=bool(request.get("with_competition")),
         with_compliance=bool(request.get("with_compliance")),
+        with_culture=bool(request.get("with_culture")),
         with_volza=bool(request.get("with_volza")),
         with_explee=bool(request.get("with_explee")),
         with_ai=bool(request.get("with_ai")),

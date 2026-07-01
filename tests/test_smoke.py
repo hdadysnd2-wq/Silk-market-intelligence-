@@ -708,6 +708,31 @@ def test_engine_compliance_layer_offline():
     assert row["total_score"] == 0.0                       # additive, score unchanged
 
 
+def test_culture_agents_no_fabrication_keyless():
+    # وكلاء المجموعة هـ بلا مفتاح بحث: None موسوم، لا رؤى/أعراف/معارض مُختلقة.
+    import silk_culture_agent as cult
+
+    os.environ.pop("SEARCH_API_KEY", None)
+    with _block_network():
+        a = cult.CulturalAgent().run({"product": "dates", "country": "UAE"})
+        b = cult.BusinessCultureAgent().run({"country": "UAE", "product": "dates"})
+        c = cult.ExhibitionsAgent().run({"product": "dates", "country": "UAE"})
+    assert a.failed and b.failed and c.failed
+    assert all(f.value is None for f in a.findings + b.findings + c.findings)
+
+
+def test_engine_culture_layer_offline():
+    # طبقة المجموعة هـ مفعّلة بلا شبكة/مفتاح: تُرفق المفاتيح، والنقاط لا تتغيّر.
+    os.environ.pop("SEARCH_API_KEY", None)
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
+                             year=2022, with_culture=True)
+    row = res["markets"][0]
+    for key in ("cultural", "business_culture", "exhibitions"):
+        assert key in row                               # context attached
+    assert row["total_score"] == 0.0                    # additive, score unchanged
+
+
 if __name__ == "__main__":
     import logging
 

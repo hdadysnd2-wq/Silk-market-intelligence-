@@ -89,6 +89,7 @@ def create_app():
         with_demographics: bool = False
         with_competition: bool = False
         with_compliance: bool = False
+        with_culture: bool = False
         with_volza: bool = False
         with_explee: bool = False
         with_ai: bool = False
