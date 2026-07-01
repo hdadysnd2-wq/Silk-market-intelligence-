@@ -685,6 +685,29 @@ def test_engine_competition_layer_offline():
     assert row["total_score"] == 0.0                    # additive, score unchanged
 
 
+def test_regulatory_and_customs_agents_no_fabrication_keyless():
+    # وكيلا الاشتراطات/الجمارك بلا مفتاح بحث: None موسوم، لا اشتراطات مُختلقة.
+    import silk_regulatory_agent as reg
+
+    os.environ.pop("SEARCH_API_KEY", None)
+    with _block_network():
+        r = reg.RegulatoryStandardsAgent().run({"product": "dates", "country": "UAE"})
+        c = reg.CustomsInfoAgent().run({"product": "dates", "country": "UAE"})
+    assert r.failed is True and c.failed is True
+    assert all(f.value is None for f in r.findings + c.findings)  # no fabrication
+
+
+def test_engine_compliance_layer_offline():
+    # طبقة المجموعة د مفعّلة بلا شبكة/مفتاح: تُرفق regulatory/customs_web، والنقاط ثابتة.
+    os.environ.pop("SEARCH_API_KEY", None)
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
+                             year=2022, with_compliance=True)
+    row = res["markets"][0]
+    assert "regulatory" in row and "customs_web" in row   # context attached
+    assert row["total_score"] == 0.0                       # additive, score unchanged
+
+
 if __name__ == "__main__":
     import logging
 

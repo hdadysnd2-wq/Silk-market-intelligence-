@@ -28,7 +28,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_maps: bool = False, with_websearch: bool = False,
             with_localprice: bool = False, own_price: float | None = None,
             with_market_size: bool = False, with_demographics: bool = False,
-            with_competition: bool = False,
+            with_competition: bool = False, with_compliance: bool = False,
             with_volza: bool = False, with_explee: bool = False,
             with_ai: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
@@ -58,6 +58,12 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                       row['ecommerce'] (dynamic web search), and row['bestsellers']
                       (LICENSED Apify actor; None without APIFY_API_TOKEN — no raw
                       scraping). Additive; no score change.
+      with_compliance — attach Group-D NEW context per top market:
+                      row['regulatory'] (packaging/labeling/cert requirements —
+                      halal/health/ISO) and row['customs_web'] (official customs
+                      authority page), both dynamic web search. Retail price
+                      (with_localprice) and applied tariff % (with_tariffs) are
+                      the pre-existing Group-D members. Additive; no score change.
       with_maps     — attach Google Maps named businesses per top market (row['maps']).
       with_localprice— attach actual in-market retail prices per top market (row['localprice']).
       own_price     — YOUR product's price; with with_localprice, attaches a
@@ -119,6 +125,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_demographics(ranked[:_ENRICH_TOP], year)
     if with_competition:
         _enrich_competition(ranked[:_ENRICH_TOP], product_name)
+    if with_compliance:
+        _enrich_compliance(ranked[:_ENRICH_TOP], product_name)
     if with_maps:
         _enrich_maps(ranked[:_ENRICH_TOP], product_name)
     if with_localprice:
@@ -311,6 +319,30 @@ def _enrich_competition(rows: list[dict], product_name: str) -> None:
         except Exception as e:  # noqa: BLE001
             log.warning("bestsellers enrichment failed for %s: %s", row.get("iso3"), e)
             row["bestsellers"] = []
+
+
+def _enrich_compliance(rows: list[dict], product_name: str) -> None:
+    """أضف سياق المجموعة د الجديد — attach Group-D NEW context per market:
+    regulatory standards + official customs-authority page (both web search).
+    Graceful None offline/keyless; additive (no score change)."""
+    from silk_regulatory_agent import (RegulatoryStandardsAgent,
+                                       CustomsInfoAgent)  # lazy: optional layer
+    reg_agent = RegulatoryStandardsAgent()
+    cust_agent = CustomsInfoAgent()
+    for row in rows:
+        country = row.get("country", "")
+        try:
+            row["regulatory"] = reg_agent.run(
+                {"product": product_name, "country": country}).findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("regulatory enrichment failed for %s: %s", row.get("iso3"), e)
+            row["regulatory"] = []
+        try:
+            row["customs_web"] = cust_agent.run(
+                {"product": product_name, "country": country}).findings
+        except Exception as e:  # noqa: BLE001
+            log.warning("customs enrichment failed for %s: %s", row.get("iso3"), e)
+            row["customs_web"] = []
 
 
 def _enrich_maps(rows: list[dict], product_name: str) -> None:
