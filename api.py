@@ -87,6 +87,7 @@ def create_app():
         own_price: float | None = None
         with_market_size: bool = False
         with_demographics: bool = False
+        with_competition: bool = False
         with_volza: bool = False
         with_explee: bool = False
         with_ai: bool = False
@@ -232,6 +233,7 @@ def create_app():
             ("Google Maps", "free", "GOOGLE_MAPS_API_KEY"),
             ("Web Search", "free", "SEARCH_API_KEY"),
             ("Local retail prices", "paid", "LOCALPRICE_API_KEY"),
+            ("Best-sellers (Apify)", "paid", "APIFY_API_TOKEN"),
             ("Volza", "paid", "VOLZA_API_KEY"),
             ("explee", "paid", "EXPLEE_API_KEY"),
             ("Claude (AI judge)", "ai", "ANTHROPIC_API_KEY"),

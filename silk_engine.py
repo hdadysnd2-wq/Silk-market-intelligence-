@@ -28,6 +28,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_maps: bool = False, with_websearch: bool = False,
             with_localprice: bool = False, own_price: float | None = None,
             with_market_size: bool = False, with_demographics: bool = False,
+            with_competition: bool = False,
             with_volza: bool = False, with_explee: bool = False,
             with_ai: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
@@ -52,6 +53,11 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                       (largest cities lat/lng+pop), row['religion'] (majority
                       religion, approx/dated), row['currency_risk'] (World Bank
                       inflation + FX-rate signals). Additive; no score change.
+      with_competition — attach Group-C context per top market:
+                      row['competitors_web'], row['distribution_channels'],
+                      row['ecommerce'] (dynamic web search), and row['bestsellers']
+                      (LICENSED Apify actor; None without APIFY_API_TOKEN — no raw
+                      scraping). Additive; no score change.
       with_maps     — attach Google Maps named businesses per top market (row['maps']).
       with_localprice— attach actual in-market retail prices per top market (row['localprice']).
       own_price     — YOUR product's price; with with_localprice, attaches a
@@ -111,6 +117,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_market_size(ranked[:_ENRICH_TOP], hs.value, product_name, year)
     if with_demographics:
         _enrich_demographics(ranked[:_ENRICH_TOP], year)
+    if with_competition:
+        _enrich_competition(ranked[:_ENRICH_TOP], product_name)
     if with_maps:
         _enrich_maps(ranked[:_ENRICH_TOP], product_name)
     if with_localprice:
@@ -262,6 +270,47 @@ def _enrich_demographics(rows: list[dict], year: int) -> None:
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("currency_risk enrichment failed for %s: %s", iso3, e)
             row["currency_risk"] = []
+
+
+def _enrich_competition(rows: list[dict], product_name: str) -> None:
+    """أضف سياق المجموعة ج — attach Group-C competition/distribution per market:
+    competitors (web), distribution channels (web), e-commerce landscape (web),
+    best-sellers (licensed Apify). Graceful None offline/keyless; all additive."""
+    from silk_competitors_agent import CompetitorsAgent      # lazy: optional layer
+    from silk_distribution_agent import (DistributionChannelsAgent,
+                                         EcommerceLandscapeAgent)  # lazy
+    from silk_bestsellers_agent import BestsellersAgent      # lazy: Apify-gated
+    comp_agent = CompetitorsAgent()
+    dist_agent = DistributionChannelsAgent()
+    ecom_agent = EcommerceLandscapeAgent()
+    best_agent = BestsellersAgent()
+    for row in rows:
+        country = row.get("country", "")
+        market = row.get("iso2") or row.get("iso3") or ""
+        try:
+            row["competitors_web"] = comp_agent.run(
+                {"product": product_name, "country": country}).findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("competitors enrichment failed for %s: %s", row.get("iso3"), e)
+            row["competitors_web"] = []
+        try:
+            row["distribution_channels"] = dist_agent.run(
+                {"product": product_name, "country": country}).findings
+        except Exception as e:  # noqa: BLE001
+            log.warning("distribution enrichment failed for %s: %s", row.get("iso3"), e)
+            row["distribution_channels"] = []
+        try:
+            row["ecommerce"] = ecom_agent.run(
+                {"product": product_name, "country": country}).findings
+        except Exception as e:  # noqa: BLE001
+            log.warning("ecommerce enrichment failed for %s: %s", row.get("iso3"), e)
+            row["ecommerce"] = []
+        try:
+            row["bestsellers"] = best_agent.run(
+                {"product": product_name, "market": market}).findings
+        except Exception as e:  # noqa: BLE001
+            log.warning("bestsellers enrichment failed for %s: %s", row.get("iso3"), e)
+            row["bestsellers"] = []
 
 
 def _enrich_maps(rows: list[dict], product_name: str) -> None:

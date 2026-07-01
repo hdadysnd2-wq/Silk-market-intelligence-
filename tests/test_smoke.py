@@ -619,6 +619,72 @@ def test_engine_demographics_layer_offline():
     assert row["total_score"] == 0.0                   # additive, score unchanged
 
 
+def test_competitors_agent_no_fabrication_keyless():
+    # وكيل المنافسين بلا مفتاح بحث: None موسوم، لا أسماء علامات مُختلقة.
+    import silk_competitors_agent as comp
+
+    os.environ.pop("SEARCH_API_KEY", None)
+    with _block_network():
+        rep = comp.CompetitorsAgent().run({"product": "dates", "country": "Morocco"})
+    assert rep.failed is True
+    assert all(f.value is None for f in rep.findings)  # no fabricated brands
+
+
+def test_distribution_agents_no_fabrication_keyless():
+    # وكيلا التوزيع/التجارة الإلكترونية بلا مفتاح: None موسوم، لا أسماء مُختلقة.
+    import silk_distribution_agent as dist
+
+    os.environ.pop("SEARCH_API_KEY", None)
+    with _block_network():
+        d = dist.DistributionChannelsAgent().run({"product": "dates", "country": "UAE"})
+        e = dist.EcommerceLandscapeAgent().run({"product": "dates", "country": "UAE"})
+    assert d.failed is True and e.failed is True
+    assert all(f.value is None for f in d.findings + e.findings)
+
+
+def test_bestsellers_agent_no_token_no_scraping():
+    # بلا APIFY_API_TOKEN: لا محاولة شبكة، None موسوم يوضّح القيد القانوني.
+    import silk_bestsellers_agent as best
+
+    os.environ.pop("APIFY_API_TOKEN", None)
+    os.environ.pop("APIFY_BESTSELLERS_ACTOR", None)
+    with _block_network():  # proves NO network call is attempted without a token
+        rep = best.BestsellersAgent().run({"product": "dates", "market": "ae"})
+    assert rep.failed is True
+    dp = rep.findings[0]
+    assert dp.value is None and dp.confidence == 0.0
+    assert "ToS" in dp.note or "licensed" in dp.note.lower()  # legal note surfaced
+
+
+def test_bestsellers_parse_ranks_real_only():
+    # التحليل يقرأ الترتيب من الردّ الحقيقي فقط (ترتيب القائمة عند غياب rank صريح).
+    import silk_bestsellers_agent as best
+
+    items = [
+        {"title": "Brand A dates 1kg", "price": 39, "platform": "Amazon.ae"},  # no rank -> pos 1
+        {"title": "Brand B dates", "rank": 2, "price": 25, "platform": "Noon"},  # explicit rank 2
+        {"no_title": "skipme"},  # no title -> skipped, never fabricated
+    ]
+    parsed = best._parse_items(items, num=10)
+    titles = [p["title"] for p in parsed]
+    assert titles == ["Brand A dates 1kg", "Brand B dates"]  # sorted by rank asc
+    assert parsed[0]["rank"] == 1 and parsed[1]["rank"] == 2  # A: list pos; B: explicit
+    assert len(parsed) == 2  # untitled row dropped, never fabricated
+
+
+def test_engine_competition_layer_offline():
+    # طبقة المجموعة ج مفعّلة بلا شبكة/مفاتيح: تُرفق المفاتيح، والنقاط لا تتغيّر.
+    for key in ("SEARCH_API_KEY", "APIFY_API_TOKEN", "APIFY_BESTSELLERS_ACTOR"):
+        os.environ.pop(key, None)
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
+                             year=2022, with_competition=True)
+    row = res["markets"][0]
+    for key in ("competitors_web", "distribution_channels", "ecommerce", "bestsellers"):
+        assert key in row                               # context attached
+    assert row["total_score"] == 0.0                    # additive, score unchanged
+
+
 if __name__ == "__main__":
     import logging
 
