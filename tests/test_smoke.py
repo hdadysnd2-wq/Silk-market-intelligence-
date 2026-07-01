@@ -1134,6 +1134,100 @@ def test_deepen_endpoint_auth_and_flow():
     assert data["hs_code"] == "080410" and data["markets"][0]["iso3"] == "MAR"
 
 
+def test_ai_cost_cap_blocks_call_before_send_no_silent_overspend():
+    # حرج (تكلفة) — ج1: سقف تكلفة كلود صلب وقبل الإرسال. عند تجاوز السقف لا يُرسَل
+    # أي نداء (requests.post = 0)، ويُعاد None بوضوح (لا فاتورة صامتة). Type-B غير
+    # محجوب بزر التعميق — يبقى في المسار العادي لكن بسقف تكلفة.
+    from unittest.mock import patch
+    import silk_ai_judge
+
+    os.environ["ANTHROPIC_API_KEY"] = "SPY-ANTHROPIC"   # key present -> would bill
+    try:
+        with patch.object(silk_ai_judge, "_TOKEN_CAP", 50):   # سقف صغير جداً
+            silk_ai_judge.reset_budget()
+            # user string كبير بحيث projected يتجاوز 50 توكن حتماً — well over the cap.
+            big = "x" * 4000                                  # ~1000 tokens estimate
+            with patch("requests.post") as post:
+                out = silk_ai_judge._call("system", big, max_tokens=1600)
+            assert out is None                    # قُطِع قبل الإرسال — cut pre-flight
+            assert post.call_count == 0           # لم يُرسَل أي نداء مدفوع — zero paid calls
+            st = silk_ai_judge.budget_status()
+            assert st["cap_hit"] is True and st["cap"] == 50
+    finally:
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        silk_ai_judge._TOKEN_CAP = silk_ai_judge._DEFAULT_TOKEN_CAP
+        silk_ai_judge.reset_budget()
+
+
+def test_ai_cost_cap_allows_within_budget_and_accumulates_spend():
+    # ضمن السقف: النداء يمرّ ويُحاسَب من usage الفعلي؛ ثم reset_budget يصفّره.
+    from unittest.mock import patch, MagicMock
+    import silk_ai_judge
+
+    os.environ["ANTHROPIC_API_KEY"] = "SPY-ANTHROPIC"
+    fake = MagicMock()
+    fake.raise_for_status.return_value = None
+    fake.json.return_value = {"content": [{"type": "text", "text": "حكم مبدئي"}],
+                              "usage": {"input_tokens": 12, "output_tokens": 8}}
+    try:
+        with patch.object(silk_ai_judge, "_TOKEN_CAP", 100000):
+            silk_ai_judge.reset_budget()
+            with patch("requests.post", return_value=fake) as post:
+                out = silk_ai_judge._call("system", "user", max_tokens=100)
+            assert out == "حكم مبدئي"
+            assert post.call_count == 1                 # نداء واحد فعلي — one real call
+            st = silk_ai_judge.budget_status()
+            assert st["spent"] == 20                    # 12+8 من usage الفعلي
+            assert st["cap_hit"] is False and st["remaining"] == 100000 - 20
+            silk_ai_judge.reset_budget()                # يصفّر بين التحاليل
+            assert silk_ai_judge.budget_status()["spent"] == 0
+    finally:
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        silk_ai_judge._TOKEN_CAP = silk_ai_judge._DEFAULT_TOKEN_CAP
+        silk_ai_judge.reset_budget()
+
+
+def test_ai_cost_cap_zero_means_unlimited():
+    # سقف = 0 => لا سقف (سلوك مفتوح صريح، لا قطع). Type-B ليس محجوباً.
+    from unittest.mock import patch, MagicMock
+    import silk_ai_judge
+
+    os.environ["ANTHROPIC_API_KEY"] = "SPY-ANTHROPIC"
+    fake = MagicMock()
+    fake.raise_for_status.return_value = None
+    fake.json.return_value = {"content": [{"type": "text", "text": "ok"}],
+                              "usage": {"input_tokens": 5, "output_tokens": 5}}
+    try:
+        with patch.object(silk_ai_judge, "_TOKEN_CAP", 0):
+            silk_ai_judge.reset_budget()
+            with patch("requests.post", return_value=fake) as post:
+                out = silk_ai_judge._call("s", "u", max_tokens=99999)
+            assert out == "ok" and post.call_count == 1   # لا قطع رغم max_tokens الضخم
+            assert silk_ai_judge.budget_status()["cap_hit"] is False
+    finally:
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        silk_ai_judge._TOKEN_CAP = silk_ai_judge._DEFAULT_TOKEN_CAP
+        silk_ai_judge.reset_budget()
+
+
+def test_engine_resets_ai_budget_each_analysis():
+    # المُحرّك يصفّر ميزانية كلود في بداية كل تحليل (with_ai) — no cost leak across runs.
+    from unittest.mock import patch
+    import silk_ai_judge
+
+    called = {"n": 0}
+    real_reset = silk_ai_judge.reset_budget
+
+    def spy():
+        called["n"] += 1
+        return real_reset()
+
+    with patch.object(silk_ai_judge, "reset_budget", spy), \
+         patch("requests.get", side_effect=OSError("net blocked")):
+        engine.analyze("تمور", year=2022, with_ai=True)
+    assert called["n"] >= 1        # reset_budget invoked at least once for the run
+
+
 if __name__ == "__main__":
     import logging
 

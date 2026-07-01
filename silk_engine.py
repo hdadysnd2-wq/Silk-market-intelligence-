@@ -117,6 +117,15 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     # 2) رتّب الأسواق المرشّحة لهذا الرمز — rank candidate markets.
     ranked = rank_markets(hs.value, countries=countries, year=year)
 
+    # صفّر ميزانية تكلفة كلود لهذا التحليل — reset Claude's per-analysis cost budget
+    # so the hard pre-flight cap (SILK_AI_TOKEN_CAP) never leaks cost across runs.
+    if with_ai or with_synthesis:
+        try:
+            import silk_ai_judge  # lazy: optional layer
+            silk_ai_judge.reset_budget()
+        except Exception as e:  # noqa: BLE001 — cost-budget reset must never crash analysis
+            log.warning("AI budget reset skipped: %s", e)
+
     # 3) أثرِ الأسواق الأعلى بالوكلاء واللجنة — enrich the top markets.
     manager = ResearchManager()
     for row in ranked[:_ENRICH_TOP]:

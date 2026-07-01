@@ -20,6 +20,47 @@ _VERSION = "2023-06-01"
 _MODEL = os.environ.get("SILK_AI_MODEL", "claude-opus-4-8")
 _TIMEOUT = 60
 
+# ── ضبط التكلفة (V3 «ضبط التكلفة») — hard pre-flight cost cap ─────────────────
+# سقف صلب لإجمالي توكنات كلود لكل تحليل (إدخال تقديري + إخراج). قبل كل نداء نتحقّق:
+# إن كان النداء التالي سيتجاوز السقف، لا نرسله ونعيد None بوضوح (تتدهور المنصة إلى
+# لجنة التحكيم الحتمية بلا اختلاق) — قطع مُعلَن، لا صمت، لا فاتورة مفاجئة.
+# 0 أو قيمة غير صالحة => لا سقف (سلوك مفتوح صريح). يُعاد الضبط في بداية كل تحليل.
+_DEFAULT_TOKEN_CAP = 50000
+try:
+    _TOKEN_CAP = int(os.environ.get("SILK_AI_TOKEN_CAP", str(_DEFAULT_TOKEN_CAP)))
+except (TypeError, ValueError):
+    _TOKEN_CAP = _DEFAULT_TOKEN_CAP
+if _TOKEN_CAP < 0:
+    _TOKEN_CAP = 0
+
+_spent_tokens = 0          # إجمالي التوكنات المُنفقة في التحليل الجاري — per-run tally
+_cap_hit = False           # هل بلغنا السقف؟ نُعلن مرة واحدة — announce the cut once
+
+
+def reset_budget() -> None:
+    """صفّر ميزانية التوكنات لتحليل جديد — reset the per-analysis token budget.
+
+    يستدعيها المُحرّك في بداية كل تحليل حتى لا تتسرّب التكلفة بين التحاليل.
+    Called by the engine at the start of each analysis so cost never leaks across runs.
+    """
+    global _spent_tokens, _cap_hit
+    _spent_tokens, _cap_hit = 0, False
+
+
+def budget_status() -> dict:
+    """حالة ميزانية التكلفة — current cost-cap state (for /usage, tests, logs)."""
+    return {"cap": _TOKEN_CAP, "spent": _spent_tokens,
+            "remaining": (max(0, _TOKEN_CAP - _spent_tokens) if _TOKEN_CAP else None),
+            "cap_hit": _cap_hit}
+
+
+def _estimate_tokens(text: str) -> int:
+    """تقدير توكنات تقريبي — rough token estimate (~4 chars/token) for pre-flight.
+
+    محافظ عمداً: نُقرّب للأعلى حتى لا نستهين بالتكلفة قبل الإرسال. Deliberately
+    conservative (rounds up) so we never *under*-estimate the pre-flight cost."""
+    return (len(text or "") + 3) // 4
+
 # مبدأ الحَكَم — non-negotiable judging principle handed to the model every call.
 _PRINCIPLE = (
     "أنت حَكَم دخول أسواق التصدير في منصة سِلك (منتجات سعودية). مبدأ غير قابل "
@@ -35,9 +76,26 @@ def available() -> bool:
 
 
 def _call(system: str, user: str, max_tokens: int = 1600) -> str | None:
-    """نداء Messages API — one Claude call; None on missing key / any failure."""
+    """نداء Messages API — one Claude call; None on missing key / any failure.
+
+    سقف تكلفة صلب قبل الإرسال: إن كان النداء التالي سيتجاوز SILK_AI_TOKEN_CAP لهذا
+    التحليل، لا نرسله ونعيد None مع تحذير واضح (لا فاتورة صامتة، تتدهور للجنة
+    الحتمية بلا اختلاق). PRE-FLIGHT cost cap — never a silent overspend.
+    """
+    global _spent_tokens, _cap_hit
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key:
+        return None
+    # فحص السقف قبل أي إرسال — projected = تقدير الإدخال + أقصى الإخراج.
+    projected = _estimate_tokens(system) + _estimate_tokens(user) + max(0, max_tokens)
+    if _TOKEN_CAP and _spent_tokens + projected > _TOKEN_CAP:
+        if not _cap_hit:  # أعلن القطع مرة واحدة بوضوح — announce the cut once, loudly.
+            log.warning(
+                "AI cost cap reached: spent=%d + projected=%d > cap=%d "
+                "(SILK_AI_TOKEN_CAP) — skipping further Claude calls this analysis; "
+                "degrading to the deterministic jury (no fabrication).",
+                _spent_tokens, projected, _TOKEN_CAP)
+            _cap_hit = True
         return None
     try:
         import requests  # lazy: keep core import offline-safe
@@ -50,6 +108,10 @@ def _call(system: str, user: str, max_tokens: int = 1600) -> str | None:
         )
         resp.raise_for_status()
         data = resp.json()
+        # حاسِب الفعلي من usage إن توفّر، وإلا التقدير المحافظ — bill actual usage.
+        usage = data.get("usage") or {}
+        used = (usage.get("input_tokens", 0) + usage.get("output_tokens", 0)) or projected
+        _spent_tokens += used
         if data.get("stop_reason") == "refusal":  # safety decline -> no fabrication
             log.warning("AI judge: request refused by the model")
             return None
@@ -57,6 +119,7 @@ def _call(system: str, user: str, max_tokens: int = 1600) -> str | None:
                        if b.get("type") == "text").strip()
         return text or None
     except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
+        _spent_tokens += projected  # فشل الشبكة لا يُلغي التقدير — count the attempt
         log.warning("AI judge call failed: %s", e)
         return None
 
