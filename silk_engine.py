@@ -185,6 +185,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         rep = _ai_report(result)
         if rep:
             result["report"] = rep
+    if with_ai or with_synthesis:  # ملخّص تكلفة كلود على مستوى النتيجة — top-level cost status
+        _attach_ai_cost_status(result)
     if check_quality:
         _annotate_quality(result)
     if persist:
@@ -206,17 +208,40 @@ def _enrich_synthesis(rows: list[dict], product_name: str) -> None:
             s = silk_synthesis.synthesize_market(row, product_name)
             if s:
                 row["synthesis"] = s
+            else:
+                try:  # قطع بالسقف؟ أظهره صراحةً — surface a cap-cut, don't drop silently.
+                    import silk_ai_judge
+                    if silk_ai_judge.available() and silk_ai_judge.budget_status()["cap_hit"]:
+                        row["synthesis_skipped"] = {
+                            "reason": "cost_cap",
+                            "note": ("توقّف التركيب لهذا السوق بسبب بلوغ سقف تكلفة التحليل "
+                                     "(SILK_AI_TOKEN_CAP). Synthesis stopped for this "
+                                     "market: per-analysis cost cap reached.")}
+                except Exception:  # noqa: BLE001
+                    pass
         except Exception as e:  # noqa: BLE001 — synthesis must not crash analysis
             log.warning("synthesis failed for %s: %s", row.get("iso3"), e)
 
 
 def _ai_verdict(row: dict, product: str, reports: list) -> None:
-    """الطبقة 3 — حكم كلود على صفّ السوق — attach Claude's verdict (graceful None)."""
+    """الطبقة 3 — حكم كلود على صفّ السوق — attach Claude's verdict (graceful None).
+
+    عند تجاوز سقف التكلفة يُرفَق مؤشّر صريح `jury.ai_skipped` (السبب: cost_cap) بدل
+    الحذف الصامت — so a cap-cut market is visibly "stopped by cap", never a silent gap.
+    """
     try:
         import silk_ai_judge  # lazy: optional layer, key-gated
         v = silk_ai_judge.ai_verdict(product, row.get("country") or row.get("iso3"), reports)
         if v:
             row.setdefault("jury", {})["ai"] = v
+        elif silk_ai_judge.available() and silk_ai_judge.budget_status()["cap_hit"]:
+            # المفتاح موجود لكن قُطِع بالسقف — key present but the cap blocked this call.
+            row.setdefault("jury", {})["ai_skipped"] = {
+                "reason": "cost_cap",
+                "note": ("توقّف حكم كلود لهذا السوق بسبب بلوغ سقف تكلفة التحليل "
+                         "(SILK_AI_TOKEN_CAP)؛ تبقى اللجنة الحتمية سارية بلا اختلاق. "
+                         "Claude verdict stopped for this market: per-analysis cost "
+                         "cap reached; the deterministic jury stands.")}
     except Exception as e:  # noqa: BLE001 — never crash analysis
         log.warning("AI verdict failed for %s: %s", row.get("iso3"), e)
 
@@ -229,6 +254,33 @@ def _ai_report(result: dict):
     except Exception as e:  # noqa: BLE001
         log.warning("AI report failed: %s", e)
         return None
+
+
+def _attach_ai_cost_status(result: dict) -> None:
+    """ملخّص تكلفة كلود على مستوى النتيجة — a top-level, human-readable AI cost summary
+    so the client can show «X سوق اكتمل، Y توقّف بالسقف» بدل فجوة صامتة. Never fabricates;
+    reflects the real per-run token tally + how many markets the cap actually cut."""
+    try:
+        import silk_ai_judge  # lazy
+    except Exception:  # noqa: BLE001
+        return
+    if not silk_ai_judge.available():  # لا مفتاح -> لا ملخّص تكلفة (اللجنة الحتمية فقط)
+        return
+    st = silk_ai_judge.budget_status()
+    markets = result.get("markets") or []
+    top = markets[:_ENRICH_TOP]
+    with_ai = sum(1 for m in top if (m.get("jury") or {}).get("ai"))
+    skipped = sum(1 for m in top
+                  if (m.get("jury") or {}).get("ai_skipped") or m.get("synthesis_skipped"))
+    note = (f"سقف تكلفة كلود ({st['cap']} توكن) بُلِغ: {skipped} سوق توقّف عن طبقة "
+            f"كلود، {with_ai} اكتمل؛ اللجنة الحتمية سارية للجميع بلا اختلاق."
+            if st["cap_hit"] else
+            f"ضمن سقف التكلفة ({st['cap']} توكن): لم يُقطع أي سوق.")
+    result["ai_cost"] = {
+        "cap": st["cap"], "spent": st["spent"], "remaining": st["remaining"],
+        "cap_hit": st["cap_hit"], "blocked_calls": st["blocked_calls"],
+        "markets_ai": with_ai, "markets_cap_skipped": skipped, "note": note,
+    }
 
 
 def _enrich_trends(rows: list[dict], product_name: str) -> None:

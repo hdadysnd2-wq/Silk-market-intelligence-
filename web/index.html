@@ -496,13 +496,15 @@
         prices:prices,              // [{title,price,currency,store,is_best_seller,...}] — منتجات منافسة + أسعار
         price_comparison:m.price_comparison||null, // مقارنة سعرك بالسوق المرصود
         ai:ai,                      // {verdict,confidence,reasoning,by}
+        ai_skipped:(m.jury&&m.jury.ai_skipped)||null, // قُطِع حكم كلود بالسقف — cap-cut marker
         synthesis:m.synthesis||null,// تركيب كلود — {verdict,opportunities,risks,recommendations,gaps}
+        synthesis_skipped:m.synthesis_skipped||null,  // قُطِع التركيب بالسقف — cap-cut marker
         note:(m.jury&&m.jury.verdict)?m.jury.verdict:(m.recommendation||""),
         sources:Object.keys(c).map(function(k){return c[k]&&c[k].source;}).filter(Boolean)
       };
     });
     return {classified:true,product:res.product,hs:res.hs_code,
-      year:res.year,report:res.report||null,
+      year:res.year,report:res.report||null,ai_cost:res.ai_cost||null,
       culture:realVals(res.websearch),   // ثقافة المستهلك — web-search findings
       markets:markets};
   }
@@ -559,7 +561,11 @@
         (S.result.report?'<button class="ghostbtn" id="reportBtn">تقرير كلود</button>':'')+
         '<button class="primary" id="exportBtn">تصدير CSV</button></div>'+
     '</section>';
-    $("resultArea").innerHTML='<div class="main"><section class="card rank-card">'+rows+'</section>'+detail+'</div>';
+    // شريط سقف تكلفة كلود — top-level cost-cap banner (only shown when the cap cut something).
+    var acb="";var ac=S.result.ai_cost;
+    if(ac&&ac.cap_hit){acb='<div class="needkey" style="border-right:3px solid #d9a406;background:#FFF9E9;margin-bottom:12px">'+
+      '💰 '+esc(ac.note||"")+' (أُنفق '+esc(ac.spent)+'/'+esc(ac.cap)+' توكن، '+esc(ac.markets_cap_skipped)+' سوق توقّف).</div>';}
+    $("resultArea").innerHTML='<div class="main"><section class="card rank-card">'+acb+rows+'</section>'+detail+'</div>';
     $("counter").classList.remove("hidden");
     $("counter").innerHTML='<b>'+ms.length+'</b> أسواق مرشّحة'+(S.result.year?' <span class="yrchip">بيانات '+S.result.year+'</span>':'');
     $("sorts").classList.remove("hidden");
@@ -586,9 +592,16 @@
       lst("فجوات البيانات",s.gaps)+
       (s.by?'<div class="aiby">'+esc(s.by)+' · قرار أوّلي</div>':'')+'</div>';
   }
+  // قطع بالسقف — visible "stopped by cost cap" marker (never a silent gap).
+  function capSkipBlock(sk){
+    if(!sk)return "";
+    return '<div class="needkey" style="border-right:3px solid #d9a406;background:#FFF9E9">'+
+      '⏸️ توقّفت طبقة كلود لهذا السوق (سقف التكلفة) — '+esc(sk.note||"cost cap reached")+'</div>';
+  }
   // حُكم كلود (الحَكَم) — Claude's preliminary verdict over the agents' findings.
   function aiBlock(sel){
-    if(!sel.ai)return "";var a=sel.ai;
+    if(!sel.ai)return capSkipBlock(sel.ai_skipped)+capSkipBlock(sel.synthesis_skipped);
+    var a=sel.ai;
     var vmap={"GO":"v-strong","WATCH":"v-mid","NO-GO":"v-low"};
     var cls=vmap[(a.verdict||"").toUpperCase()]||"v-mid";
     var conf=a.confidence==null?"":' · ثقة '+a.confidence;

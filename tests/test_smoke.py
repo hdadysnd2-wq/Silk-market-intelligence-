@@ -1210,6 +1210,51 @@ def test_ai_cost_cap_zero_means_unlimited():
         silk_ai_judge.reset_budget()
 
 
+def test_ai_cap_cut_is_visible_not_a_silent_gap():
+    # حرج (شفافية) — ج1: عند بلوغ السقف منتصف التحليل، الأسواق المقطوعة تحمل مؤشّراً
+    # صريحاً jury.ai_skipped (reason=cost_cap) + ملخّص result.ai_cost، لا حذفاً صامتاً.
+    from unittest.mock import patch, MagicMock
+    import silk_ai_judge as J
+
+    os.environ["ANTHROPIC_API_KEY"] = "SPY"
+    fake = MagicMock()
+    fake.raise_for_status.return_value = None
+    fake.json.return_value = {
+        "content": [{"type": "text",
+                     "text": '{"verdict":"GO","confidence":0.7,"reasoning":"سبب"}'}],
+        "usage": {"input_tokens": 30000, "output_tokens": 0}}  # 30k/call
+    try:
+        # سقف 50k: يمرّ سوقان (30k ثم 60k) ثم يُقطع الثالث — cap trips after 2 markets.
+        with patch.object(J, "_TOKEN_CAP", 50000), \
+             patch("requests.post", return_value=fake), \
+             patch("requests.get", side_effect=OSError("net blocked")):
+            res = engine.analyze("تمور", year=2022, with_ai=True)
+    finally:
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        J._TOKEN_CAP = J._DEFAULT_TOKEN_CAP
+        J.reset_budget()
+
+    top = res["markets"][:3]
+    with_ai = [m for m in top if (m.get("jury") or {}).get("ai")]
+    skipped = [m for m in top if (m.get("jury") or {}).get("ai_skipped")]
+    assert len(with_ai) == 2                       # سوقان اكتملا
+    assert len(skipped) == 1                        # سوق واحد قُطِع بوضوح
+    assert skipped[0]["jury"]["ai_skipped"]["reason"] == "cost_cap"
+    # الملخّص على مستوى النتيجة — top-level, human-readable cost status.
+    ac = res.get("ai_cost")
+    assert ac and ac["cap_hit"] is True
+    assert ac["markets_ai"] == 2 and ac["markets_cap_skipped"] == 1
+    assert ac["blocked_calls"] >= 1 and "سقف" in ac["note"]
+
+
+def test_ai_cost_status_absent_without_key():
+    # بلا مفتاح: لا ملخّص تكلفة (اللجنة الحتمية فقط) — no cost summary, no cap noise.
+    os.environ.pop("ANTHROPIC_API_KEY", None)
+    with _block_network():
+        res = engine.analyze("تمور", year=2022, with_ai=True)
+    assert "ai_cost" not in res                     # لا مفتاح => لا طبقة كلود => لا ملخّص
+
+
 def test_engine_resets_ai_budget_each_analysis():
     # المُحرّك يصفّر ميزانية كلود في بداية كل تحليل (with_ai) — no cost leak across runs.
     from unittest.mock import patch

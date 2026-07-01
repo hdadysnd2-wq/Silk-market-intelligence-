@@ -35,6 +35,7 @@ if _TOKEN_CAP < 0:
 
 _spent_tokens = 0          # إجمالي التوكنات المُنفقة في التحليل الجاري — per-run tally
 _cap_hit = False           # هل بلغنا السقف؟ نُعلن مرة واحدة — announce the cut once
+_blocked_calls = 0         # كم نداءً مُنع بالسقف — how many calls the cap blocked
 
 
 def reset_budget() -> None:
@@ -43,15 +44,15 @@ def reset_budget() -> None:
     يستدعيها المُحرّك في بداية كل تحليل حتى لا تتسرّب التكلفة بين التحاليل.
     Called by the engine at the start of each analysis so cost never leaks across runs.
     """
-    global _spent_tokens, _cap_hit
-    _spent_tokens, _cap_hit = 0, False
+    global _spent_tokens, _cap_hit, _blocked_calls
+    _spent_tokens, _cap_hit, _blocked_calls = 0, False, 0
 
 
 def budget_status() -> dict:
-    """حالة ميزانية التكلفة — current cost-cap state (for /usage, tests, logs)."""
+    """حالة ميزانية التكلفة — current cost-cap state (for /usage, results, tests, logs)."""
     return {"cap": _TOKEN_CAP, "spent": _spent_tokens,
             "remaining": (max(0, _TOKEN_CAP - _spent_tokens) if _TOKEN_CAP else None),
-            "cap_hit": _cap_hit}
+            "cap_hit": _cap_hit, "blocked_calls": _blocked_calls}
 
 
 def _estimate_tokens(text: str) -> int:
@@ -82,13 +83,14 @@ def _call(system: str, user: str, max_tokens: int = 1600) -> str | None:
     التحليل، لا نرسله ونعيد None مع تحذير واضح (لا فاتورة صامتة، تتدهور للجنة
     الحتمية بلا اختلاق). PRE-FLIGHT cost cap — never a silent overspend.
     """
-    global _spent_tokens, _cap_hit
+    global _spent_tokens, _cap_hit, _blocked_calls
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key:
         return None
     # فحص السقف قبل أي إرسال — projected = تقدير الإدخال + أقصى الإخراج.
     projected = _estimate_tokens(system) + _estimate_tokens(user) + max(0, max_tokens)
     if _TOKEN_CAP and _spent_tokens + projected > _TOKEN_CAP:
+        _blocked_calls += 1        # عُدّ كل نداء مُنع ليظهر في النتيجة — surface the cut
         if not _cap_hit:  # أعلن القطع مرة واحدة بوضوح — announce the cut once, loudly.
             log.warning(
                 "AI cost cap reached: spent=%d + projected=%d > cap=%d "
