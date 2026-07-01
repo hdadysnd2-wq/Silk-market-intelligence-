@@ -331,16 +331,33 @@ def _group_details(doc, result):
 
 
 def _facts_of(items):
-    """حقائق حقيقية من عنصر — real (non-None) short facts from a value/list/dict."""
+    """حقائق حقيقية مقروءة من عنصر — real (non-None) HUMAN-READABLE short facts.
+
+    يستخرج الحقل المقروء من القيم المُهيكلة (اسم/عنوان/شركة…) بدل طباعة dict خام،
+    ويُلحق الملاحظة لتوضيح الأرقام المجرّدة (تعريفة 0، مؤشّر تريندز 78…). Never a
+    raw ``{'name': ...}`` repr, never a context-free bare number."""
     out = []
     if items is None:
         return out
     seq = items if isinstance(items, list) else [items]
     for it in seq:
-        val = it.get("value") if isinstance(it, dict) and "value" in it else it
-        if val in (None, "", []):
+        if isinstance(it, dict) and "value" in it:
+            val, note = it.get("value"), (it.get("note") or "")
+        else:
+            val, note = it, ""
+        if val is None or val == "" or val == []:
             continue
-        s = val if isinstance(val, str) else str(val)
+        if isinstance(val, dict):  # قيمة مُهيكلة -> الحقل المقروء لا الـdict الخام
+            label = (val.get("name") or val.get("title") or val.get("company")
+                     or val.get("importer") or val.get("store"))
+            if label is None:
+                label = "، ".join(f"{k}: {v}" for k, v in val.items()
+                                  if v not in (None, "", []))
+            s = str(label)
+        else:
+            s = str(val)
+        if note and note not in s:  # سياق للأرقام المجرّدة والقيم القصيرة
+            s = f"{s} — {note}"
         out.append(s[:220])
     return out
 

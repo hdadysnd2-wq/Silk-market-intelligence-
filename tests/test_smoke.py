@@ -908,6 +908,26 @@ def test_reports_build_docx_with_disclaimer():
     assert "WATCH" in text                     # verdict carried from synthesis
 
 
+def test_reports_facts_of_renders_readable_not_raw_dicts():
+    # حقائق التقرير مقروءة: قيمة مُهيكلة {name/title} تُعرض بالاسم لا كـdict خام،
+    # والأرقام المجرّدة (تعريفة 0، تريندز) تُلحق بملاحظتها كسياق. اختبار «النظرة الأولى».
+    import silk_reports as reports
+
+    comp = [{"value": {"name": "شركة الفوعة للتمور"}, "note": "أكبر موزّع محلي"}]
+    listing = [{"value": {"title": "تمور مجدول 1kg — نون"}, "note": "إشارة سعرية"}]
+    tariff = {"value": 0, "note": "إعفاء خليجي (GCC)"}
+    trends = [{"value": 78, "note": "اهتمام بحثي 0-100 geo=AE"}]
+
+    f_comp = reports._facts_of(comp)[0]
+    assert "شركة الفوعة للتمور" in f_comp and "{" not in f_comp   # readable, no raw dict
+    f_listing = reports._facts_of(listing)[0]
+    assert "تمور مجدول 1kg" in f_listing and "'title'" not in f_listing
+    f_tariff = reports._facts_of(tariff)[0]
+    assert f_tariff.startswith("0") and "إعفاء" in f_tariff        # bare number gets context
+    f_trends = reports._facts_of(trends)[0]
+    assert "78" in f_trends and "اهتمام" in f_trends
+
+
 def test_reports_no_fabrication_on_missing_fields():
     # نتيجة شبه فارغة: التقرير يُبنى ويكتب "غير متوفّر" بدل اختلاق أرقام.
     import pytest
