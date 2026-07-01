@@ -85,6 +85,7 @@ def create_app():
         with_websearch: bool = False
         with_localprice: bool = False
         own_price: float | None = None
+        with_market_size: bool = False
         with_volza: bool = False
         with_explee: bool = False
         with_ai: bool = False

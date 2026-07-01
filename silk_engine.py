@@ -27,6 +27,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_tariffs: bool = False, with_faostat: bool = False,
             with_maps: bool = False, with_websearch: bool = False,
             with_localprice: bool = False, own_price: float | None = None,
+            with_market_size: bool = False,
             with_volza: bool = False, with_explee: bool = False,
             with_ai: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
@@ -44,6 +45,9 @@ def analyze(product_name: str, countries: list[dict] | None = None,
       with_trends   — attach a Google Trends finding per top market (row['trends']).
       with_tariffs  — attach a WITS applied-tariff finding per top market (row['tariff']).
       with_faostat  — attach a FAOSTAT per-capita supply finding per top market (row['faostat']).
+      with_market_size — attach Group-A production + market-size (apparent
+                      consumption, tonnes; import-value proxy fallback) per top
+                      market (row['production'], row['market_size']). Additive.
       with_maps     — attach Google Maps named businesses per top market (row['maps']).
       with_localprice— attach actual in-market retail prices per top market (row['localprice']).
       own_price     — YOUR product's price; with with_localprice, attaches a
@@ -99,6 +103,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_tariffs(ranked[:_ENRICH_TOP], hs.value, year)
     if with_faostat:
         _enrich_faostat(ranked[:_ENRICH_TOP], product_name, year)
+    if with_market_size:
+        _enrich_market_size(ranked[:_ENRICH_TOP], hs.value, product_name, year)
     if with_maps:
         _enrich_maps(ranked[:_ENRICH_TOP], product_name)
     if with_localprice:
@@ -193,6 +199,34 @@ def _enrich_faostat(rows: list[dict], product_name: str, year: int) -> None:
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("faostat enrichment failed for %s: %s", row.get("iso3"), e)
             row["faostat"] = None
+
+
+def _enrich_market_size(rows: list[dict], hs_code: str, product_name: str,
+                        year: int) -> None:
+    """أضف الإنتاج وحجم السوق (المجموعة أ) — attach Group-A production +
+    market-size (apparent consumption) per market. Graceful None offline; both
+    are additive context and never change total_score."""
+    from silk_production_agent import ProductionAgent  # lazy: optional layer
+    from silk_marketsize_agent import MarketSizeAgent  # lazy: optional layer
+    prod_agent = ProductionAgent()
+    size_agent = MarketSizeAgent()
+    for row in rows:
+        iso3 = row.get("iso3")
+        try:
+            prep = prod_agent.run({"iso3": iso3, "product": product_name,
+                                   "year": year})
+            row["production"] = prep.findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("production enrichment failed for %s: %s", iso3, e)
+            row["production"] = []
+        try:
+            srep = size_agent.run({"hs_code": hs_code, "iso3": iso3,
+                                   "market_m49": row.get("m49"),
+                                   "product": product_name, "year": year})
+            row["market_size"] = srep.findings[0] if srep.findings else None
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("market_size enrichment failed for %s: %s", iso3, e)
+            row["market_size"] = None
 
 
 def _enrich_maps(rows: list[dict], product_name: str) -> None:

@@ -33,6 +33,8 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `silk_quality.py` | فحوص جودة (stdlib): يوسم الصفوف بتنبيهات (حجم شبه صفري، نواقص، قيم خارج المدى) — **لا يغيّر أرقامًا**. |
 | `silk_storage.py` | تخزين النتائج في SQLite (stdlib): `save_analysis`/`get_analysis`/`list_analyses`. ملف `.db` متجاهَل في git. |
 | `silk_faostat_agent.py` | وكيل اختياري: نصيب الفرد من العرض الغذائي (FAOSTAT). يتدهور بأمان عند المصادقة/الفشل (لا يخمّن رقمًا). |
+| `silk_production_agent.py` | **المجموعة أ · Group A**: الإنتاج المحلي — FAOSTAT (QCL، أطنان) مع رجوع لبحث الويب كسياق للسلع غير الزراعية (لا يُستخرج رقم من نص حر). |
+| `silk_marketsize_agent.py` | **المجموعة أ · Group A**: حجم السوق بالاستهلاك الظاهري (إنتاج + استيراد − تصدير، أطنان)؛ رجوع لمؤشّر قيمة الاستيراد (دولار) موسوم كجزئي؛ لا اختلاق. |
 | `silk_cache.py` | ذاكرة تخزين مؤقت على القرص لطلبات GET (stdlib؛ `requests` بكسل). يُستخدم شفّافًا في طبقة البيانات. |
 | `api.py` | واجهة REST عبر FastAPI فوق المحرّك (تُستورد FastAPI بكسل؛ `app=None` بدونها). |
 | `app.py` | واجهة Streamlit اختيارية فوق المحرّك (تُستورد Streamlit بكسل داخليًا). |
@@ -101,6 +103,7 @@ analyze("تمور",
 - `with_trends` / `with_tariffs` / `with_faostat` **سياق إضافي فقط** — يُرفقون `row['trends']` / `row['tariff']` / `row['faostat']` ولا يغيّرون `total_score`.
 - `with_maps` / `with_volza` / `with_explee` يُرفقون `row['maps']` / `row['volza']` / `row['explee']` لأعلى الأسواق؛ و`with_websearch` يُرفق `result['websearch']` على المستوى الأعلى. كلّها **إضافية** لا تغيّر `total_score`.
 - `with_localprice` يُرفق `row['localprice']` (قوائم مسعّرة فعلية، مع `is_best_seller` عند توفّر شارة حقيقية من المزوّد — لا يوجد رقم "عدد المبيعات" علني من أي منصة). مع `own_price` يُرفق أيضاً `row['price_comparison']`: مقارنة سعرك بالقوائم المرصودة (نسبة كونك أرخص من السوق) — مقارنة سعرية لا مقارنة مبيعات.
+- `with_market_size` (**المجموعة أ · Group A**) يُرفق `row['production']` (إنتاج FAOSTAT بالأطنان، أو أدلة بحث بلا رقم مُختلق) و`row['market_size']` (الاستهلاك الظاهري = إنتاج + استيراد − تصدير بالأطنان؛ وإلا مؤشّر قيمة الاستيراد بالدولار موسوم كجزئي). **إضافي** لا يغيّر `total_score`.
 - المدفوعان (Volza, explee) يتطلبان مفتاحًا؛ بدونه يُرجعان `value=None, confidence=0.0` بلا اختلاق.
 - جميع الطبقات تتدهور بأمان بلا شبكة (قيمة `None` موسومة بمصدرها، بلا اختلاق رقم).
 

@@ -461,6 +461,111 @@ def test_jobs_cache_hit_skips_engine_call():
     assert status["result"] == {"cached": True}
 
 
+def test_production_agent_offline_no_fabrication():
+    # وكيل الإنتاج (المجموعة أ) بلا شبكة: لا رقم مُختلق، تقرير فاشل موسوم.
+    import silk_production_agent as prod
+
+    os.environ.pop("SEARCH_API_KEY", None)
+    with _block_network():
+        rep = prod.ProductionAgent().run({"iso3": "ARE", "product": "Dates",
+                                          "year": 2022})
+    assert rep.failed is True
+    assert all(f.value is None for f in rep.findings)  # no fabricated production
+
+
+def test_production_agent_unknown_area_no_network():
+    # ISO3 غير معروف لفاوستات => None فوراً بلا محاولة شبكة، بلا اختلاق.
+    import silk_production_agent as prod
+
+    dp = prod.faostat_production("XXX", "Dates", 2022)
+    assert dp.value is None and dp.confidence == 0.0
+
+
+def test_marketsize_apparent_consumption_math():
+    # الاستهلاك الظاهري = إنتاج + استيراد − تصدير (طن)، من نداءات وهمية.
+    from unittest.mock import patch
+
+    import silk_marketsize_agent as ms
+    from silk_data_layer import DataPoint
+
+    fake_imports = [{"partnerCode": 0, "netWgt": 50_000_000.0}]   # 50,000 t
+    fake_exports = [{"partnerCode": 0, "netWgt": 10_000_000.0}]   # 10,000 t
+
+    def fake_comtrade(hs, m49, year, flow="M", partner=0):
+        return fake_imports if flow == "M" else fake_exports
+
+    fake_prod = DataPoint(30_000.0, "FAOSTAT", 0.85, "prod", "")
+    orig_ct = ms.comtrade_trade
+    ms.comtrade_trade = fake_comtrade
+    try:
+        with patch("silk_marketsize_agent.production_estimate",
+                   return_value=[fake_prod]):
+            dp = ms.apparent_consumption("080410", "ARE", "784", "Dates", 2022)
+    finally:
+        ms.comtrade_trade = orig_ct
+    assert dp.value["method"] == "apparent_consumption_tonnes"
+    # 30,000 + 50,000 − 10,000 = 70,000 tonnes
+    assert dp.value["value_tonnes"] == 70000.0
+    assert dp.value["imports_tonnes"] == 50000.0
+
+
+def test_marketsize_import_value_proxy_when_production_missing():
+    # بلا إنتاج/كميات: يرجع لمؤشّر قيمة الاستيراد موسومًا كجزئي، لا حجم كامل.
+    from unittest.mock import patch
+
+    import silk_marketsize_agent as ms
+    from silk_data_layer import DataPoint
+
+    def no_qty_comtrade(hs, m49, year, flow="M", partner=0):
+        return []  # no trade quantities available
+    fao_miss = DataPoint(None, "FAOSTAT", 0.0, "no prod", "")
+    orig_ct = ms.comtrade_trade
+    ms.comtrade_trade = no_qty_comtrade
+    try:
+        with patch("silk_marketsize_agent.production_estimate",
+                   return_value=[fao_miss]):
+            with patch("silk_data_layer_v2.market_imports",
+                       return_value={"total_usd": 241_000_000.0, "competitors": []}):
+                dp = ms.apparent_consumption("080410", "ARE", "784", "Dates", 2022)
+    finally:
+        ms.comtrade_trade = orig_ct
+    assert dp.value["method"] == "import_value_proxy_usd"
+    assert dp.value["value_usd"] == 241_000_000.0
+    assert "production" in dp.value["missing"]  # honest about what's missing
+
+
+def test_marketsize_none_when_nothing_available():
+    # لا إنتاج ولا تجارة ولا قيمة استيراد => None موسوم، لا اختلاق.
+    from unittest.mock import patch
+
+    import silk_marketsize_agent as ms
+    from silk_data_layer import DataPoint
+
+    orig_ct = ms.comtrade_trade
+    ms.comtrade_trade = lambda *a, **k: []
+    try:
+        with patch("silk_marketsize_agent.production_estimate",
+                   return_value=[DataPoint(None, "FAOSTAT", 0.0, "no", "")]):
+            with patch("silk_data_layer_v2.market_imports",
+                       return_value={"total_usd": None, "competitors": []}):
+                dp = ms.apparent_consumption("080410", "ARE", "784", "Dates", 2022)
+    finally:
+        ms.comtrade_trade = orig_ct
+    assert dp.value is None and dp.confidence == 0.0
+
+
+def test_engine_market_size_layer_offline():
+    # طبقة المجموعة أ مفعّلة بلا شبكة: تُرفق production+market_size، والنقاط لا تتغيّر.
+    os.environ.pop("SEARCH_API_KEY", None)
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
+                             year=2022, with_market_size=True)
+    assert res["classified"] is True and res["hs_code"] == "080410"
+    row = res["markets"][0]
+    assert "production" in row and "market_size" in row   # context attached
+    assert row["total_score"] == 0.0                      # additive, unchanged
+
+
 if __name__ == "__main__":
     import logging
 
