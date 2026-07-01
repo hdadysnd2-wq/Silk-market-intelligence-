@@ -35,7 +35,7 @@ def _cache_key(request: dict) -> dict:
         "with_maps", "with_websearch", "with_localprice", "own_price",
         "with_market_size", "with_demographics", "with_competition",
         "with_compliance", "with_culture",
-        "with_volza", "with_explee", "with_ai",
+        "with_volza", "with_explee", "with_ai", "with_synthesis",
     )}
 
 
@@ -60,6 +60,7 @@ def _run_analysis(request: dict) -> dict:
         with_volza=bool(request.get("with_volza")),
         with_explee=bool(request.get("with_explee")),
         with_ai=bool(request.get("with_ai")),
+        with_synthesis=bool(request.get("with_synthesis")),
         persist=bool(request.get("persist")),
     )
     return to_jsonable(result)

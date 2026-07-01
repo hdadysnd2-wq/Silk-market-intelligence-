@@ -43,6 +43,7 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `silk_bestsellers_agent.py` | **المجموعة ج · Group C**: ترتيب الأكثر مبيعاً عبر **مُشغّل Apify مرخّص** (لا سكرابينغ مباشر بكودنا — قد يخالف ToS)؛ بلا `APIFY_API_TOKEN` => None موسوم بالقيد. |
 | `silk_regulatory_agent.py` | **المجموعة د · Group D**: اشتراطات التغليف/الملصقات/الشهادات (حلال/صحية/ISO) + صفحة الجمارك الرسمية (بحث ويب ديناميكي، يكمّل تعريفة WITS). |
 | `silk_culture_agent.py` | **المجموعة هـ · Group E**: عادات الاستهلاك وأسلوب الحياة + السلوك التجاري (تفاوض/دفع/آداب) + المعارض التجارية (بحث ويب ديناميكي). |
+| `silk_synthesis.py` | **المرحلة ب · Synthesis**: تركيب كلود على طلبين (ملخّص لكل مجموعة → تقييم نهائي: verdict/فرص/مخاطر/توصيات/نواقص). حماية من حقن التعليمات (raw_findings بيانات فقط) + سياسة فشل جزئي. بلا مفتاح → None واللجنة الحتمية تبقى. |
 | `silk_cache.py` | ذاكرة تخزين مؤقت على القرص لطلبات GET (stdlib؛ `requests` بكسل). يُستخدم شفّافًا في طبقة البيانات. |
 | `api.py` | واجهة REST عبر FastAPI فوق المحرّك (تُستورد FastAPI بكسل؛ `app=None` بدونها). |
 | `app.py` | واجهة Streamlit اختيارية فوق المحرّك (تُستورد Streamlit بكسل داخليًا). |
@@ -116,6 +117,7 @@ analyze("تمور",
 - `with_competition` (**المجموعة ج · Group C**) يُرفق `row['competitors_web']` و`row['distribution_channels']` و`row['ecommerce']` (بحث ويب ديناميكي، يتطلب `SEARCH_API_KEY`) و`row['bestsellers']` (ترتيب الأكثر مبيعاً عبر مُشغّل Apify مرخّص، يتطلب `APIFY_API_TOKEN` + `APIFY_BESTSELLERS_ACTOR` — لا سكرابينغ مباشر). الكل **إضافي** لا يغيّر `total_score`، ويتدهور بأمان بلا مفاتيح/شبكة.
 - `with_compliance` (**المجموعة د · Group D**) يُرفق `row['regulatory']` (اشتراطات التغليف/الملصقات/الشهادات — حلال/صحية/ISO) و`row['customs_web']` (صفحة الجمارك الرسمية)، كلاهما بحث ويب ديناميكي (يتطلب `SEARCH_API_KEY`). سعر التجزئة (`with_localprice`) والتعريفة المطبّقة % (`with_tariffs`) عضوا المجموعة د الموجودان مسبقاً. **إضافي** لا يغيّر `total_score`.
 - `with_culture` (**المجموعة هـ · Group E**) يُرفق `row['cultural']` (عادات الاستهلاك وأسلوب الحياة)، `row['business_culture']` (أعراف التفاوض/الدفع/آداب العمل)، و`row['exhibitions']` (المعارض التجارية)، كلها بحث ويب ديناميكي (يتطلب `SEARCH_API_KEY`). Google Trends (`with_trends`) عضو المجموعة هـ الموجود مسبقاً. **إضافي** لا يغيّر `total_score`.
+- `with_synthesis` (**المرحلة ب · Synthesis**) يشغّل التركيب على طلبين عبر كلود فوق **كل** حقائق المجموعات المرفقة لكل سوق أعلى، ويُرفق `row['synthesis']` (`verdict`/`opportunities`/`risks`/`recommendations`/`gaps`). يعمل **أخيراً** ليرى كل المجموعات. يتطلب `ANTHROPIC_API_KEY`؛ بدونه لا يُرفق شيء وتبقى اللجنة الحتمية. الحقائق الخام معزولة (حماية من حقن التعليمات) ولا تُختلق. **إضافي** لا يغيّر `total_score`.
 - المدفوعان (Volza, explee) يتطلبان مفتاحًا؛ بدونه يُرجعان `value=None, confidence=0.0` بلا اختلاق.
 - جميع الطبقات تتدهور بأمان بلا شبكة (قيمة `None` موسومة بمصدرها، بلا اختلاق رقم).
 

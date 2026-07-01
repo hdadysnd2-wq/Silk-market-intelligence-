@@ -93,6 +93,7 @@ def create_app():
         with_volza: bool = False
         with_explee: bool = False
         with_ai: bool = False
+        with_synthesis: bool = False
         persist: bool = False
 
     class RequestLinkBody(BaseModel):

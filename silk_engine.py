@@ -31,7 +31,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_competition: bool = False, with_compliance: bool = False,
             with_culture: bool = False,
             with_volza: bool = False, with_explee: bool = False,
-            with_ai: bool = False,
+            with_ai: bool = False, with_synthesis: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
             check_quality: bool = True) -> dict:
     """حلّل منتجًا عبر الأسواق — full preliminary market analysis for one product.
@@ -70,6 +70,13 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                       (negotiation/payment/etiquette), row['exhibitions'] (trade
                       fairs), all dynamic web search. Google Trends (with_trends)
                       is the pre-existing Group-E member. Additive; no score change.
+      with_synthesis— run the two-stage Claude synthesis (silk_synthesis) over
+                      ALL attached group findings per top market, attaching
+                      row['synthesis'] (verdict/opportunities/risks/
+                      recommendations/gaps). Runs LAST so it sees every group.
+                      Keyless -> nothing attached (deterministic jury stands);
+                      raw findings are quarantined (prompt-injection guard) and
+                      never fabricated. Additive; no score change.
       with_maps     — attach Google Maps named businesses per top market (row['maps']).
       with_localprice— attach actual in-market retail prices per top market (row['localprice']).
       own_price     — YOUR product's price; with with_localprice, attaches a
@@ -144,6 +151,11 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     if with_explee:
         _enrich_explee(ranked[:_ENRICH_TOP], product_name)
 
+    # 3c) التركيب النهائي عبر كلود (بعد كل الإثراء) — two-stage synthesis LAST so it
+    # sees every group's findings. Keyless -> None, deterministic jury stands.
+    if with_synthesis:
+        _enrich_synthesis(ranked[:_ENRICH_TOP], product_name)
+
     # 4) سطر توصية لكل سوق — one-line recommendation per market.
     for row in ranked:
         row["recommendation"] = _recommend(row)
@@ -167,6 +179,24 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     if persist:
         _persist(result, db_path)
     return result
+
+
+def _enrich_synthesis(rows: list[dict], product_name: str) -> None:
+    """التركيب النهائي — attach row['synthesis'] via the two-stage Claude synthesis
+    over every attached group finding. Keyless/offline -> nothing attached
+    (deterministic jury stands); never fabricates."""
+    try:
+        import silk_synthesis  # lazy: optional, key-gated
+    except Exception as e:  # noqa: BLE001
+        log.warning("synthesis unavailable: %s", e)
+        return
+    for row in rows:
+        try:
+            s = silk_synthesis.synthesize_market(row, product_name)
+            if s:
+                row["synthesis"] = s
+        except Exception as e:  # noqa: BLE001 — synthesis must not crash analysis
+            log.warning("synthesis failed for %s: %s", row.get("iso3"), e)
 
 
 def _ai_verdict(row: dict, product: str, reports: list) -> None:
