@@ -268,6 +268,17 @@ def create_app():
                                        "installed on the server (Word download works)")
         return _file_response(pdf, "application/pdf", f"silk_{job_id}_short.pdf")
 
+    @app.post("/deepen/{job_id}")
+    def deepen(job_id: str, user_id: int = Depends(_current_user_id)):
+        """تعميق التحليل (المجموعة و، مدفوع) — run the PAID deepen layer on the
+        job's top markets (Maps + Volza + explee + D&B). Session + ownership
+        scoped; rate-limited (it can call paid APIs). Every source degrades to
+        empty/None without its key — never fabricated."""
+        _enforce_rate_limit(str(user_id))
+        result = _owned_result(job_id, user_id)
+        import silk_deepen
+        return _json(silk_deepen.deepen(result))
+
     @app.get("/usage")
     def usage(user_id: int = Depends(_current_user_id)):
         """عدّاد الاستخدام الشهري — analyses this month + a rough cost estimate.
@@ -302,6 +313,7 @@ def create_app():
             ("Best-sellers (Apify)", "paid", "APIFY_API_TOKEN"),
             ("Volza", "paid", "VOLZA_API_KEY"),
             ("explee", "paid", "EXPLEE_API_KEY"),
+            ("Dun & Bradstreet", "paid", "DNB_API_KEY"),
             ("Claude (AI judge)", "ai", "ANTHROPIC_API_KEY"),
         ]
         return _json([

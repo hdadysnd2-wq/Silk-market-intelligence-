@@ -44,6 +44,8 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `silk_regulatory_agent.py` | **المجموعة د · Group D**: اشتراطات التغليف/الملصقات/الشهادات (حلال/صحية/ISO) + صفحة الجمارك الرسمية (بحث ويب ديناميكي، يكمّل تعريفة WITS). |
 | `silk_culture_agent.py` | **المجموعة هـ · Group E**: عادات الاستهلاك وأسلوب الحياة + السلوك التجاري (تفاوض/دفع/آداب) + المعارض التجارية (بحث ويب ديناميكي). |
 | `silk_synthesis.py` | **المرحلة ب · Synthesis**: تركيب كلود على طلبين (ملخّص لكل مجموعة → تقييم نهائي: verdict/فرص/مخاطر/توصيات/نواقص). حماية من حقن التعليمات (raw_findings بيانات فقط) + سياسة فشل جزئي. بلا مفتاح → None واللجنة الحتمية تبقى. |
+| `silk_dnb_agent.py` | **المجموعة و · Group F (تعميق، مدفوع)**: التحقق من شرعية الموردين المكتشفين (D-U-N-S) عبر D&B Direct+؛ بلا `DNB_API_KEY` => None بلا محاولة شبكة ولا اختلاق. |
+| `silk_deepen.py` | **المجموعة و · Group F**: منسّق «تعميق التحليل» — يشغّل الأدوات المدفوعة (Maps+Volza+explee+D&B) على أعلى ٣ أسواق فقط، عند الطلب عبر `POST /deepen/{id}` (لا تلقائياً). كل مصدر مقيّد بمفتاحه. |
 | `silk_reports.py` | **المخرجات · Deliverables**: تقرير Word كامل (غلاف + خلاصة تنفيذية + تركيب كلود + جداول لكل مجموعة + فهرس + ترقيم صفحات) وتقرير مختصر (١–٢ صفحة) + تصدير PDF للمختصر (LibreOffice). تذييل إخلاء مسؤولية على الكل؛ «غير متوفّر» بدل اختلاق. |
 | `web/index.html` | الواجهة: دخول برابط سحري + تدفّق مهام غير متزامن (enqueue/poll) + مفاتيح المجموعات + أزرار تنزيل التقارير + عرض تركيب كلود. |
 | `web/dashboard.html` | **المخرجات · Deliverable**: لوحة تفاعلية دائمة (`/dashboard/<id>`): الحكم أولاً + KPIs + فلاتر + رسوم Chart.js (مقارنة الأسواق، حصص المنافسين) + خريطة Leaflet (نقاط الدول + مدن السوق، تبديل طبقات) + تذييل إخلاء المسؤولية. |
@@ -161,6 +163,7 @@ docker run -p 8000:8000 silk-api
 | `POST /analyze` | **يتطلب جلسة**؛ يُدرج تحليلاً بالخلفية ويعيد `{job_id, status, cached}` فوراً (الحقول: `product, year, with_trends, with_tariffs, with_faostat, with_market_size, with_demographics, with_competition, with_compliance, with_culture, with_maps, with_websearch, with_localprice, own_price, with_volza, with_explee, with_ai, with_synthesis, persist`). |
 | `GET /jobs/{id}` | حالة/نتيجة مهمة تحليل (يتطلب جلسة، مقيّد بالمالك). |
 | `GET /reports/{id}/full.docx` · `short.docx` · `short.pdf` | تنزيل التقرير الكامل/المختصر (Word) و PDF للمختصر (يتطلب جلسة؛ PDF يحتاج LibreOffice). |
+| `POST /deepen/{id}` | **تعميق مدفوع (المجموعة و)**: Maps+Volza+explee+D&B على أعلى ٣ أسواق (يتطلب جلسة؛ كل مصدر مقيّد بمفتاحه). |
 | `GET /dashboard/{id}` | صفحة اللوحة التفاعلية الدائمة (Chart.js + خريطة Leaflet)؛ تجلب التحليل عبر الجلسة. |
 | `GET /usage` | عدّاد التحليلات هذا الشهر + تقدير تكلفة تقريبي (يتطلب جلسة). |
 | `GET /analyses` · `GET /analyses/{id}` | يسرد/يعيد التحليلات المحفوظة (يتطلب جلسة). |

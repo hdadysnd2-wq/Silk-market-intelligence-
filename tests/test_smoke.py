@@ -926,6 +926,71 @@ def test_dashboard_route_serves_page():
     assert "لوحة سِلك" in r.text and "leaflet" in r.text.lower()  # real dashboard page
 
 
+def test_dnb_agent_no_fabrication_keyless():
+    # وكيل D&B بلا مفتاح/شبكة: None موسوم يوضّح الاشتراك، لا DUNS مُختلق.
+    import silk_dnb_agent as dnb
+
+    os.environ.pop("DNB_API_KEY", None)
+    with _block_network():
+        rep = dnb.DnbAgent().run({"names": ["Some Supplier LLC"], "country": "MA"})
+    assert rep.failed is True
+    dp = rep.findings[0]
+    assert dp.value is None and dp.confidence == 0.0
+    assert "DNB_API_KEY" in dp.note or "subscription" in dp.note.lower()
+
+
+def test_deepen_offline_keyless_no_fabrication():
+    # التعميق بلا مفاتيح/شبكة: يبني الهيكل لأعلى الأسواق دون اختلاق شركات/DUNS.
+    import silk_deepen
+
+    for k in ("GOOGLE_MAPS_API_KEY", "VOLZA_API_KEY", "EXPLEE_API_KEY", "DNB_API_KEY"):
+        os.environ.pop(k, None)
+    result = {"classified": True, "product": "تمور", "hs_code": "080410",
+              "markets": [{"iso3": "MAR", "m49": "504", "country": "المغرب"},
+                          {"iso3": "EGY", "m49": "818", "country": "مصر"}]}
+    with _block_network():
+        out = silk_deepen.deepen(result, top=2)
+    assert out["hs_code"] == "080410" and len(out["markets"]) == 2
+    m = out["markets"][0]
+    for key in ("maps", "volza", "explee", "dnb"):
+        assert key in m
+    # بلا مفاتيح: لا قيم حقيقية (لا اختلاق) — keyless => no real values fabricated.
+    reals = [f for f in (m["maps"] + m["volza"] + m["explee"] + m["dnb"])
+             if (f.get("value") if isinstance(f, dict) else getattr(f, "value", None)) is not None]
+    assert reals == []
+
+
+def test_deepen_endpoint_auth_and_flow():
+    # نقطة /deepen محميّة بالجلسة وتعمل على نتيجة مهمة مملوكة منتهية.
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    import json
+    import api
+    import silk_db
+
+    client = TestClient(api.app)
+    assert client.post("/deepen/nope").status_code == 401     # no session
+
+    headers = _test_session_headers("deepen@example.com")
+    # نستخرج user_id من الجلسة عبر إنشاء مهمة مملوكة — owned finished job.
+    import silk_auth
+    uid = silk_auth.session_user_id(headers["Authorization"].split(" ", 1)[1])
+    job_id = silk_db.create_job(uid)
+    silk_db.update_job(job_id, "finished", result_json=json.dumps(
+        {"classified": True, "product": "تمور", "hs_code": "080410",
+         "markets": [{"iso3": "MAR", "m49": "504", "country": "المغرب"}]}))
+    for k in ("GOOGLE_MAPS_API_KEY", "VOLZA_API_KEY", "EXPLEE_API_KEY", "DNB_API_KEY"):
+        os.environ.pop(k, None)
+    # keyless => the paid agents short-circuit before any network call (no need to
+    # block sockets, which would break TestClient's async transport).
+    r = client.post(f"/deepen/{job_id}", headers=headers)
+    assert r.status_code == 200
+    data = r.json()
+    assert data["hs_code"] == "080410" and data["markets"][0]["iso3"] == "MAR"
+
+
 if __name__ == "__main__":
     import logging
 

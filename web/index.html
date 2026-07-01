@@ -424,6 +424,43 @@
     }).catch(function(e){alert("تعذّر تنزيل التقرير: "+e.message);});
   }
 
+  // تعميق التحليل (المجموعة و، مدفوع) — run the PAID deepen layer on top markets.
+  function runDeepen(){
+    if(!S.jobId){return;}
+    if(!loggedIn()){S.view="settings";applyView();return;}
+    var ov=document.createElement("div");ov.className="ovl";
+    ov.innerHTML='<div class="ovbox"><div class="ovhd"><span class="aibadge">تعميق التحليل · Volza/explee/Maps/D&B</span>'+
+      '<button class="ghostbtn" id="ovClose">إغلاق</button></div><div class="ovbody" id="deepBody">جارٍ التعميق على أعلى الأسواق…</div></div>';
+    document.body.appendChild(ov);
+    function close(){ov.remove();}
+    ov.addEventListener("click",function(e){if(e.target===ov)close();});
+    $("ovClose").addEventListener("click",close);
+    fetch(base()+"/deepen/"+encodeURIComponent(S.jobId),{method:"POST",headers:authHeaders()})
+      .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+      .then(function(x){
+        if(!x.ok){$("deepBody").innerHTML='<div class="err">تعذّر التعميق: '+esc((x.d&&x.d.detail)||"خطأ")+'</div>';return;}
+        $("deepBody").innerHTML=deepHtml(x.d);
+      }).catch(function(e){$("deepBody").innerHTML='<div class="err">فشل: '+esc(e.message)+'</div>';});
+  }
+  function deepList(title,findings,pick){
+    var real=realVals(findings);
+    if(!real.length)return '<div class="plhd" style="margin-top:8px"><b>'+title+'</b> — <span class="pstore">يتطلب مفتاحاً (لا اختلاق)</span></div>';
+    var rows=real.slice(0,6).map(function(v){return '<li>'+esc(pick(v))+'</li>';}).join("");
+    return '<div class="plhd" style="margin-top:8px"><b>'+title+'</b> — '+real.length+'</div><ul class="pllist">'+rows+'</ul>';
+  }
+  function deepHtml(d){
+    var ms=(d&&d.markets)||[];
+    if(!ms.length)return '<div class="needkey">لا أسواق للتعميق.</div>';
+    return ms.map(function(m){
+      return '<div class="plblk"><div class="plhd" style="font-size:15px"><b>'+esc(m.country||m.iso3)+'</b></div>'+
+        deepList("مصانع/موزّعون (Maps)",m.maps,function(v){return (v.name||"")+(v.rating?(" ★"+v.rating):"");})+
+        deepList("مستوردون (Volza)",m.volza,function(v){return typeof v==="object"?(v.name||v.importer||JSON.stringify(v)):v;})+
+        deepList("مشترون B2B (explee)",m.explee,function(v){return typeof v==="object"?(v.name||v.company||JSON.stringify(v)):v;})+
+        deepList("تحقق الشرعية (D&B)",m.dnb,function(v){return typeof v==="object"?((v.name||"")+" · DUNS "+(v.duns||"—")):v;})+
+      '</div>';
+    }).join("")+'<div class="needkey" style="margin-top:10px">'+esc(d.note||"")+'</div>';
+  }
+
   // ---------- map engine result -> dashboard model ----------
   function dpv(c){return c&&typeof c==="object"?c.value:c;}
   function realVals(list){return (list||[]).map(function(f){return f&&f.value;}).filter(function(v){return v!=null;});}
@@ -524,7 +561,7 @@
     $("sorts").classList.remove("hidden");
     $("resultArea").querySelectorAll(".rrow").forEach(function(b){b.addEventListener("click",function(){S.selId=this.getAttribute("data-id");render();});});
     var ex=$("exportBtn");if(ex)ex.addEventListener("click",exportCsv);
-    var deep=$("deepBtn");if(deep)deep.addEventListener("click",function(){S.view="settings";applyView();});
+    var deep=$("deepBtn");if(deep)deep.addEventListener("click",runDeepen);
     var rb=$("reportBtn");if(rb)rb.addEventListener("click",showReport);
     var rf=$("repFull");if(rf)rf.addEventListener("click",function(){downloadReport("full.docx");});
     var rs=$("repShort");if(rs)rs.addEventListener("click",function(){downloadReport("short.docx");});
