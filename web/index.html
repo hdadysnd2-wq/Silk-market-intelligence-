@@ -261,14 +261,37 @@
 
   // ---------- state ----------
   var S={product:"",hs:"",sort:"score",selId:null,running:false,query:"",open:false,
-    view:"dashboard",result:null,
+    view:"dashboard",result:null,jobId:null,
     year:parseInt(localStorage.getItem("silk_year")||"2023",10),
     ownPrice:parseFloat(localStorage.getItem("silk_own_price")||"")||null,
+    session:localStorage.getItem("silk_session")||"",
     keys:JSON.parse(localStorage.getItem("silk_settings_keys")||"{}"),
     toggles:JSON.parse(localStorage.getItem("silk_settings_toggles")||"{}")};
   function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"");}
   function saveKeys(){localStorage.setItem("silk_settings_keys",JSON.stringify(S.keys));}
   function saveToggles(){localStorage.setItem("silk_settings_toggles",JSON.stringify(S.toggles));}
+
+  // ---------- auth (magic-link + bearer session) ----------
+  function setSession(tok){S.session=tok||"";localStorage.setItem("silk_session",S.session);updateChrome();}
+  function authHeaders(extra){var h=extra||{};if(S.session)h["Authorization"]="Bearer "+S.session;return h;}
+  function loggedIn(){return !!S.session;}
+  function logout(){setSession("");render();}
+  // استخرج الرمز من رابط سحري أو نصّ ملصوق — pull the token out of a pasted link/token.
+  function extractToken(s){s=(s||"").trim();var m=s.match(/[?&]token=([^&\s]+)/);return m?decodeURIComponent(m[1]):s;}
+  function verifyToken(tok,cb){
+    fetch(base()+"/auth/verify?token="+encodeURIComponent(tok))
+      .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+      .then(function(x){if(x.ok&&x.d&&x.d.session_token){setSession(x.d.session_token);cb&&cb(null,x.d);}
+        else{cb&&cb(new Error((x.d&&x.d.detail)||"رابط غير صالح أو منتهٍ"));}})
+      .catch(function(e){cb&&cb(e);});
+  }
+  function requestLink(email,cb){
+    fetch(base()+"/auth/request-link",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({email:email})})
+      .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+      .then(function(x){cb&&cb(x.ok?null:new Error((x.d&&x.d.detail)||"تعذّر إرسال الرابط"),x.d);})
+      .catch(function(e){cb&&cb(e);});
+  }
 
   // ---------- pipeline render ----------
   var NODES=[
@@ -343,23 +366,57 @@
     renderReady();updateChrome();
   }
 
-  // ---------- run analysis ----------
+  // ---------- run analysis (async: enqueue -> poll job) ----------
   $("runBtn").addEventListener("click",runAnalysis);
+  var pollT;
   function runAnalysis(){
     if(!S.product){$("search").focus();return;}
-    S.running=true;renderNodes();updateChrome();
+    if(!loggedIn()){S.view="settings";applyView();return;}  // auth required for paid work
+    S.running=true;S.jobId=null;renderNodes();updateChrome();
     $("resultArea").innerHTML='<section class="card" style="padding:22px"><div class="skl" style="width:30%"></div><div class="skl" style="width:90%;margin-top:14px"></div><div class="skl" style="width:80%;margin-top:10px"></div></section>';
+    var g=S.toggles;
     var body={product:S.product,year:S.year,
-      with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,
+      with_trends:!!g.trends,with_tariffs:!!S.keys.WITS,
       with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS,
       with_localprice:!!S.keys.LOCALPRICE,own_price:S.ownPrice,
-      with_volza:!!S.keys.VOLZA,
-      with_explee:!!S.keys.EXPLEE,with_ai:!!S.keys.CLAUDE};
-    fetch(base()+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+      with_market_size:!!g.groupA,with_demographics:!!g.groupB,
+      with_competition:!!g.groupC,with_compliance:!!g.groupD,with_culture:!!g.groupE,
+      with_volza:!!S.keys.VOLZA,with_explee:!!S.keys.EXPLEE,
+      with_ai:!!S.keys.CLAUDE,with_synthesis:!!S.keys.CLAUDE&&!!g.synthesis};
+    fetch(base()+"/analyze",{method:"POST",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify(body)})
       .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t);}catch(_){}
+        if(r.status===401){setSession("");throw new Error("انتهت الجلسة — سجّل الدخول من الإعدادات");}
         if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?t:(typeof de==="string"?de:JSON.stringify(de))));}return d;});})
-      .then(function(res){S.running=false;S.result=mapResult(res);S.selId=S.result&&S.result.markets[0]&&S.result.markets[0].id;renderNodes();render();updateChrome();})
-      .catch(function(e){S.running=false;renderNodes();$("resultArea").innerHTML='<section class="card err" style="margin-top:4px">فشل الطلب: '+esc(e.message)+'</section>';});
+      .then(function(out){if(!out||!out.job_id)throw new Error("لا معرّف مهمة في الردّ");
+        S.jobId=out.job_id;pollJob(out.job_id);})
+      .catch(function(e){S.running=false;renderNodes();$("resultArea").innerHTML='<section class="card err" style="margin-top:4px">فشل الطلب: '+esc(e.message)+'</section>';updateChrome();});
+  }
+  function pollJob(jobId){
+    clearTimeout(pollT);
+    fetch(base()+"/jobs/"+encodeURIComponent(jobId),{headers:authHeaders()})
+      .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+      .then(function(x){
+        if(!x.ok){throw new Error((x.d&&x.d.detail)||"تعذّر جلب حالة المهمة");}
+        var st=x.d.status;
+        if(st==="finished"){S.running=false;S.result=mapResult(x.d.result);
+          S.selId=S.result&&S.result.markets&&S.result.markets[0]&&S.result.markets[0].id;
+          renderNodes();render();updateChrome();return;}
+        if(st==="failed"){S.running=false;renderNodes();
+          $("resultArea").innerHTML='<section class="card err" style="margin-top:4px">فشل التحليل: '+esc(x.d.error||"غير معروف")+'</section>';updateChrome();return;}
+        pollT=setTimeout(function(){pollJob(jobId);},2500);  // queued|running -> keep polling
+      })
+      .catch(function(e){S.running=false;renderNodes();$("resultArea").innerHTML='<section class="card err" style="margin-top:4px">فشل متابعة المهمة: '+esc(e.message)+'</section>';updateChrome();});
+  }
+  // تنزيل تقرير عبر جلب blob مع ترويسة الجلسة — download a report (auth blob fetch).
+  function downloadReport(kind){
+    if(!S.jobId){return;}
+    var url=base()+"/reports/"+encodeURIComponent(S.jobId)+"/"+kind;
+    fetch(url,{headers:authHeaders()}).then(function(r){
+      if(!r.ok){return r.json().then(function(d){throw new Error((d&&d.detail)||("HTTP "+r.status));});}
+      return r.blob();
+    }).then(function(b){var a=document.createElement("a");a.href=URL.createObjectURL(b);
+      a.download="silk_"+kind;a.click();setTimeout(function(){URL.revokeObjectURL(a.href);},4000);
+    }).catch(function(e){alert("تعذّر تنزيل التقرير: "+e.message);});
   }
 
   // ---------- map engine result -> dashboard model ----------
@@ -393,6 +450,7 @@
         prices:prices,              // [{title,price,currency,store,is_best_seller,...}] — منتجات منافسة + أسعار
         price_comparison:m.price_comparison||null, // مقارنة سعرك بالسوق المرصود
         ai:ai,                      // {verdict,confidence,reasoning,by}
+        synthesis:m.synthesis||null,// تركيب كلود — {verdict,opportunities,risks,recommendations,gaps}
         note:(m.jury&&m.jury.verdict)?m.jury.verdict:(m.recommendation||""),
         sources:Object.keys(c).map(function(k){return c[k]&&c[k].source;}).filter(Boolean)
       };
@@ -443,10 +501,14 @@
         '<div class="stat"><div class="l">السكان</div><div class="v num">'+fmtNum(sel.population)+'</div></div>'+
       '</div>'+
       '<div class="drow2">المنافس المهيمن: <b>'+esc(sel.top_competitor||"—")+'</b></div>'+
-      aiBlock(sel)+competitorsBlock(sel)+pricesBlock(sel)+suppliersBlock(sel)+cultureBlock()+
+      synthBlock(sel)+aiBlock(sel)+competitorsBlock(sel)+pricesBlock(sel)+suppliersBlock(sel)+cultureBlock()+
       (sel.note?'<div class="note">'+esc(sel.note)+'</div>':'')+
       '<div class="srcs">'+(sel.sources||[]).map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'+
-      '<div class="dbtns"><button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button>'+
+      '<div class="dbtns">'+
+        (S.jobId?'<button class="ghostbtn" id="repFull">تقرير كامل (Word)</button>'+
+                 '<button class="ghostbtn" id="repShort">مختصر (Word)</button>'+
+                 '<button class="ghostbtn" id="repPdf">مختصر (PDF)</button>':'')+
+        '<button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button>'+
         (S.result.report?'<button class="ghostbtn" id="reportBtn">تقرير كلود</button>':'')+
         '<button class="primary" id="exportBtn">تصدير CSV</button></div>'+
     '</section>';
@@ -458,6 +520,24 @@
     var ex=$("exportBtn");if(ex)ex.addEventListener("click",exportCsv);
     var deep=$("deepBtn");if(deep)deep.addEventListener("click",function(){S.view="settings";applyView();});
     var rb=$("reportBtn");if(rb)rb.addEventListener("click",showReport);
+    var rf=$("repFull");if(rf)rf.addEventListener("click",function(){downloadReport("full.docx");});
+    var rs=$("repShort");if(rs)rs.addEventListener("click",function(){downloadReport("short.docx");});
+    var rp=$("repPdf");if(rp)rp.addEventListener("click",function(){downloadReport("short.pdf");});
+  }
+  // تركيب كلود (verdict/فرص/مخاطر/توصيات/نواقص) — Claude synthesis block.
+  function synthBlock(sel){
+    var s=sel.synthesis;if(!s)return "";
+    var vmap={"GO":"v-strong","WATCH":"v-mid","NO-GO":"v-low"};
+    var cls=vmap[(s.verdict||"").toUpperCase()]||"v-mid";
+    function lst(title,arr){if(!arr||!arr.length)return "";
+      return '<div class="plhd" style="margin-top:8px"><b>'+title+'</b></div><ul class="pllist">'+
+        arr.slice(0,4).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join("")+'</ul>';}
+    return '<div class="aiblk"><div class="aihd"><span class="aibadge">تركيب كلود</span>'+
+      '<span class="verdict '+cls+'">'+esc(s.verdict||"—")+'</span>'+
+      (s.confidence!=null?'<span class="aiconf"> · ثقة '+esc(s.confidence)+'</span>':'')+'</div>'+
+      lst("فرص",s.opportunities)+lst("مخاطر",s.risks)+lst("توصيات",s.recommendations)+
+      lst("فجوات البيانات",s.gaps)+
+      (s.by?'<div class="aiby">'+esc(s.by)+' · قرار أوّلي</div>':'')+'</div>';
   }
   // حُكم كلود (الحَكَم) — Claude's preliminary verdict over the agents' findings.
   function aiBlock(sel){
@@ -592,17 +672,68 @@
       '<div class="body"><div class="nm">'+s.nm+'</div><div class="ds">'+s.ds+'</div></div>'+
       '<span class="stbadge '+cls+'">'+badge+'</span>'+ctrl+'</div>';
   }
+  // مجموعات الوكلاء (المرحلة أ) — agent-group toggles fed into the analyze request.
+  var GROUPS=[
+    {toggle:"groupA",ic:"globe",nm:"المجموعة أ · الإنتاج وحجم السوق",ds:"FAOSTAT + الاستهلاك الظاهري.",st:"مطفأ",on:"مفعّل"},
+    {toggle:"groupB",ic:"chart",nm:"المجموعة ب · الاقتصاد والديموغرافيا",ds:"مدن، ديانة، مخاطر عملة.",st:"مطفأ",on:"مفعّل"},
+    {toggle:"groupC",ic:"factory",nm:"المجموعة ج · المنافسة والتوزيع",ds:"منافسون، قنوات، تجارة إلكترونية، الأكثر مبيعاً.",st:"مطفأ",on:"مفعّل"},
+    {toggle:"groupD",ic:"ship",nm:"المجموعة د · السعر والاشتراطات",ds:"اشتراطات تنظيمية + جمارك (بحث).",st:"مطفأ",on:"مفعّل"},
+    {toggle:"groupE",ic:"doc",nm:"المجموعة هـ · الثقافة والسلوك",ds:"ثقافة، سلوك تجاري، معارض.",st:"مطفأ",on:"مفعّل"},
+    {toggle:"synthesis",ic:"package",nm:"تركيب كلود (المرحلة ب)",ds:"تقييم نهائي فوق كل المجموعات (يتطلب مفتاح Claude).",st:"مطفأ",on:"مفعّل"}
+  ];
+  function accountCard(){
+    if(loggedIn()){
+      return '<div class="srccard"><div class="ic">'+svg("doc")+'</div>'+
+        '<div class="body"><div class="nm">جلسة نشطة</div><div class="ds">أنت مسجّل الدخول؛ يمكنك تشغيل التحليلات وتنزيل التقارير.</div></div>'+
+        '<span class="stbadge st-on">مسجّل</span>'+
+        '<button class="ghostbtn" id="logoutBtn">خروج</button></div>';
+    }
+    return '<div class="srccard" style="flex-wrap:wrap;gap:10px"><div class="ic">'+svg("doc")+'</div>'+
+      '<div class="body"><div class="nm">تسجيل الدخول (رابط سحري)</div>'+
+      '<div class="ds">أدخل بريدك لإرسال رابط دخول، ثم ألصق الرابط أو الرمز. التحليلات تتطلب جلسة.</div></div>'+
+      '<span class="stbadge st-off">غير مسجّل</span>'+
+      '<div style="flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'+
+      '<input class="keyin" id="loginEmail" type="email" placeholder="بريدك الإلكتروني" style="flex:1;min-width:200px"/>'+
+      '<button class="ghostbtn" id="loginSend">أرسل الرابط</button></div>'+
+      '<div style="flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap">'+
+      '<input class="keyin" id="loginToken" placeholder="ألصق رابط الدخول أو الرمز" style="flex:1;min-width:200px"/>'+
+      '<button class="primary" id="loginVerify">دخول</button></div>'+
+      '<div class="ds" id="loginMsg" style="flex-basis:100%"></div></div>';
+  }
   function renderSettings(){
-    var ai=[{key:"CLAUDE",ic:"doc",nm:"Claude (Anthropic)",ds:"تلخيص ذكي للنتائج (طبقة اختيارية).",st:"يحتاج مفتاح",cls:"st-off",ph:"sk-ant-…"}];
+    var ai=[{key:"CLAUDE",ic:"doc",nm:"Claude (Anthropic)",ds:"تلخيص وتركيب النتائج (يفعّل تركيب المرحلة ب).",st:"يحتاج مفتاح",cls:"st-off",ph:"sk-ant-…"}];
     $("settingsBody").innerHTML=
+      '<div class="sec-ttl">الحساب · ACCOUNT</div>'+accountCard()+
+      '<div class="sec-ttl">مجموعات الوكلاء · AGENT GROUPS</div>'+GROUPS.map(srcCard).join("")+
       '<div class="sec-ttl">الذكاء الاصطناعي · AI</div>'+ai.map(srcCard).join("")+
       '<div class="sec-ttl">مصادر مجانية · FREE</div>'+FREE.map(srcCard).join("")+
       '<div class="sec-ttl">مصادر مدفوعة · PAID</div>'+PAID.map(srcCard).join("");
-    $("settingsBody").querySelectorAll(".keyin").forEach(function(inp){
-      inp.addEventListener("input",function(){S.keys[this.getAttribute("data-key")]=this.value;saveKeys();renderSettings();});
+    $("settingsBody").querySelectorAll(".keyin[data-key]").forEach(function(inp){
+      inp.addEventListener("input",function(){S.keys[this.getAttribute("data-key")]=this.value;saveKeys();});
     });
     $("settingsBody").querySelectorAll(".switch").forEach(function(b){
       b.addEventListener("click",function(){var t=this.getAttribute("data-toggle");S.toggles[t]=!S.toggles[t];saveToggles();renderSettings();renderNodes();});
+    });
+    _wireAccount();
+  }
+  function _wireAccount(){
+    var lo=$("logoutBtn");if(lo)lo.addEventListener("click",function(){logout();renderSettings();});
+    var send=$("loginSend");if(send)send.addEventListener("click",function(){
+      var email=($("loginEmail")||{}).value||"";
+      $("loginMsg").textContent="جارٍ الإرسال…";
+      requestLink(email,function(err,d){
+        if(err){$("loginMsg").textContent="خطأ: "+err.message;return;}
+        $("loginMsg").textContent=(d&&d.sent)?"أُرسل رابط الدخول إلى بريدك.":"أُعدّ الرابط (وضع تطوير: راجع سجلّ الخادم)، ثم ألصقه أدناه.";
+      });
+    });
+    var vr=$("loginVerify");if(vr)vr.addEventListener("click",function(){
+      var tok=extractToken(($("loginToken")||{}).value||"");
+      if(!tok){$("loginMsg").textContent="ألصق الرابط أو الرمز أولاً.";return;}
+      $("loginMsg").textContent="جارٍ التحقّق…";
+      verifyToken(tok,function(err){
+        if(err){$("loginMsg").textContent="فشل الدخول: "+err.message;return;}
+        renderSettings();
+      });
     });
   }
 
@@ -648,6 +779,13 @@
 
   // ---------- init ----------
   renderNodes();
+  // رابط سحري بالرابط الحالي — auto-verify a magic-link token in the URL, then clean it.
+  (function initAuth(){
+    var m=location.search.match(/[?&]token=([^&]+)/);
+    if(m){verifyToken(decodeURIComponent(m[1]),function(){
+      try{history.replaceState(null,"",location.pathname);}catch(_){}
+    });}
+  })();
   if(/[?&]demo=1/.test(location.search)){
     S.product="تمور";S.hs="080410";S.result=demoResult();S.selId="MA-0";
     $("hschip").style.display="";$("hschip").textContent="080410";
