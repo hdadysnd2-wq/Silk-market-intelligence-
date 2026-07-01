@@ -926,6 +926,47 @@ def test_dashboard_route_serves_page():
     assert "لوحة سِلك" in r.text and "leaflet" in r.text.lower()  # real dashboard page
 
 
+def test_vectors_cosine_and_keyless_disabled():
+    # جيب التمام صحيح، وبلا مفتاح تضمين الذاكرة معطّلة (embed=None، لا اختلاق).
+    import silk_vectors as v
+
+    assert v.cosine([1, 0, 0], [1, 0, 0]) == 1.0
+    assert v.cosine([1, 0], [0, 1]) == 0.0
+    for k in ("VOYAGE_API_KEY", "OPENAI_API_KEY"):
+        os.environ.pop(k, None)
+    assert v.available() is False
+    with _block_network():
+        assert v.embed(["dates market"]) is None      # no key -> no vector, no network
+    assert v.remember_report({"classified": True, "product": "x",
+                              "markets": [{"country": "م"}]}) is None
+    assert v.similar_reports("dates", "EGY") == []     # disabled -> empty, not fabricated
+
+
+def test_vectors_store_and_similarity_roundtrip():
+    # مع مزوّد تضمين وهمي: خزّن تقريرين واسترجع الأقرب — منطق التشابه صحيح.
+    from unittest.mock import patch
+    import silk_vectors as v
+
+    # مضمّن وهمي: يعطي ناقلاً حسب المحتوى (تمر مقابل صلب) — deterministic fake embedder.
+    def fake_embed(texts):
+        out = []
+        for t in texts:
+            out.append([1.0, 0.0] if ("تمر" in t or "dates" in t) else [0.0, 1.0])
+        return out
+
+    with patch("silk_vectors.available", return_value=True), \
+         patch("silk_vectors.embed", side_effect=fake_embed), \
+         patch("silk_db.try_enable_pgvector", return_value=False):
+        rid1 = v.remember_report({"classified": True, "product": "تمر", "hs_code": "080410",
+                                  "year": 2022, "markets": [{"country": "مصر"}]})
+        rid2 = v.remember_report({"classified": True, "product": "steel", "hs_code": "7208",
+                                  "year": 2022, "markets": [{"country": "USA"}]})
+        assert rid1 and rid2
+        hits = v.similar_reports("تمر فاخر", "مصر", k=3, min_score=0.5)
+    assert hits and hits[0]["product"] == "تمر"        # dates report ranks first
+    assert all(h["product"] != "steel" or h["score"] < 0.5 for h in hits)  # steel filtered out
+
+
 if __name__ == "__main__":
     import logging
 
