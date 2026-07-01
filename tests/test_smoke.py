@@ -680,9 +680,21 @@ def test_engine_competition_layer_offline():
         res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
                              year=2022, with_competition=True)
     row = res["markets"][0]
-    for key in ("competitors_web", "distribution_channels", "ecommerce", "bestsellers"):
+    for key in ("competitors_web", "importers", "distribution_channels",
+                "ecommerce", "bestsellers"):
         assert key in row                               # context attached
     assert row["total_score"] == 0.0                    # additive, score unchanged
+
+
+def test_importers_agent_free_no_fabrication_keyless():
+    # وكيل المستوردين (مجموعة ج) بحث ويب مجاني: بلا مفتاح => None موسوم، لا أسماء مُختلقة.
+    import silk_importers_agent as imp
+
+    os.environ.pop("SEARCH_API_KEY", None)
+    with _block_network():
+        rep = imp.ImportersAgent().run({"product": "dates", "country": "Morocco"})
+    assert rep.failed is True
+    assert all(f.value is None for f in rep.findings)   # no fabricated companies
 
 
 def test_regulatory_and_customs_agents_no_fabrication_keyless():

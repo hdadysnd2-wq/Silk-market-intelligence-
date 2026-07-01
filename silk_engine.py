@@ -55,8 +55,10 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                       religion, approx/dated), row['currency_risk'] (World Bank
                       inflation + FX-rate signals). Additive; no score change.
       with_competition — attach Group-C context per top market:
-                      row['competitors_web'], row['distribution_channels'],
-                      row['ecommerce'] (dynamic web search), and row['bestsellers']
+                      row['competitors_web'], row['importers'] (FREE web search;
+                      the PAID Volza importers stay deepen-only),
+                      row['distribution_channels'], row['ecommerce'] (dynamic web
+                      search), and row['bestsellers']
                       (LICENSED Apify actor; None without APIFY_API_TOKEN — no raw
                       scraping). Additive; no score change.
       with_compliance — attach Group-D NEW context per top market:
@@ -320,13 +322,16 @@ def _enrich_demographics(rows: list[dict], year: int) -> None:
 
 def _enrich_competition(rows: list[dict], product_name: str) -> None:
     """أضف سياق المجموعة ج — attach Group-C competition/distribution per market:
-    competitors (web), distribution channels (web), e-commerce landscape (web),
-    best-sellers (licensed Apify). Graceful None offline/keyless; all additive."""
+    competitors (web), importers (FREE web), distribution channels (web),
+    e-commerce landscape (web), best-sellers (licensed Apify). Graceful None
+    offline/keyless; all additive. The PAID Volza importers stay deepen-only."""
     from silk_competitors_agent import CompetitorsAgent      # lazy: optional layer
+    from silk_importers_agent import ImportersAgent          # lazy: FREE web search
     from silk_distribution_agent import (DistributionChannelsAgent,
                                          EcommerceLandscapeAgent)  # lazy
     from silk_bestsellers_agent import BestsellersAgent      # lazy: Apify-gated
     comp_agent = CompetitorsAgent()
+    imp_agent = ImportersAgent()
     dist_agent = DistributionChannelsAgent()
     ecom_agent = EcommerceLandscapeAgent()
     best_agent = BestsellersAgent()
@@ -339,6 +344,12 @@ def _enrich_competition(rows: list[dict], product_name: str) -> None:
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("competitors enrichment failed for %s: %s", row.get("iso3"), e)
             row["competitors_web"] = []
+        try:
+            row["importers"] = imp_agent.run(
+                {"product": product_name, "country": country}).findings
+        except Exception as e:  # noqa: BLE001
+            log.warning("importers enrichment failed for %s: %s", row.get("iso3"), e)
+            row["importers"] = []
         try:
             row["distribution_channels"] = dist_agent.run(
                 {"product": product_name, "country": country}).findings

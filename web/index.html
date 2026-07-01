@@ -488,6 +488,7 @@
         population:m.population!=null?m.population:null,
         top_competitor:m.top_competitor||null,
         competitors:m.competitors||[],// [{partner,share,value_usd}] — الدول المنافسة وحصصها
+        importers:realVals(m.importers),// مستوردون محتملون (بحث ويب مجاني) — free importer leads
         factories:factories,        // [{name,rating,...}]
         suppliers:suppliers,        // [{name,source,detail}] — الموردون وتجار الجملة
         prices:prices,              // [{title,price,currency,store,is_best_seller,...}] — منتجات منافسة + أسعار
@@ -544,7 +545,7 @@
         '<div class="stat"><div class="l">السكان</div><div class="v num">'+fmtNum(sel.population)+'</div></div>'+
       '</div>'+
       '<div class="drow2">المنافس المهيمن: <b>'+esc(sel.top_competitor||"—")+'</b></div>'+
-      synthBlock(sel)+aiBlock(sel)+competitorsBlock(sel)+pricesBlock(sel)+suppliersBlock(sel)+cultureBlock()+
+      synthBlock(sel)+aiBlock(sel)+competitorsBlock(sel)+importersBlock(sel)+pricesBlock(sel)+suppliersBlock(sel)+cultureBlock()+
       (sel.note?'<div class="note">'+esc(sel.note)+'</div>':'')+
       '<div class="srcs">'+(sel.sources||[]).map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'+
       '<div class="dbtns">'+
@@ -620,6 +621,18 @@
       return '<li>'+esc(x.partner||"—")+' <span class="cshare">'+esc(sh)+'</span> '+
         '<span class="pstore">'+fmtUSD(x.value_usd)+'</span></li>';}).join("");
     return '<div class="plblk"><div class="plhd">الدول المنافسة وحصصها — <b>'+c.length+'</b> دولة مورّدة (Comtrade)</div>'+
+      '<ul class="pllist">'+rows+'</ul></div>';
+  }
+  // المستوردون/الموزّعون المحتملون (بحث ويب مجاني) — free importer leads (Group C).
+  function importersBlock(sel){
+    var im=sel.importers||[];
+    if(!im.length)return needBlock("المستوردون والموزّعون المحتملون (بحث ويب)",
+      "يتطلب مفتاح بحث الويب (SEARCH_API_KEY) — بحث مجاني عن مستوردين/موزّعين. النسخة المدفوعة الأدقّ (Volza) عبر زر «تعميق التحليل» فقط.");
+    var rows=im.slice(0,5).map(function(x){
+      var t=(x&&(x.title||x.snippet||x))||"";
+      var link=x&&x.link?' <a href="'+esc(x.link)+'" target="_blank" rel="noopener" class="pstore">المصدر</a>':'';
+      return '<li>'+esc(String(t).slice(0,90))+link+'</li>';}).join("");
+    return '<div class="plblk"><div class="plhd">المستوردون والموزّعون المحتملون — <b>'+im.length+'</b> (بحث ويب مجاني)</div>'+
       '<ul class="pllist">'+rows+'</ul></div>';
   }
   // أسعار السوق المحلي الفعلية — actual in-market retail prices (needs key).
