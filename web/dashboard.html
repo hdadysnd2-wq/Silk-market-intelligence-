@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>لوحة سِلك التفاعلية · Silk Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+  :root{--petrol:#0C3A3A;--petrol2:#12504e;--gold:#C9A227;--ink:#0C0E1A;--mist:#F4F6F6;--line:#DDE5E5;--muted:#5b6b6b;--white:#fff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--mist);color:var(--ink);font-family:"IBM Plex Sans Arabic",system-ui,Tahoma,sans-serif;font-size:15px;line-height:1.55}
+  .num{font-family:"IBM Plex Sans";font-variant-numeric:tabular-nums}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+  header{background:var(--petrol);color:#fff;padding:16px 0}
+  .hrow{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:700}
+  .mark{width:34px;height:34px;border-radius:9px;background:var(--gold);color:var(--petrol);display:grid;place-items:center;font-weight:700}
+  a.homelink{color:#cfe;font-size:13px;text-decoration:none}
+  .verdictbar{margin:18px 0;padding:18px 20px;border-radius:14px;background:#fff;border:1px solid var(--line);box-shadow:0 6px 20px rgba(12,58,58,.06)}
+  .vbig{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .vtag{font-size:15px;font-weight:700;padding:6px 16px;border-radius:40px}
+  .v-strong{background:rgba(46,160,67,.14);color:#1a7f37}.v-mid{background:rgba(201,162,39,.16);color:#8a6d00}.v-low{background:#fdecec;color:#b42318}
+  .vsub{color:var(--muted);font-size:14px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 6px 20px rgba(12,58,58,.05)}
+  .card h3{margin:0 0 12px;font-size:15px;color:var(--petrol)}
+  .filters{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:6px 0 16px}
+  .filters label{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}
+  select,input[type=range]{font-family:inherit;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:7px 12px;background:#fff}
+  #map{height:420px;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  @media(max-width:760px){.kpis{grid-template-columns:1fr 1fr}}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px}
+  .kpi .l{font-size:12.5px;color:var(--muted)}.kpi .v{font-size:20px;font-weight:700;margin-top:3px;color:var(--petrol)}
+  .lists li{margin:4px 0}
+  .disc{font-size:12px;color:var(--muted);background:#fff;border:1px dashed var(--line);border-radius:10px;padding:12px;margin:16px 0 40px;line-height:1.7}
+  .msg{padding:40px;text-align:center;color:var(--muted)}
+  .btn{display:inline-block;background:var(--gold);color:var(--petrol);font-weight:600;border:0;border-radius:10px;padding:9px 16px;text-decoration:none;cursor:pointer}
+</style>
+</head>
+<body>
+<header><div class="wrap hrow">
+  <div class="brand"><span class="mark">س</span><span>لوحة سِلك التفاعلية</span></div>
+  <a class="homelink" href="/">← العودة للمنصّة</a>
+</div></header>
+
+<main class="wrap" id="root"><div class="msg" id="msg">جارٍ التحميل…</div></main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+  function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"");}
+  function session(){return localStorage.getItem("silk_session")||"";}
+
+  // مراكز الدول التقريبية (نقاط الخريطة القطرية) — approximate country centroids (map points).
+  var CENTROIDS={SAU:[23.9,45.1],ARE:[24.0,54.0],QAT:[25.3,51.2],KWT:[29.3,47.5],BHR:[26.0,50.5],OMN:[21.5,55.9],
+    JOR:[31.2,36.5],LBN:[33.9,35.5],EGY:[26.8,30.8],MAR:[31.8,-7.1],TUN:[34.0,9.5],DZA:[28.0,3.0],IRQ:[33.2,43.7],
+    TUR:[39.0,35.2],YEM:[15.5,48.5],ZAF:[-29.0,24.0],NGA:[9.1,8.7],KEN:[0.2,37.9],ETH:[9.1,40.5],GHA:[7.9,-1.0],
+    IND:[22.0,79.0],PAK:[30.4,69.3],BGD:[23.7,90.4],IDN:[-2.5,118.0],MYS:[4.2,101.9],SGP:[1.35,103.8],
+    THA:[15.0,101.0],VNM:[16.0,107.8],CHN:[35.9,104.2],JPN:[36.2,138.3],KOR:[36.5,127.8],GBR:[54.0,-2.0],
+    DEU:[51.2,10.4],FRA:[46.6,2.4],ITA:[42.8,12.6],ESP:[40.2,-3.7],NLD:[52.1,5.3],USA:[39.8,-98.6],CAN:[56.1,-106.3]};
+
+  // ---------- boot ----------
+  function jobId(){
+    var m=location.pathname.match(/\/dashboard\/([^/?#]+)/);
+    if(m)return decodeURIComponent(m[1]);
+    var q=location.search.match(/[?&]id=([^&]+)/);
+    return q?decodeURIComponent(q[1]):"";
+  }
+  var ID=jobId();
+  if(!ID){$("msg").textContent="لا يوجد معرّف تحليل في الرابط.";return;}
+  if(!session()){
+    $("msg").innerHTML='هذه اللوحة تتطلب جلسة. <a class="btn" href="/">سجّل الدخول من المنصّة</a> ثم افتح هذا الرابط مجدداً.';
+    return;
+  }
+  fetch(base()+"/jobs/"+encodeURIComponent(ID),{headers:{"Authorization":"Bearer "+session()}})
+    .then(function(r){return r.json().then(function(d){return {ok:r.ok,status:r.status,d:d};});})
+    .then(function(x){
+      if(x.status===401){$("msg").innerHTML='انتهت الجلسة. <a class="btn" href="/">سجّل الدخول</a> ثم أعد المحاولة.';return;}
+      if(!x.ok){$("msg").textContent="تعذّر الجلب: "+((x.d&&x.d.detail)||x.status);return;}
+      if(x.d.status!=="finished"||!x.d.result){$("msg").textContent="التحليل ليس جاهزاً بعد (الحالة: "+esc(x.d.status)+"). حدّث الصفحة لاحقاً.";return;}
+      render(x.d.result);
+    })
+    .catch(function(e){$("msg").textContent="خطأ شبكة: "+e.message;});
+
+  // ---------- helpers ----------
+  function dpv(c){return c&&typeof c==="object"?c.value:c;}
+  function realVals(list){return (list||[]).map(function(f){return f&&f.value;}).filter(function(v){return v!=null;});}
+  function fmtUSD(v){if(v==null)return "—";var n=Number(v);if(n>=1e9)return "$"+(n/1e9).toFixed(1)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(1)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(0)+"K";return "$"+n.toLocaleString("en-US");}
+  function vClass(v){v=(v||"").toUpperCase();return v.indexOf("GO")===0||v.indexOf("PRELIMINARY GO")>=0?"v-strong":v.indexOf("NO-GO")>=0?"v-low":"v-mid";}
+
+  var state={result:null,markets:[],selIdx:0,minConf:0,map:null,layers:{},chart1:null,chart2:null};
+
+  function render(result){
+    state.result=result;
+    var markets=(result.markets||[]).slice();
+    state.markets=markets;
+    if(!markets.length){$("msg").textContent="لا أسواق في هذا التحليل.";return;}
+    var top=markets[0];
+    var syn=top.synthesis||{};
+    var verdict=syn.verdict||(top.jury&&top.jury.verdict)||"—";
+    $("root").innerHTML=
+      '<div class="verdictbar"><div class="vbig">'+
+        '<span class="vtag '+vClass(verdict)+'">'+esc(verdict)+'</span>'+
+        '<div><div style="font-weight:700">'+esc(result.product||"")+' · HS '+esc(result.hs_code||"")+'</div>'+
+        '<div class="vsub">أعلى سوق: '+esc(top.country||"")+' · بيانات '+esc(result.year||"")+' · '+markets.length+' سوق مرشّح</div></div>'+
+      '</div></div>'+
+      '<div class="kpis" id="kpis"></div>'+
+      '<div class="filters">'+
+        '<label>السوق: <select id="mkt"></select></label>'+
+        '<label>أدنى ثقة: <input type="range" id="conf" min="0" max="1" step="0.33" value="0"/> <span id="confv">الكل</span></label>'+
+      '</div>'+
+      '<div class="grid">'+
+        '<div class="card"><h3>مقارنة الأسواق (النقاط)</h3><canvas id="c1" height="220"></canvas></div>'+
+        '<div class="card"><h3>حصص الدول المنافسة — <span id="compName"></span></h3><canvas id="c2" height="220"></canvas></div>'+
+      '</div>'+
+      '<div class="card" style="margin-bottom:16px"><h3>الخريطة التفاعلية</h3>'+
+        '<div class="vsub" style="margin-bottom:8px">بدّل الطبقات من أعلى يمين الخريطة: نقاط الدول (بحجم النقاط) ومدن السوق المختار.</div>'+
+        '<div id="map"></div></div>'+
+      '<div class="card" id="synCard"></div>'+
+      '<div class="disc" id="disc"></div>';
+
+    // market selector
+    $("mkt").innerHTML=markets.map(function(m,i){return '<option value="'+i+'">'+esc(m.country||m.iso3)+'</option>';}).join("");
+    $("mkt").addEventListener("change",function(){state.selIdx=parseInt(this.value,10);onSelect();});
+    $("conf").addEventListener("input",function(){state.minConf=parseFloat(this.value);
+      $("confv").textContent=state.minConf===0?"الكل":("≥"+state.minConf);drawMarketChart();drawMap();});
+
+    initMap();
+    renderKpis();
+    drawMarketChart();
+    onSelect();
+    renderSynthesis();
+    $("disc").textContent="هذا التقرير أداة مساعدة لاتخاذ القرار مبنية على مصادر عامة، وليس استشارة قانونية أو جمركية أو مالية رسمية. يُنصح بالتحقق من الجهات الرسمية المختصة قبل اتخاذ قرارات تصدير نهائية.";
+  }
+
+  function filteredMarkets(){
+    return state.markets.filter(function(m){return (m.confidence==null?0:m.confidence)>=state.minConf;});
+  }
+
+  function renderKpis(){
+    var m=state.markets[state.selIdx],c=m.components||{};
+    var rows=[["أعلى سوق",state.markets[0].country||"—"],
+      ["حجم الاستيراد",fmtUSD(dpv(c.market_size))],
+      ["حصة السعودية",dpv(c.saudi_position)==null?"—":dpv(c.saudi_position)+"%"],
+      ["عدد الأسواق",String(state.markets.length)]];
+    $("kpis").innerHTML=rows.map(function(r){return '<div class="kpi"><div class="l">'+esc(r[0])+'</div><div class="v num">'+esc(r[1])+'</div></div>';}).join("");
+  }
+
+  function drawMarketChart(){
+    var ms=filteredMarkets();
+    var labels=ms.map(function(m){return m.country||m.iso3;});
+    var data=ms.map(function(m){return m.total_score==null?0:Math.round(m.total_score*100);});
+    if(state.chart1)state.chart1.destroy();
+    state.chart1=new Chart($("c1"),{type:"bar",
+      data:{labels:labels,datasets:[{label:"النقاط /100",data:data,backgroundColor:"#12504e"}]},
+      options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:100}}}});
+  }
+
+  function onSelect(){
+    var m=state.markets[state.selIdx];
+    $("compName").textContent=m.country||m.iso3||"";
+    var comps=(m.competitors||[]).filter(function(x){return x&&x.share!=null;}).slice(0,6);
+    if(state.chart2)state.chart2.destroy();
+    if(comps.length){
+      state.chart2=new Chart($("c2"),{type:"doughnut",
+        data:{labels:comps.map(function(x){return x.partner||"—";}),
+          datasets:[{data:comps.map(function(x){return x.share;}),
+            backgroundColor:["#0C3A3A","#12504e","#C9A227","#8a6d00","#5b6b6b","#a9b7b7"]}]},
+        options:{plugins:{legend:{position:"bottom"}}}});
+    }else{
+      $("c2").parentNode.querySelector("canvas").replaceWith(Object.assign(document.createElement("div"),{className:"vsub",textContent:"لا بيانات منافسين لهذا السوق."}));
+    }
+    renderKpis();drawMap();
+  }
+
+  function initMap(){
+    state.map=L.map("map",{scrollWheelZoom:false}).setView([25,45],3);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {maxZoom:12,attribution:"© OpenStreetMap"}).addTo(state.map);
+  }
+
+  function drawMap(){
+    if(!state.map)return;
+    Object.keys(state.layers).forEach(function(k){state.map.removeLayer(state.layers[k]);});
+    var countryLayer=L.layerGroup(),cityLayer=L.layerGroup();
+    // نقاط الدول — country points sized by score.
+    filteredMarkets().forEach(function(m){
+      var c=CENTROIDS[m.iso3];if(!c)return;
+      var score=m.total_score==null?0:m.total_score;
+      L.circleMarker(c,{radius:6+score*16,color:"#0C3A3A",fillColor:"#12504e",fillOpacity:.55,weight:1})
+        .bindPopup("<b>"+esc(m.country||m.iso3)+"</b><br>النقاط: "+(m.total_score==null?"—":Math.round(m.total_score*100))+
+          "<br>الاستيراد: "+fmtUSD(dpv((m.components||{}).market_size)))
+        .addTo(countryLayer);
+    });
+    // مدن السوق المختار — cities of the selected market (from Group B).
+    var sel=state.markets[state.selIdx];
+    realVals(sel.cities).forEach(function(ct){
+      if(ct.lat==null||ct.lng==null)return;
+      var pop=ct.population||0;
+      L.circleMarker([ct.lat,ct.lng],{radius:5+(pop?Math.min(14,Math.log10(pop)):3),
+        color:"#C9A227",fillColor:"#C9A227",fillOpacity:.6,weight:1})
+        .bindPopup("<b>"+esc(ct.city||"")+"</b>"+(pop?"<br>سكان≈ "+pop.toLocaleString("en-US"):""))
+        .addTo(cityLayer);
+    });
+    countryLayer.addTo(state.map);cityLayer.addTo(state.map);
+    state.layers={"الدول (النقاط)":countryLayer,"مدن السوق المختار":cityLayer};
+    if(state._ctl)state.map.removeControl(state._ctl);
+    state._ctl=L.control.layers(null,state.layers,{collapsed:false}).addTo(state.map);
+  }
+
+  function renderSynthesis(){
+    var m=state.markets[0],s=m.synthesis;
+    if(!s){$("synCard").innerHTML='<h3>تحليل كلود</h3><div class="vsub">لم يُفعّل تركيب كلود لهذا التحليل (with_synthesis + مفتاح Claude).</div>';return;}
+    function lst(t,a){if(!a||!a.length)return "";return '<b>'+t+'</b><ul class="lists">'+a.slice(0,5).map(function(x){return '<li>'+esc(String(x))+'</li>';}).join("")+'</ul>';}
+    $("synCard").innerHTML='<h3>تحليل كلود — '+esc(m.country||"")+'</h3>'+
+      lst("فرص",s.opportunities)+lst("مخاطر",s.risks)+lst("توصيات",s.recommendations)+lst("فجوات البيانات",s.gaps)+
+      (s.by?'<div class="vsub">'+esc(s.by)+' · قرار أوّلي</div>':'');
+  }
+})();
+</script>
+</body>
+</html>

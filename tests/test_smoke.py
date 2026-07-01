@@ -912,6 +912,20 @@ def test_reports_endpoints_auth_and_flow():
     assert "attachment" in r.headers.get("content-disposition", "")
 
 
+def test_dashboard_route_serves_page():
+    # /dashboard/{id} يقدّم صفحة اللوحة الثابتة (عامّة؛ الصفحة تجلب البيانات بالجلسة).
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    import api
+
+    client = TestClient(api.app)
+    r = client.get("/dashboard/some-job-id")
+    assert r.status_code == 200
+    assert "لوحة سِلك" in r.text and "leaflet" in r.text.lower()  # real dashboard page
+
+
 if __name__ == "__main__":
     import logging
 

@@ -330,6 +330,21 @@ def create_app():
                                 detail=f"analysis {analysis_id} not found")
         return _json(found)
 
+    @app.get("/dashboard/{job_id}")
+    def dashboard_page(job_id: str):
+        """اللوحة الدائمة — serve the permanent dashboard page for a job id.
+
+        Static HTML; the page reads the job id from its own URL and fetches the
+        analysis via the authenticated GET /jobs/{id} (ownership-scoped). The
+        permanent link is /dashboard/<job_id>.
+        """
+        from fastapi.responses import FileResponse
+        page = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "web", "dashboard.html")
+        if not os.path.isfile(page):
+            raise HTTPException(status_code=404, detail="dashboard page not found")
+        return FileResponse(page)
+
     # الواجهة الثابتة على نفس الخدمة — serve the static frontend at "/" so one
     # Render service hosts BOTH the API and the UI (same origin, no CORS needed).
     # Registered last so the API routes above take precedence over static files.

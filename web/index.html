@@ -505,7 +505,8 @@
       (sel.note?'<div class="note">'+esc(sel.note)+'</div>':'')+
       '<div class="srcs">'+(sel.sources||[]).map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'+
       '<div class="dbtns">'+
-        (S.jobId?'<button class="ghostbtn" id="repFull">تقرير كامل (Word)</button>'+
+        (S.jobId?'<a class="ghostbtn" href="'+base()+'/dashboard/'+encodeURIComponent(S.jobId)+'" target="_blank" rel="noopener">لوحة دائمة ↗</a>'+
+                 '<button class="ghostbtn" id="repFull">تقرير كامل (Word)</button>'+
                  '<button class="ghostbtn" id="repShort">مختصر (Word)</button>'+
                  '<button class="ghostbtn" id="repPdf">مختصر (PDF)</button>':'')+
         '<button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button>'+
