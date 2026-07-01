@@ -680,9 +680,9 @@ def test_engine_competition_layer_offline():
         res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
                              year=2022, with_competition=True)
     row = res["markets"][0]
-    for key in ("competitors_web", "importers", "distribution_channels",
-                "ecommerce", "bestsellers"):
-        assert key in row                               # context attached
+    for key in ("competitors_web", "importers", "distribution_channels", "ecommerce"):
+        assert key in row                               # free context attached
+    assert "bestsellers" not in row                     # PAID Apify -> deepen-only, NOT on /analyze
     assert row["total_score"] == 0.0                    # additive, score unchanged
 
 
@@ -976,6 +976,97 @@ def test_analyze_never_invokes_paid_volza_even_with_key_and_flag():
     assert calls["n"] == 0                 # Volza never invoked on /analyze
     assert "volza" not in row and "explee" not in row  # no paid enrichment attached
     assert "competitors_web" in row        # free Group C still ran
+
+
+def test_analyze_never_invokes_paid_maps_or_bestsellers_even_with_keys_and_flags():
+    # حرج (أمان/تكلفة) — أ1: /analyze لا يستدعي Google Places (Maps) ولا
+    # الأكثر-مبيعاً (Apify) أبداً، حتى مع مفاتيح محفوظة وإرسال with_maps=True
+    # وwith_competition=True عمداً. كلاهما طبقة تعميق مدفوعة (/deepen) فقط.
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import api
+    import silk_maps_agent
+    import silk_bestsellers_agent
+
+    os.environ["GOOGLE_MAPS_API_KEY"] = "SPY-MAPS"   # keys present -> old bug would fire them
+    os.environ["APIFY_API_TOKEN"] = "SPY-APIFY"
+    client = TestClient(api.app)
+    headers = _test_session_headers("no-maps-bestsellers-on-analyze@example.com")
+    calls = {"maps": 0, "best": 0}
+    real_maps = silk_maps_agent.MapsAgent.run
+    real_best = silk_bestsellers_agent.BestsellersAgent.run
+
+    def spy_maps(self, task):
+        calls["maps"] += 1
+        return real_maps(self, task)
+
+    def spy_best(self, task):
+        calls["best"] += 1
+        return real_best(self, task)
+
+    try:
+        with patch.object(silk_maps_agent.MapsAgent, "run", spy_maps), \
+             patch.object(silk_bestsellers_agent.BestsellersAgent, "run", spy_best), \
+             patch("requests.get", side_effect=OSError("net blocked")), \
+             patch("requests.post", side_effect=OSError("net blocked")):
+            r = client.post("/analyze", json={"product": "تمور", "year": 2022,
+                                              "with_competition": True,
+                                              "with_maps": True},
+                            headers=headers)
+            data = r.json()
+            jr = client.get(f"/jobs/{data['job_id']}", headers=headers).json()
+    finally:
+        os.environ.pop("GOOGLE_MAPS_API_KEY", None)
+        os.environ.pop("APIFY_API_TOKEN", None)
+    assert r.status_code == 200
+    row = (jr["result"]["markets"] or [{}])[0]
+    assert calls["maps"] == 0              # Google Places never invoked on /analyze
+    assert calls["best"] == 0              # Apify best-sellers never invoked on /analyze
+    assert "maps" not in row               # no paid maps enrichment attached
+    assert "bestsellers" not in row        # no paid best-sellers enrichment attached
+    assert "competitors_web" in row        # free Group C still ran
+
+
+def test_analyze_localprice_is_free_web_never_invokes_serpapi():
+    # حرج (أمان/تكلفة) — ب1: with_localprice في /analyze = بحث ويب مجاني، ولا
+    # يستدعي أبداً LocalPriceAgent المدفوع (SerpApi)، حتى مع LOCALPRICE_API_KEY.
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import api
+    import silk_localprice_agent
+
+    os.environ["LOCALPRICE_API_KEY"] = "SPY-SERPAPI"   # key present -> old path would fire paid SerpApi
+    client = TestClient(api.app)
+    headers = _test_session_headers("localprice-free-on-analyze@example.com")
+    calls = {"paid": 0}
+    real_paid = silk_localprice_agent.LocalPriceAgent.run
+
+    def spy_paid(self, task):
+        calls["paid"] += 1
+        return real_paid(self, task)
+
+    try:
+        with patch.object(silk_localprice_agent.LocalPriceAgent, "run", spy_paid), \
+             patch("requests.get", side_effect=OSError("net blocked")), \
+             patch("requests.post", side_effect=OSError("net blocked")):
+            r = client.post("/analyze", json={"product": "تمور", "year": 2022,
+                                              "with_localprice": True,
+                                              "own_price": 50.0},
+                            headers=headers)
+            data = r.json()
+            jr = client.get(f"/jobs/{data['job_id']}", headers=headers).json()
+    finally:
+        os.environ.pop("LOCALPRICE_API_KEY", None)
+    assert r.status_code == 200
+    row = (jr["result"]["markets"] or [{}])[0]
+    assert calls["paid"] == 0              # paid SerpApi LocalPriceAgent never invoked on /analyze
+    assert "localprice" in row             # free web-search signals attached instead
 
 
 def test_dnb_agent_no_fabrication_keyless():

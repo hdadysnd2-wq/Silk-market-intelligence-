@@ -142,6 +142,29 @@ def retail_prices(query: str, market: str | None = None) -> list[DataPoint]:
     return findings
 
 
+def retail_price_web(product: str, country: str = "", num: int = 5) -> list[DataPoint]:
+    """أسعار التجزئة (بحث ويب مجاني) — FREE retail price signals via web search.
+
+    مطابقة مواصفة V3 لمجموعة د: retail_price بحث ويب عادي مجاني (نطاق/إشارات سعرية)
+    لا أداة مدفوعة. النسخة المُهيكلة بالأرقام (SerpApi) تبقى في «تعميق التحليل».
+    Each result -> DataPoint(value={title, snippet, link}); no structured price
+    number (that's the paid deepen layer). Keyless/failure -> provenance-tagged
+    None. Never fabricates a price.
+    """
+    product = (product or "").strip()
+    if not product:
+        return [DataPoint(None, "Web Search", 0.0,
+                          "empty product — no retail price search", _today())]
+    query = f"{product} price retail سعر {country}".strip()
+    try:
+        from silk_websearch_agent import web_search  # lazy: FREE layer
+        return web_search(query, num=num)
+    except Exception as e:  # noqa: BLE001 — never raise to caller
+        log.warning("retail price web search failed for %r: %s", query, e)
+        return [DataPoint(None, "Web Search", 0.0,
+                          f"retail price search unavailable: {e}", _today())]
+
+
 def compare_own_price(own_price: float | None, findings: list[DataPoint]) -> dict:
     """قارن سعرك بقوائم السوق المحلي المرصودة — compare YOUR price to the local
     retail listings already fetched by retail_prices() (no extra network call).

@@ -81,7 +81,8 @@ def create_app():
         with_trends: bool = False
         with_tariffs: bool = False
         with_faostat: bool = False
-        with_maps: bool = False
+        # with_maps عمداً غير مقبول هنا — Google Places مكلف (طبقة تعميق فقط، /deepen).
+        # Google Places is costly; maps is deepen-only, never on /analyze.
         with_websearch: bool = False
         with_localprice: bool = False
         own_price: float | None = None

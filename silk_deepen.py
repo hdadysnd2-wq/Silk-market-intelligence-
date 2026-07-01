@@ -64,11 +64,14 @@ def deepen(result: dict, top: int = _DEEPEN_TOP) -> dict:
     from silk_volza_agent import VolzaAgent
     from silk_explee_agent import ExpleeAgent
     from silk_dnb_agent import DnbAgent
+    from silk_bestsellers_agent import BestsellersAgent   # PAID Apify — deepen-only
+    from silk_localprice_agent import LocalPriceAgent     # PAID SerpApi — deepen-only
 
     product = result.get("product") or ""
     hs_code = result.get("hs_code")
     maps_a, volza_a, explee_a, dnb_a = (MapsAgent(), VolzaAgent(),
                                         ExpleeAgent(), DnbAgent())
+    best_a, price_a = BestsellersAgent(), LocalPriceAgent()
     out_markets = []
     for row in (result.get("markets") or [])[: max(1, top)]:
         iso3 = row.get("iso3")
@@ -92,6 +95,17 @@ def deepen(result: dict, top: int = _DEEPEN_TOP) -> dict:
         except Exception as e:  # noqa: BLE001
             log.warning("deepen explee failed for %s: %s", iso3, e)
             entry["explee"] = []
+        try:  # الأكثر مبيعاً (Apify مدفوع) — deepen-only best-sellers
+            entry["bestsellers"] = best_a.run({"product": product, "market": iso2 or iso3 or ""}).findings
+        except Exception as e:  # noqa: BLE001
+            log.warning("deepen bestsellers failed for %s: %s", iso3, e)
+            entry["bestsellers"] = []
+        try:  # أسعار التجزئة المُهيكلة (SerpApi مدفوع) — deepen-only structured prices
+            entry["retail_prices"] = price_a.run(
+                {"query": f"{product} {country}".strip(), "market": iso2}).findings
+        except Exception as e:  # noqa: BLE001
+            log.warning("deepen retail_prices failed for %s: %s", iso3, e)
+            entry["retail_prices"] = []
         # D&B: تحقّق من اتحاد الأسماء المكتشفة — verify the union of discovered names.
         names = _names_from(entry["maps"]) + _names_from(entry["volza"]) + _names_from(entry["explee"])
         try:

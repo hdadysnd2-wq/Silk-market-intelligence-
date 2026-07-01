@@ -382,8 +382,8 @@
     var g=S.toggles;
     var body={product:S.product,year:S.year,
       with_trends:!!g.trends,with_tariffs:!!S.keys.WITS,
-      with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS,
-      with_localprice:!!S.keys.LOCALPRICE,own_price:S.ownPrice,
+      with_faostat:!!S.keys.FAOSTAT,
+      with_localprice:!!g.groupD,own_price:S.ownPrice,
       with_market_size:!!g.groupA,with_demographics:!!g.groupB,
       with_competition:!!g.groupC,with_compliance:!!g.groupD,with_culture:!!g.groupE,
       // الأدوات المدفوعة (Volza/explee) لا تُرسَل مع /analyze إطلاقاً — تُستدعى
@@ -457,6 +457,8 @@
         deepList("مصانع/موزّعون (Maps)",m.maps,function(v){return (v.name||"")+(v.rating?(" ★"+v.rating):"");})+
         deepList("مستوردون (Volza)",m.volza,function(v){return typeof v==="object"?(v.name||v.importer||JSON.stringify(v)):v;})+
         deepList("مشترون B2B (explee)",m.explee,function(v){return typeof v==="object"?(v.name||v.company||JSON.stringify(v)):v;})+
+        deepList("الأكثر مبيعاً (Apify)",m.bestsellers,function(v){return typeof v==="object"?((v.title||v.name||JSON.stringify(v))+(v.rank?(" · #"+v.rank):"")):v;})+
+        deepList("أسعار التجزئة (SerpApi)",m.retail_prices,function(v){if(typeof v!=="object")return v;var p=(v.price!=null?v.price:"")+(v.currency?(" "+v.currency):"");return (v.title||"قائمة")+" @ "+p+(v.store?(" ("+v.store+")"):"")+(v.is_best_seller?" ★":"");})+
         deepList("تحقق الشرعية (D&B)",m.dnb,function(v){return typeof v==="object"?((v.name||"")+" · DUNS "+(v.duns||"—")):v;})+
       '</div>';
     }).join("")+'<div class="needkey" style="margin-top:10px">'+esc(d.note||"")+'</div>';
@@ -635,18 +637,25 @@
     return '<div class="plblk"><div class="plhd">المستوردون والموزّعون المحتملون — <b>'+im.length+'</b> (بحث ويب مجاني)</div>'+
       '<ul class="pllist">'+rows+'</ul></div>';
   }
-  // أسعار السوق المحلي الفعلية — actual in-market retail prices (needs key).
+  // إشارات سعر التجزئة (بحث ويب مجاني) — FREE web-search retail-price signals.
+  // القوائم الرقمية المُهيكلة (سعر/عملة/متجر) تأتي في «تعميق التحليل» (SerpApi مدفوع).
   function pricesBlock(sel){
     var p=sel.prices||[];
-    if(!p.length)return needBlock("المنتجات المنافسة وأسعارها في المتاجر المحلية",
-      "يتطلب مفتاح أسعار السوق المحلي (LOCALPRICE_API_KEY) — أمازون/نون/جوميا. كل قائمة = منتج منافس بسعره ومتجره. المنصة لا تختلق سعرًا.");
+    if(!p.length)return needBlock("إشارات أسعار التجزئة في السوق (بحث ويب)",
+      "يتطلب مفتاح بحث الويب (SEARCH_API_KEY). إشارات سعرية مجانية من الويب؛ للأرقام المُهيكلة (سعر/متجر) استخدم «تعميق التحليل». المنصة لا تختلق سعرًا.");
     var rows=p.slice(0,5).map(function(x){
-      var cur=x.currency?' '+esc(x.currency):'';
-      var st=x.store?' <span class="pstore">'+esc(x.store)+'</span>':'';
-      var badge=x.is_best_seller?' <span class="ssrc" style="background:#FFF4D6;color:#8a6d00">🏆 الأكثر مبيعاً</span>':'';
-      return '<li><span class="pprice">'+esc(x.price)+cur+'</span> '+esc((x.title||"").slice(0,48))+st+badge+'</li>';
+      // شكلان: قائمة مُهيكلة {price,currency,store} أو إشارة ويب {title,snippet,link}
+      if(x&&x.price!=null){
+        var cur=x.currency?' '+esc(x.currency):'';
+        var st=x.store?' <span class="pstore">'+esc(x.store)+'</span>':'';
+        var badge=x.is_best_seller?' <span class="ssrc" style="background:#FFF4D6;color:#8a6d00">🏆 الأكثر مبيعاً</span>':'';
+        return '<li><span class="pprice">'+esc(x.price)+cur+'</span> '+esc((x.title||"").slice(0,48))+st+badge+'</li>';
+      }
+      var link=x&&x.link?' <a class="pstore" href="'+esc(x.link)+'" target="_blank" rel="noopener">↗</a>':'';
+      var snip=x&&x.snippet?' <span class="pstore">'+esc(String(x.snippet).slice(0,80))+'</span>':'';
+      return '<li>'+esc(((x&&(x.title||x.name))||"").slice(0,64))+snip+link+'</li>';
     }).join("");
-    return '<div class="plblk"><div class="plhd">المنتجات المنافسة وأسعارها — <b>'+p.length+'</b> (المتاجر المحلية)</div>'+
+    return '<div class="plblk"><div class="plhd">إشارات أسعار التجزئة (بحث ويب) — <b>'+p.length+'</b></div>'+
       priceComparisonBlock(sel.price_comparison)+
       '<ul class="pllist">'+rows+'</ul></div>';
   }

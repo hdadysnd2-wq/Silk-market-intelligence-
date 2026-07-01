@@ -329,15 +329,14 @@ def _enrich_competition(rows: list[dict], product_name: str) -> None:
     from silk_importers_agent import ImportersAgent          # lazy: FREE web search
     from silk_distribution_agent import (DistributionChannelsAgent,
                                          EcommerceLandscapeAgent)  # lazy
-    from silk_bestsellers_agent import BestsellersAgent      # lazy: Apify-gated
+    # best-sellers (مُشغّل Apify مدفوع) لا يُستدعى في المسار العادي — طبقة تعميق فقط
+    # (silk_deepen). PAID Apify best-sellers is deepen-only, never on /analyze.
     comp_agent = CompetitorsAgent()
     imp_agent = ImportersAgent()
     dist_agent = DistributionChannelsAgent()
     ecom_agent = EcommerceLandscapeAgent()
-    best_agent = BestsellersAgent()
     for row in rows:
         country = row.get("country", "")
-        market = row.get("iso2") or row.get("iso3") or ""
         try:
             row["competitors_web"] = comp_agent.run(
                 {"product": product_name, "country": country}).findings
@@ -362,12 +361,6 @@ def _enrich_competition(rows: list[dict], product_name: str) -> None:
         except Exception as e:  # noqa: BLE001
             log.warning("ecommerce enrichment failed for %s: %s", row.get("iso3"), e)
             row["ecommerce"] = []
-        try:
-            row["bestsellers"] = best_agent.run(
-                {"product": product_name, "market": market}).findings
-        except Exception as e:  # noqa: BLE001
-            log.warning("bestsellers enrichment failed for %s: %s", row.get("iso3"), e)
-            row["bestsellers"] = []
 
 
 def _enrich_compliance(rows: list[dict], product_name: str) -> None:
@@ -441,18 +434,20 @@ def _enrich_maps(rows: list[dict], product_name: str) -> None:
 
 def _enrich_localprice(rows: list[dict], product_name: str,
                        own_price: float | None = None) -> None:
-    """أضف أسعار التجزئة المحلية لكل سوق — attach actual in-market retail prices
-    (الأسعار الفعلية، docx 'المتاجر المحلية') + مقارنة سعرك إن أُعطي. Graceful
-    None offline; own_price comparison reuses the same fetch, no 2nd call."""
-    from silk_localprice_agent import LocalPriceAgent, compare_own_price  # lazy: optional layer
-    agent = LocalPriceAgent()
+    """أضف إشارات سعر التجزئة (بحث ويب مجاني) لكل سوق — attach FREE web-search
+    retail-price signals (V3 Group-D spec: retail_price is free web search, not a
+    paid tool). The PAID structured SerpApi listings + numeric own_price
+    comparison + best-seller badges live in the deepen layer (/deepen). Graceful
+    None offline. own_price here degrades to a 'no structured listings' note."""
+    from silk_localprice_agent import retail_price_web, compare_own_price  # lazy: FREE layer
     for row in rows:
         try:
-            query = f"{product_name} {row.get('country', '')}".strip()
-            rep = agent.run({"query": query, "market": row.get("iso2")})
-            row["localprice"] = rep.findings
+            findings = retail_price_web(product_name, row.get("country", ""))
+            row["localprice"] = findings
             if own_price is not None:
-                row["price_comparison"] = compare_own_price(own_price, rep.findings)
+                # free web has no numeric listings -> graceful 'no listings' note;
+                # precise percentile comparison is a /deepen (paid SerpApi) feature.
+                row["price_comparison"] = compare_own_price(own_price, findings)
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("localprice enrichment failed for %s: %s", row.get("iso3"), e)
             row["localprice"] = []
