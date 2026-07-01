@@ -1210,6 +1210,61 @@ def test_ai_cost_cap_zero_means_unlimited():
         silk_ai_judge.reset_budget()
 
 
+def test_cultural_agent_builds_distinct_queries_per_country_and_product():
+    # مجموعة هـ — cultural_agent يبني استعلامات مختلفة فعلياً حسب المنتج والدولة،
+    # لا نص عام مكرّر. تكرار نفس الاستعلام لدولتين مختلفتين = فشل.
+    from unittest.mock import patch
+    import silk_culture_agent as C
+    from silk_data_layer import DataPoint, _today
+
+    seen = []
+
+    def spy(query, num=5):
+        seen.append(query)
+        return [DataPoint({"title": "x"}, "Web Search", 0.5, "ok", _today())]
+
+    with patch("silk_websearch_agent.web_search", spy):
+        C.CulturalAgent().run({"product": "تمور", "country": "United Arab Emirates"})
+        C.CulturalAgent().run({"product": "تمور", "country": "Morocco"})
+        C.CulturalAgent().run({"product": "عسل", "country": "United Arab Emirates"})
+
+    assert len(seen) == 3
+    assert seen[0] != seen[1]                       # نفس المنتج، دولتان -> استعلامان مختلفان
+    assert seen[0] != seen[2]                       # نفس الدولة، منتجان -> استعلامان مختلفان
+    assert len(set(seen)) == 3                       # لا تكرار عام
+    assert "United Arab Emirates" in seen[0] and "Morocco" in seen[1]
+    assert "تمور" in seen[0] and "عسل" in seen[2]
+
+
+def test_group_e_unexpected_exception_is_visible_not_a_silent_gap():
+    # حرج (شفافية/البند ٤) — مجموعة هـ: أي استثناء غير متوقّع في وكيل إثراء
+    # يُرفق DataPoint(None, note='... enrichment error: ...') بدل []/None صامت.
+    # يشمل trends/cultural/business_culture/exhibitions.
+    from unittest.mock import patch
+    import silk_trends_agent, silk_culture_agent
+
+    with patch.object(silk_trends_agent.TrendsAgent, "run",
+                      side_effect=RuntimeError("boom-trends")), \
+         patch.object(silk_culture_agent.CulturalAgent, "run",
+                      side_effect=RuntimeError("boom-cult")), \
+         patch.object(silk_culture_agent.BusinessCultureAgent, "run",
+                      side_effect=RuntimeError("boom-biz")), \
+         patch.object(silk_culture_agent.ExhibitionsAgent, "run",
+                      side_effect=RuntimeError("boom-exh")), \
+         _block_network():
+        res = engine.analyze("تمور", year=2021, with_trends=True, with_culture=True)
+
+    row = res["markets"][0]
+    for field, marker in (("trends", "boom-trends"), ("cultural", "boom-cult"),
+                          ("business_culture", "boom-biz"), ("exhibitions", "boom-exh")):
+        v = row.get(field, "__MISSING__")
+        assert v != "__MISSING__", f"{field} disappeared silently"
+        val = (v[0].value if isinstance(v, list) and v else getattr(v, "value", "X"))
+        assert val is None, f"{field} should carry a None value, not fabricate"
+        n = (v[0].note if isinstance(v, list) and v else getattr(v, "note", "")) or ""
+        assert "enrichment error" in n and marker in n, f"{field} note lost the reason: {n!r}"
+
+
 def test_group_d_unexpected_exception_is_visible_not_a_silent_gap():
     # حرج (شفافية/البند ٤) — مجموعة د: أي استثناء غير متوقّع داخل وكيل إثراء
     # يُرفق DataPoint(None, note='... enrichment error: ...') بدل []/None صامت،

@@ -293,7 +293,8 @@ def _enrich_trends(rows: list[dict], product_name: str) -> None:
             row["trends"] = rep.findings
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("trends enrichment failed for %s: %s", row.get("iso3"), e)
-            row["trends"] = []
+            # البند ٤: بدل [] الصامت، DataPoint موسوم بالسبب — tagged None, visible reason.
+            row["trends"] = [_enrich_error_dp("Google Trends", "trends", e)]
 
 
 def _enrich_error_dp(source: str, field: str, exc: Exception):
@@ -475,19 +476,20 @@ def _enrich_culture(rows: list[dict], product_name: str) -> None:
                 {"product": product_name, "country": country}).findings
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("cultural enrichment failed for %s: %s", row.get("iso3"), e)
-            row["cultural"] = []
+            # البند ٤: بدل [] الصامت، DataPoint موسوم بالسبب — tagged None, visible reason.
+            row["cultural"] = [_enrich_error_dp("Web Search", "cultural", e)]
         try:
             row["business_culture"] = biz_agent.run(
                 {"country": country, "product": product_name}).findings
         except Exception as e:  # noqa: BLE001
             log.warning("business_culture enrichment failed for %s: %s", row.get("iso3"), e)
-            row["business_culture"] = []
+            row["business_culture"] = [_enrich_error_dp("Web Search", "business_culture", e)]
         try:
             row["exhibitions"] = exh_agent.run(
                 {"product": product_name, "country": country}).findings
         except Exception as e:  # noqa: BLE001
             log.warning("exhibitions enrichment failed for %s: %s", row.get("iso3"), e)
-            row["exhibitions"] = []
+            row["exhibitions"] = [_enrich_error_dp("Web Search", "exhibitions", e)]
 
 
 def _enrich_maps(rows: list[dict], product_name: str) -> None:
