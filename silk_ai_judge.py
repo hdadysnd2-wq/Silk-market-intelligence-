@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 _ENDPOINT = "https://api.anthropic.com/v1/messages"
 _VERSION = "2023-06-01"
-_MODEL = os.environ.get("SILK_AI_MODEL", "claude-opus-4-8")
+_MODEL = os.environ.get("SILK_AI_MODEL", "claude-sonnet-5")
 _TIMEOUT = 60
 
 # ── ضبط التكلفة (V3 «ضبط التكلفة») — hard pre-flight cost cap ─────────────────
