@@ -1,7 +1,16 @@
 requests>=2.31
-# واجهة REST عبر FastAPI (api.py / النشر على Render):  uvicorn api:app
+# واجهة REST عبر FastAPI (api.py / النشر على Railway):  uvicorn api:app
 fastapi>=0.110
 uvicorn>=0.29
+# طبقة قاعدة البيانات (silk_db.py) — Postgres عبر DATABASE_URL في الإنتاج،
+# SQLite محلياً بلا إعداد. مطلوبان فعلياً على Railway (auth + jobs + usage).
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+# الطابور الخلفي + الكاش (silk_jobs.py / silk_cache.py / silk_ratelimit.py) —
+# Redis عبر REDIS_URL في الإنتاج؛ بلا REDIS_URL يعمل النظام محلياً بلا
+# حاجة لهما فعلياً (تنفيذ متزامن + كاش قرص + عدّاد في الذاكرة).
+redis>=5.0
+rq>=1.16
 # --- اختياري · OPTIONAL (core library imports & runs without these) ---
 # واجهة Streamlit (for app.py):  streamlit run app.py
 # streamlit>=1.30

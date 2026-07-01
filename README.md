@@ -143,16 +143,20 @@ docker run -p 8000:8000 silk-api
 
 **CI** (`.github/workflows/ci.yml`): يثبّت `requirements.txt` (بما فيها `fastapi`/`uvicorn`) + `pytest` ويشغّل `python -m pytest tests/ -q` عند كل push / PR.
 
-### النشر · Deployment (Render — خدمة واحدة)
+### النشر · Deployment (Railway)
 
-خدمة Render واحدة تقدّم **الواجهة + الـ API معًا** (`api.py` يضيف `web/` على `/`)، فلا حاجة لـ Netlify ولا لصق رابط:
+النشر على **Railway** (بدّل Render — `railway.toml` يحل محل `render.yaml`). خدمتان من نفس المستودع:
 
-1. Render → **New +** → **Web Service** (أو Blueprint يقرأ `render.yaml`)، اربط المستودع، فرع `main`.
-   - Build: `pip install -r requirements.txt`  ·  Start: `uvicorn api:app --host 0.0.0.0 --port $PORT`  ·  Python 3.11 (`.python-version`).
-2. افتح رابط الخدمة (مثل `https://...onrender.com`) → **تظهر الواجهة مباشرةً**. اترك حقل «رابط الباك-إند» فارغًا (نفس الخدمة) → اكتب المنتج → حلّل.
-3. تحقّق من `/<الرابط>/health` → `{"status":"ok"}`.
+1. Railway → **New Project** → **Deploy from GitHub repo** (يقرأ `railway.toml` تلقائيًا) → فرع `main`.
+   - خدمة **web**: Start command من `railway.toml`/`Procfile` (`uvicorn api:app`)، تقدّم الواجهة + الـ API معًا (`api.py` يضيف `web/` على `/`).
+   - خدمة **worker** (أضِفها كخدمة ثانية بنفس المستودع، Start command = سطر `worker:` في `Procfile`): تُنفّذ التحليلات بالخلفية (طابور RQ عبر Redis).
+2. أضف من لوحة Railway: قالب **Postgres** (يُعبّئ `DATABASE_URL` تلقائيًا لكلتا الخدمتين) وقالب **Redis** (يُعبّئ `REDIS_URL`).
+   ⚠️ هذي القوالب **"غير مُدارة"** رسميًا حسب توثيق Railway — النسخ الاحتياطي والمراقبة مسؤوليتك؛ فعّل **Backups** اليدوية من اليوم الأول.
+3. متغيرات بيئة إضافية على كلتا الخدمتين: `ANTHROPIC_API_KEY`، وأي مفاتيح مصادر اختيارية (`.env.example`). بلا `DATABASE_URL`/`REDIS_URL` يعمل النظام محليًا بـ SQLite + كاش قرص (نفس سلوك dev القديم، بلا تعطّل).
+4. تحقّق من `/<الرابط>/health` → `{"status":"ok", "deps": {...}}`.
+5. راقب لوحة استهلاك Railway أسبوعيًا أول شهر — الفوترة حسب الاستهلاك الفعلي لا سعر ثابت.
 
-> بديل اختياري: نشر الواجهة وحدها على Netlify (`netlify.toml`, `publish = web`) ووضع رابط الـ API في الحقل؛ حينها فعّل `CORS_ORIGINS` بدومين Netlify (CORS مهيّأ في `api.py`).
+> Docker: `Dockerfile` الموجود يعمل أيضًا لو فضّلت نشرًا آخر يقرأ صورة حاويات مباشرة.
 
 ---
 

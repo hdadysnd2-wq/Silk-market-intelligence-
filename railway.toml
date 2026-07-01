@@ -1,0 +1,18 @@
+# نشر منصة سِلك على Railway — Railway deploy config (replaces render.yaml).
+# Railway → New Project → Deploy from GitHub repo → يقرأ هذا الملف تلقائياً.
+# أضف من لوحة Railway: قالب Postgres (يُعبّئ DATABASE_URL تلقائياً) وقالب
+# Redis (يُعبّئ REDIS_URL تلقائياً)، ثم شغّل هذه الخدمة + خدمة worker منفصلة
+# (نفس المستودع، نفس الإعدادات، لكن start command من Procfile سطر "worker").
+# ملاحظة: قوالب Postgres/Redis على Railway "غير مُدارة" (unmanaged) — فعّل
+# النسخ الاحتياطي اليدوي من لوحة Railway منذ اليوم الأول.
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "uvicorn api:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

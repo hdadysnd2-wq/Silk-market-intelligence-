@@ -106,8 +106,22 @@ def test_api_imports_without_fastapi():
     assert hasattr(api, "create_app") and hasattr(api, "app")
 
 
+def _test_session_headers(email: str) -> dict:
+    """جلسة اختبار — mint a session token directly (bypassing email transport)."""
+    import hashlib
+    import secrets
+
+    import silk_auth
+    import silk_db
+
+    token = secrets.token_urlsafe(32)
+    silk_db.store_magic_link(email, hashlib.sha256(token.encode()).hexdigest())
+    verified = silk_auth.verify_magic_link(token)
+    return {"Authorization": f"Bearer {verified['session_token']}"}
+
+
 def test_api_analyze_endpoint_own_price_offline():
-    # عبر TestClient الفعلي: /analyze بلا شبكة يرجّع price_comparison بلا اختلاق.
+    # عبر TestClient الفعلي: /analyze (مصادَق) بلا شبكة يرجّع price_comparison بلا اختلاق.
     import pytest
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")  # TestClient needs it; test-only dep, not a runtime one
@@ -117,6 +131,7 @@ def test_api_analyze_endpoint_own_price_offline():
 
     assert api.app is not None
     client = TestClient(api.app)
+    headers = _test_session_headers("own-price-test@example.com")
     # لا نستخدم _block_network هنا: تعطّل socket.socket عالمياً يكسر نقل TestClient
     # الداخلي (asyncio socketpair)؛ بدلاً منها نعطّل requests.get فقط — نفس الأثر
     # الحتمي (لا شبكة => لا بيانات) بلا التصادم مع بنية الاختبار التحتية.
@@ -124,15 +139,54 @@ def test_api_analyze_endpoint_own_price_offline():
         r = client.post("/analyze", json={
             "product": "تمور", "year": 2022,
             "with_localprice": True, "own_price": 25.0,
-        })
+        }, headers=headers)
     assert r.status_code == 200
-    data = r.json()
+    job = r.json()
+    assert job["status"] == "finished"  # no REDIS_URL -> synchronous fallback
+
+    jr = client.get(f"/jobs/{job['job_id']}", headers=headers)
+    assert jr.status_code == 200
+    data = jr.json()["result"]
     assert data["classified"] is True and data["hs_code"] == "080410"
     row = data["markets"][0]
     assert "price_comparison" in row
     assert row["price_comparison"]["your_price"] == 25.0
     assert row["price_comparison"]["listings_count"] == 0     # no network -> no listings
     assert row["price_comparison"]["cheaper_than_pct"] is None  # never fabricated
+
+
+def test_api_analyze_requires_auth():
+    # /analyze بلا جلسة => 401؛ لا تحليلات مدفوعة بلا مصادقة.
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    import api
+
+    client = TestClient(api.app)
+    r = client.post("/analyze", json={"product": "تمور"})
+    assert r.status_code == 401
+
+
+def test_api_jobs_ownership_isolation():
+    # لا يقدر مستخدم يقرأ مهمة مستخدم آخر — job ids aren't guessable but ownership
+    # is still enforced explicitly.
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import api
+
+    client = TestClient(api.app)
+    owner_headers = _test_session_headers("owner@example.com")
+    other_headers = _test_session_headers("other@example.com")
+    with patch("requests.get", side_effect=OSError("network disabled for hermetic test")):
+        r = client.post("/analyze", json={"product": "تمور",
+                                          "year": 2022}, headers=owner_headers)
+    job_id = r.json()["job_id"]
+    assert client.get(f"/jobs/{job_id}", headers=other_headers).status_code == 404
+    assert client.get(f"/jobs/{job_id}", headers=owner_headers).status_code == 200
 
 
 def test_faostat_agent_imports():
@@ -334,6 +388,77 @@ def test_index_helper_matches_dates():
     out = api._index_search("تمور", limit=20)
     assert any(item["hs"] == "080410" for item in out)
     assert out and set(out[0].keys()) == {"name", "hs", "analyzed"}
+
+
+def test_db_fallback_to_sqlite_without_database_url():
+    # بلا DATABASE_URL: يعمل silk_db بـ SQLite محلياً (لا حاجة Postgres حيّ).
+    import silk_db
+
+    os.environ.pop("DATABASE_URL", None)
+    assert silk_db._database_url().startswith("sqlite:///")
+    uid = silk_db.get_or_create_user("db-fallback-test@example.com")
+    assert silk_db.get_or_create_user("db-fallback-test@example.com") == uid  # idempotent
+
+
+def test_auth_magic_link_single_use_and_expiry():
+    # الرابط يعمل مرة واحدة فقط، ورمز غير صالح لا يُصدر جلسة أبداً.
+    import hashlib
+    import secrets
+
+    import silk_auth
+    import silk_db
+
+    token = secrets.token_urlsafe(32)
+    silk_db.store_magic_link("auth-smoke@example.com", hashlib.sha256(token.encode()).hexdigest())
+
+    out = silk_auth.verify_magic_link(token)
+    assert out is not None and out["email"] == "auth-smoke@example.com"
+    assert silk_auth.verify_magic_link(token) is None       # replay rejected
+    assert silk_auth.verify_magic_link("not-a-real-token") is None  # never guesses
+    assert silk_auth.session_user_id(out["session_token"]) == out["user_id"]
+    assert silk_auth.session_user_id("garbage") is None
+
+
+def test_auth_dev_fallback_logs_without_smtp():
+    # بلا SMTP_HOST: الرابط يُسجَّل فقط (dev)، sent=False — لا محاولة إرسال صامتة.
+    import silk_auth
+
+    os.environ.pop("SMTP_HOST", None)
+    out = silk_auth.request_magic_link("no-smtp@example.com", "http://localhost:8000")
+    assert out["sent"] is False
+
+
+def test_ratelimit_blocks_after_cap():
+    # يسمح بالحد بالضبط ثم يمنع — in-memory fallback (no REDIS_URL).
+    import importlib
+
+    import silk_ratelimit as rl
+    importlib.reload(rl)  # fresh in-memory counters for this identity/test run
+    identity = "ratelimit-test-user"
+    for _ in range(rl._PER_HOUR):
+        rl.enforce_analysis_limits(identity)
+    try:
+        rl.enforce_analysis_limits(identity)
+        assert False, "expected RateLimitExceeded"
+    except rl.RateLimitExceeded as e:
+        assert e.scope == "hour" and e.limit == rl._PER_HOUR
+
+
+def test_jobs_cache_hit_skips_engine_call():
+    # نتيجة مخزّنة => لا نداء لـ silk_engine.analyze إطلاقاً (لا وكلاء ولا كلود).
+    from unittest.mock import patch
+
+    import silk_jobs
+
+    request = {"product": "cache-hit-demo", "year": 2022,
+              "countries": [{"iso3": "ARE", "m49": "784"}]}
+    with patch("silk_cache.get_cached_analysis", return_value={"cached": True}):
+        with patch("silk_engine.analyze") as mocked_analyze:
+            out = silk_jobs.enqueue_analysis(request, user_id=None)
+            mocked_analyze.assert_not_called()
+    assert out["cached"] is True and out["status"] == "finished"
+    status = silk_jobs.job_status(out["job_id"])
+    assert status["result"] == {"cached": True}
 
 
 if __name__ == "__main__":
