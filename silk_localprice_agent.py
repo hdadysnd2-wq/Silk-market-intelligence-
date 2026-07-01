@@ -1,8 +1,8 @@
 """وكيل أسعار السوق المحلي لسِلك — Silk local retail-price agent (docx layer 10).
 
-يغطّي صف «المتاجر المحلية» في دليل المصادر: الأسعار الفعلية والأكثر مبيعاً في
-متاجر التجزئة (أمازون، نون، جوميا…). يعطيك سعر بيع المنتج الفعلي في السوق
-المستهدف — عنصر حاسم لتقدير هامش الربح بعد الاستيراد والرسوم.
+يغطّي صف «المتاجر المحلية» في دليل المصادر: الأسعار الفعلية في متاجر التجزئة
+(أمازون، نون، جوميا…) + مقارنة سعرك الخاص بها. يعطيك سعر بيع المنتج الفعلي في
+السوق المستهدف — عنصر حاسم لتقدير هامش الربح بعد الاستيراد والرسوم.
 
 Returns the product's REAL local retail price points by querying a configured
 price/shopping API (LOCALPRICE_API_KEY + LOCALPRICE_API_URL — e.g. a SerpApi
@@ -10,6 +10,14 @@ Google-Shopping endpoint or any JSON service returning priced listings). With no
 key OR a network/format failure it returns a provenance-tagged None and never
 invents a price (founding principle). 'requests' is lazy-imported so the module
 imports offline and keyless with no side effects.
+
+ملاحظة صادقة عن «الأكثر مبيعاً» — honest note on "best-sellers": is_best_seller
+on a listing reflects a badge/tag the PROVIDER itself returned (e.g. a shopping
+API's "bestseller" flag) — never inferred from price or position. No retail
+platform publishes actual UNITS-SOLD numbers via a public API, so this module
+never reports a sales count — only a real badge when the provider sends one, or
+False otherwise. compare_own_price() gives you a price-positioning comparison
+(percentile vs. real local listings) — not a sales-volume comparison.
 """
 from __future__ import annotations
 
@@ -28,12 +36,38 @@ _PRICE_URL = os.environ.get(
 _TIMEOUT = 30
 
 
+_BESTSELLER_KEYS = ("bestseller", "is_bestseller", "best_seller")
+
+
+def _is_bestseller(it: dict) -> bool:
+    """شارة «الأكثر مبيعاً» الحقيقية فقط — real badge only, from the provider's
+    own payload; never inferred from price/rank/position. False when the
+    provider sends nothing (no fabrication, no guessing)."""
+    for k in _BESTSELLER_KEYS:
+        v = it.get(k)
+        if isinstance(v, bool) and v:
+            return True
+        if isinstance(v, str) and v.strip():
+            return True
+    tag = str(it.get("tag") or "").lower()
+    if "best seller" in tag or "bestseller" in tag:
+        return True
+    for ext in it.get("extensions") or []:
+        if isinstance(ext, str) and ("best seller" in ext.lower()
+                                     or "bestseller" in ext.lower()):
+            return True
+    return False
+
+
 def _extract(payload: dict) -> list[dict]:
     """التقط القوائم المسعّرة من ردّ المزوّد — pull priced listings from the payload.
 
     Supports SerpApi's `shopping_results` and a generic `results`/`items` list.
-    Each item -> {title, price, currency, store, link} using only present fields;
-    items with no usable price are skipped (never fabricated).
+    Each item -> {title, price, currency, store, link, is_best_seller} using
+    only present fields; items with no usable price are skipped (never
+    fabricated). is_best_seller is True only when the provider itself flagged
+    the listing (badge/tag/extension) — never a units-sold count (no platform
+    publishes that publicly).
     """
     items = (payload.get("shopping_results")
              or payload.get("results") or payload.get("items") or [])
@@ -51,6 +85,7 @@ def _extract(payload: dict) -> list[dict]:
             "currency": it.get("currency"),
             "store": it.get("source") or it.get("store") or it.get("seller"),
             "link": it.get("link") or it.get("product_link"),
+            "is_best_seller": _is_bestseller(it),
         })
     return out
 
@@ -98,12 +133,61 @@ def retail_prices(query: str, market: str | None = None) -> list[DataPoint]:
     findings: list[DataPoint] = []
     for it in listings:
         cur = f" {it['currency']}" if it.get("currency") else ""
+        badge = " [best-seller]" if it.get("is_best_seller") else ""
         findings.append(DataPoint(
             it, "Local retail", 0.6,
             f"{it.get('title') or 'listing'} @ {it['price']}{cur}"
-            + (f" ({it['store']})" if it.get("store") else ""),
+            + (f" ({it['store']})" if it.get("store") else "") + badge,
             _today()))
     return findings
+
+
+def compare_own_price(own_price: float | None, findings: list[DataPoint]) -> dict:
+    """قارن سعرك بقوائم السوق المحلي المرصودة — compare YOUR price to the local
+    retail listings already fetched by retail_prices() (no extra network call).
+
+    Returns {your_price, listings_count, market_min, market_max, market_avg,
+    cheaper_than_pct, verdict, note}. cheaper_than_pct is the % of the observed
+    listings priced HIGHER than yours (i.e. you're cheaper than that share of
+    the observed market) — a positioning signal, not a sales-volume comparison.
+    Never fabricates: with no listings or no own_price, the numeric fields stay
+    None and `note` explains why.
+    """
+    prices: list[float] = []
+    for dp in findings or []:
+        v = dp.value
+        raw = v.get("price") if isinstance(v, dict) else None
+        try:
+            prices.append(float(raw))
+        except (TypeError, ValueError):
+            continue
+
+    if not prices:
+        return {"your_price": own_price, "listings_count": 0,
+                "market_min": None, "market_max": None, "market_avg": None,
+                "cheaper_than_pct": None, "verdict": None,
+                "note": "لا توجد قوائم أسعار محلية كافية للمقارنة — "
+                        "no local listings available to compare against"}
+
+    market_avg = round(sum(prices) / len(prices), 2)
+    if own_price is None:
+        return {"your_price": None, "listings_count": len(prices),
+                "market_min": min(prices), "market_max": max(prices),
+                "market_avg": market_avg, "cheaper_than_pct": None,
+                "verdict": None,
+                "note": "أدخل سعرك لمقارنته بالسوق — enter your price to compare"}
+
+    n = len(prices)
+    cheaper_than_pct = round(100 * sum(1 for p in prices if p > own_price) / n, 1)
+    verdict = (f"تنافسي — أرخص من {cheaper_than_pct}% من القوائم المرصودة"
+               if cheaper_than_pct >= 50 else
+               f"أعلى من السوق — أرخص من {cheaper_than_pct}% فقط من القوائم المرصودة")
+    return {"your_price": own_price, "listings_count": n,
+            "market_min": min(prices), "market_max": max(prices),
+            "market_avg": market_avg, "cheaper_than_pct": cheaper_than_pct,
+            "verdict": verdict,
+            "note": "مقارنة مبدئية على القوائم المرصودة فقط، ليست شاملة كل "
+                    "السوق — preliminary, over observed listings only."}
 
 
 class LocalPriceAgent(Agent):

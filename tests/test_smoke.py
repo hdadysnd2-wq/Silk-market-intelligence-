@@ -106,6 +106,35 @@ def test_api_imports_without_fastapi():
     assert hasattr(api, "create_app") and hasattr(api, "app")
 
 
+def test_api_analyze_endpoint_own_price_offline():
+    # عبر TestClient الفعلي: /analyze بلا شبكة يرجّع price_comparison بلا اختلاق.
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")  # TestClient needs it; test-only dep, not a runtime one
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import api
+
+    assert api.app is not None
+    client = TestClient(api.app)
+    # لا نستخدم _block_network هنا: تعطّل socket.socket عالمياً يكسر نقل TestClient
+    # الداخلي (asyncio socketpair)؛ بدلاً منها نعطّل requests.get فقط — نفس الأثر
+    # الحتمي (لا شبكة => لا بيانات) بلا التصادم مع بنية الاختبار التحتية.
+    with patch("requests.get", side_effect=OSError("network disabled for hermetic test")):
+        r = client.post("/analyze", json={
+            "product": "تمور", "year": 2022,
+            "with_localprice": True, "own_price": 25.0,
+        })
+    assert r.status_code == 200
+    data = r.json()
+    assert data["classified"] is True and data["hs_code"] == "080410"
+    row = data["markets"][0]
+    assert "price_comparison" in row
+    assert row["price_comparison"]["your_price"] == 25.0
+    assert row["price_comparison"]["listings_count"] == 0     # no network -> no listings
+    assert row["price_comparison"]["cheaper_than_pct"] is None  # never fabricated
+
+
 def test_faostat_agent_imports():
     # وكيل فاوستات يُستورد بلا شبكة — offline import + graceful None on unknown area.
     import silk_faostat_agent as fao
@@ -196,6 +225,70 @@ def test_engine_localprice_layer_offline():
     assert res["classified"] is True and res["year"] == 2023
     assert "localprice" in res["markets"][0]            # context attached
     assert res["markets"][0]["total_score"] == 0.0      # additive, score unchanged
+
+
+def test_engine_localprice_own_price_offline():
+    # own_price مفعّل بلا شبكة: price_comparison مرفق لكن بلا اختلاق (لا قوائم).
+    os.environ.pop("LOCALPRICE_API_KEY", None)
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "ARE", "m49": "784"}],
+                             year=2023, with_localprice=True, own_price=25.0)
+    row = res["markets"][0]
+    pc = row["price_comparison"]
+    assert pc["your_price"] == 25.0 and pc["listings_count"] == 0
+    assert pc["cheaper_than_pct"] is None and pc["market_avg"] is None  # no fabrication
+
+
+def test_compare_own_price_no_fabrication_without_listings():
+    import silk_localprice_agent as lp
+
+    out = lp.compare_own_price(25.0, [])
+    assert out["listings_count"] == 0
+    assert out["market_avg"] is None and out["cheaper_than_pct"] is None
+    assert out["verdict"] is None
+
+
+def test_compare_own_price_no_own_price_given():
+    import silk_localprice_agent as lp
+    from silk_data_layer import DataPoint
+
+    findings = [DataPoint({"price": 100}, "Local retail", 0.6, ""),
+                DataPoint({"price": 80}, "Local retail", 0.6, "")]
+    out = lp.compare_own_price(None, findings)
+    assert out["your_price"] is None and out["listings_count"] == 2
+    assert out["market_min"] == 80 and out["market_max"] == 100
+    assert out["cheaper_than_pct"] is None and out["verdict"] is None  # not guessed
+
+
+def test_compare_own_price_percentile_math():
+    import silk_localprice_agent as lp
+    from silk_data_layer import DataPoint
+
+    findings = [DataPoint({"price": 100}, "Local retail", 0.6, ""),
+                DataPoint({"price": 80}, "Local retail", 0.6, ""),
+                DataPoint({"price": 60}, "Local retail", 0.6, "")]
+    out = lp.compare_own_price(70.0, findings)
+    assert out["listings_count"] == 3
+    assert out["market_min"] == 60 and out["market_max"] == 100
+    assert out["market_avg"] == 80.0
+    # سعرك 70 أرخص من قائمتين (80، 100) من أصل 3 => 66.7%
+    assert out["cheaper_than_pct"] == round(200 / 3, 1)
+    assert "66.7" in out["verdict"]
+
+
+def test_localprice_bestseller_badge_real_only():
+    # الشارة تُقرأ فقط من ردّ المزوّد الحقيقي — لا تُخمَّن من السعر/الترتيب.
+    import silk_localprice_agent as lp
+
+    payload = {"shopping_results": [
+        {"title": "A", "price": 10, "tag": "Best Seller"},
+        {"title": "B", "price": 12, "extensions": ["Free shipping", "Bestseller"]},
+        {"title": "C", "price": 8, "bestseller": True},
+        {"title": "D", "price": 15},
+    ]}
+    listings = lp._extract(payload)
+    flags = {it["title"]: it["is_best_seller"] for it in listings}
+    assert flags == {"A": True, "B": True, "C": True, "D": False}
 
 
 def test_engine_paid_layers_offline():

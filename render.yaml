@@ -7,7 +7,7 @@ services:
     plan: free
     branch: main                        # بعد دمج PR #1، الكود على main
     healthCheckPath: /health
-    buildCommand: pip install -r requirements.txt fastapi uvicorn
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION

@@ -5,10 +5,12 @@ curated CSV seed plus stdlib matching (difflib + keyword lookup). No network,
 no fuzzy-match dependency, fully offline.
 
 seed scope / نطاق البيانات:
-    data/hs_codes.csv is a CURATED SEED (~110 HS6 rows) of products Silk
-    plausibly exports — NOT the full ~5,613-row Comtrade HS reference. All codes
-    are real international HS6 values. Extend it via extend_from_comtrade_rows()
-    using the official UN Comtrade HS reference table.
+    data/hs_codes.csv started as a small curated seed (~110 rows) of products
+    Silk plausibly exports and has since been GROWN via extend_from_comtrade_rows()
+    with the full official UN Comtrade HS6 reference (data/hs_reference.csv,
+    ~6,940 codes) — now ~5,627 rows covering the full international HS6
+    nomenclature, not just Silk's original shortlist. All codes are real
+    international HS6 values; nothing here is invented.
 
 Every result is a provenance-tagged DataPoint: weak/no match -> value=None,
 confidence=0.0. The resolver never fabricates a code.

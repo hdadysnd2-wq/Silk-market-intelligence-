@@ -1,5 +1,4 @@
 requests>=2.31
-pandas>=2.0
 # واجهة REST عبر FastAPI (api.py / النشر على Render):  uvicorn api:app
 fastapi>=0.110
 uvicorn>=0.29
