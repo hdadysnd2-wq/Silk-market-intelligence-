@@ -51,6 +51,17 @@ GROUP_LABELS = {
 }
 
 
+def confidence_from_coverage(n_present: int, n_total: int = 5) -> tuple[str, str]:
+    """ثقة نوعية محسوبة من تغطية البيانات — a QUALITATIVE confidence DERIVED from how
+    many groups actually had data, not an LLM-invented decimal. متّسقة مع بقية النظام
+    (عالية/متوسطة/منخفضة) وقابلة للتفسير: مصدرها عدد المجموعات المكتملة من خمس. Never
+    a false-precision number the model made up with no criterion (المبدأ التأسيسي)."""
+    cov = (n_present / n_total) if n_total else 0.0
+    tier = ("عالية" if cov >= 0.66 else
+            "متوسطة" if cov >= 0.33 else "منخفضة (تحتاج تأكيد)")
+    return tier, f"مبنية على تغطية البيانات: {n_present} من {n_total} مجموعات متوفّرة لهذا السوق"
+
+
 def available() -> bool:
     """هل طبقة الذكاء متاحة؟ — reuse silk_ai_judge's key check (never fabricates)."""
     try:
@@ -223,10 +234,11 @@ def synthesize_market(row: dict, product: str) -> dict | None:
         "missing_groups": missing,
     }
     user = (
-        "استناداً إلى group_summaries و key_numbers أدناه فقط، أصدر تقييماً أوّلياً "
+        "استناداً إلى group_summaries و key_numbers أدناه فقط, أصدر تقييماً أوّلياً "
         "لدخول هذا السوق. لو مجموعة غير متوفّرة (missing_groups) اذكرها في gaps ولا "
-        "تُقدّر قيمتها. أعد JSON فقط بهذا الشكل:\n"
-        '{"verdict":"GO|WATCH|NO-GO","confidence":0.0-1.0,'
+        "تُقدّر قيمتها. لا تُصدر رقم ثقة — الثقة تُحسب آلياً من تغطية البيانات. أعد "
+        "JSON فقط بهذا الشكل:\n"
+        '{"verdict":"GO|WATCH|NO-GO",'
         '"opportunities":["..."],"risks":["..."],'
         '"recommendations":["..."],"gaps":["..."]}\n\n'
         + json.dumps(payload, ensure_ascii=False))
@@ -253,9 +265,13 @@ def synthesize_market(row: dict, product: str) -> dict | None:
     except Exception:  # noqa: BLE001
         pass
 
+    # الثقة محسوبة من تغطية البيانات، لا من رقم يخترعه كلود — computed, not fabricated.
+    conf_tier, conf_basis = confidence_from_coverage(len(present), 5)
     return {
         "verdict": obj.get("verdict", "WATCH"),
-        "confidence": obj.get("confidence"),
+        "confidence": conf_tier,               # تصنيف نوعي متّسق (عالية/متوسطة/منخفضة)
+        "confidence_basis": conf_basis,        # مصدر الثقة صريح — how it was derived
+        "coverage": f"{len(present)}/5",       # المجموعات المكتملة من خمس
         "opportunities": obj.get("opportunities") or [],
         "risks": obj.get("risks") or [],
         "recommendations": obj.get("recommendations") or [],

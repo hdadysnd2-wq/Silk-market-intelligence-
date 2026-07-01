@@ -287,16 +287,46 @@ def _markets_ranking_table(doc, result):
 
 
 def _synthesis_section(doc, result):
+    """تحليل كلود السردي الكامل — the FULL narrative analysis for the top market:
+    verdict + confidence, per-group narrative summaries, opportunities, risks,
+    recommendations, then data gaps + source. This is the platform's core written
+    decision (V3 goal: «دراسة سوق شاملة + قرار دخول مبدئي واضح») — never a hollow
+    heading. Renders only what the synthesis really produced (no fabrication)."""
     markets = result.get("markets") or []
     top = markets[0] if markets else {}
     syn = top.get("synthesis")
     if not syn:
         return
     _heading(doc, f"تحليل كلود — {top.get('country', '')}", level=1)
+    # الحكم المبدئي + الثقة (نوعية محسوبة) — decision + DERIVED qualitative confidence.
+    conf = syn.get("confidence")
+    conf_s = "" if conf is None else f"  ·  الثقة: {conf}"
+    _para(doc, f"الحكم المبدئي: {syn.get('verdict', _NA)}{conf_s}",
+          bold=True, color=_PETROL)
+    if syn.get("confidence_basis"):  # مصدر الثقة صريح — no false-precision decimal.
+        _para(doc, str(syn["confidence_basis"]), size=9, color=_INK)
+
+    def _bullets(title, items):
+        _heading(doc, title, level=2)
+        if items:
+            for it in items:
+                _rtl(doc.add_paragraph(str(it), style="List Bullet"))
+        else:
+            _para(doc, _NA)
+
+    # السرد التحليلي حسب المجموعة (ملخّصات المرحلة ١) — the written reasoning body.
+    summaries = syn.get("summaries") or {}
+    if summaries:
+        _heading(doc, "التحليل حسب المجموعة", level=2)
+        for label, text in summaries.items():
+            _para(doc, str(label), bold=True, color=_GOLD)
+            _para(doc, str(text))
+
+    _bullets("الفرص", syn.get("opportunities"))
+    _bullets("المخاطر", syn.get("risks"))
+    _bullets("التوصيات", syn.get("recommendations"))
     if syn.get("gaps"):
-        _heading(doc, "فجوات البيانات", level=2)
-        for g in syn["gaps"]:
-            _rtl(doc.add_paragraph(str(g), style="List Bullet"))
+        _bullets("فجوات البيانات", syn.get("gaps"))
     _para(doc, f"المصدر: {syn.get('by', 'Claude')} · قرار أوّلي", size=9, color=_INK)
 
 

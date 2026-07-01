@@ -857,6 +857,11 @@ def test_synthesis_two_stage_flow_and_gaps_mocked():
     # المجموعات ب–هـ غائبة => يجب أن تظهر كنواقص (سياسة الفشل الجزئي).
     joined = " ".join(out["gaps"])
     assert "الاقتصاد" in joined and "الثقافة" in joined
+    # الثقة نوعية محسوبة من التغطية (مجموعة واحدة من خمس)، لا رقم كلود العشري (0.6).
+    assert out["confidence"] == "منخفضة (تحتاج تأكيد)"    # 1/5 coverage tier
+    assert out["coverage"] == "1/5"
+    assert "1 من 5" in out["confidence_basis"]
+    assert out["confidence"] != 0.6                        # Claude's decimal is ignored
 
 
 def test_engine_synthesis_layer_offline_keyless():
@@ -906,6 +911,12 @@ def test_reports_build_docx_with_disclaimer():
     assert "إخلاء مسؤولية" in text            # mandatory disclaimer present
     assert "الخلاصة التنفيذية" in text        # executive summary present
     assert "WATCH" in text                     # verdict carried from synthesis
+    # قسم «تحليل كلود» ليس أجوف: يعرض السرد الكامل (فرص/مخاطر/توصيات) لا فجوات فقط.
+    full_txt = "\n".join(p.text for p in docx.Document(io.BytesIO(full)).paragraphs)
+    assert "تحليل كلود" in full_txt
+    assert "الفرص" in full_txt and "المخاطر" in full_txt and "التوصيات" in full_txt
+    assert "حضور سعودي" in full_txt            # an actual opportunity string rendered
+    assert "ابدأ بشحنة تجريبية" in full_txt    # an actual recommendation rendered
 
 
 def test_reports_facts_of_renders_readable_not_raw_dicts():
