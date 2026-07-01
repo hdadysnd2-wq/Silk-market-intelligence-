@@ -90,8 +90,10 @@ def create_app():
         with_competition: bool = False
         with_compliance: bool = False
         with_culture: bool = False
-        with_volza: bool = False
-        with_explee: bool = False
+        # الطبقات المدفوعة (Volza/explee) عمداً غير مُعرّفة هنا — لا تُستدعى أبداً في
+        # مسار /analyze العادي (مبدأ V3: الأدوات المدفوعة عبر زر «تعميق التحليل» فقط،
+        # POST /deepen). أي `with_volza`/`with_explee` يرسله عميل يُسقطه pydantic بصمت.
+        # Paid layers are intentionally NOT accepted on /analyze — deepen-only.
         with_ai: bool = False
         with_synthesis: bool = False
         persist: bool = False

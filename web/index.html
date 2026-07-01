@@ -386,7 +386,8 @@
       with_localprice:!!S.keys.LOCALPRICE,own_price:S.ownPrice,
       with_market_size:!!g.groupA,with_demographics:!!g.groupB,
       with_competition:!!g.groupC,with_compliance:!!g.groupD,with_culture:!!g.groupE,
-      with_volza:!!S.keys.VOLZA,with_explee:!!S.keys.EXPLEE,
+      // الأدوات المدفوعة (Volza/explee) لا تُرسَل مع /analyze إطلاقاً — تُستدعى
+      // حصراً عبر زر «تعميق التحليل» (/deepen). paid tools are deepen-only.
       with_ai:!!S.keys.CLAUDE,with_synthesis:!!S.keys.CLAUDE&&!!g.synthesis};
     fetch(base()+"/analyze",{method:"POST",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify(body)})
       .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t);}catch(_){}

@@ -926,6 +926,46 @@ def test_dashboard_route_serves_page():
     assert "لوحة سِلك" in r.text and "leaflet" in r.text.lower()  # real dashboard page
 
 
+def test_analyze_never_invokes_paid_volza_even_with_key_and_flag():
+    # حرج (أمان/تكلفة): /analyze لا يستدعي Volza أبداً — حتى مع مفتاح محفوظ
+    # وإرسال with_volza=True عمداً. الأدوات المدفوعة عبر /deepen فقط.
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import api
+    import silk_volza_agent
+
+    os.environ["VOLZA_API_KEY"] = "SPY-KEY"        # key present -> old bug would fire it
+    client = TestClient(api.app)
+    headers = _test_session_headers("no-paid-on-analyze@example.com")
+    calls = {"n": 0}
+    real = silk_volza_agent.VolzaAgent.run
+
+    def spy(self, task):
+        calls["n"] += 1
+        return real(self, task)
+
+    try:
+        with patch.object(silk_volza_agent.VolzaAgent, "run", spy), \
+             patch("requests.get", side_effect=OSError("net blocked")), \
+             patch("requests.post", side_effect=OSError("net blocked")):
+            r = client.post("/analyze", json={"product": "تمور", "year": 2022,
+                                              "with_competition": True,
+                                              "with_volza": True, "with_explee": True},
+                            headers=headers)
+            data = r.json()
+            jr = client.get(f"/jobs/{data['job_id']}", headers=headers).json()
+    finally:
+        os.environ.pop("VOLZA_API_KEY", None)
+    assert r.status_code == 200
+    row = (jr["result"]["markets"] or [{}])[0]
+    assert calls["n"] == 0                 # Volza never invoked on /analyze
+    assert "volza" not in row and "explee" not in row  # no paid enrichment attached
+    assert "competitors_web" in row        # free Group C still ran
+
+
 def test_dnb_agent_no_fabrication_keyless():
     # وكيل D&B بلا مفتاح/شبكة: None موسوم يوضّح الاشتراك، لا DUNS مُختلق.
     import silk_dnb_agent as dnb
