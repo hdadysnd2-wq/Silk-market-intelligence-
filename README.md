@@ -100,6 +100,7 @@ analyze("تمور",
 
 - `with_trends` / `with_tariffs` / `with_faostat` **سياق إضافي فقط** — يُرفقون `row['trends']` / `row['tariff']` / `row['faostat']` ولا يغيّرون `total_score`.
 - `with_maps` / `with_volza` / `with_explee` يُرفقون `row['maps']` / `row['volza']` / `row['explee']` لأعلى الأسواق؛ و`with_websearch` يُرفق `result['websearch']` على المستوى الأعلى. كلّها **إضافية** لا تغيّر `total_score`.
+- `with_localprice` يُرفق `row['localprice']` (قوائم مسعّرة فعلية، مع `is_best_seller` عند توفّر شارة حقيقية من المزوّد — لا يوجد رقم "عدد المبيعات" علني من أي منصة). مع `own_price` يُرفق أيضاً `row['price_comparison']`: مقارنة سعرك بالقوائم المرصودة (نسبة كونك أرخص من السوق) — مقارنة سعرية لا مقارنة مبيعات.
 - المدفوعان (Volza, explee) يتطلبان مفتاحًا؛ بدونه يُرجعان `value=None, confidence=0.0` بلا اختلاق.
 - جميع الطبقات تتدهور بأمان بلا شبكة (قيمة `None` موسومة بمصدرها، بلا اختلاق رقم).
 
@@ -136,17 +137,17 @@ docker run -p 8000:8000 silk-api
 | `GET /health` | حالة الخدمة + توفّر الحزم الاختيارية. |
 | `GET /sources` | خريطة حالة الطبقات التسع (`name, type, wired, key_env, key_present`). |
 | `GET /resolve/{name}` | يصنّف اسم منتج إلى HS6 (مع المصدر/الثقة). |
-| `POST /analyze` | يشغّل `analyze` كاملًا (`{product, year, with_trends, with_tariffs, with_faostat, with_maps, with_websearch, with_volza, with_explee, persist}`). |
+| `POST /analyze` | يشغّل `analyze` كاملًا (`{product, year, with_trends, with_tariffs, with_faostat, with_maps, with_websearch, with_localprice, own_price, with_volza, with_explee, persist}`). |
 | `GET /analyses` | يسرد التحليلات المحفوظة. |
 | `GET /analyses/{id}` | يعيد تحليلًا محفوظًا، أو 404. |
 
-**CI** (`.github/workflows/ci.yml`): يثبّت `requests pandas pytest` ويشغّل `python -m pytest tests/ -q` عند كل push / PR.
+**CI** (`.github/workflows/ci.yml`): يثبّت `requirements.txt` (بما فيها `fastapi`/`uvicorn`) + `pytest` ويشغّل `python -m pytest tests/ -q` عند كل push / PR.
 
 ### النشر · Deployment (Render — خدمة واحدة)
 
 خدمة Render واحدة تقدّم **الواجهة + الـ API معًا** (`api.py` يضيف `web/` على `/`)، فلا حاجة لـ Netlify ولا لصق رابط:
 
-1. Render → **New +** → **Web Service** (أو Blueprint يقرأ `render.yaml`)، اربط المستودع، فرع `claude/initial-build`.
+1. Render → **New +** → **Web Service** (أو Blueprint يقرأ `render.yaml`)، اربط المستودع، فرع `main`.
    - Build: `pip install -r requirements.txt`  ·  Start: `uvicorn api:app --host 0.0.0.0 --port $PORT`  ·  Python 3.11 (`.python-version`).
 2. افتح رابط الخدمة (مثل `https://...onrender.com`) → **تظهر الواجهة مباشرةً**. اترك حقل «رابط الباك-إند» فارغًا (نفس الخدمة) → اكتب المنتج → حلّل.
 3. تحقّق من `/<الرابط>/health` → `{"status":"ok"}`.

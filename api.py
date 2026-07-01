@@ -91,6 +91,7 @@ def create_app():
         with_maps: bool = False
         with_websearch: bool = False
         with_localprice: bool = False
+        own_price: float | None = None
         with_volza: bool = False
         with_explee: bool = False
         with_ai: bool = False
@@ -127,12 +128,16 @@ def create_app():
 
     @app.post("/analyze")
     def analyze(req: AnalyzeRequest):
-        """حلّل منتجًا عبر الأسواق — run the full engine.analyze pipeline."""
+        """حلّل منتجًا عبر الأسواق — run the full engine.analyze pipeline.
+
+        own_price (with with_localprice=True) attaches a price-positioning
+        comparison per top market — your price vs. real local listings.
+        """
         result = silk_engine.analyze(
             req.product, year=req.year, with_trends=req.with_trends,
             with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
             with_maps=req.with_maps, with_websearch=req.with_websearch,
-            with_localprice=req.with_localprice,
+            with_localprice=req.with_localprice, own_price=req.own_price,
             with_volza=req.with_volza, with_explee=req.with_explee,
             with_ai=req.with_ai, persist=req.persist)
         return _json(result)

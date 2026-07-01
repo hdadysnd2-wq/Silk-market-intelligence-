@@ -206,6 +206,9 @@
         <div class="drop hidden" id="drop"></div>
       </div>
       <label class="yearsel"><span>سنة البيانات</span><select id="year"></select></label>
+      <label class="yearsel"><span>سعرك (اختياري)</span><input id="ownPrice" type="number" min="0" step="0.01"
+        placeholder="مثلاً 25.00" style="font-family:var(--en);font-size:14px;color:var(--ink);background:#fff;
+        border:1px solid var(--line);border-radius:40px;padding:8px 14px;width:110px" /></label>
       <span class="counter hidden" id="counter"></span>
     </div>
     <div class="sorts hidden" id="sorts">
@@ -260,6 +263,7 @@
   var S={product:"",hs:"",sort:"score",selId:null,running:false,query:"",open:false,
     view:"dashboard",result:null,
     year:parseInt(localStorage.getItem("silk_year")||"2023",10),
+    ownPrice:parseFloat(localStorage.getItem("silk_own_price")||"")||null,
     keys:JSON.parse(localStorage.getItem("silk_settings_keys")||"{}"),
     toggles:JSON.parse(localStorage.getItem("silk_settings_toggles")||"{}")};
   function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"");}
@@ -309,6 +313,11 @@
     S.year=parseInt(this.value,10);localStorage.setItem("silk_year",String(S.year));
     if(S.product&&!S.running)runAnalysis();  // أعد التحليل لسنة البيانات الجديدة
   });
+  $("ownPrice").value=S.ownPrice==null?"":S.ownPrice;
+  $("ownPrice").addEventListener("change",function(){
+    var v=parseFloat(this.value);S.ownPrice=isNaN(v)?null:v;
+    localStorage.setItem("silk_own_price",S.ownPrice==null?"":String(S.ownPrice));
+  });
   document.addEventListener("click",function(e){if(!e.target.closest(".search")){$("drop").classList.add("hidden");}});
   function doSearch(){
     fetch(base()+"/index?q="+encodeURIComponent(S.query)+"&limit=12")
@@ -343,7 +352,8 @@
     var body={product:S.product,year:S.year,
       with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,
       with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS,
-      with_localprice:!!S.keys.LOCALPRICE,with_volza:!!S.keys.VOLZA,
+      with_localprice:!!S.keys.LOCALPRICE,own_price:S.ownPrice,
+      with_volza:!!S.keys.VOLZA,
       with_explee:!!S.keys.EXPLEE,with_ai:!!S.keys.CLAUDE};
     fetch(base()+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
       .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t);}catch(_){}
@@ -380,7 +390,8 @@
         competitors:m.competitors||[],// [{partner,share,value_usd}] — الدول المنافسة وحصصها
         factories:factories,        // [{name,rating,...}]
         suppliers:suppliers,        // [{name,source,detail}] — الموردون وتجار الجملة
-        prices:prices,              // [{title,price,currency,store,...}] — منتجات منافسة + أسعار
+        prices:prices,              // [{title,price,currency,store,is_best_seller,...}] — منتجات منافسة + أسعار
+        price_comparison:m.price_comparison||null, // مقارنة سعرك بالسوق المرصود
         ai:ai,                      // {verdict,confidence,reasoning,by}
         note:(m.jury&&m.jury.verdict)?m.jury.verdict:(m.recommendation||""),
         sources:Object.keys(c).map(function(k){return c[k]&&c[k].source;}).filter(Boolean)
@@ -495,10 +506,22 @@
     var rows=p.slice(0,5).map(function(x){
       var cur=x.currency?' '+esc(x.currency):'';
       var st=x.store?' <span class="pstore">'+esc(x.store)+'</span>':'';
-      return '<li><span class="pprice">'+esc(x.price)+cur+'</span> '+esc((x.title||"").slice(0,48))+st+'</li>';
+      var badge=x.is_best_seller?' <span class="ssrc" style="background:#FFF4D6;color:#8a6d00">🏆 الأكثر مبيعاً</span>':'';
+      return '<li><span class="pprice">'+esc(x.price)+cur+'</span> '+esc((x.title||"").slice(0,48))+st+badge+'</li>';
     }).join("");
     return '<div class="plblk"><div class="plhd">المنتجات المنافسة وأسعارها — <b>'+p.length+'</b> (المتاجر المحلية)</div>'+
+      priceComparisonBlock(sel.price_comparison)+
       '<ul class="pllist">'+rows+'</ul></div>';
+  }
+  // مقارنة سعرك بالسوق المرصود — your price vs. the observed local listings.
+  function priceComparisonBlock(pc){
+    if(!pc)return "";
+    if(pc.your_price==null||!pc.listings_count)return '<div class="needkey">'+esc(pc.note||"")+'</div>';
+    return '<div class="aiblk" style="margin:0 0 12px"><div class="aihd">'+
+      '<span class="aibadge">مقارنة سعرك</span>'+
+      '<span class="aiconf">سعرك '+esc(pc.your_price)+' · متوسط السوق '+esc(pc.market_avg)+
+      ' ('+esc(pc.listings_count)+' قائمة، '+esc(pc.market_min)+'–'+esc(pc.market_max)+')</span></div>'+
+      '<div class="aitext">'+esc(pc.verdict||"")+'</div></div>';
   }
   // ثقافة المستهلك ونبض السوق (بحث الويب) — consumer culture (product-level, needs key).
   function cultureBlock(){
@@ -552,7 +575,7 @@
     {key:"MAPS",ic:"factory",nm:"Google Maps",ds:"المصانع والموزّعون والمنافسون بأسمائهم وتقييماتهم.",st:"يحتاج مفتاح",cls:"st-off"}
   ];
   var PAID=[
-    {key:"LOCALPRICE",ic:"package",nm:"أسعار السوق المحلي",ds:"الأسعار الفعلية والأكثر مبيعاً (أمازون، نون، جوميا).",st:"غير مفعّل",cls:"st-off"},
+    {key:"LOCALPRICE",ic:"package",nm:"أسعار السوق المحلي",ds:"الأسعار الفعلية + شارة الأكثر مبيعاً عند توفّرها + مقارنة سعرك (أمازون، نون، جوميا).",st:"غير مفعّل",cls:"st-off"},
     {key:"VOLZA",ic:"ship",nm:"Volza",ds:"المستوردون بالاسم من بوالص الشحن.",st:"غير مفعّل",cls:"st-off"},
     {key:"EXPLEE",ic:"package",nm:"explee",ds:"مشترون وجهات اتصال B2B (امتثال GDPR/PDPL).",st:"غير مفعّل",cls:"st-off"}
   ];
@@ -610,7 +633,8 @@
         competitors:[{partner:"تونس",share:31.4,value_usd:75700000},{partner:"الجزائر",share:22.1,value_usd:53200000},{partner:"السعودية",share:12.0,value_usd:28900000},{partner:"الإمارات",share:9.3,value_usd:22400000},{partner:"إيران",share:7.8,value_usd:18800000}],
         factories:[{name:"Maroc Dattes SARL",rating:4.3},{name:"Coopérative Tafilalet",rating:4.6},{name:"Atlas Fruits Co.",rating:4.1}],
         suppliers:[{name:"Maroc Dattes SARL",source:"Google Maps",detail:"★4.3"},{name:"Coopérative Tafilalet",source:"Google Maps",detail:"★4.6"},{name:"Atlas Import & Distribution",source:"Volza",detail:"مستورد (بوالص شحن)"},{name:"Dattes du Sud SARL",source:"Explee",detail:"مورّد / جهة B2B"}],
-        prices:[{title:"تمور المجهول 1kg",price:89,currency:"MAD",store:"Jumia"},{title:"تمور سكري فاخر",price:120,currency:"MAD",store:"Marjane"}],
+        prices:[{title:"تمور المجهول 1kg",price:89,currency:"MAD",store:"Jumia",is_best_seller:true},{title:"تمور سكري فاخر",price:120,currency:"MAD",store:"Marjane",is_best_seller:false}],
+        price_comparison:{your_price:75,listings_count:2,market_min:89,market_max:120,market_avg:104.5,cheaper_than_pct:100,verdict:"تنافسي — أرخص من 100% من القوائم المرصودة (عرض توضيحي)"},
         note:"أكبر سوق استيراد عالمي للتمور؛ مفتوح ومنافسة معتدلة — مرشّح قوي.",sources:["UN Comtrade","World Bank","Google Maps","Local retail"]},
       {id:"EG-1",country:"مصر",code:"EG",import_value:23849784,saudi_share:44,score:74,confidence:"عالية",income_ppp:14800,population:111000000,top_competitor:"العراق",
         ai:{verdict:"WATCH",confidence:0.7,reasoning:"حضور سعودي قوي (44%) وسوق كبير، لكن المنافسة العراقية مرتفعة — راقب الهامش (عرض توضيحي).",by:"Claude (claude-opus-4-8)"},

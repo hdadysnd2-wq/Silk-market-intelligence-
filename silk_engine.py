@@ -26,7 +26,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             year: int | None = None, *, with_trends: bool = False,
             with_tariffs: bool = False, with_faostat: bool = False,
             with_maps: bool = False, with_websearch: bool = False,
-            with_localprice: bool = False,
+            with_localprice: bool = False, own_price: float | None = None,
             with_volza: bool = False, with_explee: bool = False,
             with_ai: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
@@ -46,6 +46,11 @@ def analyze(product_name: str, countries: list[dict] | None = None,
       with_faostat  — attach a FAOSTAT per-capita supply finding per top market (row['faostat']).
       with_maps     — attach Google Maps named businesses per top market (row['maps']).
       with_localprice— attach actual in-market retail prices per top market (row['localprice']).
+      own_price     — YOUR product's price; with with_localprice, attaches a
+                      price-positioning comparison per top market
+                      (row['price_comparison']: percentile vs. observed local
+                      listings). No effect without with_localprice. Ignored
+                      (never fabricated) when there are no local listings.
       with_websearch— attach web-search results for the product (result['websearch']).
       with_volza    — attach Volza named importers (PAID) per top market (row['volza']).
       with_explee   — attach Explee buyers/contacts (PAID) per top market (row['explee']).
@@ -97,7 +102,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     if with_maps:
         _enrich_maps(ranked[:_ENRICH_TOP], product_name)
     if with_localprice:
-        _enrich_localprice(ranked[:_ENRICH_TOP], product_name)
+        _enrich_localprice(ranked[:_ENRICH_TOP], product_name, own_price)
     if with_volza:
         _enrich_volza(ranked[:_ENRICH_TOP], hs.value)
     if with_explee:
@@ -204,19 +209,25 @@ def _enrich_maps(rows: list[dict], product_name: str) -> None:
             row["maps"] = []
 
 
-def _enrich_localprice(rows: list[dict], product_name: str) -> None:
+def _enrich_localprice(rows: list[dict], product_name: str,
+                       own_price: float | None = None) -> None:
     """أضف أسعار التجزئة المحلية لكل سوق — attach actual in-market retail prices
-    (الأكثر مبيعاً والأسعار الفعلية، docx 'المتاجر المحلية'). Graceful None offline."""
-    from silk_localprice_agent import LocalPriceAgent  # lazy: optional layer
+    (الأسعار الفعلية، docx 'المتاجر المحلية') + مقارنة سعرك إن أُعطي. Graceful
+    None offline; own_price comparison reuses the same fetch, no 2nd call."""
+    from silk_localprice_agent import LocalPriceAgent, compare_own_price  # lazy: optional layer
     agent = LocalPriceAgent()
     for row in rows:
         try:
             query = f"{product_name} {row.get('country', '')}".strip()
             rep = agent.run({"query": query, "market": row.get("iso2")})
             row["localprice"] = rep.findings
+            if own_price is not None:
+                row["price_comparison"] = compare_own_price(own_price, rep.findings)
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("localprice enrichment failed for %s: %s", row.get("iso3"), e)
             row["localprice"] = []
+            if own_price is not None:
+                row["price_comparison"] = compare_own_price(own_price, [])
 
 
 def _enrich_volza(rows: list[dict], hs_code: str) -> None:

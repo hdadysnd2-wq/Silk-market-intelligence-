@@ -102,7 +102,6 @@ M49_TO_ISO3 = {
     "246": "FIN", "616": "POL", "203": "CZE", "620": "PRT", "300": "GRC",
     "372": "IRL", "643": "RUS", "804": "UKR", "710": "ZAF", "566": "NGA",
     "404": "KEN", "231": "ETH", "288": "GHA", "834": "TZA", "800": "UGA",
-    "012a": "DZA",
 }
 ISO3_TO_M49 = {v: k for k, v in M49_TO_ISO3.items()}
 
