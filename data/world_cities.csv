@@ -1,0 +1,50 @@
+city,city_ascii,lat,lng,iso3,capital,population
+Riyadh,Riyadh,24.7136,46.6753,SAU,primary,7000000
+Jeddah,Jeddah,21.4858,39.1925,SAU,,4700000
+Abu Dhabi,Abu Dhabi,24.4539,54.3773,ARE,primary,1500000
+Dubai,Dubai,25.2048,55.2708,ARE,,3400000
+Doha,Doha,25.2854,51.5310,QAT,primary,2400000
+Kuwait City,Kuwait City,29.3759,47.9774,KWT,primary,3100000
+Manama,Manama,26.2285,50.5860,BHR,primary,600000
+Muscat,Muscat,23.5880,58.3829,OMN,primary,1600000
+Amman,Amman,31.9454,35.9284,JOR,primary,4000000
+Beirut,Beirut,33.8938,35.5018,LBN,primary,2400000
+Cairo,Cairo,30.0444,31.2357,EGY,primary,20900000
+Alexandria,Alexandria,31.2001,29.9187,EGY,,5200000
+Rabat,Rabat,34.0209,-6.8416,MAR,primary,1900000
+Casablanca,Casablanca,33.5731,-7.5898,MAR,,3700000
+Tunis,Tunis,36.8065,10.1815,TUN,primary,2300000
+Algiers,Algiers,36.7538,3.0588,DZA,primary,2900000
+Baghdad,Baghdad,33.3152,44.3661,IRQ,primary,7500000
+Ankara,Ankara,39.9334,32.8597,TUR,primary,5700000
+Istanbul,Istanbul,41.0082,28.9784,TUR,,15500000
+Sanaa,Sanaa,15.3694,44.1910,YEM,primary,2900000
+Johannesburg,Johannesburg,-26.2041,28.0473,ZAF,,5900000
+Cape Town,Cape Town,-33.9249,18.4241,ZAF,,4700000
+Lagos,Lagos,6.5244,3.3792,NGA,,15400000
+Nairobi,Nairobi,-1.2864,36.8172,KEN,primary,4700000
+Addis Ababa,Addis Ababa,9.0300,38.7400,ETH,primary,5000000
+Accra,Accra,5.6037,-0.1870,GHA,primary,2500000
+New Delhi,New Delhi,28.6139,77.2090,IND,primary,32900000
+Mumbai,Mumbai,19.0760,72.8777,IND,,21300000
+Karachi,Karachi,24.8607,67.0011,PAK,,16800000
+Dhaka,Dhaka,23.8103,90.4125,BGD,primary,22500000
+Jakarta,Jakarta,-6.2088,106.8456,IDN,primary,11000000
+Kuala Lumpur,Kuala Lumpur,3.1390,101.6869,MYS,primary,8400000
+Singapore,Singapore,1.3521,103.8198,SGP,primary,5900000
+Bangkok,Bangkok,13.7563,100.5018,THA,primary,10700000
+Ho Chi Minh City,Ho Chi Minh City,10.8231,106.6297,VNM,,9300000
+Beijing,Beijing,39.9042,116.4074,CHN,primary,21300000
+Shanghai,Shanghai,31.2304,121.4737,CHN,,29200000
+Tokyo,Tokyo,35.6762,139.6503,JPN,primary,37400000
+Seoul,Seoul,37.5665,126.9780,KOR,primary,9900000
+London,London,51.5074,-0.1278,GBR,primary,9500000
+Berlin,Berlin,52.5200,13.4050,DEU,primary,3700000
+Paris,Paris,48.8566,2.3522,FRA,primary,11100000
+Rome,Rome,41.9028,12.4964,ITA,primary,4300000
+Madrid,Madrid,40.4168,-3.7038,ESP,primary,6600000
+Amsterdam,Amsterdam,52.3676,4.9041,NLD,primary,1200000
+Washington,Washington,38.9072,-77.0369,USA,primary,5400000
+New York,New York,40.7128,-74.0060,USA,,18800000
+Ottawa,Ottawa,45.4215,-75.6972,CAN,primary,1400000
+Toronto,Toronto,43.6532,-79.3832,CAN,,6400000

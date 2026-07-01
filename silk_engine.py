@@ -27,7 +27,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_tariffs: bool = False, with_faostat: bool = False,
             with_maps: bool = False, with_websearch: bool = False,
             with_localprice: bool = False, own_price: float | None = None,
-            with_market_size: bool = False,
+            with_market_size: bool = False, with_demographics: bool = False,
             with_volza: bool = False, with_explee: bool = False,
             with_ai: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
@@ -48,6 +48,10 @@ def analyze(product_name: str, countries: list[dict] | None = None,
       with_market_size — attach Group-A production + market-size (apparent
                       consumption, tonnes; import-value proxy fallback) per top
                       market (row['production'], row['market_size']). Additive.
+      with_demographics — attach Group-B context per top market: row['cities']
+                      (largest cities lat/lng+pop), row['religion'] (majority
+                      religion, approx/dated), row['currency_risk'] (World Bank
+                      inflation + FX-rate signals). Additive; no score change.
       with_maps     — attach Google Maps named businesses per top market (row['maps']).
       with_localprice— attach actual in-market retail prices per top market (row['localprice']).
       own_price     — YOUR product's price; with with_localprice, attaches a
@@ -105,6 +109,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_faostat(ranked[:_ENRICH_TOP], product_name, year)
     if with_market_size:
         _enrich_market_size(ranked[:_ENRICH_TOP], hs.value, product_name, year)
+    if with_demographics:
+        _enrich_demographics(ranked[:_ENRICH_TOP], year)
     if with_maps:
         _enrich_maps(ranked[:_ENRICH_TOP], product_name)
     if with_localprice:
@@ -227,6 +233,35 @@ def _enrich_market_size(rows: list[dict], hs_code: str, product_name: str,
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("market_size enrichment failed for %s: %s", iso3, e)
             row["market_size"] = None
+
+
+def _enrich_demographics(rows: list[dict], year: int) -> None:
+    """أضف سياق المجموعة ب — attach Group-B demographics per market: cities,
+    religion, currency-risk. Graceful None offline; all additive (no score change)."""
+    from silk_cities_agent import CitiesAgent      # lazy: optional layer
+    from silk_religion_agent import ReligionAgent  # lazy: optional layer
+    from silk_currency_agent import CurrencyRiskAgent  # lazy: optional layer
+    cities_agent = CitiesAgent()
+    religion_agent = ReligionAgent()
+    currency_agent = CurrencyRiskAgent()
+    for row in rows:
+        iso3 = row.get("iso3")
+        try:
+            row["cities"] = cities_agent.run({"iso3": iso3}).findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("cities enrichment failed for %s: %s", iso3, e)
+            row["cities"] = []
+        try:
+            crep = religion_agent.run({"iso3": iso3})
+            row["religion"] = crep.findings[0] if crep.findings else None
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("religion enrichment failed for %s: %s", iso3, e)
+            row["religion"] = None
+        try:
+            row["currency_risk"] = currency_agent.run({"iso3": iso3, "year": year}).findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("currency_risk enrichment failed for %s: %s", iso3, e)
+            row["currency_risk"] = []
 
 
 def _enrich_maps(rows: list[dict], product_name: str) -> None:

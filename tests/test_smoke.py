@@ -566,6 +566,59 @@ def test_engine_market_size_layer_offline():
     assert row["total_score"] == 0.0                      # additive, unchanged
 
 
+def test_cities_agent_known_and_unknown_country():
+    # مدن حقيقية لدولة مغطّاة، وNone موسوم لدولة غير مغطّاة — لا اختلاق.
+    import silk_cities_agent as cities
+
+    rep = cities.CitiesAgent().run({"iso3": "EGY", "top_n": 2})
+    assert rep.failed is False
+    top = rep.findings[0].value
+    assert top["city"] == "Cairo" and isinstance(top["lat"], float)  # ranked by pop
+    miss = cities.CitiesAgent().run({"iso3": "XXX"})
+    assert miss.failed is True and miss.findings[0].value is None  # no fabrication
+
+
+def test_religion_agent_known_and_unknown_country():
+    # ديانة غالبة لدولة مرجعية، وNone لدولة غير مغطّاة — بيانات تقريبية موسومة.
+    import silk_religion_agent as rel
+
+    rep = rel.ReligionAgent().run({"iso3": "SAU"})
+    assert rep.failed is False
+    val = rep.findings[0].value
+    assert val["majority_religion"] == "Islam" and val["source"].startswith("Pew")
+    assert val["majority_share_pct"] is not None
+    miss = rel.ReligionAgent().run({"iso3": "XXX"})
+    assert miss.failed is True and miss.findings[0].value is None  # not guessed
+
+
+def test_currency_agent_offline_no_fabrication():
+    # بلا شبكة: التضخم/سعر الصرف None، والتصنيف الائتماني None دائماً (لا اختلاق).
+    import silk_currency_agent as cur
+
+    with _block_network():
+        rep = cur.CurrencyRiskAgent().run({"iso3": "EGY", "year": 2022})
+    assert rep.failed is True
+    assert all(f.value is None for f in rep.findings)
+    # آخر عنصر = التصنيف الائتماني، دائماً غير متاح وموسوم بذلك صراحة.
+    rating = rep.findings[-1]
+    assert rating.value is None and "credit rating" in rating.note.lower()
+
+
+def test_engine_demographics_layer_offline():
+    # طبقة المجموعة ب مفعّلة بلا شبكة: تُرفق cities/religion/currency_risk، والنقاط ثابتة.
+    with _block_network():
+        res = engine.analyze("تمور", countries=[{"iso3": "EGY", "m49": "818"}],
+                             year=2022, with_demographics=True)
+    row = res["markets"][0]
+    assert "cities" in row and "religion" in row and "currency_risk" in row
+    # المدن والديانة مرجع محلي => تعمل حتى بلا شبكة (لا اختلاق، بيانات حقيقية مخزّنة).
+    # engine.analyze() يرجّع DataPoint خام (تحويل JSON يحدث في طبقة jobs/api فقط).
+    assert row["religion"] is not None
+    assert row["religion"].value["majority_religion"] == "Islam"
+    assert any(f.value for f in row["cities"])         # Cairo present offline
+    assert row["total_score"] == 0.0                   # additive, score unchanged
+
+
 if __name__ == "__main__":
     import logging
 
