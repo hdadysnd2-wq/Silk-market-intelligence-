@@ -809,6 +809,109 @@ def test_engine_synthesis_layer_offline_keyless():
     assert row["total_score"] == 0.0          # additive, score unchanged
 
 
+def _demo_result_for_reports():
+    return {"product": "تمور", "hs_code": "080410", "year": 2022,
+            "markets": [{"country": "مصر",
+                         "components": {"market_size": {"value": 2.4e8},
+                                        "saudi_position": {"value": 44}},
+                         "income_ppp": 14800, "population": 111000000,
+                         "total_score": 0.74,
+                         "jury": {"verdict": "PRELIMINARY GO"},
+                         "synthesis": {"verdict": "WATCH",
+                                       "opportunities": ["سوق كبير", "حضور سعودي"],
+                                       "risks": ["منافسة عراقية"],
+                                       "recommendations": ["ابدأ بشحنة تجريبية"],
+                                       "gaps": ["مجموعة غير متوفّرة: الثقافة"],
+                                       "by": "Claude"},
+                         "regulatory": [{"value": {"title": "halal cert"},
+                                         "source": "Web Search"}]}]}
+
+
+def test_reports_build_docx_with_disclaimer():
+    # يبني التقريرين Word ويحويان تذييل إخلاء المسؤولية والخلاصة التنفيذية.
+    import pytest
+    pytest.importorskip("docx")
+    import silk_reports as reports
+
+    result = _demo_result_for_reports()
+    full = reports.build_full_report(result)
+    short = reports.build_short_report(result)
+    assert len(full) > 2000 and len(short) > 2000  # real .docx payloads
+    # افتح المختصر وتحقق من وجود التذييل والحكم — reopen and check content.
+    import io
+    import docx
+    doc = docx.Document(io.BytesIO(short))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "إخلاء مسؤولية" in text            # mandatory disclaimer present
+    assert "الخلاصة التنفيذية" in text        # executive summary present
+    assert "WATCH" in text                     # verdict carried from synthesis
+
+
+def test_reports_no_fabrication_on_missing_fields():
+    # نتيجة شبه فارغة: التقرير يُبنى ويكتب "غير متوفّر" بدل اختلاق أرقام.
+    import pytest
+    pytest.importorskip("docx")
+    import io
+    import docx
+    import silk_reports as reports
+
+    result = {"product": "x", "hs_code": "1", "year": 2022,
+              "markets": [{"country": "م", "components": {}}]}  # no numbers
+    short = reports.build_short_report(result)
+    doc = docx.Document(io.BytesIO(short))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert reports._NA in text                 # missing values marked, not invented
+
+
+def test_reports_pdf_graceful():
+    # to_pdf لا يرمي أبداً: يعيد bytes (لو LibreOffice موجود) أو None (لو غائب).
+    import pytest
+    pytest.importorskip("docx")
+    import silk_reports as reports
+
+    short = reports.build_short_report(_demo_result_for_reports())
+    out = reports.to_pdf(short)
+    assert out is None or (isinstance(out, bytes) and out[:4] == b"%PDF")
+
+
+def test_reports_endpoints_auth_and_flow():
+    # نقاط التقارير محميّة بالجلسة وتبني ملفاً من نتيجة مهمة حقيقية مملوكة.
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    pytest.importorskip("docx")
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import hashlib
+    import secrets
+    import api
+    import silk_auth
+    import silk_db
+    import silk_jobs
+
+    client = TestClient(api.app)
+    # بلا جلسة => 401 — unauthorized without a session token.
+    assert client.get("/reports/nope/full.docx").status_code == 401
+
+    # أنشئ مستخدماً وجلسة — mint a real session.
+    token = secrets.token_urlsafe(32)
+    silk_db.store_magic_link("reports@example.com",
+                             hashlib.sha256(token.encode()).hexdigest())
+    sess = silk_auth.verify_magic_link(token)
+    auth = {"Authorization": f"Bearer {sess['session_token']}"}
+
+    # مهمة منتهية مملوكة بنتيجة تقرير — an owned finished job with a result.
+    job_id = silk_db.create_job(sess["user_id"])
+    import json
+    silk_db.update_job(job_id, "finished",
+                       result_json=json.dumps(_demo_result_for_reports()))
+
+    r = client.get(f"/reports/{job_id}/short.docx", headers=auth)
+    assert r.status_code == 200
+    assert r.content[:2] == b"PK"              # a real .docx (zip) payload
+    assert "attachment" in r.headers.get("content-disposition", "")
+
+
 if __name__ == "__main__":
     import logging
 

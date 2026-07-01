@@ -44,6 +44,7 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `silk_regulatory_agent.py` | **المجموعة د · Group D**: اشتراطات التغليف/الملصقات/الشهادات (حلال/صحية/ISO) + صفحة الجمارك الرسمية (بحث ويب ديناميكي، يكمّل تعريفة WITS). |
 | `silk_culture_agent.py` | **المجموعة هـ · Group E**: عادات الاستهلاك وأسلوب الحياة + السلوك التجاري (تفاوض/دفع/آداب) + المعارض التجارية (بحث ويب ديناميكي). |
 | `silk_synthesis.py` | **المرحلة ب · Synthesis**: تركيب كلود على طلبين (ملخّص لكل مجموعة → تقييم نهائي: verdict/فرص/مخاطر/توصيات/نواقص). حماية من حقن التعليمات (raw_findings بيانات فقط) + سياسة فشل جزئي. بلا مفتاح → None واللجنة الحتمية تبقى. |
+| `silk_reports.py` | **المخرجات · Deliverables**: تقرير Word كامل (غلاف + خلاصة تنفيذية + تركيب كلود + جداول لكل مجموعة + فهرس + ترقيم صفحات) وتقرير مختصر (١–٢ صفحة) + تصدير PDF للمختصر (LibreOffice). تذييل إخلاء مسؤولية على الكل؛ «غير متوفّر» بدل اختلاق. |
 | `silk_cache.py` | ذاكرة تخزين مؤقت على القرص لطلبات GET (stdlib؛ `requests` بكسل). يُستخدم شفّافًا في طبقة البيانات. |
 | `api.py` | واجهة REST عبر FastAPI فوق المحرّك (تُستورد FastAPI بكسل؛ `app=None` بدونها). |
 | `app.py` | واجهة Streamlit اختيارية فوق المحرّك (تُستورد Streamlit بكسل داخليًا). |
@@ -151,12 +152,15 @@ docker run -p 8000:8000 silk-api
 
 | Method · Path | الوظيفة · Role |
 |---|---|
-| `GET /health` | حالة الخدمة + توفّر الحزم الاختيارية. |
-| `GET /sources` | خريطة حالة الطبقات التسع (`name, type, wired, key_env, key_present`). |
-| `GET /resolve/{name}` | يصنّف اسم منتج إلى HS6 (مع المصدر/الثقة). |
-| `POST /analyze` | يشغّل `analyze` كاملًا (`{product, year, with_trends, with_tariffs, with_faostat, with_maps, with_websearch, with_localprice, own_price, with_volza, with_explee, persist}`). |
-| `GET /analyses` | يسرد التحليلات المحفوظة. |
-| `GET /analyses/{id}` | يعيد تحليلًا محفوظًا، أو 404. |
+| `GET /health` | حالة الخدمة + توفّر الحزم + هل Postgres/Redis مُهيّآن. |
+| `GET /sources` | خريطة حالة المصادر (`name, type, wired, key_env, key_present`). |
+| `GET /resolve/{name}` · `GET /index` | تصنيف اسم منتج إلى HS6 · فهرس بحث المنتجات. (عامّة) |
+| `POST /auth/request-link` · `GET /auth/verify` | اطلب رابط دخول سحري · تحقّق منه وأصدر جلسة. |
+| `POST /analyze` | **يتطلب جلسة**؛ يُدرج تحليلاً بالخلفية ويعيد `{job_id, status, cached}` فوراً (الحقول: `product, year, with_trends, with_tariffs, with_faostat, with_market_size, with_demographics, with_competition, with_compliance, with_culture, with_maps, with_websearch, with_localprice, own_price, with_volza, with_explee, with_ai, with_synthesis, persist`). |
+| `GET /jobs/{id}` | حالة/نتيجة مهمة تحليل (يتطلب جلسة، مقيّد بالمالك). |
+| `GET /reports/{id}/full.docx` · `short.docx` · `short.pdf` | تنزيل التقرير الكامل/المختصر (Word) و PDF للمختصر (يتطلب جلسة؛ PDF يحتاج LibreOffice). |
+| `GET /usage` | عدّاد التحليلات هذا الشهر + تقدير تكلفة تقريبي (يتطلب جلسة). |
+| `GET /analyses` · `GET /analyses/{id}` | يسرد/يعيد التحليلات المحفوظة (يتطلب جلسة). |
 
 **CI** (`.github/workflows/ci.yml`): يثبّت `requirements.txt` (بما فيها `fastapi`/`uvicorn`) + `pytest` ويشغّل `python -m pytest tests/ -q` عند كل push / PR.
 

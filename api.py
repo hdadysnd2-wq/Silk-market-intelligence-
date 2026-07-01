@@ -205,6 +205,69 @@ def create_app():
             raise HTTPException(status_code=404, detail=f"job {job_id} not found")
         return _json(status)
 
+    def _owned_result(job_id: str, user_id: int) -> dict:
+        """نتيجة مهمة يملكها المستخدم — the finished result for an owned job, or HTTP error.
+
+        404 if unknown/not owned; 409 if not finished yet or has no result.
+        Reports are generated only from a real completed analysis (never faked).
+        """
+        row = silk_db.get_job(job_id)
+        if row is None or (row.get("user_id") is not None and row["user_id"] != user_id):
+            raise HTTPException(status_code=404, detail=f"job {job_id} not found")
+        status = silk_jobs.job_status(job_id)
+        result = status.get("result") if status else None
+        if not result:
+            raise HTTPException(status_code=409,
+                                detail=f"job {job_id} not finished (status "
+                                       f"{status['status'] if status else 'unknown'})")
+        return result
+
+    def _file_response(data: bytes, media_type: str, filename: str):
+        from fastapi.responses import Response
+        return Response(content=data, media_type=media_type, headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'})
+
+    @app.get("/reports/{job_id}/full.docx")
+    def report_full(job_id: str, user_id: int = Depends(_current_user_id)):
+        """التقرير الكامل (Word) — full Word report for a finished analysis."""
+        import silk_reports
+        if not silk_reports.available():
+            raise HTTPException(status_code=503,
+                                detail="python-docx not installed on the server")
+        result = _owned_result(job_id, user_id)
+        data = silk_reports.build_full_report(result)
+        return _file_response(
+            data, "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            f"silk_{job_id}_full.docx")
+
+    @app.get("/reports/{job_id}/short.docx")
+    def report_short(job_id: str, user_id: int = Depends(_current_user_id)):
+        """التقرير المختصر (Word) — 1–2 page executive Word report."""
+        import silk_reports
+        if not silk_reports.available():
+            raise HTTPException(status_code=503,
+                                detail="python-docx not installed on the server")
+        result = _owned_result(job_id, user_id)
+        data = silk_reports.build_short_report(result)
+        return _file_response(
+            data, "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            f"silk_{job_id}_short.docx")
+
+    @app.get("/reports/{job_id}/short.pdf")
+    def report_short_pdf(job_id: str, user_id: int = Depends(_current_user_id)):
+        """التقرير المختصر (PDF) — PDF of the short report (needs LibreOffice)."""
+        import silk_reports
+        if not silk_reports.available():
+            raise HTTPException(status_code=503,
+                                detail="python-docx not installed on the server")
+        result = _owned_result(job_id, user_id)
+        pdf = silk_reports.to_pdf(silk_reports.build_short_report(result))
+        if pdf is None:
+            raise HTTPException(status_code=503,
+                                detail="PDF export unavailable — LibreOffice not "
+                                       "installed on the server (Word download works)")
+        return _file_response(pdf, "application/pdf", f"silk_{job_id}_short.pdf")
+
     @app.get("/usage")
     def usage(user_id: int = Depends(_current_user_id)):
         """عدّاد الاستخدام الشهري — analyses this month + a rough cost estimate.

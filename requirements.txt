@@ -11,6 +11,11 @@ psycopg2-binary>=2.9
 # حاجة لهما فعلياً (تنفيذ متزامن + كاش قرص + عدّاد في الذاكرة).
 redis>=5.0
 rq>=1.16
+# مولّد تقارير Word (silk_reports.py) — التقريران الكامل والمختصر. تصدير PDF
+# للتقرير المختصر يتطلب LibreOffice في صورة النشر (يتدهور بأمان لرسالة واضحة لو غاب).
+# Word report generator; PDF export additionally needs LibreOffice in the deploy
+# image (degrades gracefully to a clear message if absent).
+python-docx>=1.1
 # --- اختياري · OPTIONAL (core library imports & runs without these) ---
 # واجهة Streamlit (for app.py):  streamlit run app.py
 # streamlit>=1.30
