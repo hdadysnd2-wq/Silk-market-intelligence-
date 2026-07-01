@@ -5,24 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>لوحة سِلك التفاعلية · Silk Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <style>
-  :root{--petrol:#0C3A3A;--petrol2:#12504e;--gold:#C9A227;--ink:#0C0E1A;--mist:#F4F6F6;--line:#DDE5E5;--muted:#5b6b6b;--white:#fff}
+  /* لوحة ألوان بأسلوب Claude — warm, calm Claude-style palette (clay accent). */
+  :root{--petrol:#26231C;--petrol2:#C96442;--gold:#C99A5B;--accent:#C96442;--accent2:#A84C30;
+    --ink:#1A1915;--mist:#FAF9F5;--line:#E7E2D8;--muted:#6B6862;--white:#fff;
+    --serif:"Amiri",Georgia,"Times New Roman",serif}
   *{box-sizing:border-box}
   body{margin:0;background:var(--mist);color:var(--ink);font-family:"IBM Plex Sans Arabic",system-ui,Tahoma,sans-serif;font-size:15px;line-height:1.55}
   .num{font-family:"IBM Plex Sans";font-variant-numeric:tabular-nums}
   .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
   header{background:var(--petrol);color:#fff;padding:16px 0}
   .hrow{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  .brand{display:flex;align-items:center;gap:12px;font-weight:700}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:700;font-family:var(--serif)}
   .mark{width:34px;height:34px;border-radius:9px;background:var(--gold);color:var(--petrol);display:grid;place-items:center;font-weight:700}
-  a.homelink{color:#cfe;font-size:13px;text-decoration:none}
+  a.homelink{color:#E8E2D5;font-size:13px;text-decoration:none}
   .verdictbar{margin:18px 0;padding:18px 20px;border-radius:14px;background:#fff;border:1px solid var(--line);box-shadow:0 6px 20px rgba(12,58,58,.06)}
   .vbig{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .vtag{font-size:15px;font-weight:700;padding:6px 16px;border-radius:40px}
-  .v-strong{background:rgba(46,160,67,.14);color:#1a7f37}.v-mid{background:rgba(201,162,39,.16);color:#8a6d00}.v-low{background:#fdecec;color:#b42318}
+  .v-strong{background:rgba(46,160,67,.14);color:#1a7f37}.v-mid{background:rgba(201,100,66,.14);color:#A84C30}.v-low{background:#fdecec;color:#b42318}
   .vsub{color:var(--muted);font-size:14px}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
   @media(max-width:900px){.grid{grid-template-columns:1fr}}
@@ -39,7 +42,7 @@
   .lists li{margin:4px 0}
   .disc{font-size:12px;color:var(--muted);background:#fff;border:1px dashed var(--line);border-radius:10px;padding:12px;margin:16px 0 40px;line-height:1.7}
   .msg{padding:40px;text-align:center;color:var(--muted)}
-  .btn{display:inline-block;background:var(--gold);color:var(--petrol);font-weight:600;border:0;border-radius:10px;padding:9px 16px;text-decoration:none;cursor:pointer}
+  .btn{display:inline-block;background:var(--accent);color:#fff;font-weight:600;border:0;border-radius:10px;padding:9px 16px;text-decoration:none;cursor:pointer}
 </style>
 </head>
 <body>
@@ -162,7 +165,7 @@
     var data=ms.map(function(m){return m.total_score==null?0:Math.round(m.total_score*100);});
     if(state.chart1)state.chart1.destroy();
     state.chart1=new Chart($("c1"),{type:"bar",
-      data:{labels:labels,datasets:[{label:"النقاط /100",data:data,backgroundColor:"#12504e"}]},
+      data:{labels:labels,datasets:[{label:"النقاط /100",data:data,backgroundColor:"#C96442"}]},
       options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:100}}}});
   }
 
@@ -175,7 +178,7 @@
       state.chart2=new Chart($("c2"),{type:"doughnut",
         data:{labels:comps.map(function(x){return x.partner||"—";}),
           datasets:[{data:comps.map(function(x){return x.share;}),
-            backgroundColor:["#0C3A3A","#12504e","#C9A227","#8a6d00","#5b6b6b","#a9b7b7"]}]},
+            backgroundColor:["#C96442","#A84C30","#C99A5B","#8a6d00","#6B6862","#B9B2A4"]}]},
         options:{plugins:{legend:{position:"bottom"}}}});
     }else{
       $("c2").parentNode.querySelector("canvas").replaceWith(Object.assign(document.createElement("div"),{className:"vsub",textContent:"لا بيانات منافسين لهذا السوق."}));
@@ -197,7 +200,7 @@
     filteredMarkets().forEach(function(m){
       var c=CENTROIDS[m.iso3];if(!c)return;
       var score=m.total_score==null?0:m.total_score;
-      L.circleMarker(c,{radius:6+score*16,color:"#0C3A3A",fillColor:"#12504e",fillOpacity:.55,weight:1})
+      L.circleMarker(c,{radius:6+score*16,color:"#A84C30",fillColor:"#C96442",fillOpacity:.55,weight:1})
         .bindPopup("<b>"+esc(m.country||m.iso3)+"</b><br>النقاط: "+(m.total_score==null?"—":Math.round(m.total_score*100))+
           "<br>الاستيراد: "+fmtUSD(dpv((m.components||{}).market_size)))
         .addTo(countryLayer);
@@ -208,7 +211,7 @@
       if(ct.lat==null||ct.lng==null)return;
       var pop=ct.population||0;
       L.circleMarker([ct.lat,ct.lng],{radius:5+(pop?Math.min(14,Math.log10(pop)):3),
-        color:"#C9A227",fillColor:"#C9A227",fillOpacity:.6,weight:1})
+        color:"#C99A5B",fillColor:"#C99A5B",fillOpacity:.6,weight:1})
         .bindPopup("<b>"+esc(ct.city||"")+"</b>"+(pop?"<br>سكان≈ "+pop.toLocaleString("en-US"):""))
         .addTo(cityLayer);
     });

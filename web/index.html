@@ -6,21 +6,26 @@
 <title>منصة سِلك · ذكاء الأسواق</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --blue:#2348E2; --blue-deep:#1633A8; --blue-400:#5C73EE; --blue-50:#EEF1FD;
-    --ink:#0C0E1A; --mist:#F5F6FB; --line:#E6E8F0; --muted:#6E7180; --muted-2:#8A8FA3; --white:#fff;
+    /* لوحة ألوان بأسلوب Claude — warm, calm Claude-style palette (clay accent). */
+    --blue:#C96442; --blue-deep:#A84C30; --blue-400:#D98E75; --blue-50:#F3EBE4;
+    --ink:#1A1915; --mist:#F0EEE6; --line:#E7E2D8; --muted:#6B6862; --muted-2:#938F84; --white:#fff;
+    --bg:#FAF9F5;
     --ar:"IBM Plex Sans Arabic",system-ui,Tahoma,sans-serif;
     --en:"IBM Plex Sans",system-ui,sans-serif;
     --mono:"IBM Plex Mono",ui-monospace,monospace;
-    --sh:0 1px 3px rgba(12,14,26,.06),0 6px 20px rgba(12,14,26,.06);
+    --serif:"Amiri",Georgia,"Times New Roman",serif;
+    --sh:0 1px 2px rgba(26,25,21,.04),0 4px 16px rgba(26,25,21,.05);
     --ease:cubic-bezier(.22,.61,.36,1);
   }
   @keyframes silkPulse{0%,100%{opacity:.35}50%{opacity:1}}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--white);color:var(--ink);font-family:var(--ar);
-    font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ar);
+    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  /* عناوين بخط Serif دافئ (طابع Claude التحريري) — warm serif display headings. */
+  .btitle,.dcountry,.ready h2,.settings h1{font-family:var(--serif);font-weight:700;letter-spacing:0}
   .mono{font-family:var(--mono)} .en{font-family:var(--en)}
   .wrap{max-width:1240px;margin:0 auto;padding:0 28px}
   .num{font-family:var(--en);font-variant-numeric:tabular-nums}
@@ -33,7 +38,7 @@
   .hrow{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 0}
   .brand{display:flex;align-items:center;gap:16px}
   .mark{width:38px;height:38px;border-radius:11px;background:var(--blue);display:grid;place-items:center;
-    color:#fff;font-weight:700;font-size:19px;box-shadow:0 4px 12px rgba(35,72,226,.3)}
+    color:#fff;font-weight:700;font-size:19px;box-shadow:0 4px 12px rgba(201,100,66,.22)}
   .sep{width:1px;height:34px;background:var(--line)}
   .btitle{font-size:18px;font-weight:600;line-height:1.1}
   .bsub{font-size:13.5px;color:var(--muted)}
@@ -44,7 +49,7 @@
     color:var(--ink);border-radius:10px;padding:9px 14px;font-size:14px;font-weight:500;transition:.18s var(--ease)}
   .ghostbtn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-50)}
   .primary{display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;border:0;
-    border-radius:12px;padding:11px 20px;font-size:14.5px;font-weight:600;box-shadow:0 6px 16px rgba(35,72,226,.24);
+    border-radius:12px;padding:11px 20px;font-size:14.5px;font-weight:600;box-shadow:0 6px 16px rgba(201,100,66,.18);
     transition:.18s var(--ease)}
   .primary:hover{background:var(--blue-deep)} .primary:disabled{opacity:.5;box-shadow:none}
 
@@ -55,7 +60,7 @@
   .search{position:relative;width:360px;max-width:100%}
   .sbox{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:40px;
     padding:11px 16px;box-shadow:var(--sh);transition:.18s var(--ease)}
-  .sbox:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px rgba(35,72,226,.1)}
+  .sbox:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px rgba(201,100,66,.12)}
   .sbox input{border:0;outline:0;flex:1;font-family:var(--ar);font-size:15px;background:transparent;color:var(--ink)}
   .hschip{font-family:var(--mono);font-size:12px;background:var(--blue-50);color:var(--blue);padding:3px 8px;border-radius:7px}
   .drop{position:absolute;top:calc(100% + 8px);right:0;left:0;background:#fff;border:1px solid var(--line);
@@ -67,7 +72,7 @@
   .yearsel{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--muted)}
   .yearsel select{font-family:var(--ar);font-size:14px;color:var(--ink);background:#fff;border:1px solid var(--line);
     border-radius:40px;padding:8px 14px;cursor:pointer;transition:.16s var(--ease)}
-  .yearsel select:hover{border-color:var(--blue)} .yearsel select:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 4px rgba(35,72,226,.1)}
+  .yearsel select:hover{border-color:var(--blue)} .yearsel select:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 4px rgba(201,100,66,.12)}
   .yrchip{font-size:12px;color:var(--blue);background:var(--blue-50);padding:3px 9px;border-radius:40px;margin-inline-end:8px}
   .sorts{display:flex;gap:8px}
   .sortbtn{background:#fff;border:1px solid var(--line);border-radius:40px;padding:8px 15px;font-size:13.5px;color:var(--muted);transition:.16s var(--ease)}
@@ -109,7 +114,7 @@
   .scell{display:flex;align-items:center;gap:9px} .sval{font-family:var(--en);font-weight:700;color:var(--blue);font-size:15px;min-width:30px}
   .track{flex:1;height:7px;background:var(--mist);border-radius:5px;overflow:hidden} .fill{height:100%;background:var(--blue);border-radius:5px}
   .confpill{font-size:12px;color:var(--muted);background:var(--mist);padding:3px 9px;border-radius:40px;white-space:nowrap}
-  .aiblk{margin:14px 0;padding:14px 16px;background:var(--blue-50);border:1px solid #D6DEFB;border-radius:11px}
+  .aiblk{margin:14px 0;padding:14px 16px;background:var(--blue-50);border:1px solid #E7E2D8;border-radius:11px}
   .aihd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .aibadge{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.06em;color:#fff;background:var(--blue);padding:4px 10px;border-radius:40px}
   .aiconf{font-size:12.5px;color:var(--muted)}
@@ -170,7 +175,7 @@
   .switch{width:46px;height:26px;border-radius:40px;background:var(--line);position:relative;border:0;transition:.2s var(--ease);flex:none}
   .switch.on{background:var(--blue)} .switch .k{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s var(--ease)}
   .switch.on .k{right:23px}
-  .skl{height:14px;background:linear-gradient(90deg,#eef0f6,#f6f7fb,#eef0f6);background-size:200% 100%;border-radius:6px;animation:silkPulse 1.2s infinite}
+  .skl{height:14px;background:linear-gradient(90deg,#F0EEE6,#FAF9F5,#F0EEE6);background-size:200% 100%;border-radius:6px;animation:silkPulse 1.2s infinite}
   .err{color:#b42318;background:#fdecec;border-radius:10px;padding:12px;font-size:14px}
 </style>
 </head>
@@ -295,12 +300,12 @@
 
   // ---------- pipeline render ----------
   var NODES=[
-    {ic:"doc",nm:"المدير الموزِّع",ds:"يقسّم الطلب إلى مهام",foot:"تنسيق",col:"#5C73EE"},
+    {ic:"doc",nm:"المدير الموزِّع",ds:"يقسّم الطلب إلى مهام",foot:"تنسيق",col:"#D98E75"},
     {ic:"globe",nm:"وكيل التجارة",ds:"UN Comtrade · الاستيراد والموردون",foot:"ثقة عالية",col:"#2ea043"},
     {ic:"chart",nm:"وكيل الاقتصاد",ds:"World Bank · الدخل والقوة الشرائية",foot:"ثقة عالية",col:"#2ea043"},
     {ic:"factory",nm:"وكيل المنافسة",ds:"Comtrade · حصص المنافسين",foot:"ثقة متوسطة",col:"#d4a72c"},
     {ic:"chart",nm:"وكيل الطلب",ds:"Google Trends · الطلب والموسمية",foot:"قيد الربط",col:"#8A8FA3"},
-    {ic:"package",nm:"لجنة التحكيم",ds:"تجمّع وتوزن النتائج وتُصدر القرار",foot:"قرار أوّلي",col:"#2348E2"}
+    {ic:"package",nm:"لجنة التحكيم",ds:"تجمّع وتوزن النتائج وتُصدر القرار",foot:"قرار أوّلي",col:"#C96442"}
   ];
   function renderNodes(){
     var trends=S.toggles.trends;
