@@ -296,6 +296,15 @@ def _enrich_trends(rows: list[dict], product_name: str) -> None:
             row["trends"] = []
 
 
+def _enrich_error_dp(source: str, field: str, exc: Exception):
+    """DataPoint موسوم لخطأ إثراء غير متوقّع — a provenance-tagged None so an
+    UNEXPECTED enrichment exception stays visible with its reason, never a silent
+    []/None gap (البند ٤: الفشل مرئيّ لا صامت). Confidence 0.0; no fabrication."""
+    from silk_data_layer import DataPoint, _today  # lazy: keep engine import light
+    return DataPoint(None, source, 0.0,
+                     f"{field} enrichment error: {type(exc).__name__}: {exc}", _today())
+
+
 def _enrich_tariffs(rows: list[dict], hs_code: str, year: int) -> None:
     """أضف التعريفة المطبّقة لكل سوق — attach tariff finding (graceful None offline)."""
     from silk_tariffs_agent import TariffsAgent  # lazy: optional layer
@@ -307,7 +316,8 @@ def _enrich_tariffs(rows: list[dict], hs_code: str, year: int) -> None:
             row["tariff"] = rep.findings[0] if rep.findings else None
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("tariff enrichment failed for %s: %s", row.get("iso3"), e)
-            row["tariff"] = None
+            # البند ٤: بدل None عارٍ، DataPoint موسوم بالسبب — tagged None, not a silent gap.
+            row["tariff"] = _enrich_error_dp("World Bank WITS", "tariff", e)
 
 
 def _enrich_faostat(rows: list[dict], product_name: str, year: int) -> None:
@@ -439,13 +449,14 @@ def _enrich_compliance(rows: list[dict], product_name: str) -> None:
                 {"product": product_name, "country": country}).findings
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("regulatory enrichment failed for %s: %s", row.get("iso3"), e)
-            row["regulatory"] = []
+            # البند ٤: بدل [] الصامت، DataPoint موسوم بالسبب — tagged None, visible reason.
+            row["regulatory"] = [_enrich_error_dp("Web Search", "regulatory", e)]
         try:
             row["customs_web"] = cust_agent.run(
                 {"product": product_name, "country": country}).findings
         except Exception as e:  # noqa: BLE001
             log.warning("customs enrichment failed for %s: %s", row.get("iso3"), e)
-            row["customs_web"] = []
+            row["customs_web"] = [_enrich_error_dp("Web Search", "customs_web", e)]
 
 
 def _enrich_culture(rows: list[dict], product_name: str) -> None:
@@ -511,7 +522,8 @@ def _enrich_localprice(rows: list[dict], product_name: str,
                 row["price_comparison"] = compare_own_price(own_price, findings)
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("localprice enrichment failed for %s: %s", row.get("iso3"), e)
-            row["localprice"] = []
+            # البند ٤: بدل [] الصامت، DataPoint موسوم بالسبب — tagged None, visible reason.
+            row["localprice"] = [_enrich_error_dp("Web Search", "localprice", e)]
             if own_price is not None:
                 row["price_comparison"] = compare_own_price(own_price, [])
 

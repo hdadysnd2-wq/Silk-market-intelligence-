@@ -1210,6 +1210,42 @@ def test_ai_cost_cap_zero_means_unlimited():
         silk_ai_judge.reset_budget()
 
 
+def test_group_d_unexpected_exception_is_visible_not_a_silent_gap():
+    # حرج (شفافية/البند ٤) — مجموعة د: أي استثناء غير متوقّع داخل وكيل إثراء
+    # يُرفق DataPoint(None, note='... enrichment error: ...') بدل []/None صامت،
+    # فيرى المستخدم السبب دائماً. يشمل regulatory/customs_web/tariff/localprice.
+    from unittest.mock import patch
+    import silk_regulatory_agent, silk_tariffs_agent, silk_localprice_agent
+
+    def note_of(v):
+        if isinstance(v, list):
+            return v[0].note if v else None
+        return getattr(v, "note", None)
+
+    with patch.object(silk_regulatory_agent.RegulatoryStandardsAgent, "run",
+                      side_effect=RuntimeError("boom-reg")), \
+         patch.object(silk_regulatory_agent.CustomsInfoAgent, "run",
+                      side_effect=RuntimeError("boom-cust")), \
+         patch.object(silk_tariffs_agent.TariffsAgent, "run",
+                      side_effect=RuntimeError("boom-tariff")), \
+         patch.object(silk_localprice_agent, "retail_price_web",
+                      side_effect=RuntimeError("boom-price")), \
+         _block_network():
+        res = engine.analyze("تمور", year=2021, with_compliance=True,
+                             with_tariffs=True, with_localprice=True, own_price=50.0)
+
+    row = res["markets"][0]
+    for field, marker in (("regulatory", "boom-reg"), ("customs_web", "boom-cust"),
+                          ("tariff", "boom-tariff"), ("localprice", "boom-price")):
+        v = row.get(field, "__MISSING__")
+        assert v != "__MISSING__", f"{field} disappeared silently"
+        # قيمة None (لا اختلاق) + سبب صريح يحوي نوع الاستثناء ورسالته.
+        val = (v[0].value if isinstance(v, list) and v else getattr(v, "value", "X"))
+        assert val is None, f"{field} should carry a None value, not fabricate"
+        n = note_of(v) or ""
+        assert "enrichment error" in n and marker in n, f"{field} note lost the reason: {n!r}"
+
+
 def test_ai_cap_cut_is_visible_not_a_silent_gap():
     # حرج (شفافية) — ج1: عند بلوغ السقف منتصف التحليل، الأسواق المقطوعة تحمل مؤشّراً
     # صريحاً jury.ai_skipped (reason=cost_cap) + ملخّص result.ai_cost، لا حذفاً صامتاً.
