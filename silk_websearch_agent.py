@@ -17,7 +17,7 @@ import logging
 import os
 
 from silk_data_layer import DataPoint, _today
-from silk_agents import Agent, AgentReport
+from silk_agents import BaseAgent, AgentReport
 
 log = logging.getLogger(__name__)
 
@@ -81,13 +81,20 @@ def web_search(query: str, num: int = 5) -> list[DataPoint]:
     return findings
 
 
-class WebSearchAgent(Agent):
-    """وكيل البحث على الويب — consumer-behaviour / reports / news signals."""
+class WebSearchAgent(BaseAgent):
+    """وكيل البحث على الويب — consumer-behaviour / reports / news signals.
+
+    هاجر إلى BaseAgent (قاعدة "وكيل مع كل PR" — الموجة ٣): PAID=False،
+    والفشل الصامت مستحيل بنيوياً.
+    """
+
+    PAID = False
+    SOURCE = "Web Search (Serper)"
 
     def __init__(self) -> None:
         super().__init__("WebSearchAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """نتائج بحث حقيقية للمنتج والسوق — real web results, real data only.
 
         task keys: query(str, product+market+intent), num(int, default 5).
