@@ -55,10 +55,37 @@ def _index_search(q: str = "", limit: int = 20) -> list[dict]:
     return out
 
 
+def _cors_origins() -> list[str]:
+    """أصول CORS المسموحة — allowed origins from CORS_ORIGINS; [] = same-origin only.
+
+    الموجة ٠: الافتراضي لم يعد "*" — بلا ضبط صريح لا يُركَّب CORS إطلاقاً
+    (الواجهة تُقدَّم من نفس الأصل). Wildcard requires an explicit opt-in.
+    """
+    raw = os.environ.get("CORS_ORIGINS", "").strip()
+    if not raw:
+        return []
+    if raw == "*":
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+def _api_key_expected() -> str:
+    """مفتاح الخدمة المتوقع — the API key required by /analyze ('' = auth off).
+
+    الموجة ٠: يُضبط SILK_API_KEY في الإنتاج فيصير كل طلب /analyze بلا ترويسة
+    X-API-Key مطابقة = 401 **قبل تشغيل أي وكيل**. غير مضبوط => وضع تطوير مفتوح.
+    """
+    return os.environ.get("SILK_API_KEY", "").strip()
+
+
+# الطبقات المدفوعة الخاضعة للسقف — paid layers counted against the daily cap.
+_PAID_FLAGS = ("with_localprice", "with_volza", "with_explee", "with_ai")
+
+
 def create_app():
     """أنشئ تطبيق FastAPI — build the FastAPI app, or raise if fastapi is absent."""
     try:
-        from fastapi import FastAPI, HTTPException
+        from fastapi import FastAPI, HTTPException, Request
         from fastapi.middleware.cors import CORSMiddleware
         from fastapi.responses import JSONResponse
         from fastapi.staticfiles import StaticFiles
@@ -69,17 +96,19 @@ def create_app():
     import silk_engine
     import silk_hs_resolver
     import silk_storage
+    import silk_usage
 
     app = FastAPI(title="Silk Market Intelligence API",
                   description="Real public-data export-market analysis "
                               "(UN Comtrade + World Bank). Preliminary, never fabricated.")
 
-    # CORS: يسمح لواجهة Netlify بالنداء — allow the static frontend to call the API.
-    # افتراضيًا أي أصل؛ قيّده بـ CORS_ORIGINS (مفصولة بفواصل) في الإنتاج.
-    _origins = os.environ.get("CORS_ORIGINS", "*").strip()
-    allow = ["*"] if _origins == "*" else [o.strip() for o in _origins.split(",") if o.strip()]
-    app.add_middleware(CORSMiddleware, allow_origins=allow,
-                       allow_methods=["*"], allow_headers=["*"])
+    # CORS (الموجة ٠): الافتراضي صار **نفس الأصل فقط** (الواجهة تُقدَّم من نفس
+    # الخدمة فلا تحتاج CORS). للواجهات المنفصلة (Netlify) اضبط CORS_ORIGINS
+    # بقائمة أصول مفصولة بفواصل؛ "*" لم يعد افتراضياً ويتطلب ضبطاً صريحاً.
+    allow = _cors_origins()
+    if allow:
+        app.add_middleware(CORSMiddleware, allow_origins=allow,
+                           allow_methods=["*"], allow_headers=["*"])
 
     class AnalyzeRequest(BaseModel):
         """طلب تحليل منتج — analyze request body."""
@@ -127,12 +156,29 @@ def create_app():
         return _json(_index_search(q, limit))
 
     @app.post("/analyze")
-    def analyze(req: AnalyzeRequest):
+    def analyze(req: AnalyzeRequest, request: Request):
         """حلّل منتجًا عبر الأسواق — run the full engine.analyze pipeline.
 
         own_price (with with_localprice=True) attaches a price-positioning
         comparison per top market — your price vs. real local listings.
+
+        حراسة الموجة ٠ قبل أي وكيل — wave-0 guards run BEFORE any agent:
+        401 بلا مفتاح صحيح (عند ضبط SILK_API_KEY)، و429 عند تجاوز سقف
+        الطبقات المدفوعة اليومي (عند ضبط SILK_PAID_DAILY_CAP).
         """
+        expected = _api_key_expected()
+        if expected and request.headers.get("x-api-key", "") != expected:
+            raise HTTPException(status_code=401,
+                                detail="missing or invalid API key "
+                                       "(send X-API-Key header)")
+        paid_requested = sum(1 for f in _PAID_FLAGS if getattr(req, f))
+        if paid_requested and silk_usage.would_exceed_cap(paid_requested):
+            raise HTTPException(
+                status_code=429,
+                detail="daily paid-layer cap reached (SILK_PAID_DAILY_CAP) — "
+                       "retry tomorrow or raise the cap")
+        if paid_requested:
+            silk_usage.record_paid_calls(paid_requested)
         result = silk_engine.analyze(
             req.product, year=req.year, with_trends=req.with_trends,
             with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
