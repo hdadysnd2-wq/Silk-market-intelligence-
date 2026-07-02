@@ -124,6 +124,10 @@ def create_app():
         with_faostat: bool = False
         with_maps: bool = False
         with_websearch: bool = False
+        with_competitors: bool = False
+        with_channels: bool = False
+        with_importers: bool = False
+        with_requirements: bool = False
         persist: bool = False
 
     class DeepenRequest(BaseModel):
@@ -144,6 +148,10 @@ def create_app():
         with_volza: bool = False
         with_explee: bool = False
         with_ai: bool = False
+        with_competitors: bool = False
+        with_channels: bool = False
+        with_importers: bool = False
+        with_requirements: bool = False
         persist: bool = False
 
     def _json(payload: object):
@@ -207,6 +215,10 @@ def create_app():
             req.product, year=req.year, with_trends=req.with_trends,
             with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
             with_maps=req.with_maps, with_websearch=req.with_websearch,
+            with_competitors=req.with_competitors,
+            with_channels=req.with_channels,
+            with_importers=req.with_importers,
+            with_requirements=req.with_requirements,
             persist=req.persist)
         return _json(result)
 
@@ -229,7 +241,12 @@ def create_app():
                 with_maps=req.with_maps, with_websearch=req.with_websearch,
                 with_localprice=req.with_localprice, own_price=req.own_price,
                 with_volza=req.with_volza, with_explee=req.with_explee,
-                with_ai=req.with_ai, persist=req.persist)
+                with_ai=req.with_ai,
+                with_competitors=req.with_competitors,
+                with_channels=req.with_channels,
+                with_importers=req.with_importers,
+                with_requirements=req.with_requirements,
+                persist=req.persist)
         return _json(result)
 
     @app.get("/sources")
@@ -251,6 +268,7 @@ def create_app():
             ("Volza", "paid", "VOLZA_API_KEY"),
             ("explee", "paid", "EXPLEE_API_KEY"),
             ("Claude (AI judge)", "ai", "ANTHROPIC_API_KEY"),
+            ("Requirements L1 reference (GCC + Saudi exit)", "free", None),
         ]
         return _json([
             {"name": name, "type": kind, "wired": True, "key_env": key_env,

@@ -30,6 +30,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_localprice: bool = False, own_price: float | None = None,
             with_volza: bool = False, with_explee: bool = False,
             with_ai: bool = False,
+            with_competitors: bool = False, with_channels: bool = False,
+            with_importers: bool = False, with_requirements: bool = False,
             persist: bool = False, db_path: str = "data/silk.db",
             check_quality: bool = True) -> dict:
     """حلّل منتجًا عبر الأسواق — full preliminary market analysis for one product.
@@ -55,6 +57,12 @@ def analyze(product_name: str, countries: list[dict] | None = None,
       with_websearch— attach web-search results for the product (result['websearch']).
       with_volza    — attach Volza named importers (PAID) per top market (row['volza']).
       with_explee   — attach Explee buyers/contacts (PAID) per top market (row['explee']).
+      with_competitors — attach named-competitor candidates (row['competitors_named']).
+      with_channels — attach distribution-channel candidates (row['channels']).
+      with_importers— attach importer candidates, free web layer (row['importers']).
+      with_requirements — attach the dual-direction compliance checklist
+                      (row['requirements']: entry items for the market +
+                      Saudi-exit items, L1 reference, fully offline).
                       All of these are ADDITIVE context — they never change total_score.
       persist       — init_db + save_analysis(db_path); attaches result['analysis_id'].
       check_quality — annotate each market with quality_flags (flags only, no number edits).
@@ -108,6 +116,19 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_volza(ranked[:_ENRICH_TOP], hs.value)
     if with_explee:
         _enrich_explee(ranked[:_ENRICH_TOP], product_name)
+    if with_competitors:
+        _enrich_named(ranked[:_ENRICH_TOP], product_name,
+                      "competitors_named", "silk_competitors_agent",
+                      "NamedCompetitorsAgent")
+    if with_channels:
+        _enrich_named(ranked[:_ENRICH_TOP], product_name,
+                      "channels", "silk_channels_agent",
+                      "DistributionChannelsAgent")
+    if with_importers:
+        _enrich_named(ranked[:_ENRICH_TOP], product_name,
+                      "importers", "silk_importers_agent", "ImportersAgent")
+    if with_requirements:
+        _enrich_requirements(ranked[:_ENRICH_TOP], hs.value)
 
     # 4) سطر توصية لكل سوق — one-line recommendation per market.
     for row in ranked:
@@ -268,6 +289,39 @@ def _enrich_explee(rows: list[dict], product_name: str) -> None:
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("explee enrichment failed for %s: %s", row.get("iso3"), e)
             row["explee"] = [_enrich_error_dp("Explee", e)]
+
+
+def _enrich_named(rows: list[dict], product_name: str, key: str,
+                  module: str, cls: str) -> None:
+    """أضف وكيل ترشيح ويب لكل سوق — attach a wave-3 web-candidate agent.
+
+    غلاف واحد للوكلاء الثلاثة (منافسون مُسمّون/قنوات/مستوردون) — نفس نمط
+    الإثراء القائم ونفس انضباط الموجة ١ (استثناء => DataPoint موسوم).
+    """
+    import importlib
+    agent = getattr(importlib.import_module(module), cls)()
+    for row in rows:
+        try:
+            rep = agent.run({"product": product_name,
+                             "market": row.get("country") or row.get("iso3")})
+            row[key] = rep.findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("%s enrichment failed for %s: %s", key, row.get("iso3"), e)
+            row[key] = [_enrich_error_dp(cls, e)]
+
+
+def _enrich_requirements(rows: list[dict], hs_code: str) -> None:
+    """أضف قائمة تحقق الاشتراطات — attach the dual-direction L1 checklist."""
+    from silk_requirements_agent import RequirementsAgent  # lazy: optional layer
+    agent = RequirementsAgent()
+    for row in rows:
+        try:
+            rep = agent.run({"market_iso3": row.get("iso3"), "hs_code": hs_code})
+            row["requirements"] = rep.findings
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("requirements enrichment failed for %s: %s",
+                        row.get("iso3"), e)
+            row["requirements"] = [_enrich_error_dp("Silk L1 reference", e)]
 
 
 def _websearch(product_name: str) -> list:
