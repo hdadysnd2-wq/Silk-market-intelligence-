@@ -154,6 +154,7 @@ def create_app():
         with_importers: bool = False
         with_requirements: bool = False
         product_card: ProductCard | None = None
+        hs_code: str | None = None
         persist: bool = False
 
     class DeepenRequest(BaseModel):
@@ -179,6 +180,7 @@ def create_app():
         with_importers: bool = False
         with_requirements: bool = False
         product_card: ProductCard | None = None
+        hs_code: str | None = None
         persist: bool = False
 
     def _json(payload: object):
@@ -275,6 +277,7 @@ def create_app():
             with_requirements=req.with_requirements,
             product_card=(req.product_card.model_dump()
                           if req.product_card else None),
+            hs_code=req.hs_code,
             persist=req.persist)
         result["view"] = _view(result)
         return _json(result)
@@ -305,9 +308,33 @@ def create_app():
                 with_requirements=req.with_requirements,
                 product_card=(req.product_card.model_dump()
                               if req.product_card else None),
+                hs_code=req.hs_code,
                 persist=req.persist)
         result["view"] = _view(result)
         return _json(result)
+
+    class DiscoverRequest(BaseModel):
+        """طلب اكتشاف الفرص المعكوس (الموجة ٥أ، vision §11) — سوق بدل منتج."""
+        market_iso3: str
+        year: int | None = None
+        sector: str | None = None          # food|textile|industrial|None=الكل
+        min_import_usd: float = 0.0
+        with_seasonality: bool = False     # pytrends — تكميلية بوزن أدنى
+
+    @app.post("/discover")
+    def discover(req: DiscoverRequest, request: Request):
+        """اكتشف فرص سوق — reverse discovery: "ما المطلوب في هذا السوق؟"
+
+        مجاني (Comtrade + trends القائمان — صفر مصادر جديدة، §11.5-4)؛
+        حارس المصادقة يعمل قبل أي جلب. كل فرصة تحمل hs_code يُمرَّر
+        مباشرة إلى /analyze أو /deepen (زر "حلّل هذه الفرصة"، §11.5-3).
+        """
+        _require_key(request)
+        import silk_discovery
+        return _json(silk_discovery.discover(
+            req.market_iso3, req.year, sector=req.sector,
+            min_import_usd=req.min_import_usd,
+            with_seasonality=req.with_seasonality))
 
     @app.get("/sources")
     def sources():

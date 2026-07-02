@@ -34,6 +34,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_competitors: bool = False, with_channels: bool = False,
             with_importers: bool = False, with_requirements: bool = False,
             product_card: dict | None = None,
+            hs_code: str | None = None,
             persist: bool = False, db_path: str = "data/silk.db",
             check_quality: bool = True) -> dict:
     """حلّل منتجًا عبر الأسواق — full preliminary market analysis for one product.
@@ -80,7 +81,14 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     countries = countries or COUNTRIES
 
     # 1) صنّف المنتج إلى رمز HS — resolve product -> HS6 (carry its confidence).
-    hs = resolve(product_name)
+    #    hs_code ممرَّر (من زر "حلّل هذه الفرصة" بالاكتشاف، §11.5-3) يتجاوز
+    #    المصنّف — رمز معلوم المصدر لا يحتاج إعادة تخمين.
+    if hs_code:
+        hs = DataPoint(str(hs_code), "Silk discovery hand-off", 1.0,
+                       "HS ممرَّر مباشرة من اكتشاف الفرص — لا إعادة تصنيف",
+                       _today())
+    else:
+        hs = resolve(product_name)
     if hs.value is None:
         result = {
             "product": product_name, "hs_code": None, "hs_confidence": 0.0,
