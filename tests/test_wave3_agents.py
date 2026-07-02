@@ -102,10 +102,11 @@ def test_requirements_agent_gcc_dual_direction_offline():
 
 
 def test_requirements_agent_unknown_market_honest_gap():
-    # سوق غير مغطى (DEU): فجوة دخول معلنة "تحقق محلياً" + بنود الخروج تبقى.
+    # سوق غير مغطى (KEN): فجوة دخول معلنة "تحقق محلياً" + بنود الخروج تبقى.
+    # (كان الاختبار يستخدم DEU — الموجة ٥ب غطّتها بالسلسلة الأوروبية عمداً.)
     from silk_requirements_agent import RequirementsAgent
 
-    rep = RequirementsAgent().run({"market_iso3": "DEU", "hs_code": "080410"})
+    rep = RequirementsAgent().run({"market_iso3": "KEN", "hs_code": "080410"})
     assert rep.failed is False
     gaps = [dp for dp in rep.findings if dp.value is None]
     assert len(gaps) == 1 and "تحقق محلياً" in gaps[0].note   # لا اختلاق اشتراطات

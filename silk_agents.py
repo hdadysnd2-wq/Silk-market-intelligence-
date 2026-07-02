@@ -144,14 +144,17 @@ class EconomicAgent(Agent):
         return AgentReport(self.name, findings, failed, summary)
 
 
-class CompetitionAgent(Agent):
+class CompetitionAgent(BaseAgent):
     """وكيل المنافسة — named competitors & shares in the target market."""
+
+    PAID = False
+    SOURCE = "UN Comtrade"
 
     def __init__(self, top_n: int = 5) -> None:
         super().__init__("CompetitionAgent")
         self.top_n = top_n
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """من يورّد للسوق وبأي حصة — ranked suppliers of the HS code to the market."""
         hs, market, year = task["hs_code"], task["market_m49"], task["year"]
         comps = market_competitors(hs, market, year)
