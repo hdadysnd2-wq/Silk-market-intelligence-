@@ -116,11 +116,13 @@ def ai_verdict(product: str, market: str, reports: list) -> dict | None:
         return None
     try:
         start, end = out.find("{"), out.rfind("}")
-        obj = json.loads(out[start:end + 1]) if start >= 0 else {}
+        obj = json.loads(out[start:end + 1]) if start >= 0 else {"reasoning": out}
     except Exception:  # noqa: BLE001 — non-JSON reply still useful as reasoning
-        obj = {"verdict": "WATCH", "reasoning": out}
+        obj = {"reasoning": out}
+    # الموجة ١: لا افتراض "WATCH" — فشل التفسير يعني verdict=None صريحًا،
+    # فالوسم المُختلق ليس حكمًا (الواجهة تعرض "تعذّر الحكم").
     return {
-        "verdict": obj.get("verdict", "WATCH"),
+        "verdict": obj.get("verdict"),
         "confidence": obj.get("confidence"),
         "reasoning": obj.get("reasoning", ""),
         "by": f"Claude ({_MODEL})",

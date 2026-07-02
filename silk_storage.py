@@ -28,13 +28,18 @@ def _connect(path: str) -> sqlite3.Connection:
 
 
 def init_db(path: str = _DEFAULT_PATH) -> None:
-    """أنشئ الجداول (idempotent) — create tables if absent. Safe to call repeatedly."""
+    """أنشئ الجداول (idempotent) — create tables if absent. Safe to call repeatedly.
+
+    الموجة ١: عمودا `outcome` + `outcome_date` (سجل النتائج الفعلية التراكمي).
+    قواعد قديمة بلا العمودين تُرحَّل بـ ALTER TABLE آمن لا يمسّ أي بيانات قائمة.
+    """
     with _connect(path) as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS analyses ("
             "id INTEGER PRIMARY KEY AUTOINCREMENT, "
             "product TEXT, hs_code TEXT, year INTEGER, created_at TEXT, "
-            "preliminary INTEGER, json_blob TEXT)"
+            "preliminary INTEGER, json_blob TEXT, "
+            "outcome TEXT, outcome_date TEXT)"
         )
         conn.execute(
             "CREATE TABLE IF NOT EXISTS market_scores ("
@@ -43,6 +48,11 @@ def init_db(path: str = _DEFAULT_PATH) -> None:
             "total_score REAL, confidence REAL, "
             "FOREIGN KEY(analysis_id) REFERENCES analyses(id))"
         )
+        # ترحيل القواعد الأقدم — additive migration; existing rows untouched.
+        existing = {r[1] for r in conn.execute("PRAGMA table_info(analyses)")}
+        for col in ("outcome", "outcome_date"):
+            if col not in existing:
+                conn.execute(f"ALTER TABLE analyses ADD COLUMN {col} TEXT")
 
 
 def save_analysis(result: dict, path: str = _DEFAULT_PATH) -> int:
@@ -75,14 +85,35 @@ def save_analysis(result: dict, path: str = _DEFAULT_PATH) -> int:
     return analysis_id
 
 
+def set_outcome(analysis_id: int, outcome: str,
+                path: str | None = None) -> bool:
+    """سجّل نتيجة تحليل فعلية — record what actually happened (wave 1).
+
+    يضبط `outcome` (نص حر: "entered/GO confirmed/رفض العميل"...) و`outcome_date`
+    (تاريخ اليوم). يعيد False إن لم يوجد التحليل — لا إنشاء ضمني.
+    path=None يقرأ المسار الافتراضي وقت النداء (قابل للتوجيه في الاختبارات).
+    """
+    path = path or _DEFAULT_PATH
+    if not os.path.exists(path):
+        return False
+    init_db(path)  # يضمن وجود العمودين على القواعد الأقدم (ترحيل آمن)
+    with _connect(path) as conn:
+        cur = conn.execute(
+            "UPDATE analyses SET outcome = ?, outcome_date = ? WHERE id = ?",
+            (outcome, datetime.date.today().isoformat(), analysis_id),
+        )
+    return cur.rowcount > 0
+
+
 def list_analyses(path: str = _DEFAULT_PATH) -> list[dict]:
     """اسرد التحليلات المحفوظة — list saved analyses (newest first), metadata only."""
     if not os.path.exists(path):
         return []
+    init_db(path)  # ترحيل آمن للقواعد الأقدم قبل قراءة عمودي outcome
     with _connect(path) as conn:
         rows = conn.execute(
-            "SELECT id, product, hs_code, year, created_at, preliminary "
-            "FROM analyses ORDER BY id DESC"
+            "SELECT id, product, hs_code, year, created_at, preliminary, "
+            "outcome, outcome_date FROM analyses ORDER BY id DESC"
         ).fetchall()
     return [dict(r) for r in rows]
 

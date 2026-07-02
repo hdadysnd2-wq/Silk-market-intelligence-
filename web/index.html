@@ -358,7 +358,7 @@
     fetch(base()+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
       .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t);}catch(_){}
         if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?t:(typeof de==="string"?de:JSON.stringify(de))));}return d;});})
-      .then(function(res){S.running=false;S.result=mapResult(res);S.selId=S.result&&S.result.markets[0]&&S.result.markets[0].id;renderNodes();render();updateChrome();})
+      .then(function(res){S.running=false;S.raw=res;S.result=mapResult(res);S.selId=S.result&&S.result.markets[0]&&S.result.markets[0].id;renderNodes();render();updateChrome();})
       .catch(function(e){S.running=false;renderNodes();$("resultArea").innerHTML='<section class="card err" style="margin-top:4px">فشل الطلب: '+esc(e.message)+'</section>';});
   }
 
@@ -448,6 +448,7 @@
       '<div class="srcs">'+(sel.sources||[]).map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'+
       '<div class="dbtns"><button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button>'+
         (S.result.report?'<button class="ghostbtn" id="reportBtn">تقرير كلود</button>':'')+
+        '<button class="ghostbtn" id="jsonBtn">حمّل JSON</button>'+
         '<button class="primary" id="exportBtn">تصدير CSV</button></div>'+
     '</section>';
     $("resultArea").innerHTML='<div class="main"><section class="card rank-card">'+rows+'</section>'+detail+'</div>';
@@ -456,6 +457,7 @@
     $("sorts").classList.remove("hidden");
     $("resultArea").querySelectorAll(".rrow").forEach(function(b){b.addEventListener("click",function(){S.selId=this.getAttribute("data-id");render();});});
     var ex=$("exportBtn");if(ex)ex.addEventListener("click",exportCsv);
+    var jb=$("jsonBtn");if(jb)jb.addEventListener("click",exportJson);
     var deep=$("deepBtn");if(deep)deep.addEventListener("click",function(){S.view="settings";applyView();});
     var rb=$("reportBtn");if(rb)rb.addEventListener("click",showReport);
   }
@@ -464,9 +466,10 @@
     if(!sel.ai)return "";var a=sel.ai;
     var vmap={"GO":"v-strong","WATCH":"v-mid","NO-GO":"v-low"};
     var cls=vmap[(a.verdict||"").toUpperCase()]||"v-mid";
+    var vlabel=a.verdict||"تعذّر الحكم";
     var conf=a.confidence==null?"":' · ثقة '+a.confidence;
     return '<div class="aiblk"><div class="aihd"><span class="aibadge">كلود · الحَكَم</span>'+
-      '<span class="verdict '+cls+'">'+esc(a.verdict||"—")+'</span><span class="aiconf">'+esc(conf)+'</span></div>'+
+      '<span class="verdict '+cls+'">'+esc(vlabel)+'</span><span class="aiconf">'+esc(conf)+'</span></div>'+
       (a.reasoning?'<div class="aitext">'+esc(a.reasoning)+'</div>':'')+
       (a.by?'<div class="aiby">'+esc(a.by)+' · قرار أوّلي</div>':'')+'</div>';
   }
@@ -556,6 +559,13 @@
       '<p>المُصنّف حلّ المنتج إلى رمز HS. وزِّع المهام على الوكلاء لجمع البيانات الحيّة وترتيب الأسواق.</p>'+
       '<button class="primary" onclick="document.getElementById(\'runBtn\').click()">وزِّع المهام على الوكلاء</button>'+
       '<div class="foot">النظام لا يُنشئ بيانات — تظهر النتائج فور اتصال الوكلاء بمصدر حقيقي.</div></section>';
+  }
+  // تصدير JSON الخام (الموجة ١): نفس ردّ المحرّك كاملاً — بياناتك لأنظمتك الداخلية.
+  function exportJson(){
+    var raw=S.raw||S.result;if(!raw)return;
+    var a=document.createElement("a");
+    a.href="data:application/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(raw,null,2));
+    a.download="silk_"+((S.result&&S.result.product)||"analysis")+".json";a.click();
   }
   function exportCsv(){
     if(!S.result||!S.result.classified)return;

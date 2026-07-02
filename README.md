@@ -34,6 +34,13 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `silk_storage.py` | تخزين النتائج في SQLite (stdlib): `save_analysis`/`get_analysis`/`list_analyses`. ملف `.db` متجاهَل في git. |
 | `silk_faostat_agent.py` | وكيل اختياري: نصيب الفرد من العرض الغذائي (FAOSTAT). يتدهور بأمان عند المصادقة/الفشل (لا يخمّن رقمًا). |
 | `silk_cache.py` | ذاكرة تخزين مؤقت على القرص لطلبات GET (stdlib؛ `requests` بكسل). يُستخدم شفّافًا في طبقة البيانات. |
+| `silk_maps_agent.py` | وكيل اختياري: أعمال حقيقية بالاسم والتقييم (Google Places). بلا مفتاح: `None` موسوم. |
+| `silk_websearch_agent.py` | وكيل اختياري: نتائج ويب حقيقية (Serper.dev). بلا مفتاح: `None` موسوم. |
+| `silk_localprice_agent.py` | وكيل مدفوع: أسعار تجزئة فعلية + مقارنة سعرك (`compare_own_price`). |
+| `silk_volza_agent.py` | وكيل مدفوع: مستوردون بالاسم من بوالص الشحن (Volza). |
+| `silk_explee_agent.py` | وكيل مدفوع: مشترون وجهات اتصال B2B (explee، امتثال GDPR/PDPL). |
+| `silk_ai_judge.py` | الطبقة 3 الاختيارية: كلود حَكَمًا (`ai_verdict`) ومُعِدّ تقرير (`ai_report`) فوق حقائق الوكلاء الموسومة فقط — بعزل حقن بنيوي. |
+| `silk_usage.py` | عدّاد الاستهلاك المدفوع اليومي (سقف 429) — ملف مستقل عن `silk.db`. |
 | `api.py` | واجهة REST عبر FastAPI فوق المحرّك (تُستورد FastAPI بكسل؛ `app=None` بدونها). |
 | `app.py` | واجهة Streamlit اختيارية فوق المحرّك (تُستورد Streamlit بكسل داخليًا). |
 | `tools/fetch_hs_codes.py` | أداة تشغيل: تجلب مرجع HS من Comtrade وتوسّع `data/hs_codes.csv` برموز حقيقية. |
@@ -45,7 +52,7 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 
 ---
 
-## المصادر · Data sources — الطبقات التسع · the 9 layers
+## المصادر · Data sources — الطبقات الإحدى عشرة · the 11 layers
 
 كل المصادر **موصولة** (`wired`). المجانية تعمل بلا مفتاح (أو بمفتاح اختياري يرفع الحد)؛
 المدفوعة تتطلب مفتاحًا وإلا تتدهور بأمان إلى `value=None` بلا اختلاق. خريطة الحالة الحيّة عبر `GET /sources`.
@@ -63,8 +70,10 @@ Live status map: `GET /sources`.
 | 5 | Google Trends | مجاني · free | `silk_trends_agent.py` | — (`pip install pytrends`) |
 | 6 | Google Maps | مجاني · free | `silk_maps_agent.py` | `GOOGLE_MAPS_API_KEY` |
 | 7 | Web Search (Serper) | مجاني · free | `silk_websearch_agent.py` | `SEARCH_API_KEY` |
-| 8 | Volza | مدفوع · paid | `silk_volza_agent.py` | `VOLZA_API_KEY` |
-| 9 | explee | مدفوع · paid | `silk_explee_agent.py` | `EXPLEE_API_KEY` |
+| 8 | أسعار التجزئة المحلية · Local retail | مدفوع · paid | `silk_localprice_agent.py` | `LOCALPRICE_API_KEY` |
+| 9 | Volza | مدفوع · paid | `silk_volza_agent.py` | `VOLZA_API_KEY` |
+| 10 | explee | مدفوع · paid | `silk_explee_agent.py` | `EXPLEE_API_KEY` |
+| 11 | كلود (الحَكَم) · Claude (AI judge) | ذكاء · ai | `silk_ai_judge.py` | `ANTHROPIC_API_KEY` |
 
 > النهايات المرجعية · reference endpoints:
 > **UN Comtrade** `https://comtradeapi.un.org/public/v1/preview/C/A/HS` ·
@@ -135,11 +144,12 @@ docker run -p 8000:8000 silk-api
 | Method · Path | الوظيفة · Role |
 |---|---|
 | `GET /health` | حالة الخدمة + توفّر الحزم الاختيارية. |
-| `GET /sources` | خريطة حالة الطبقات التسع (`name, type, wired, key_env, key_present`). |
+| `GET /sources` | خريطة حالة الطبقات الإحدى عشرة (`name, type, wired, key_env, key_present`). |
 | `GET /resolve/{name}` | يصنّف اسم منتج إلى HS6 (مع المصدر/الثقة). |
 | `POST /analyze` | يشغّل `analyze` كاملًا (`{product, year, with_trends, with_tariffs, with_faostat, with_maps, with_websearch, with_localprice, own_price, with_volza, with_explee, persist}`). |
 | `GET /analyses` | يسرد التحليلات المحفوظة. |
 | `GET /analyses/{id}` | يعيد تحليلًا محفوظًا، أو 404. |
+| `PATCH /analyses/{id}/outcome` | يسجّل النتيجة الفعلية (`{outcome}`) — سجل المصداقية التراكمي. |
 
 **CI** (`.github/workflows/ci.yml`): يثبّت `requirements.txt` (بما فيها `fastapi`/`uvicorn`) + `pytest` ويشغّل `python -m pytest tests/ -q` عند كل push / PR.
 
@@ -176,7 +186,7 @@ docker run -p 8000:8000 silk-api
 
 **مُنجَز:** النواة (طبقة بيانات + مُصنّف HS + وكلاء + مُرتّب + محرّك) + طبقات Google Trends،
 الرسوم الجمركية (WITS)، FAOSTAT، فحوص الجودة، تخزين SQLite، وذاكرة تخزين مؤقت + واجهتا Streamlit
-و**FastAPI** + تعبئة Docker وتكامل مستمر (CI). اختبارات الدخان: 10/10.
+و**FastAPI** + تعبئة Docker وتكامل مستمر (CI) + حراسة الموجة ٠ (مصادقة/سقف/عزل حقن/CORS). اختبارات الدخان الهيرمتيكية: **40** تمر كاملة عبر CI (العدّ الحي في `tests/`).
 
 **خطوات لاحقة مقترحة:** اختبار حيّ شامل ببيانات الإنترنت، توسيع `hs_codes.csv` للقائمة الكاملة عبر
 `tools/fetch_hs_codes.py`، لفّ الوكلاء بـ CrewAI، ودمج المصادر المدفوعة (Volza/explee) للأسواق الناجية

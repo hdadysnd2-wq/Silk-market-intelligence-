@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 
+from silk_data_layer import DataPoint, _today
 from silk_hs_resolver import resolve
 from silk_market_ranker import rank_markets, COUNTRIES, WEIGHTS
 from silk_agents import ResearchManager, JuryCommittee
@@ -124,8 +125,10 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         result["websearch"] = _websearch(product_name)
     if with_ai:  # الطبقة 3: كلود يكتب التقرير المبدئي — Claude writes the report
         rep = _ai_report(result)
-        if rep:
-            result["report"] = rep
+        result["report"] = rep  # None = فشل/غياب المفتاح، ظاهرٌ لا محذوف (الموجة ١)
+        if rep is None:
+            result["report_note"] = ("تعذّر توليد تقرير كلود (مفتاح غائب أو فشل "
+                                     "النداء) — AI report unavailable, not hidden.")
     if check_quality:
         _annotate_quality(result)
     if persist:
@@ -154,6 +157,16 @@ def _ai_report(result: dict):
         return None
 
 
+
+def _enrich_error_dp(source: str, e: Exception) -> "DataPoint":
+    """فشل غلاف الإثراء بملاحظة — provenance-tagged enrichment failure (wave 1).
+
+    كان الاستثناء غير المتوقع يتدهور إلى []/None صامتين لا يميّزهما المستهلك عن
+    "لا نتائج"؛ الآن يظهر DataPoint(None, note=السبب) — نفس صرامة الوكلاء.
+    """
+    return DataPoint(None, source, 0.0,
+                     f"enrichment error: {type(e).__name__}: {e}", _today())
+
 def _enrich_trends(rows: list[dict], product_name: str) -> None:
     """أضف إشارة جوجل تريندز لكل سوق — attach Trends findings (graceful None offline)."""
     from silk_trends_agent import TrendsAgent  # lazy: optional layer
@@ -164,7 +177,7 @@ def _enrich_trends(rows: list[dict], product_name: str) -> None:
             row["trends"] = rep.findings
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("trends enrichment failed for %s: %s", row.get("iso3"), e)
-            row["trends"] = []
+            row["trends"] = [_enrich_error_dp("Google Trends", e)]
 
 
 def _enrich_tariffs(rows: list[dict], hs_code: str, year: int) -> None:
@@ -178,7 +191,7 @@ def _enrich_tariffs(rows: list[dict], hs_code: str, year: int) -> None:
             row["tariff"] = rep.findings[0] if rep.findings else None
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("tariff enrichment failed for %s: %s", row.get("iso3"), e)
-            row["tariff"] = None
+            row["tariff"] = _enrich_error_dp("World Bank WITS", e)
 
 
 def _enrich_faostat(rows: list[dict], product_name: str, year: int) -> None:
@@ -192,7 +205,7 @@ def _enrich_faostat(rows: list[dict], product_name: str, year: int) -> None:
             row["faostat"] = rep.findings[0] if rep.findings else None
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("faostat enrichment failed for %s: %s", row.get("iso3"), e)
-            row["faostat"] = None
+            row["faostat"] = _enrich_error_dp("FAOSTAT", e)
 
 
 def _enrich_maps(rows: list[dict], product_name: str) -> None:
@@ -206,7 +219,7 @@ def _enrich_maps(rows: list[dict], product_name: str) -> None:
             row["maps"] = rep.findings
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("maps enrichment failed for %s: %s", row.get("iso3"), e)
-            row["maps"] = []
+            row["maps"] = [_enrich_error_dp("Google Maps", e)]
 
 
 def _enrich_localprice(rows: list[dict], product_name: str,
@@ -225,7 +238,7 @@ def _enrich_localprice(rows: list[dict], product_name: str,
                 row["price_comparison"] = compare_own_price(own_price, rep.findings)
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("localprice enrichment failed for %s: %s", row.get("iso3"), e)
-            row["localprice"] = []
+            row["localprice"] = [_enrich_error_dp("Local retail", e)]
             if own_price is not None:
                 row["price_comparison"] = compare_own_price(own_price, [])
 
@@ -241,7 +254,7 @@ def _enrich_volza(rows: list[dict], hs_code: str) -> None:
             row["volza"] = rep.findings
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("volza enrichment failed for %s: %s", row.get("iso3"), e)
-            row["volza"] = []
+            row["volza"] = [_enrich_error_dp("Volza", e)]
 
 
 def _enrich_explee(rows: list[dict], product_name: str) -> None:
@@ -254,7 +267,7 @@ def _enrich_explee(rows: list[dict], product_name: str) -> None:
             row["explee"] = rep.findings
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("explee enrichment failed for %s: %s", row.get("iso3"), e)
-            row["explee"] = []
+            row["explee"] = [_enrich_error_dp("Explee", e)]
 
 
 def _websearch(product_name: str) -> list:
@@ -265,7 +278,7 @@ def _websearch(product_name: str) -> list:
         return rep.findings
     except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
         log.warning("websearch enrichment failed: %s", e)
-        return []
+        return [_enrich_error_dp("Web Search", e)]
 
 
 def _annotate_quality(result: dict) -> None:
