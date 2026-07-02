@@ -81,6 +81,23 @@ def _api_key_expected() -> str:
 # الطبقات المدفوعة الخاضعة للسقف — paid layers counted against the daily cap.
 _PAID_FLAGS = ("with_localprice", "with_volza", "with_explee", "with_ai")
 
+# مفاتيح البيئة المدفوعة — the paid-provider key env vars (503 guard below).
+_PAID_KEY_ENVS = ("LOCALPRICE_API_KEY", "VOLZA_API_KEY",
+                  "EXPLEE_API_KEY", "ANTHROPIC_API_KEY")
+
+
+def _unprotected_paid_keys() -> list[str]:
+    """مفاتيح مدفوعة بلا مصادقة — paid keys present while SILK_API_KEY is unset.
+
+    الإغلاق المسبق قبل الموجة ٤: مفتاح مدفوع في البيئة + مصادقة معطّلة =
+    خدمة عامة تصرف رصيداً مدفوعاً لأي مجهول. القاعدة: وضع التطوير المفتوح
+    مشروع فقط عند غياب المفاتيح المدفوعة **كلها**؛ وجود أي منها يوجب ضبط
+    SILK_API_KEY وإلا رُفض تشغيل الطبقات المدفوعة بـ503 وسبب واضح.
+    """
+    if _api_key_expected():
+        return []
+    return [k for k in _PAID_KEY_ENVS if os.environ.get(k, "").strip()]
+
 
 def create_app():
     """أنشئ تطبيق FastAPI — build the FastAPI app, or raise if fastapi is absent."""
@@ -168,7 +185,15 @@ def create_app():
                 deps[name] = True
             except Exception:  # noqa: BLE001
                 deps[name] = False
-        return {"status": "ok", "deps": deps}
+        health = {"status": "ok", "deps": deps}
+        unprotected = _unprotected_paid_keys()
+        if unprotected:
+            health["warnings"] = [
+                "paid keys present without SILK_API_KEY ("
+                + ", ".join(unprotected)
+                + ") — paid layers will refuse with 503 until SILK_API_KEY "
+                  "is set (or the paid keys are removed)"]
+        return health
 
     @app.get("/resolve/{name}")
     def resolve(name: str):
@@ -192,8 +217,18 @@ def create_app():
                                        "(send X-API-Key header)")
 
     def _guard_paid(req) -> None:
-        """حارس السقف (الموجة ٠) — 429 قبل أي وكيل، ثم تسجيل الاستهلاك."""
+        """حارسا المدفوع — 503 لمفاتيح غير محمية، ثم 429 للسقف، ثم التسجيل."""
         paid_requested = sum(1 for f in _PAID_FLAGS if getattr(req, f, False))
+        if paid_requested:
+            unprotected = _unprotected_paid_keys()
+            if unprotected:
+                raise HTTPException(
+                    status_code=503,
+                    detail="paid provider keys are set ("
+                           + ", ".join(unprotected)
+                           + ") but SILK_API_KEY is not — refusing to run "
+                             "paid layers unauthenticated. Set SILK_API_KEY "
+                             "(and send X-API-Key) or unset the paid keys.")
         if paid_requested and silk_usage.would_exceed_cap(paid_requested):
             raise HTTPException(
                 status_code=429,
