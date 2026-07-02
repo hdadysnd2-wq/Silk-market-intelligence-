@@ -67,14 +67,17 @@ def test_enrichment_wrapper_tariff_exception_noted():
 
 def test_ai_verdict_no_watch_default_on_unparseable_reply():
     # ردّ غير JSON من كلود => verdict=None صريح (لا وسم WATCH مختلق).
+    # (الموجة ٤ وحّدت الحكم في silk_synthesis — نفس الضمان على المدخل الموحّد.)
     from unittest.mock import patch
-    import silk_ai_judge as judge
+    import silk_synthesis as synth
 
-    with patch.object(judge, "_call", return_value="آسف، لا أستطيع إخراج JSON"):
-        v = judge.ai_verdict("تمور", "مصر", [])
+    with patch.object(synth, "_call", return_value="آسف، لا أستطيع إخراج JSON"):
+        out = synth.synthesize([], product="تمور", market="مصر", with_ai=True)
+    v = out.get("ai")
     assert v is not None
     assert v["verdict"] is None                  # لا افتراض
     assert "لا أستطيع" in v["reasoning"]          # النص محفوظ كتعليل
+    assert out["synthesis_stage"] == 2           # المرحلتان عملتا
 
 
 def test_ai_report_absence_is_visible_not_hidden():

@@ -1,0 +1,94 @@
+"""التوليف ثنائي المرحلة لسِلك — Silk two-stage synthesis (wave 4, vision §5, §9.3).
+
+يوحّد طبقتي الحكم اللتين كانتا متوازيتين (ازدواجية حذفتها هذه الموجة):
+  المرحلة ١ (حتمية): تجميع تقارير الوكلاء بقرار قابل للتفسير — منطق
+    `JuryCommittee` نفسه (يبقى في silk_agents كمكوّن المرحلة ١).
+  المرحلة ٢ (كلود، اختيارية بمفتاح): حكم فوق حقائق المرحلة ١ المعزولة؛
+    وعند وجود **خيوط التقاطع** (بطاقة منتج) يتغيّر البرومبت إلى "مواجهة
+    محددة": منتج المستخدم ضد المنافسين المرصودين (vision §5).
+
+كل نص خارجي — حقائق الوكلاء والخيوط — يمرّ عبر عزل `RAW_FINDINGS` القائم
+في silk_ai_judge (نفس آلية الموجة ٠، لا آلية جديدة). فشل تفسير ردّ كلود
+=> `verdict: null` (قاعدة الموجة ١ — لا وسم مختلق).
+
+نقطة الدخول الوحيدة للحكم: `synthesize()` — المحرّك لا يستدعي بعد اليوم
+لجنةً وحكماً منفصلين (الازدواجية محذوفة، §9.3؛ إصلاح الحقن/الثقة يقع هنا
+مرة واحدة).
+"""
+from __future__ import annotations
+
+import json
+import logging
+
+from silk_agents import JuryCommittee
+from silk_ai_judge import _call, _facts, _isolate, _MODEL, _PRINCIPLE
+
+log = logging.getLogger(__name__)
+
+# برومبت المواجهة (vision §5) — the confrontation prompt when threads exist.
+_CONFRONTATION = (
+    "أمامك مواجهة محددة — منتج المستخدم (بطاقته ضمن الخيوط المرفقة) ضد "
+    "المنافسين المرصودين في الخيوط. احكم على المواجهة: مَن يستطيع المستخدم "
+    "منافسته سعرياً ومن لا (استشهد بهوامش الخيوط حرفياً)، وما استراتيجية "
+    "الدخول الواقعية عبر الأبواب المرصودة. كل رقم تذكره يجب أن يكون وارداً "
+    "في الخيوط — الخيط الناقص يُذكر ناقصاً."
+)
+
+
+def _stage2(product: str, market: str, reports: list,
+            threads: dict | None) -> dict | None:
+    """المرحلة ٢ — حكم كلود المعزول — Claude's judgment over isolated inputs.
+
+    None عند غياب المفتاح/فشل النداء (المرحلة ١ تكفي وحدها حينها).
+    """
+    facts = _isolate(_facts(reports))
+    parts = [f"المنتج: {_isolate(product)}", f"السوق: {market}", "",
+             f"حقائق الوكلاء (لا تتجاوزها):\n{facts}"]
+    if threads:
+        blob = json.dumps(threads, ensure_ascii=False, default=str)
+        parts += ["", "خيوط التقاطع (منتج المستخدم ضد المنافسين المرصودين):",
+                  _isolate(blob), "", _CONFRONTATION]
+    else:
+        parts += ["", "أصدر حكمًا أوّليًّا على دخول هذا السوق."]
+    parts += ["", 'أعد JSON فقط بهذا الشكل:',
+              '{"verdict":"GO|WATCH|NO-GO","confidence":0.0-1.0,'
+              '"reasoning":"سبب موجز مبني على الحقائق والخيوط"}']
+    out = _call(_PRINCIPLE, "\n".join(parts), max_tokens=900)
+    if not out:
+        return None
+    try:
+        start, end = out.find("{"), out.rfind("}")
+        obj = (json.loads(out[start:end + 1]) if start >= 0
+               else {"reasoning": out})
+    except Exception:  # noqa: BLE001 — non-JSON reply kept as reasoning
+        obj = {"reasoning": out}
+    # قاعدة الموجة ١: لا افتراض وسم — فشل التفسير يعني verdict=None صريحًا.
+    return {
+        "verdict": obj.get("verdict"),
+        "confidence": obj.get("confidence"),
+        "reasoning": obj.get("reasoning", ""),
+        "by": f"Claude ({_MODEL})",
+        "preliminary": True,
+        "grounded_in_threads": bool(threads),
+    }
+
+
+def synthesize(reports: list, *, product: str, market: str,
+               threads: dict | None = None, with_ai: bool = False) -> dict:
+    """التوليف الموحّد — the single verdict entry point (both stages).
+
+    يعيد بنية «jury» المتوافقة مع الواجهة القائمة (شرط ٩.٣: الحذف لا يغيّر
+    شكل الاستجابة): مفاتيح المرحلة ١ كما كانت + `ai` للمرحلة ٢ إن توفرت.
+    """
+    verdict = JuryCommittee.evaluate(reports)          # المرحلة ١ — حتمية
+    verdict["synthesis_stage"] = 1
+    if with_ai:
+        try:
+            ai = _stage2(product, market, reports, threads)
+        except Exception as e:  # noqa: BLE001 — AI stage must never crash
+            log.warning("synthesis stage 2 failed for %s: %s", market, e)
+            ai = None
+        if ai:
+            verdict["ai"] = ai
+            verdict["synthesis_stage"] = 2
+    return verdict

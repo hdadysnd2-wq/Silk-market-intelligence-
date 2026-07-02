@@ -22,17 +22,15 @@ log = logging.getLogger(__name__)
 
 
 def _markets_table(markets: list[dict]) -> list[dict]:
-    """جدول الأسواق المختصر — compact rows (country, score, confidence, comps)."""
-    rows = []
-    for r in markets:
-        present = sum(1 for dp in r["components"].values() if dp.value is not None)
-        rows.append({
-            "السوق / Country": r["country"],
-            "الدرجة / Score": round(r.get("total_score", 0.0), 3),
-            "الثقة / Confidence": r.get("confidence", 0.0),
-            "مكوّنات / Components": f"{present}/{len(WEIGHTS)}",
-        })
-    return rows
+    """جدول الأسواق المختصر — rows derived from the ONE view template (§10.1)."""
+    from silk_render import build_view
+    view = build_view({"markets": markets, "classified": True})
+    return [{
+        "السوق / Country": m["country"],
+        "الدرجة / Score": round(m.get("score") or 0.0, 3),
+        "الثقة / Confidence": m.get("confidence", 0.0),
+        "مكوّنات / Components": m["components_present"],
+    } for m in view["markets"]]
 
 
 def _render_market(st, row: dict) -> None:

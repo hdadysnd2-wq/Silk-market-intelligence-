@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 import requests
 
 from silk_data_layer import DataPoint, ISO3_TO_M49, M49_TO_ISO3, _today
-from silk_agents import Agent, AgentReport
+from silk_agents import BaseAgent, AgentReport
 
 log = logging.getLogger(__name__)
 
@@ -117,13 +117,15 @@ def _iter_json_obs(data: dict):
                 yield obs[0]
 
 
-class TariffsAgent(Agent):
+class TariffsAgent(BaseAgent):
     """وكيل التعريفات — applied customs tariff (%) into a market for an HS code."""
+
+    PAID = False
 
     def __init__(self) -> None:
         super().__init__("TariffsAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """جلب التعريفة المطبّقة — fetch the applied import tariff into the market.
 
         task keys: hs_code, reporter_m49 or iso3 (market), partner_iso3

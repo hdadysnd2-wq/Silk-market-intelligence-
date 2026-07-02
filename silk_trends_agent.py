@@ -12,7 +12,7 @@ import calendar
 import logging
 
 from silk_data_layer import DataPoint, _today
-from silk_agents import Agent, AgentReport
+from silk_agents import BaseAgent, AgentReport
 
 log = logging.getLogger(__name__)
 
@@ -83,13 +83,15 @@ def _seasonality(keyword: str, geo: str | None, timeframe: str) -> DataPoint:
                          f"pytrends unavailable / no network: {e}", _today())
 
 
-class TrendsAgent(Agent):
+class TrendsAgent(BaseAgent):
     """وكيل الاتجاهات — Google Trends demand signal for a product keyword."""
+
+    PAID = False
 
     def __init__(self) -> None:
         super().__init__("TrendsAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """إشارة الطلب من بحث جوجل — mean interest + seasonality, real data only.
 
         task keys: keyword(str), geo(ISO2 like 'AE'/'SA', optional),
