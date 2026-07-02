@@ -1,0 +1,195 @@
+{
+  "product": "تمور",
+  "hs_code": "080410",
+  "hs_confidence": 1.0,
+  "hs_note": "Dates fresh or dried / تمور طازجة أو مجففة",
+  "year": 2022,
+  "preliminary": true,
+  "classified": true,
+  "markets": [
+    {
+      "country": "United Arab Emirates",
+      "iso3": "ARE",
+      "m49": "784",
+      "total_score": 0.0,
+      "confidence": 0.0,
+      "components": {
+        "market_size": {
+          "value": null,
+          "source": "UN Comtrade",
+          "confidence": 0.0,
+          "note": "no import total HS080410 -> 784 2022",
+          "retrieved_at": "2026-07-02"
+        },
+        "saudi_position": {
+          "value": null,
+          "source": "UN Comtrade",
+          "confidence": 0.0,
+          "note": "no competitor data",
+          "retrieved_at": "2026-07-02"
+        },
+        "demand_capacity": {
+          "value": null,
+          "source": "World Bank",
+          "confidence": 0.0,
+          "note": "no income data for ARE 2022",
+          "retrieved_at": "2026-07-02"
+        },
+        "competition": {
+          "value": null,
+          "source": "UN Comtrade",
+          "confidence": 0.0,
+          "note": "no competitor data",
+          "retrieved_at": "2026-07-02"
+        }
+      },
+      "income_ppp": null,
+      "population": null,
+      "competitors": [],
+      "top_competitor": null,
+      "jury": {
+        "verdict": "NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات",
+        "preliminary": true,
+        "confidence": 0.0,
+        "agents_with_data": 0,
+        "agents_total": 3,
+        "data_gaps": [
+          "TradeFlowAgent",
+          "EconomicAgent",
+          "CompetitionAgent"
+        ],
+        "contributing_findings": [],
+        "note": "Preliminary only; missing sources flagged, not estimated. تنبيه: قرار مبدئي والنواقص معلّمة لا مُخمّنة."
+      },
+      "recommendation": "United Arab Emirates: لا بيانات كافية — insufficient data (preliminary).",
+      "quality_flags": [
+        "all components missing — no usable data for this market"
+      ]
+    },
+    {
+      "country": "India",
+      "iso3": "IND",
+      "m49": "356",
+      "total_score": 0.0,
+      "confidence": 0.0,
+      "components": {
+        "market_size": {
+          "value": null,
+          "source": "UN Comtrade",
+          "confidence": 0.0,
+          "note": "no import total HS080410 -> 356 2022",
+          "retrieved_at": "2026-07-02"
+        },
+        "saudi_position": {
+          "value": null,
+          "source": "UN Comtrade",
+          "confidence": 0.0,
+          "note": "no competitor data",
+          "retrieved_at": "2026-07-02"
+        },
+        "demand_capacity": {
+          "value": null,
+          "source": "World Bank",
+          "confidence": 0.0,
+          "note": "no income data for IND 2022",
+          "retrieved_at": "2026-07-02"
+        },
+        "competition": {
+          "value": null,
+          "source": "UN Comtrade",
+          "confidence": 0.0,
+          "note": "no competitor data",
+          "retrieved_at": "2026-07-02"
+        }
+      },
+      "income_ppp": null,
+      "population": null,
+      "competitors": [],
+      "top_competitor": null,
+      "jury": {
+        "verdict": "NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات",
+        "preliminary": true,
+        "confidence": 0.0,
+        "agents_with_data": 0,
+        "agents_total": 3,
+        "data_gaps": [
+          "TradeFlowAgent",
+          "EconomicAgent",
+          "CompetitionAgent"
+        ],
+        "contributing_findings": [],
+        "note": "Preliminary only; missing sources flagged, not estimated. تنبيه: قرار مبدئي والنواقص معلّمة لا مُخمّنة."
+      },
+      "recommendation": "India: لا بيانات كافية — insufficient data (preliminary).",
+      "quality_flags": [
+        "all components missing — no usable data for this market"
+      ]
+    },
+    {
+      "country": "United Kingdom",
+      "iso3": "GBR",
+      "m49": "826",
+      "total_score": 0.0,
+      "confidence": 0.0,
+      "components": {
+        "market_size": {
+          "value": null,
+          "source": "UN Comtrade",
+          "confidence": 0.0,
+          "note": "no import total HS080410 -> 826 2022",
+          "retrieved_at": "2026-07-02"
+        },
+        "saudi_position": {
+          "value": null,
+          "source": "UN Comtrade",
+          "confidence": 0.0,
+          "note": "no competitor data",
+          "retrieved_at": "2026-07-02"
+        },
+        "demand_capacity": {
+          "value": null,
+          "source": "World Bank",
+          "confidence": 0.0,
+          "note": "no income data for GBR 2022",
+          "retrieved_at": "2026-07-02"
+        },
+        "competition": {
+          "value": null,
+          "source": "UN Comtrade",
+          "confidence": 0.0,
+          "note": "no competitor data",
+          "retrieved_at": "2026-07-02"
+        }
+      },
+      "income_ppp": null,
+      "population": null,
+      "competitors": [],
+      "top_competitor": null,
+      "jury": {
+        "verdict": "NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات",
+        "preliminary": true,
+        "confidence": 0.0,
+        "agents_with_data": 0,
+        "agents_total": 3,
+        "data_gaps": [
+          "TradeFlowAgent",
+          "EconomicAgent",
+          "CompetitionAgent"
+        ],
+        "contributing_findings": [],
+        "note": "Preliminary only; missing sources flagged, not estimated. تنبيه: قرار مبدئي والنواقص معلّمة لا مُخمّنة."
+      },
+      "recommendation": "United Kingdom: لا بيانات كافية — insufficient data (preliminary).",
+      "quality_flags": [
+        "all components missing — no usable data for this market"
+      ]
+    }
+  ],
+  "note": "نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. Preliminary, real public data only; gaps flagged, not estimated.",
+  "quality_summary": {
+    "markets_checked": 3,
+    "markets_flagged": 3,
+    "total_flags": 3,
+    "note": "تنبيهات جودة فقط؛ الأرقام لم تُغيّر — quality flags only; underlying numbers unchanged."
+  }
+}

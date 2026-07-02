@@ -228,6 +228,25 @@ def create_app():
                                 detail=f"analysis {analysis_id} not found")
         return _json(found)
 
+    class OutcomeRequest(BaseModel):
+        """جسم تسجيل النتيجة الفعلية — actual-outcome body (wave 1)."""
+        outcome: str
+
+    @app.patch("/analyses/{analysis_id}/outcome")
+    def set_outcome(analysis_id: int, req: OutcomeRequest):
+        """سجّل ما حدث فعلاً لتحليل — record the real-world outcome (wave 1).
+
+        يبني سجل المصداقية التراكمي (عمودا outcome/outcome_date). 404 إن لم
+        يوجد التحليل؛ لا يغيّر بيانات التحليل نفسها إطلاقاً.
+        """
+        outcome = (req.outcome or "").strip()
+        if not outcome:
+            raise HTTPException(status_code=422, detail="outcome must be non-empty")
+        if not silk_storage.set_outcome(analysis_id, outcome):
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        return {"id": analysis_id, "outcome": outcome, "recorded": True}
+
     # الواجهة الثابتة على نفس الخدمة — serve the static frontend at "/" so one
     # Render service hosts BOTH the API and the UI (same origin, no CORS needed).
     # Registered last so the API routes above take precedence over static files.
