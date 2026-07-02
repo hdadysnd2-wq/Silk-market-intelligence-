@@ -39,7 +39,7 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `silk_localprice_agent.py` | وكيل مدفوع: أسعار تجزئة فعلية + مقارنة سعرك (`compare_own_price`). |
 | `silk_volza_agent.py` | وكيل مدفوع: مستوردون بالاسم من بوالص الشحن (Volza). |
 | `silk_explee_agent.py` | وكيل مدفوع: مشترون وجهات اتصال B2B (explee، امتثال GDPR/PDPL). |
-| `silk_ai_judge.py` | الطبقة 3 الاختيارية: كلود حَكَمًا (`ai_verdict`) ومُعِدّ تقرير (`ai_report`) فوق حقائق الوكلاء الموسومة فقط — بعزل حقن بنيوي. |
+| `silk_ai_judge.py` | أدوات كلود المشتركة (`_call`/العزل) + مُعِدّ التقرير (`ai_report`) — الحكم نفسه صار حصراً عبر `silk_synthesis` (§9.3). |
 | `silk_usage.py` | عدّاد الاستهلاك المدفوع اليومي (سقف 429) — ملف مستقل عن `silk.db`. |
 | `silk_competitors_agent.py` | وكيل الموجة ٣: مرشّحو منافسين **بالاسم** (شركات لا دول) من بحث الويب — موسومون "غير مُتحقَّق". |
 | `silk_channels_agent.py` | وكيل الموجة ٣: مرشّحو قنوات التوزيع (فعلي + رقمي بعدستين في وكيل واحد). |
