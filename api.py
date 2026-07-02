@@ -111,7 +111,27 @@ def create_app():
                            allow_methods=["*"], allow_headers=["*"])
 
     class AnalyzeRequest(BaseModel):
-        """طلب تحليل منتج — analyze request body."""
+        """طلب تحليل منتج (المسار العادي) — analyze request body.
+
+        الموجة ٢: حقول الطبقات المدفوعة أُزيلت نهائياً من هذا النموذج —
+        إرسالها يُتجاهَل بنيوياً (pydantic يسقط الحقول الزائدة)، فالمسار
+        العادي **يستحيل** أن يشغّل طبقة مدفوعة. التعميق عبر POST /deepen.
+        """
+        product: str
+        year: int | None = None
+        with_trends: bool = False
+        with_tariffs: bool = False
+        with_faostat: bool = False
+        with_maps: bool = False
+        with_websearch: bool = False
+        persist: bool = False
+
+    class DeepenRequest(BaseModel):
+        """طلب تعميق (المسار المدفوع) — the /deepen request body (wave 2).
+
+        المسار الوحيد القادر على تفعيل الطبقات المدفوعة، ويعمل داخل
+        silk_context.deepen_context() فيسمح حارس BaseAgent البنيوي بالتنفيذ.
+        """
         product: str
         year: int | None = None
         with_trends: bool = False
@@ -155,23 +175,17 @@ def create_app():
         """فهرس المنتجات للبحث — product search index for the dashboard combobox."""
         return _json(_index_search(q, limit))
 
-    @app.post("/analyze")
-    def analyze(req: AnalyzeRequest, request: Request):
-        """حلّل منتجًا عبر الأسواق — run the full engine.analyze pipeline.
-
-        own_price (with with_localprice=True) attaches a price-positioning
-        comparison per top market — your price vs. real local listings.
-
-        حراسة الموجة ٠ قبل أي وكيل — wave-0 guards run BEFORE any agent:
-        401 بلا مفتاح صحيح (عند ضبط SILK_API_KEY)، و429 عند تجاوز سقف
-        الطبقات المدفوعة اليومي (عند ضبط SILK_PAID_DAILY_CAP).
-        """
+    def _require_key(request: Request) -> None:
+        """حارس المصادقة (الموجة ٠) — 401 before any agent when key mismatches."""
         expected = _api_key_expected()
         if expected and request.headers.get("x-api-key", "") != expected:
             raise HTTPException(status_code=401,
                                 detail="missing or invalid API key "
                                        "(send X-API-Key header)")
-        paid_requested = sum(1 for f in _PAID_FLAGS if getattr(req, f))
+
+    def _guard_paid(req) -> None:
+        """حارس السقف (الموجة ٠) — 429 قبل أي وكيل، ثم تسجيل الاستهلاك."""
+        paid_requested = sum(1 for f in _PAID_FLAGS if getattr(req, f, False))
         if paid_requested and silk_usage.would_exceed_cap(paid_requested):
             raise HTTPException(
                 status_code=429,
@@ -179,13 +193,43 @@ def create_app():
                        "retry tomorrow or raise the cap")
         if paid_requested:
             silk_usage.record_paid_calls(paid_requested)
+
+    @app.post("/analyze")
+    def analyze(req: AnalyzeRequest, request: Request):
+        """حلّل منتجًا عبر الأسواق (المسار العادي، مجاني حصراً) — free-only path.
+
+        الموجة ٢: لا حقول مدفوعة في النموذج أصلاً، فلا يصل المحرّكَ أي علم
+        مدفوع من هنا — الحصر بنيوي لا افتراضي. التعميق عبر POST /deepen.
+        حارس الموجة ٠ (المصادقة) يعمل قبل أي وكيل.
+        """
+        _require_key(request)
         result = silk_engine.analyze(
             req.product, year=req.year, with_trends=req.with_trends,
             with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
             with_maps=req.with_maps, with_websearch=req.with_websearch,
-            with_localprice=req.with_localprice, own_price=req.own_price,
-            with_volza=req.with_volza, with_explee=req.with_explee,
-            with_ai=req.with_ai, persist=req.persist)
+            persist=req.persist)
+        return _json(result)
+
+    @app.post("/deepen")
+    def deepen(req: DeepenRequest, request: Request):
+        """عمّق التحليل (المسار المدفوع الوحيد) — the only paid-layer path.
+
+        يعمل داخل silk_context.deepen_context() فيسمح حارس BaseAgent البنيوي
+        بتشغيل الوكلاء المدفوعين (localprice/volza/explee) — خارجه يستحيل
+        تنفيذهم حتى مع مفاتيح مضبوطة. حارسا الموجة ٠ (401 المصادقة، 429
+        السقف) يعملان قبل أي وكيل.
+        """
+        _require_key(request)
+        _guard_paid(req)
+        import silk_context
+        with silk_context.deepen_context():
+            result = silk_engine.analyze(
+                req.product, year=req.year, with_trends=req.with_trends,
+                with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
+                with_maps=req.with_maps, with_websearch=req.with_websearch,
+                with_localprice=req.with_localprice, own_price=req.own_price,
+                with_volza=req.with_volza, with_explee=req.with_explee,
+                with_ai=req.with_ai, persist=req.persist)
         return _json(result)
 
     @app.get("/sources")

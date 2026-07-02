@@ -19,7 +19,7 @@ import logging
 import os
 
 from silk_data_layer import DataPoint, ISO3_TO_M49, _today
-from silk_agents import Agent, AgentReport
+from silk_agents import BaseAgent, AgentReport
 
 log = logging.getLogger(__name__)
 
@@ -118,13 +118,20 @@ def _parse_importer_names(payload: object) -> list[str]:
     return names
 
 
-class VolzaAgent(Agent):
-    """وكيل فولزا — named importers/exporters from bills of lading (PAID, advanced)."""
+class VolzaAgent(BaseAgent):
+    """وكيل فولزا — named importers/exporters from bills of lading (PAID, advanced).
+
+    يرث BaseAgent (الموجة ٢): PAID=True يعني الحصر البنيوي داخل /deepen —
+    خارجه يستحيل الاستدعاء حتى مع مفتاح مضبوط.
+    """
+
+    PAID = True
+    SOURCE = "Volza"
 
     def __init__(self) -> None:
         super().__init__("VolzaAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """مستوردون بالاسم من فولزا — named importers for an HS code into a market.
 
         task keys: hs_code (or product as a label), market (M49/ISO3 of the

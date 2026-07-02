@@ -349,17 +349,37 @@
     if(!S.product){$("search").focus();return;}
     S.running=true;renderNodes();updateChrome();
     $("resultArea").innerHTML='<section class="card" style="padding:22px"><div class="skl" style="width:30%"></div><div class="skl" style="width:90%;margin-top:14px"></div><div class="skl" style="width:80%;margin-top:10px"></div></section>';
+    // الموجة ٢: المسار العادي مجاني حصراً — الطبقات المدفوعة عبر /deepen فقط.
     var body={product:S.product,year:S.year,
       with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,
-      with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS,
-      with_localprice:!!S.keys.LOCALPRICE,own_price:S.ownPrice,
-      with_volza:!!S.keys.VOLZA,
-      with_explee:!!S.keys.EXPLEE,with_ai:!!S.keys.CLAUDE};
+      with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS};
     fetch(base()+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
       .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t);}catch(_){}
         if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?t:(typeof de==="string"?de:JSON.stringify(de))));}return d;});})
       .then(function(res){S.running=false;S.raw=res;S.result=mapResult(res);S.selId=S.result&&S.result.markets[0]&&S.result.markets[0].id;renderNodes();render();updateChrome();})
       .catch(function(e){S.running=false;renderNodes();$("resultArea").innerHTML='<section class="card err" style="margin-top:4px">فشل الطلب: '+esc(e.message)+'</section>';});
+  }
+
+  // تعميق مدفوع (الموجة ٢) — POST /deepen يعيد التحليل بالطبقات المدفوعة المفعّلة.
+  function runDeepen(){
+    if(!S.product)return;
+    var paid={with_localprice:!!S.keys.LOCALPRICE,with_volza:!!S.keys.VOLZA,
+      with_explee:!!S.keys.EXPLEE,with_ai:!!S.keys.CLAUDE};
+    if(!paid.with_localprice&&!paid.with_volza&&!paid.with_explee&&!paid.with_ai){
+      S.view="settings";applyView();return;  // لا طبقة مفعّلة => وجّه للإعدادات
+    }
+    S.running=true;renderNodes();updateChrome();
+    var body={product:S.product,year:S.year,
+      with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,
+      with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS,
+      own_price:S.ownPrice,
+      with_localprice:paid.with_localprice,with_volza:paid.with_volza,
+      with_explee:paid.with_explee,with_ai:paid.with_ai};
+    fetch(base()+"/deepen",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+      .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t);}catch(_){}
+        if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?t:(typeof de==="string"?de:JSON.stringify(de))));}return d;});})
+      .then(function(res){S.running=false;S.raw=res;S.result=mapResult(res);S.selId=S.result&&S.result.markets[0]&&S.result.markets[0].id;renderNodes();render();updateChrome();})
+      .catch(function(e){S.running=false;renderNodes();$("resultArea").innerHTML='<section class="card err" style="margin-top:4px">فشل التعميق: '+esc(e.message)+'</section>';});
   }
 
   // ---------- map engine result -> dashboard model ----------
@@ -458,7 +478,7 @@
     $("resultArea").querySelectorAll(".rrow").forEach(function(b){b.addEventListener("click",function(){S.selId=this.getAttribute("data-id");render();});});
     var ex=$("exportBtn");if(ex)ex.addEventListener("click",exportCsv);
     var jb=$("jsonBtn");if(jb)jb.addEventListener("click",exportJson);
-    var deep=$("deepBtn");if(deep)deep.addEventListener("click",function(){S.view="settings";applyView();});
+    var deep=$("deepBtn");if(deep)deep.addEventListener("click",runDeepen);
     var rb=$("reportBtn");if(rb)rb.addEventListener("click",showReport);
   }
   // حُكم كلود (الحَكَم) — Claude's preliminary verdict over the agents' findings.
