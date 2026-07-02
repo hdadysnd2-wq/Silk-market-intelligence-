@@ -95,13 +95,15 @@ class BaseAgent(Agent):
         raise NotImplementedError
 
 
-class TradeFlowAgent(Agent):
+class TradeFlowAgent(BaseAgent):
     """وكيل تدفّق التجارة — Comtrade import/export size of an HS code in a market."""
+
+    PAID = False
 
     def __init__(self) -> None:
         super().__init__("TradeFlowAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """حجم استيراد/تصدير سلعة في سوق — total trade value from World partner."""
         hs, market, year = task["hs_code"], task["market_m49"], task["year"]
         findings: list[DataPoint] = []
@@ -123,13 +125,15 @@ class TradeFlowAgent(Agent):
         return AgentReport(self.name, findings, failed, summary)
 
 
-class EconomicAgent(Agent):
+class EconomicAgent(BaseAgent):
     """وكيل اقتصادي — World Bank income (GDP & PPP per capita) + population."""
+
+    PAID = False
 
     def __init__(self) -> None:
         super().__init__("EconomicAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """قياس قوة السوق الاقتصادية — economic profile of the market."""
         iso3, year = task.get("iso3"), task.get("year")
         if not iso3:

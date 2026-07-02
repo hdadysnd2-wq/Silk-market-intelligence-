@@ -118,8 +118,12 @@ def list_analyses(path: str = _DEFAULT_PATH) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_analysis(analysis_id: int, path: str = _DEFAULT_PATH) -> dict | None:
-    """أعد تحليلًا كاملًا — fetch one full analysis dict, or None if absent."""
+def get_analysis(analysis_id: int, path: str | None = None) -> dict | None:
+    """أعد تحليلًا كاملًا — fetch one full analysis dict, or None if absent.
+
+    path=None يقرأ المسار الافتراضي وقت النداء (قابل للتوجيه في الاختبارات).
+    """
+    path = path or _DEFAULT_PATH
     if not os.path.exists(path):
         return None
     with _connect(path) as conn:
