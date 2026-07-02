@@ -16,7 +16,7 @@ import logging
 import requests
 
 from silk_data_layer import DataPoint, _today
-from silk_agents import Agent, AgentReport
+from silk_agents import BaseAgent, AgentReport
 
 log = logging.getLogger(__name__)
 
@@ -121,13 +121,15 @@ def per_capita_supply(
     return DataPoint(value, "FAOSTAT", 0.85, note, _today())
 
 
-class FaostatAgent(Agent):
+class FaostatAgent(BaseAgent):
     """وكيل فاوستات — per-capita food consumption/production for a market."""
+
+    PAID = False
 
     def __init__(self) -> None:
         super().__init__("FaostatAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """نصيب الفرد الغذائي — FAOSTAT per-capita supply for the task's item."""
         iso3 = task.get("iso3") or task.get("country")
         item = task.get("item") or task.get("product")

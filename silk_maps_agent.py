@@ -15,7 +15,7 @@ import logging
 import os
 
 from silk_data_layer import DataPoint, _today
-from silk_agents import Agent, AgentReport
+from silk_agents import BaseAgent, AgentReport
 
 log = logging.getLogger(__name__)
 
@@ -84,13 +84,15 @@ def find_places(query: str, region: str | None = None) -> list[DataPoint]:
     return findings
 
 
-class MapsAgent(Agent):
+class MapsAgent(BaseAgent):
     """وكيل الخرائط — named factories/distributors/competitors + ratings."""
+
+    PAID = False
 
     def __init__(self) -> None:
         super().__init__("MapsAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """جد لاعبي السوق بالاسم — locate market players by name on Google Maps.
 
         task keys: query (product+market, e.g. 'تمور موزعون المغرب'),
