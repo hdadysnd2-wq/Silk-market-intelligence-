@@ -7,6 +7,8 @@
 
 | الملف | ما هو | كيف وُلّد |
 |---|---|---|
+| `report_full_latest.docx` | التقرير الكامل Word (§10.3) من نفس النتيجة — خلاصة أولاً + سطر مصدر تحت كل رقم + «حدود هذا التقرير» | `silk_reports.render_docx(build_view(...))` |
+| `brief_latest.txt` | المختصر (§10.4) — صفحة «رسالة جوال» | `silk_reports.render_brief(build_view(...))` |
 | `analysis_latest.json` | ردّ `POST /analyze` الكامل (تمور × 38 سوقاً، ببطاقة منتج) شاملاً `view` (القالب الموحّد) و`competitive_position` (محرّك التقاطع) — نفس ما ينزّله زر «حمّل JSON» | عبر `TestClient` فوق مسار الـ API الحقيقي |
 
 **ملاحظة صدق:** النموذج الحالي وُلّد في بيئة **بلا وصول لمصادر البيانات**

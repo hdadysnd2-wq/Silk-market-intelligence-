@@ -26,7 +26,8 @@ def _dp(obj: object) -> dict:
     return {"value": getattr(obj, "value", None),
             "source": getattr(obj, "source", ""),
             "confidence": getattr(obj, "confidence", 0.0),
-            "note": getattr(obj, "note", "")}
+            "note": getattr(obj, "note", ""),
+            "retrieved_at": getattr(obj, "retrieved_at", "")}
 
 
 def _decision(top: dict | None) -> dict:
@@ -110,6 +111,15 @@ def build_view(result: dict) -> dict:
             "country": row.get("country"), "iso3": row.get("iso3"),
             "score": row.get("total_score"), "confidence": row.get("confidence"),
             "components_present": f"{present}/{len(comps) or 4}",
+            # §10.3: سطر مصدر تحت كل رقم — مبني في القالب نفسه فيستحيل
+            # بنيوياً ظهور رقم بلا نسب في أي مشتق (docx/نص/لوحة).
+            "components_detail": [
+                {"name": name, "value": _dp(c).get("value"),
+                 "source": _dp(c).get("source"),
+                 "confidence": _dp(c).get("confidence"),
+                 "retrieved_at": _dp(c).get("retrieved_at", ""),
+                 "note": _dp(c).get("note", "")}
+                for name, c in comps.items()],
             "recommendation": row.get("recommendation"),
             "quality_flags": row.get("quality_flags") or [],
             "has_competitive_position": "competitive_position" in row,

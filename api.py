@@ -377,6 +377,42 @@ def create_app():
                                 detail=f"analysis {analysis_id} not found")
         return _json(found)
 
+    @app.get("/analyses/{analysis_id}/brief")
+    def brief(analysis_id: int):
+        """المختصر (§10.4) — one-page mobile-style brief from the ONE template."""
+        found = silk_storage.get_analysis(analysis_id)
+        if found is None:
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        from silk_render import build_view
+        from silk_reports import render_brief
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(render_brief(build_view(found)))
+
+    @app.get("/analyses/{analysis_id}/report.docx")
+    def report_docx(analysis_id: int):
+        """التقرير الكامل Word (§10.3) — derived from the ONE template.
+
+        404 للتحليل المفقود؛ 501 بتلميح تثبيت واضح إن غابت python-docx.
+        """
+        found = silk_storage.get_analysis(analysis_id)
+        if found is None:
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        import tempfile
+        from silk_render import build_view
+        from silk_reports import render_docx
+        from fastapi.responses import FileResponse
+        try:
+            path = render_docx(build_view(found),
+                               os.path.join(tempfile.mkdtemp(), "report.docx"))
+        except RuntimeError as e:
+            raise HTTPException(status_code=501, detail=str(e))
+        return FileResponse(
+            path, filename=f"silk_report_{analysis_id}.docx",
+            media_type="application/vnd.openxmlformats-officedocument"
+                       ".wordprocessingml.document")
+
     class OutcomeRequest(BaseModel):
         """جسم تسجيل النتيجة الفعلية — actual-outcome body (wave 1)."""
         outcome: str
