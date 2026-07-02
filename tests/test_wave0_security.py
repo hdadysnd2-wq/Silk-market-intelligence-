@@ -161,3 +161,55 @@ def test_usage_counter_no_cap_when_env_unset():
         assert silk_usage.would_exceed_cap(1000) is False
     with _env(SILK_PAID_DAILY_CAP="not-a-number"):
         assert silk_usage.daily_cap() is None  # قيمة فاسدة لا تعطّل الخدمة
+
+
+def test_503_when_paid_keys_present_without_auth():
+    # مفتاح مدفوع بالبيئة + SILK_API_KEY غائب => 503 للطبقات المدفوعة + تحذير /health.
+    from unittest.mock import patch
+    with _env(SILK_API_KEY=None, SILK_PAID_DAILY_CAP=None,
+              VOLZA_API_KEY="paid-key-present", EXPLEE_API_KEY=None,
+              LOCALPRICE_API_KEY=None, ANTHROPIC_API_KEY=None):
+        client = _client()
+        r = client.post("/deepen", json={"product": "تمور",
+                                         "with_volza": True})
+        assert r.status_code == 503
+        assert "SILK_API_KEY" in r.json()["detail"]      # السبب واضح
+        assert "VOLZA_API_KEY" in r.json()["detail"]     # المفتاح مسمّى
+        h = client.get("/health").json()
+        assert any("SILK_API_KEY" in w for w in h.get("warnings", []))
+        # المسار المجاني لا يتأثر — free path unaffected.
+        with patch("requests.get",
+                   side_effect=OSError("network disabled for hermetic test")):
+            r = client.post("/analyze", json={"product": "تمور"})
+        assert r.status_code == 200
+
+
+def test_paid_keys_protected_when_auth_set_no_503():
+    # نفس المفاتيح مع SILK_API_KEY مضبوط => لا 503 (الحماية قائمة) ولا تحذير.
+    from unittest.mock import patch
+    with _env(SILK_API_KEY="prod-secret", SILK_PAID_DAILY_CAP=None,
+              VOLZA_API_KEY="paid-key-present"):
+        client = _client()
+        with patch("requests.get",
+                   side_effect=OSError("network disabled for hermetic test")):
+            r = client.post("/deepen", json={"product": "تمور",
+                                             "with_volza": True},
+                            headers={"X-API-Key": "prod-secret"})
+        assert r.status_code == 200
+        assert "warnings" not in client.get(
+            "/health", headers={"X-API-Key": "prod-secret"}).json()
+
+
+def test_dev_mode_valid_only_without_paid_keys():
+    # وضع التطوير المفتوح مشروع فقط عند غياب المفاتيح المدفوعة كلها.
+    from unittest.mock import patch
+    with _env(SILK_API_KEY=None, VOLZA_API_KEY=None, EXPLEE_API_KEY=None,
+              LOCALPRICE_API_KEY=None, ANTHROPIC_API_KEY=None,
+              SILK_PAID_DAILY_CAP=None):
+        client = _client()
+        assert "warnings" not in client.get("/health").json()
+        with patch("requests.get",
+                   side_effect=OSError("network disabled for hermetic test")):
+            r = client.post("/deepen", json={"product": "تمور",
+                                             "with_volza": True})
+        assert r.status_code == 200  # keyless dev: يمر ويتدهور بأمان بلا اختلاق
