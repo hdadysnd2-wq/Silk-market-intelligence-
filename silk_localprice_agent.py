@@ -25,7 +25,7 @@ import logging
 import os
 
 from silk_data_layer import DataPoint, _today
-from silk_agents import Agent, AgentReport
+from silk_agents import BaseAgent, AgentReport
 
 log = logging.getLogger(__name__)
 
@@ -190,13 +190,16 @@ def compare_own_price(own_price: float | None, findings: list[DataPoint]) -> dic
                     "السوق — preliminary, over observed listings only."}
 
 
-class LocalPriceAgent(Agent):
+class LocalPriceAgent(BaseAgent):
     """وكيل أسعار السوق المحلي — actual retail prices/best-sellers in-market."""
+
+    PAID = True
+    SOURCE = "Local retail"
 
     def __init__(self) -> None:
         super().__init__("LocalPriceAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """اجلب الأسعار الفعلية في السوق — fetch real in-market retail prices.
 
         task keys: query (product, optionally + market words), market (ccTLD

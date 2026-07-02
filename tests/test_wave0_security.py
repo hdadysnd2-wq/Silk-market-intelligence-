@@ -81,14 +81,15 @@ def test_analyze_keyless_dev_mode_still_open():
     assert r.status_code == 200
 
 
-def test_analyze_429_over_paid_cap():
-    # سقف 0 + طلب بطبقة مدفوعة => 429 قبل أي وكيل؛ الطلب المجاني يمر.
+def test_deepen_429_over_paid_cap():
+    # سقف 0 + طلب تعميق بطبقة مدفوعة => 429 قبل أي وكيل؛ المسار المجاني يمر.
+    # (الموجة ٢ نقلت الطبقات المدفوعة إلى /deepen — الحارس انتقل معها.)
     from unittest.mock import patch
     usage_db = os.path.join(tempfile.mkdtemp(), "usage.db")
     with _env(SILK_API_KEY=None, SILK_PAID_DAILY_CAP="0",
               SILK_USAGE_DB=usage_db):
         client = _client()
-        r = client.post("/analyze",
+        r = client.post("/deepen",
                         json={"product": "تمور", "with_localprice": True})
         assert r.status_code == 429
         with patch("requests.get",
@@ -98,7 +99,7 @@ def test_analyze_429_over_paid_cap():
 
 
 def test_paid_cap_counts_and_allows_within_cap():
-    # سقف 2: أول طلب بطبقتين مدفوعتين يمر ويُسجَّل؛ الثاني يتجاوز => 429.
+    # سقف 2: أول تعميق بطبقتين مدفوعتين يمر ويُسجَّل؛ الثاني يتجاوز => 429.
     from unittest.mock import patch
     import silk_usage
     usage_db = os.path.join(tempfile.mkdtemp(), "usage.db")
@@ -107,13 +108,13 @@ def test_paid_cap_counts_and_allows_within_cap():
         client = _client()
         with patch("requests.get",
                    side_effect=OSError("network disabled for hermetic test")):
-            r = client.post("/analyze", json={"product": "تمور",
-                                              "with_volza": True,
-                                              "with_explee": True})
+            r = client.post("/deepen", json={"product": "تمور",
+                                             "with_volza": True,
+                                             "with_explee": True})
         assert r.status_code == 200
         assert silk_usage.paid_calls_today(usage_db) == 2
-        r = client.post("/analyze", json={"product": "تمور",
-                                          "with_volza": True})
+        r = client.post("/deepen", json={"product": "تمور",
+                                         "with_volza": True})
         assert r.status_code == 429
 
 

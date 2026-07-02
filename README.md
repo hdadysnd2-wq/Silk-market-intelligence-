@@ -146,7 +146,8 @@ docker run -p 8000:8000 silk-api
 | `GET /health` | حالة الخدمة + توفّر الحزم الاختيارية. |
 | `GET /sources` | خريطة حالة الطبقات الإحدى عشرة (`name, type, wired, key_env, key_present`). |
 | `GET /resolve/{name}` | يصنّف اسم منتج إلى HS6 (مع المصدر/الثقة). |
-| `POST /analyze` | يشغّل `analyze` كاملًا (`{product, year, with_trends, with_tariffs, with_faostat, with_maps, with_websearch, with_localprice, own_price, with_volza, with_explee, persist}`). |
+| `POST /analyze` | المسار العادي (مجاني حصراً): `{product, year, with_trends, with_tariffs, with_faostat, with_maps, with_websearch, persist}` — الحقول المدفوعة تُتجاهَل بنيوياً. |
+| `POST /deepen` | مسار التعميق (المدفوع الوحيد): يضيف `{with_localprice, own_price, with_volza, with_explee, with_ai}` ويعمل داخل سياق يسمح لوكلاء `PAID` بالتنفيذ. |
 | `GET /analyses` | يسرد التحليلات المحفوظة. |
 | `GET /analyses/{id}` | يعيد تحليلًا محفوظًا، أو 404. |
 | `PATCH /analyses/{id}/outcome` | يسجّل النتيجة الفعلية (`{outcome}`) — سجل المصداقية التراكمي. |

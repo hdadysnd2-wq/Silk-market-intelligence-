@@ -6,6 +6,7 @@ reports it — it never invents findings (founding principle).
 """
 from __future__ import annotations
 
+import datetime
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -47,6 +48,51 @@ class Agent(ABC):
 def _real(findings: list[DataPoint]) -> list[DataPoint]:
     """نقاط حقيقية — findings carrying an actual value (value is not None)."""
     return [f for f in findings if f.value is not None]
+
+
+class BaseAgent(Agent):
+    """الفئة الأساس الفارضة — enforces the protocol structurally (wave 2).
+
+    البروتوكول الرباعي كان قواعد تُراجَع؛ هنا يصير بنيةً تُورَث:
+      - `PAID = True` خارج سياق `/deepen` = **يستحيل التنفيذ** (تقرير متخطى
+        موسوم، بلا أي نداء) — لا يعتمد على حارس يدوي في api.py.
+      - استثناء غير متوقع من `_execute` = تقرير فاشل بـ `DataPoint(None,
+        note=السبب)` تلقائياً — الفشل الصامت مستحيل بنيوياً.
+    الوكلاء الجدد يرثونها ويكتبون `_execute()` فقط؛ القائمون يهاجرون تدريجياً
+    (الموجة ٢ تهجّر المدفوعين الثلاثة، والبقية وكيلٌ مع كل PR لاحق).
+    """
+
+    PAID: bool = False   # تصنيف إلزامي عند التعريف — مدفوع أم مجاني
+    SOURCE: str = ""     # وسم المصدر لنقاط الفشل البنيوية (افتراضه اسم الوكيل)
+
+    def run(self, task: dict) -> AgentReport:
+        """نفّذ محروساً — guarded execution; subclasses implement _execute()."""
+        import silk_context  # lazy: keeps import graph flat
+
+        src = self.SOURCE or self.name
+        if self.PAID and not silk_context.deepen_active():
+            note = (f"{self.name}: paid agent outside /deepen — skipped "
+                    "(structural guard, no call attempted)")
+            log.warning(note)
+            return AgentReport(
+                self.name,
+                [DataPoint(None, src, 0.0, note,
+                           datetime.date.today().isoformat())],
+                True, note)
+        try:
+            return self._execute(task)
+        except Exception as e:  # noqa: BLE001 — silent failure impossible
+            note = f"{self.name} error: {type(e).__name__}: {e}"
+            log.warning(note)
+            return AgentReport(
+                self.name,
+                [DataPoint(None, src, 0.0, note,
+                           datetime.date.today().isoformat())],
+                True, note)
+
+    def _execute(self, task: dict) -> AgentReport:
+        """منطق الوكيل الفعلي — the agent's actual logic (subclass hook)."""
+        raise NotImplementedError
 
 
 class TradeFlowAgent(Agent):

@@ -24,7 +24,7 @@ import logging
 import os
 
 from silk_data_layer import DataPoint, _today
-from silk_agents import Agent, AgentReport
+from silk_agents import BaseAgent, AgentReport
 
 log = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ def _first_contact(row: dict) -> str:
     return label.strip()
 
 
-class ExpleeAgent(Agent):
+class ExpleeAgent(BaseAgent):
     """وكيل Explee — late, paid buyer-discovery agent (factories/contacts/emails).
 
     Runs AFTER market filtering to enrich the chosen market with real companies
@@ -153,10 +153,13 @@ class ExpleeAgent(Agent):
     nothing: no key / network fail / empty -> failed report.
     """
 
+    PAID = True
+    SOURCE = "Explee"
+
     def __init__(self) -> None:
         super().__init__("ExpleeAgent")
 
-    def run(self, task: dict) -> AgentReport:
+    def _execute(self, task: dict) -> AgentReport:
         """اكتشاف مشترين للسوق المختارة — discover buyers for the filtered market.
 
         task keys: query (sector/product), market (target market name/ISO).

@@ -106,8 +106,8 @@ def test_api_imports_without_fastapi():
     assert hasattr(api, "create_app") and hasattr(api, "app")
 
 
-def test_api_analyze_endpoint_own_price_offline():
-    # عبر TestClient الفعلي: /analyze بلا شبكة يرجّع price_comparison بلا اختلاق.
+def test_api_deepen_endpoint_own_price_offline():
+    # الموجة ٢: الطبقات المدفوعة انتقلت لمسار /deepen — نفس ضمانات اللااختلاق.
     import pytest
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")  # TestClient needs it; test-only dep, not a runtime one
@@ -121,7 +121,7 @@ def test_api_analyze_endpoint_own_price_offline():
     # الداخلي (asyncio socketpair)؛ بدلاً منها نعطّل requests.get فقط — نفس الأثر
     # الحتمي (لا شبكة => لا بيانات) بلا التصادم مع بنية الاختبار التحتية.
     with patch("requests.get", side_effect=OSError("network disabled for hermetic test")):
-        r = client.post("/analyze", json={
+        r = client.post("/deepen", json={
             "product": "تمور", "year": 2022,
             "with_localprice": True, "own_price": 25.0,
         })
