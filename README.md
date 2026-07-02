@@ -39,13 +39,16 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `silk_localprice_agent.py` | وكيل مدفوع: أسعار تجزئة فعلية + مقارنة سعرك (`compare_own_price`). |
 | `silk_volza_agent.py` | وكيل مدفوع: مستوردون بالاسم من بوالص الشحن (Volza). |
 | `silk_explee_agent.py` | وكيل مدفوع: مشترون وجهات اتصال B2B (explee، امتثال GDPR/PDPL). |
-| `silk_ai_judge.py` | الطبقة 3 الاختيارية: كلود حَكَمًا (`ai_verdict`) ومُعِدّ تقرير (`ai_report`) فوق حقائق الوكلاء الموسومة فقط — بعزل حقن بنيوي. |
+| `silk_ai_judge.py` | أدوات كلود المشتركة (`_call`/العزل) + مُعِدّ التقرير (`ai_report`) — الحكم نفسه صار حصراً عبر `silk_synthesis` (§9.3). |
 | `silk_usage.py` | عدّاد الاستهلاك المدفوع اليومي (سقف 429) — ملف مستقل عن `silk.db`. |
 | `silk_competitors_agent.py` | وكيل الموجة ٣: مرشّحو منافسين **بالاسم** (شركات لا دول) من بحث الويب — موسومون "غير مُتحقَّق". |
 | `silk_channels_agent.py` | وكيل الموجة ٣: مرشّحو قنوات التوزيع (فعلي + رقمي بعدستين في وكيل واحد). |
 | `silk_importers_agent.py` | وكيل الموجة ٣: مرشّحو مستوردين (طبقة ويب مجانية؛ الأسماء الموثّقة عبر `/deepen`/Volza). |
 | `silk_requirements_agent.py` | وكيل الموجة ٣: قائمة تحقق الاشتراطات ثنائية الاتجاه (دخول السوق + خروج سعودي) من مرجع الطبقة ١ `data/requirements_l1.csv` — بلا شبكة. |
 | `silk_context.py` | سياق `/deepen` (contextvars) — حارس `BaseAgent` البنيوي للوكلاء المدفوعين. |
+| `correlation.py` | **محرّك التقاطع** (الموجة ٤): يربط نتائج الوكلاء بالذاكرة حول بطاقة منتجك — خيوط منافسين/جدوى/أبواب دخول/جهات. **صفر استدعاءات خارجية** (اختبار بنيوي يثبته)؛ الخيط الناقص يُعلن لا يُخترع. |
+| `silk_synthesis.py` | التوليف ثنائي المرحلة (الموجة ٤): لجنة حتمية (مرحلة ١) + حكم كلود المعزول (مرحلة ٢، ببرومبت "المواجهة" عند وجود الخيوط) — **المدخل الوحيد للحكم** (الازدواجية حُذفت، §9.3). |
+| `silk_render.py` | **القالب الموحّد** (§10.1): `build_view` نموذج العرض القانوني الوحيد — اللوحة والطرفية وStreamlit والمختصر كلها مشتقات منه. |
 | `api.py` | واجهة REST عبر FastAPI فوق المحرّك (تُستورد FastAPI بكسل؛ `app=None` بدونها). |
 | `app.py` | واجهة Streamlit اختيارية فوق المحرّك (تُستورد Streamlit بكسل داخليًا). |
 | `tools/fetch_hs_codes.py` | أداة تشغيل: تجلب مرجع HS من Comtrade وتوسّع `data/hs_codes.csv` برموز حقيقية. |
@@ -154,6 +157,7 @@ docker run -p 8000:8000 silk-api
 | `GET /resolve/{name}` | يصنّف اسم منتج إلى HS6 (مع المصدر/الثقة). |
 | `POST /analyze` | المسار العادي (مجاني حصراً): `{product, year, with_trends, with_tariffs, with_faostat, with_maps, with_websearch, with_competitors, with_channels, with_importers, with_requirements, persist}` — الحقول المدفوعة تُتجاهَل بنيوياً. |
 | `POST /deepen` | مسار التعميق (المدفوع الوحيد): يضيف `{with_localprice, own_price, with_volza, with_explee, with_ai}` ويعمل داخل سياق يسمح لوكلاء `PAID` بالتنفيذ. |
+| — `product_card` | حقل اختياري على المسارين: `{cost_per_unit, unit, tier, monthly_capacity, shipping_per_unit}` — وجوده يشغّل محرّك التقاطع ويضيف «موقعك التنافسي»؛ والرد يحمل دوماً `view` (القالب الموحّد §10.1). |
 | `GET /analyses` | يسرد التحليلات المحفوظة. |
 | `GET /analyses/{id}` | يعيد تحليلًا محفوظًا، أو 404. |
 | `PATCH /analyses/{id}/outcome` | يسجّل النتيجة الفعلية (`{outcome}`) — سجل المصداقية التراكمي. |
@@ -193,7 +197,7 @@ docker run -p 8000:8000 silk-api
 
 **مُنجَز:** النواة (طبقة بيانات + مُصنّف HS + وكلاء + مُرتّب + محرّك) + طبقات Google Trends،
 الرسوم الجمركية (WITS)، FAOSTAT، فحوص الجودة، تخزين SQLite، وذاكرة تخزين مؤقت + واجهتا Streamlit
-و**FastAPI** + تعبئة Docker وتكامل مستمر (CI) + حراسة الموجة ٠ (مصادقة/سقف/عزل حقن/CORS). اختبارات الدخان الهيرمتيكية: **55** تمر كاملة عبر CI (العدّ الحي في `tests/`).
+و**FastAPI** + تعبئة Docker وتكامل مستمر (CI) + حراسة الموجة ٠ (مصادقة/سقف/عزل حقن/CORS). اختبارات الدخان الهيرمتيكية: **66** تمر كاملة عبر CI (العدّ الحي في `tests/`).
 
 **خطوات لاحقة مقترحة:** اختبار حيّ شامل ببيانات الإنترنت، توسيع `hs_codes.csv` للقائمة الكاملة عبر
 `tools/fetch_hs_codes.py`، لفّ الوكلاء بـ CrewAI، ودمج المصادر المدفوعة (Volza/explee) للأسواق الناجية

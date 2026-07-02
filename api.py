@@ -127,6 +127,14 @@ def create_app():
         app.add_middleware(CORSMiddleware, allow_origins=allow,
                            allow_methods=["*"], allow_headers=["*"])
 
+    class ProductCard(BaseModel):
+        """بطاقة المنتج (الموجة ٤، vision §2) — اختيارية، تفعّل محرّك التقاطع."""
+        cost_per_unit: float
+        unit: str | None = None
+        tier: str | None = None            # premium|standard|economy
+        monthly_capacity: float | None = None
+        shipping_per_unit: float | None = None  # افتراض شحن معلَن قابل للتعديل
+
     class AnalyzeRequest(BaseModel):
         """طلب تحليل منتج (المسار العادي) — analyze request body.
 
@@ -145,6 +153,7 @@ def create_app():
         with_channels: bool = False
         with_importers: bool = False
         with_requirements: bool = False
+        product_card: ProductCard | None = None
         persist: bool = False
 
     class DeepenRequest(BaseModel):
@@ -169,11 +178,21 @@ def create_app():
         with_channels: bool = False
         with_importers: bool = False
         with_requirements: bool = False
+        product_card: ProductCard | None = None
         persist: bool = False
 
     def _json(payload: object):
         """رد JSON آمن للـ DataPoint — JSONResponse with DataPoint-safe payload."""
         return JSONResponse(content=_to_jsonable(payload))
+
+    def _view(result: dict) -> dict:
+        """القالب الموحّد (§10.1) — attach the canonical view (never crashes)."""
+        try:
+            from silk_render import build_view
+            return build_view(result)
+        except Exception as e:  # noqa: BLE001 — العرض لا يُسقط التحليل
+            log.warning("view build failed: %s", e)
+            return {"error": f"view error: {type(e).__name__}: {e}"}
 
     @app.get("/health")
     def health():
@@ -254,7 +273,10 @@ def create_app():
             with_channels=req.with_channels,
             with_importers=req.with_importers,
             with_requirements=req.with_requirements,
+            product_card=(req.product_card.model_dump()
+                          if req.product_card else None),
             persist=req.persist)
+        result["view"] = _view(result)
         return _json(result)
 
     @app.post("/deepen")
@@ -281,7 +303,10 @@ def create_app():
                 with_channels=req.with_channels,
                 with_importers=req.with_importers,
                 with_requirements=req.with_requirements,
+                product_card=(req.product_card.model_dump()
+                              if req.product_card else None),
                 persist=req.persist)
+        result["view"] = _view(result)
         return _json(result)
 
     @app.get("/sources")

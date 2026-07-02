@@ -98,36 +98,9 @@ def _facts(reports: list) -> str:
     return "\n".join(lines) or "(لا حقائق)"
 
 
-def ai_verdict(product: str, market: str, reports: list) -> dict | None:
-    """حُكم كلود على سوق — Claude's preliminary verdict over the agents' findings.
-
-    Returns {verdict, confidence, reasoning, by:"Claude (...)"} or None when the AI
-    layer is unavailable (caller then keeps the deterministic jury). Never fabricates.
-    """
-    facts = _isolate(_facts(reports))
-    user = (
-        f"المنتج: {_isolate(product)}\nالسوق: {market}\n\n"
-        f"حقائق الوكلاء (لا تتجاوزها):\n{facts}\n\n"
-        "أصدر حكمًا أوّليًّا على دخول هذا السوق. أعد JSON فقط بهذا الشكل:\n"
-        '{"verdict":"GO|WATCH|NO-GO","confidence":0.0-1.0,"reasoning":"سبب موجز مبني على الحقائق"}'
-    )
-    out = _call(_PRINCIPLE, user, max_tokens=700)
-    if not out:
-        return None
-    try:
-        start, end = out.find("{"), out.rfind("}")
-        obj = json.loads(out[start:end + 1]) if start >= 0 else {"reasoning": out}
-    except Exception:  # noqa: BLE001 — non-JSON reply still useful as reasoning
-        obj = {"reasoning": out}
-    # الموجة ١: لا افتراض "WATCH" — فشل التفسير يعني verdict=None صريحًا،
-    # فالوسم المُختلق ليس حكمًا (الواجهة تعرض "تعذّر الحكم").
-    return {
-        "verdict": obj.get("verdict"),
-        "confidence": obj.get("confidence"),
-        "reasoning": obj.get("reasoning", ""),
-        "by": f"Claude ({_MODEL})",
-        "preliminary": True,
-    }
+# ملاحظة الموجة ٤ (§9.3): دالة الحكم المنفردة ai_verdict حُذفت — الحكم صار
+# حصراً عبر silk_synthesis.synthesize (مرحلتان: لجنة حتمية + كلود معزول).
+# تبقى هنا أدوات كلود المشتركة فقط: _call/_facts/_isolate وai_report.
 
 
 def ai_report(result: dict) -> str | None:
@@ -161,4 +134,4 @@ def ai_report(result: dict) -> str | None:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print("AI judge available (ANTHROPIC_API_KEY set)?", available())
-    print("verdict (keyless ->) :", ai_verdict("تمور", "مصر", []))
+    print("(الحكم عبر silk_synthesis.synthesize — verdicts via synthesis now)")

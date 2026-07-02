@@ -15,7 +15,8 @@ import logging
 from silk_data_layer import DataPoint, _today
 from silk_hs_resolver import resolve
 from silk_market_ranker import rank_markets, COUNTRIES, WEIGHTS
-from silk_agents import ResearchManager, JuryCommittee
+from silk_agents import ResearchManager
+from silk_synthesis import synthesize
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_ai: bool = False,
             with_competitors: bool = False, with_channels: bool = False,
             with_importers: bool = False, with_requirements: bool = False,
+            product_card: dict | None = None,
             persist: bool = False, db_path: str = "data/silk.db",
             check_quality: bool = True) -> dict:
     """حلّل منتجًا عبر الأسواق — full preliminary market analysis for one product.
@@ -63,6 +65,11 @@ def analyze(product_name: str, countries: list[dict] | None = None,
       with_requirements — attach the dual-direction compliance checklist
                       (row['requirements']: entry items for the market +
                       Saudi-exit items, L1 reference, fully offline).
+      product_card  — بطاقة المنتج الاختيارية (الموجة ٤): {cost_per_unit,
+                      unit, tier, monthly_capacity, shipping_per_unit}.
+                      عند وجودها يعمل محرّك التقاطع (correlation.py) على
+                      نتائج الوكلاء بالذاكرة ويضيف row['competitive_position'];
+                      غيابها = السلوك الحالي بالضبط (لا انحدار).
                       All of these are ADDITIVE context — they never change total_score.
       persist       — init_db + save_analysis(db_path); attaches result['analysis_id'].
       check_quality — annotate each market with quality_flags (flags only, no number edits).
@@ -91,15 +98,14 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     # 2) رتّب الأسواق المرشّحة لهذا الرمز — rank candidate markets.
     ranked = rank_markets(hs.value, countries=countries, year=year)
 
-    # 3) أثرِ الأسواق الأعلى بالوكلاء واللجنة — enrich the top markets.
+    # 3) شغّل الوكلاء الأساسيين واحتفظ بتقاريرهم — run core agents, keep reports
+    #    (الحكم يتأخر لما بعد الإثراء والتقاطع كي تصل الخيوط للمرحلة ٢ — الموجة ٤).
     manager = ResearchManager()
+    reports_by_iso: dict[str, list] = {}
     for row in ranked[:_ENRICH_TOP]:
         task = {"hs_code": hs.value, "market_m49": row["m49"],
                 "iso3": row["iso3"], "year": year}
-        reports = manager.distribute(task)
-        row["jury"] = JuryCommittee.evaluate(reports)
-        if with_ai:  # الطبقة 3: كلود يَحكم على مخرجات الوكلاء — Claude judges the findings
-            _ai_verdict(row, product_name, reports)
+        reports_by_iso[row["iso3"]] = manager.distribute(task)
 
     # 3b) طبقات سياق إضافية (لا تغيّر النقاط) — additive context layers (no score change).
     if with_trends:
@@ -130,6 +136,26 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     if with_requirements:
         _enrich_requirements(ranked[:_ENRICH_TOP], hs.value)
 
+    # 3c) محرّك التقاطع (الموجة ٤) — يعمل فقط عند وجود بطاقة المنتج.
+    if product_card:
+        import correlation  # صفر استدعاءات خارجية — يعمل على الذاكرة حصراً
+        for row in ranked[:_ENRICH_TOP]:
+            try:
+                row["competitive_position"] = correlation.correlate(
+                    row, product_card, product_name)
+            except Exception as e:  # noqa: BLE001 — لا يُسقط التحليل
+                log.warning("correlation failed for %s: %s", row.get("iso3"), e)
+                row["competitive_position"] = {
+                    "error": f"correlation error: {type(e).__name__}: {e}"}
+
+    # 3d) التوليف الموحّد (مرحلتان) — the single verdict entry point (§9.3).
+    for row in ranked[:_ENRICH_TOP]:
+        reports = reports_by_iso.get(row["iso3"], [])
+        row["jury"] = synthesize(
+            reports, product=product_name,
+            market=row.get("country") or row["iso3"],
+            threads=row.get("competitive_position"), with_ai=with_ai)
+
     # 4) سطر توصية لكل سوق — one-line recommendation per market.
     for row in ranked:
         row["recommendation"] = _recommend(row)
@@ -142,6 +168,10 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         "note": "نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. "
                 "Preliminary, real public data only; gaps flagged, not estimated.",
     }
+    if not product_card:
+        result["product_card_hint"] = ("أضف بطاقة منتجك (product_card) للحصول "
+                                       "على تحليل تنافسي مخصص — موقعك ضد "
+                                       "منافسين مرصودين بالاسم")
     if with_websearch:
         result["websearch"] = _websearch(product_name)
     if with_ai:  # الطبقة 3: كلود يكتب التقرير المبدئي — Claude writes the report
@@ -155,17 +185,6 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     if persist:
         _persist(result, db_path)
     return result
-
-
-def _ai_verdict(row: dict, product: str, reports: list) -> None:
-    """الطبقة 3 — حكم كلود على صفّ السوق — attach Claude's verdict (graceful None)."""
-    try:
-        import silk_ai_judge  # lazy: optional layer, key-gated
-        v = silk_ai_judge.ai_verdict(product, row.get("country") or row.get("iso3"), reports)
-        if v:
-            row.setdefault("jury", {})["ai"] = v
-    except Exception as e:  # noqa: BLE001 — never crash analysis
-        log.warning("AI verdict failed for %s: %s", row.get("iso3"), e)
 
 
 def _ai_report(result: dict):
@@ -370,35 +389,13 @@ def _recommend(row: dict) -> str:
 
 
 def format_result(result: dict) -> str:
-    """نسّق النتيجة للطرفية — readable terminal summary (Arabic labels ok)."""
-    L = [
-        "═" * 60,
-        f"المنتج / Product : {result['product']}",
-    ]
-    if not result.get("classified"):
-        L += [f"الحالة / Status  : تعذّر التصنيف — could not classify product",
-              f"السبب / Reason   : {result.get('hs_note', '')}",
-              "═" * 60]
-        return "\n".join(L)
+    """نسّق النتيجة للطرفية — terminal summary derived from the ONE view template.
 
-    L += [
-        f"رمز HS / HS code : {result['hs_code']}  (ثقة/conf={result['hs_confidence']})",
-        f"السنة / Year     : {result['year']}   |   مبدئي / PRELIMINARY",
-        f"التصنيف / Note   : {result['hs_note']}",
-        "─" * 60,
-        "الأسواق مرتّبة (الأفضل أولاً) — markets ranked best-first:",
-    ]
-    for i, row in enumerate(result["markets"], 1):
-        present = sum(1 for dp in row["components"].values() if dp.value is not None)
-        L.append(f"  {i:>2}. {row['country']:<22} score={row['total_score']:.3f} "
-                 f"conf={row['confidence']} ({present}/{len(WEIGHTS)} comps)")
-        if "jury" in row:
-            j = row["jury"]
-            L.append(f"      الحكم/Jury: {j['verdict']}  "
-                     f"(conf={j['confidence']}, gaps={j['data_gaps']})")
-        L.append(f"      → {row['recommendation']}")
-    L += [f"\nملاحظة / Note: {result['note']}", "═" * 60]
-    return "\n".join(L)
+    الموجة ٤ (§10.1): كان هذا مسار عرض مستقلاً ثالثاً؛ صار مشتقاً من
+    silk_render.build_view — القالب الموحّد الذي تشتق منه كل المخرجات.
+    """
+    from silk_render import build_view, render_text
+    return render_text(build_view(result))
 
 
 if __name__ == "__main__":

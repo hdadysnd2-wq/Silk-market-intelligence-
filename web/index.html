@@ -463,7 +463,7 @@
         '<div class="stat"><div class="l">السكان</div><div class="v num">'+fmtNum(sel.population)+'</div></div>'+
       '</div>'+
       '<div class="drow2">المنافس المهيمن: <b>'+esc(sel.top_competitor||"—")+'</b></div>'+
-      aiBlock(sel)+competitorsBlock(sel)+pricesBlock(sel)+suppliersBlock(sel)+cultureBlock()+
+      aiBlock(sel)+cpBlock()+competitorsBlock(sel)+pricesBlock(sel)+suppliersBlock(sel)+cultureBlock()+
       (sel.note?'<div class="note">'+esc(sel.note)+'</div>':'')+
       '<div class="srcs">'+(sel.sources||[]).map(function(s){return '<span>'+esc(s)+'</span>';}).join("")+'</div>'+
       '<div class="dbtns"><button class="ghostbtn" id="deepBtn">دراسة عميقة · Volza/explee</button>'+
@@ -480,6 +480,31 @@
     var jb=$("jsonBtn");if(jb)jb.addEventListener("click",exportJson);
     var deep=$("deepBtn");if(deep)deep.addEventListener("click",runDeepen);
     var rb=$("reportBtn");if(rb)rb.addEventListener("click",showReport);
+  }
+  // موقعك التنافسي (الموجة ٤) — من القالب الموحّد view.competitive_position:
+  // بطاقة أولى بعد الحكم مباشرة (vision §10.2)، والفجوات معلنة لا مخفية.
+  function cpBlock(){
+    var v=S.raw&&S.raw.view&&S.raw.view.competitive_position;
+    if(!v)return "";
+    if(!v.available){
+      return '<div class="aiblk"><div class="aihd"><span class="aibadge">موقعك التنافسي</span></div>'+
+        '<div class="aitext">'+esc(v.note||"")+'</div></div>';
+    }
+    var rows="";
+    (v.feasibility_threads||[]).forEach(function(f){
+      rows+='<li>ضد <b>'+esc(f.competitor)+'</b>: سعر مرصود '+esc(String(f.observed_price))+
+        (f.currency?' '+esc(f.currency):'')+' — هامشك عند المضاهاة <b>'+esc(String(f.margin_at_match_pct))+
+        '%</b> وعند البيع أقل 10% <b>'+esc(String(f.margin_at_10pct_below))+'%</b></li>';
+    });
+    (v.competitor_threads||[]).forEach(function(t){
+      if(!t.observed_price)rows+='<li>'+esc(t.name)+': <span class="pstore">'+esc(t.price_flag)+
+        ' (اكتمال '+esc(t.thread_completeness)+')</span></li>';
+    });
+    var door=v.best_door?('<div class="drow2">أفضل باب دخول: <b>'+esc(v.best_door.name)+
+      '</b> — '+esc(v.best_door.assessment)+'</div>'):'';
+    return '<div class="aiblk"><div class="aihd"><span class="aibadge">موقعك التنافسي</span>'+
+      '<span class="aiconf">'+esc(v.coverage||"")+'</span></div>'+
+      (rows?'<ul class="plist">'+rows+'</ul>':'')+door+'</div>';
   }
   // حُكم كلود (الحَكَم) — Claude's preliminary verdict over the agents' findings.
   function aiBlock(sel){

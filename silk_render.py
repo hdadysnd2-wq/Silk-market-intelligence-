@@ -1,0 +1,173 @@
+"""القالب الموحّد لسِلك — Silk unified render template (wave 4, vision §10.1).
+
+قالب واحد «أصل» والباقي مشتقات: `build_view()` يبني نموذج العرض القانوني
+الوحيد من نتيجة المحرّك، وكل المخرجات تشتق منه:
+  - اللوحة (الواجهة تستهلك `result["view"]` من الـ API)
+  - نص الطرفية (`render_text` — يحل محل جسد format_result القديم)
+  - واجهة Streamlit (`app.py` يقرأ الجدول من النموذج نفسه)
+  - سطور المختصر (`view["brief"]` — القرار + الموقع التنافسي بسطرين)
+
+المبرر (vision §10.1): خلل «التحليل الأجوف» كان خلل ربط عرض — مسارات
+عرض منفصلة = فرص متعددة لنفس الخطأ؛ مسار مشترك = الخطأ يقع مرة ويُصلح مرة.
+
+منطق عرض صرف: صفر شبكة، صفر تعديل على الأرقام — قراءة وتشكيل فقط.
+"""
+from __future__ import annotations
+
+import logging
+
+log = logging.getLogger(__name__)
+
+
+def _dp(obj: object) -> dict:
+    """طبّع DataPoint/dict — normalize a DataPoint or dict to a plain dict."""
+    if isinstance(obj, dict):
+        return obj
+    return {"value": getattr(obj, "value", None),
+            "source": getattr(obj, "source", ""),
+            "confidence": getattr(obj, "confidence", 0.0),
+            "note": getattr(obj, "note", "")}
+
+
+def _decision(top: dict | None) -> dict:
+    """القرار أولاً (vision §10.2) — verdict + confidence + one-line why."""
+    if not top:
+        return {"verdict": None, "confidence": None,
+                "why": "لا أسواق مرتّبة — لا بيانات كافية"}
+    jury = top.get("jury") or {}
+    ai = jury.get("ai") or {}
+    verdict = ai.get("verdict") or jury.get("verdict")
+    confidence = (ai.get("confidence") if ai.get("confidence") is not None
+                  else jury.get("confidence"))
+    why = (ai.get("reasoning")
+           or f"تغطية الوكلاء {jury.get('agents_with_data', 0)}/"
+              f"{jury.get('agents_total', 0)} وفجوات: "
+              f"{', '.join(jury.get('data_gaps', [])) or 'لا شيء'}")
+    return {"verdict": verdict, "confidence": confidence,
+            "why": (why or "")[:280], "market": top.get("country"),
+            "stage": jury.get("synthesis_stage")}
+
+
+def _competitive_position(top: dict | None) -> dict:
+    """قسم "موقعك التنافسي" — the correlation section, or an honest absence."""
+    cp = (top or {}).get("competitive_position")
+    if not cp or "error" in (cp or {}):
+        return {"available": False,
+                "note": (cp or {}).get("error")
+                or "أضف بطاقة منتجك (product_card) للحصول على موقعك التنافسي"}
+    feas = cp.get("feasibility_threads") or []
+    best = max(feas, key=lambda f: f.get("margin_at_match_pct", -9e9),
+               default=None)
+    doors = (cp.get("entry_thread") or {}).get("doors") or []
+    realistic = next((d for d in doors if str(d.get("assessment", ""))
+                      .startswith("واقعية")), doors[0] if doors else None)
+    return {
+        "available": True,
+        "market": (top or {}).get("country"),
+        "coverage": cp.get("coverage"),
+        "competitor_threads": cp.get("competitor_threads"),
+        "feasibility_threads": feas,
+        "entry_thread": cp.get("entry_thread"),
+        "contacts_thread": cp.get("contacts_thread"),
+        "nearest_beatable": best,
+        "best_door": realistic,
+        "note": cp.get("note"),
+    }
+
+
+def _brief(decision: dict, cp: dict) -> list[str]:
+    """المختصر — سطران للموقع التنافسي فوق سطر القرار (vision §6, §10.4)."""
+    lines = [f"القرار: {decision.get('verdict') or 'تعذّر الحكم'} "
+             f"(ثقة {decision.get('confidence')}) — {decision.get('market') or '؟'}"]
+    if cp.get("available"):
+        best = cp.get("nearest_beatable")
+        lines.append(
+            f"أقرب منافس قابل للمنافسة: {best['competitor']} — هامشك عند "
+            f"مضاهاته {best['margin_at_match_pct']}%" if best else
+            "لا منافس بسعر مرصود بعد — فعّل with_localprice/deepen")
+        door = cp.get("best_door")
+        lines.append(f"أفضل باب دخول مرصود: {door['name']} ({door['assessment']})"
+                     if door else "لا أبواب دخول مرصودة — فعّل with_channels")
+    else:
+        lines.append(cp.get("note", ""))
+    return lines
+
+
+def build_view(result: dict) -> dict:
+    """ابنِ نموذج العرض القانوني — the ONE canonical view-model (vision §10.1).
+
+    كل المخرجات (لوحة/طرفية/Streamlit/مختصر) تشتق من هذا النموذج حصراً.
+    """
+    markets = result.get("markets") or []
+    top = markets[0] if markets else None
+    decision = _decision(top)
+    cp = _competitive_position(top)
+    view_markets = []
+    for row in markets:
+        comps = row.get("components") or {}
+        present = sum(1 for c in comps.values() if _dp(c).get("value") is not None)
+        view_markets.append({
+            "country": row.get("country"), "iso3": row.get("iso3"),
+            "score": row.get("total_score"), "confidence": row.get("confidence"),
+            "components_present": f"{present}/{len(comps) or 4}",
+            "recommendation": row.get("recommendation"),
+            "quality_flags": row.get("quality_flags") or [],
+            "has_competitive_position": "competitive_position" in row,
+        })
+    limits = [f"{m['country']}: {f}" for m in markets[:5]
+              for f in (m.get("quality_flags") or [])]
+    if not result.get("classified"):
+        limits.insert(0, result.get("hs_note") or "تعذّر التصنيف")
+    view = {
+        "product": result.get("product"), "hs_code": result.get("hs_code"),
+        "hs_confidence": result.get("hs_confidence"),
+        "year": result.get("year"), "preliminary": True,
+        "classified": result.get("classified", False),
+        "decision": decision,
+        "competitive_position": cp,
+        "markets": view_markets,
+        "brief": _brief(decision, cp),
+        "limits": limits,
+        "note": result.get("note"),
+    }
+    return view
+
+
+def render_text(view: dict) -> str:
+    """نص الطرفية من القالب — terminal rendering derived from the view only."""
+    L = ["═" * 60, f"المنتج / Product : {view.get('product')}"]
+    if not view.get("classified"):
+        L += ["الحالة: تعذّر التصنيف — could not classify",
+              *(f"  حد: {x}" for x in view.get("limits", [])[:3]), "═" * 60]
+        return "\n".join(L)
+    d = view["decision"]
+    L += [f"رمز HS: {view['hs_code']} (ثقة {view['hs_confidence']}) | "
+          f"سنة {view['year']} | مبدئي",
+          f"القرار: {d.get('verdict') or 'تعذّر الحكم'} "
+          f"(ثقة {d.get('confidence')}) — {d.get('market')}",
+          f"لماذا: {d.get('why')}", "─" * 60]
+    cp = view["competitive_position"]
+    L.append("موقعك التنافسي:")
+    if cp.get("available"):
+        L.append(f"  التغطية: {cp.get('coverage')}")
+        for f in cp.get("feasibility_threads") or []:
+            L.append(f"  ضد {f['competitor'][:40]}: سعر مرصود "
+                     f"{f['observed_price']} — هامشك عند المضاهاة "
+                     f"{f['margin_at_match_pct']}% وعند البيع أقل 10% "
+                     f"{f['margin_at_10pct_below']}%")
+        for t in cp.get("competitor_threads") or []:
+            if not t.get("observed_price"):
+                L.append(f"  {t['name'][:40]}: {t['price_flag']} "
+                         f"(اكتمال الخيط {t['thread_completeness']})")
+    else:
+        L.append(f"  {cp.get('note')}")
+    L.append("─" * 60)
+    L.append("الأسواق (الأفضل أولاً):")
+    for i, m in enumerate(view["markets"], 1):
+        L.append(f"  {i:>2}. {m['country']:<22} score={m['score']:.3f} "
+                 f"conf={m['confidence']} ({m['components_present']})")
+    if view.get("limits"):
+        L.append("حدود هذا التقرير:")
+        L += [f"  - {x}" for x in view["limits"][:6]]
+    L += ["المختصر:", *(f"  {x}" for x in view["brief"]), "═" * 60]
+    return "\n".join(L)
