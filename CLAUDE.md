@@ -32,6 +32,16 @@ CI (`.github/workflows/ci.yml`) runs exactly `python -m pytest tests/ -q`. There
 6. **Synthesis** (`silk_synthesis.synthesize()`) — the ONLY verdict entry point. Stage 1 is the deterministic `JuryCommittee`; stage 2 (with `with_ai` + `ANTHROPIC_API_KEY`) is a Claude judgment over isolated inputs, switching to the "confrontation" prompt when correlation threads exist. Do not add parallel verdict paths — the old `ai_verdict` duality was deliberately deleted.
 7. **View** (`silk_render.build_view()`) — the ONE canonical view-model. Every output derives from it: dashboard (`result["view"]` attached by the API, rendered by `web/index.html`), terminal (`format_result`), Streamlit (`app.py`), Word report + one-page brief (`silk_reports.py`), `view["brief"]`. Per-number provenance lives in `components_detail` inside the template, so a figure without a source line is structurally impossible. **Never add a separate render path; extend `build_view` instead.**
 
+`silk_reports.py` derives two more outputs from that same view — `render_docx()` (executive summary → competitive position → markets with a source line per number → "حدود هذا التقرير" limits section, needs `python-docx`) and `render_brief()` (decision + 3 sourced numbers + the two competitive-position lines, plain text). Served via `GET /analyses/{id}/report.docx` and `/brief`.
+
+## Reverse discovery (the other direction)
+
+`silk_discovery.py` flips the question: given a market, which HS codes look like real opportunities for a Saudi exporter? It reuses only the existing sources — `silk_data_layer.comtrade_trade()` for two signals (3-year import growth, and a "Saudi gap" where the market imports heavily, Saudi's share is low, but Saudi exports that code to the world) plus optional `silk_trends_agent` seasonality as a low-weight tiebreaker. No new API integrations — an AST-based test (`test_wave5a_discovery.py`) asserts the module imports nothing beyond that set. Exposed via `POST /discover`; a result's `hs_code` feeds straight into `analyze(hs_code=...)`, bypassing the resolver.
+
+## Compliance checklists
+
+`silk_requirements_agent.py` (the `with_requirements` enrichment flag) reads `data/requirements_l1.csv` — a static, offline reference of entry requirements per market/category plus Saudi-exit requirements, each row citing its regulation number and an official source URL. Rows are tagged with a codification tier (`مقنّن بالكامل` / `شبه موحّد` / `موثّق جزئياً`) reflecting how legible that market's rules are (EU numbered regulations vs. GCC unified standards vs. everything else). For animal-origin HS chapters into the EU, an eligibility check (EU 2017/625 listed-establishment status) is forced to the front of the list — no downstream item is shown as reachable until that gate is noted. This is a lookup table, not a live legal service; treat additions to the CSV as carefully as code (cite the regulation, don't invent one).
+
 ## BaseAgent and the paid/free boundary
 
 All 15 agents inherit `BaseAgent` (`silk_agents.py`), which enforces the protocol structurally:
