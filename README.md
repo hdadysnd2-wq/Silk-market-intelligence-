@@ -181,3 +181,15 @@ docker run -p 8000:8000 silk-api
 **خطوات لاحقة مقترحة:** اختبار حيّ شامل ببيانات الإنترنت، توسيع `hs_codes.csv` للقائمة الكاملة عبر
 `tools/fetch_hs_codes.py`، لفّ الوكلاء بـ CrewAI، ودمج المصادر المدفوعة (Volza/explee) للأسواق الناجية
 من التصفية الأولية فقط.
+
+---
+
+## الرؤية المعمارية · Architecture vision
+
+خارطة التطوير بعد V3 موثّقة في **[`docs/VISION.md`](docs/VISION.md)** — محرّك التقاطع
+(Correlation Engine)، دروس "لو أُعيد البناء" (المعمارية الأنحف)، تصميم المخرجات الموحّد،
+محرّك اكتشاف الفرص المعكوس، وترقية طبقة الامتثال لقوائم تحقق تنفيذية.
+
+The post-V3 roadmap lives in **[`docs/VISION.md`](docs/VISION.md)**: the Correlation Engine,
+"if rebuilt" leaner-architecture lessons, a unified output template, the reverse
+opportunity-discovery engine, and the compliance layer upgraded to executable checklists.
