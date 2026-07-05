@@ -159,6 +159,7 @@ docker run -p 8000:8000 silk-api
 | `GET /resolve/{name}` | يصنّف اسم منتج إلى HS6 (مع المصدر/الثقة). |
 | `POST /analyze` | المسار العادي (مجاني حصراً): `{product, year, with_trends, with_tariffs, with_faostat, with_maps, with_websearch, with_competitors, with_channels, with_importers, with_requirements, persist}` — الحقول المدفوعة تُتجاهَل بنيوياً. |
 | `POST /deepen` | مسار التعميق (المدفوع الوحيد): يضيف `{with_localprice, own_price, with_volza, with_explee, with_ai}` ويعمل داخل سياق يسمح لوكلاء `PAID` بالتنفيذ. |
+| `POST /trend` | **خط الاتجاه متعدد السنوات** (سنوات الدراسة): `{hs_code, market_iso3, end_year, span}` — سلسلة استيراد سنوية + نمو% + CAGR من Comtrade القائم (صفر مصادر جديدة)؛ سنة بلا بيانات = فجوة معلنة لا صفر. متاح أيضاً على `/analyze` عبر `with_trend`/`trend_span` (يُرفَق `row['trend']`). |
 | `POST /discover` | **اكتشاف الفرص المعكوس** (§11): `{market_iso3, year, sector, min_import_usd, with_seasonality}` — أعلى الفرص بإشارات قابلة للتتبع (نمو الاستيراد + فجوة الحصة السعودية + موسمية تكميلية)؛ لا حشو، والفجوات معلنة. كل فرصة تحمل `hs_code` يُمرَّر مباشرة إلى `/analyze` («حلّل هذه الفرصة»). |
 | — `product_card` | حقل اختياري على المسارين: `{cost_per_unit, unit, tier, monthly_capacity, shipping_per_unit}` — وجوده يشغّل محرّك التقاطع ويضيف «موقعك التنافسي»؛ والرد يحمل دوماً `view` (القالب الموحّد §10.1). |
 | `GET /analyses` | يسرد التحليلات المحفوظة. |

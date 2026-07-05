@@ -153,6 +153,8 @@ def create_app():
         with_channels: bool = False
         with_importers: bool = False
         with_requirements: bool = False
+        with_trend: bool = False          # مدى السنوات — multi-year import trend
+        trend_span: int = 5
         product_card: ProductCard | None = None
         hs_code: str | None = None
         persist: bool = False
@@ -179,6 +181,8 @@ def create_app():
         with_channels: bool = False
         with_importers: bool = False
         with_requirements: bool = False
+        with_trend: bool = False          # مدى السنوات — multi-year import trend
+        trend_span: int = 5
         product_card: ProductCard | None = None
         hs_code: str | None = None
         persist: bool = False
@@ -277,6 +281,7 @@ def create_app():
             with_channels=req.with_channels,
             with_importers=req.with_importers,
             with_requirements=req.with_requirements,
+            with_trend=req.with_trend, trend_span=req.trend_span,
             product_card=(req.product_card.model_dump()
                           if req.product_card else None),
             hs_code=req.hs_code,
@@ -308,6 +313,7 @@ def create_app():
                 with_channels=req.with_channels,
                 with_importers=req.with_importers,
                 with_requirements=req.with_requirements,
+                with_trend=req.with_trend, trend_span=req.trend_span,
                 product_card=(req.product_card.model_dump()
                               if req.product_card else None),
                 hs_code=req.hs_code,
@@ -337,6 +343,30 @@ def create_app():
             req.market_iso3, req.year, sector=req.sector,
             min_import_usd=req.min_import_usd,
             with_seasonality=req.with_seasonality))
+
+    class TrendRequest(BaseModel):
+        """طلب خط الاتجاه متعدد السنوات — multi-year import-trend request."""
+        hs_code: str
+        market_iso3: str
+        end_year: int | None = None
+        span: int = 5
+
+    @app.post("/trend")
+    def trend(req: TrendRequest, request: Request):
+        """خط اتجاه استيراد سوق لرمز عبر مدى سنوات — multi-year import trend.
+
+        مجاني (Comtrade القائم — صفر مصادر جديدة)؛ حارس المصادقة يعمل قبل أي
+        جلب. سنة بلا بيانات = فجوة معلنة لا صفر. يغذّي تبويب «الاتجاه» في الواجهة.
+        """
+        _require_key(request)
+        import silk_trend
+        from silk_data_layer import ISO3_TO_M49
+        m49 = ISO3_TO_M49.get((req.market_iso3 or "").upper())
+        if not m49:
+            raise HTTPException(status_code=422,
+                                detail=f"unknown market ISO3: {req.market_iso3}")
+        end_year = req.end_year or 2023
+        return _json(silk_trend.import_trend(req.hs_code, m49, end_year, req.span))
 
     @app.get("/sources")
     def sources():
