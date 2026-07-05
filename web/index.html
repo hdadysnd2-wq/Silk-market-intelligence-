@@ -802,6 +802,12 @@
       $("loginMsg").textContent="جارٍ الإرسال…";
       requestLink(email,function(err,d){
         if(err){$("loginMsg").textContent="خطأ: "+err.message;return;}
+        if(d&&d.dev_link){            // وضع الإعداد: الرابط ظاهر مباشرة — one-click login
+          var tin=$("loginToken");if(tin)tin.value=d.dev_link;
+          $("loginMsg").innerHTML='رابط الدخول جاهز (وضع الإعداد): '+
+            '<a href="'+esc(d.dev_link)+'">افتح للدخول ↗</a> — أو اضغط «دخول» بالأسفل.';
+          return;
+        }
         $("loginMsg").textContent=(d&&d.sent)?"أُرسل رابط الدخول إلى بريدك.":"أُعدّ الرابط (وضع تطوير: راجع سجلّ الخادم)، ثم ألصقه أدناه.";
       });
     });

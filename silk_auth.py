@@ -86,7 +86,13 @@ def request_magic_link(email: str, base_url: str) -> dict:
     body = (f"رابط الدخول لمنصة سِلك (صالح {_LINK_TTL_MINUTES} دقيقة):\n{link}\n\n"
             "لو لم تطلب هذا الرابط، تجاهل هذه الرسالة.")
     sent = _send_email(email, "رابط الدخول — منصة سِلك", body)
-    return {"sent": sent}
+    resp = {"sent": sent}
+    # مفتاح إعداد/اختبار آمن (مطفأ افتراضياً): يُظهر الرابط في الرد مباشرة حين لا SMTP،
+    # فتدخل بلا نبش السجلّات. SILK_DEV_RETURN_LINK=1 surfaces the link for setup only;
+    # do NOT enable on a real multi-user deployment (anyone could request any email's link).
+    if os.environ.get("SILK_DEV_RETURN_LINK", "").strip().lower() in ("1", "true", "yes", "on"):
+        resp["dev_link"] = link
+    return resp
 
 
 def verify_magic_link(token: str) -> dict | None:
