@@ -115,8 +115,10 @@ def try_reserve_paid_calls(n: int, path: str | None = None) -> bool:
 
     - يعيد True والحجز مسجَّل، أو False (تجاوز السقف) وبلا أي تسجيل.
     - بلا سقف (SILK_PAID_DAILY_CAP غير مضبوط) => يسجّل ويعيد True دائمًا.
-    - عند فشل القاعدة يعيد True (fail-open) — العدّاد لا يُسقط الخدمة أبدًا،
-      كسلوك record_paid_calls القائم. On DB failure: log and fail open.
+    - **عند فشل القاعدة يعيد False (fail-closed، M-2):** إن تعذّر التحقق من
+      العدّاد (قفل/تلف/قرص) لا نسمح بصرف رصيد مدفوع بلا محاسبة — الرفض أأمن
+      من التجاوز الصامت للسقف. (المسار المجاني لا يمرّ من هنا إطلاقاً، فلا
+      يتأثر بهذا القرار.) On DB failure: log and **deny** the paid call.
     """
     if n <= 0:
         return True
@@ -139,5 +141,5 @@ def try_reserve_paid_calls(n: int, path: str | None = None) -> bool:
             )
         return True  # الخروج من with يُنهي المعاملة بالالتزام — commits on exit
     except Exception as e:  # noqa: BLE001 — counter must never crash the API
-        log.warning("usage counter reserve failed: %s", e)
-        return True
+        log.warning("usage counter reserve failed (failing closed): %s", e)
+        return False  # M-2: deny the paid call when accounting is unavailable
