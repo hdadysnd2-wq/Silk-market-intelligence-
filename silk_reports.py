@@ -105,6 +105,61 @@ def render_docx(view: dict, path: str) -> str:
     else:
         doc.add_paragraph(cp.get("note") or "")
 
+    # ٢ب) مشهد السوق الأول — أسعار/منافسون/موردون/اتجاه/ثقافة (الموجة ٩).
+    #     يُعرض المرصود، ويُعلن الغائب «غير مرصود» بمصدره/مفتاحه المطلوب — لا
+    #     اختلاق، وتقرير لا يعود «ناقصاً» بل صريحاً بما لديه وما ينقصه.
+    top_m = (view.get("markets") or [{}])[0]
+
+    def _sec(title: str, items: list, empty_hint: str, fmt) -> None:
+        doc.add_heading(title, level=1)
+        if items:
+            for it in items:
+                doc.add_paragraph(fmt(it), style="List Bullet")
+        else:
+            doc.add_paragraph(f"غير مرصود — {empty_hint}")
+
+    _sec("أسعار المنتجات في السوق", top_m.get("prices"),
+         "يتطلب طبقة أسعار السوق (LOCALPRICE_API_KEY) عبر «الدراسة العميقة»",
+         lambda p: f"{p.get('title') or 'قائمة'}: {_fmt(p.get('price'))}"
+                   + (f" {p['currency']}" if p.get("currency") else "")
+                   + (f" — {p['store']}" if p.get("store") else ""))
+
+    doc.add_heading("المنافسون", level=1)
+    countries = top_m.get("supplier_countries") or []
+    named = top_m.get("named_competitors") or []
+    if countries:
+        doc.add_paragraph("الدول المورّدة وحصصها:")
+        for c in countries[:6]:
+            doc.add_paragraph(f"{c.get('partner')}: {c.get('share')}% "
+                              f"({_fmt(c.get('value_usd'))}$)", style="List Bullet")
+    if named:
+        doc.add_paragraph("شركات منافسة بالاسم:")
+        for n in named[:8]:
+            doc.add_paragraph(str(n), style="List Bullet")
+    if not countries and not named:
+        doc.add_paragraph("غير مرصود — الدول المورّدة تتطلب Comtrade (شبكة)؛ "
+                          "والشركات بالاسم تتطلب مفتاح بحث (SEARCH_API_KEY).")
+
+    _sec("الموردون والأعمال بالاسم", top_m.get("suppliers"),
+         "يتطلب Google Maps / Volza / explee (مفاتيح)",
+         lambda s: f"{s.get('name')} — {s.get('source')}")
+
+    tr = top_m.get("trend") or {}
+    doc.add_heading("اتجاه الاستيراد متعدد السنوات", level=1)
+    if tr.get("series") and (tr.get("observed_years") or []):
+        doc.add_paragraph(f"النمو {tr.get('growth_pct')}% "
+                          f"(CAGR {tr.get('cagr_pct')}%) — {tr.get('note')}")
+    else:
+        doc.add_paragraph("غير مرصود — فعّل «مدى السنوات» (with_trend) وتحقّق من الشبكة.")
+
+    doc.add_heading("ثقافة المستهلك ونبض السوق", level=1)
+    culture = view.get("culture") or []
+    if culture:
+        for c in culture[:6]:
+            doc.add_paragraph(str(c.get("title"))[:200], style="List Bullet")
+    else:
+        doc.add_paragraph("غير مرصود — يتطلب مفتاح بحث الويب (SEARCH_API_KEY).")
+
     # ٣) الأسواق — سطر مصدر تحت كل رقم (§10.3، من components_detail).
     doc.add_heading("الأسواق المرشّحة (الأفضل أولاً)", level=1)
     for i, m in enumerate((view.get("markets") or [])[:8], 1):
