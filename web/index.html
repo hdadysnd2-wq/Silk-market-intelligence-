@@ -289,6 +289,7 @@
     complianceEntry:{ar:"اشتراطات الدخول والخروج",en:"Entry & exit requirements"},officialSrc:{ar:"المصدر الرسمي",en:"Official source"},
     juryTitle:{ar:"لجنة التحكيم",en:"Jury committee"},claudeJudge:{ar:"كلود · الحَكَم",en:"Claude · Judge"},coverageL:{ar:"تغطية",en:"Coverage"},gapsL:{ar:"فجوات",en:"Gaps"},
     reportLimits:{ar:"حدود هذا التقرير",en:"Limits of this report"},limitsSub:{ar:"ما لا يعرفه النظام يُقال صراحةً — الفجوات تُعلن ولا تُقدَّر.",en:"What the system doesn't know is stated plainly — gaps declared, not estimated."},noLimits:{ar:"لا حدود مسجّلة — كل مكوّنات الأسواق الأولى مرصودة.",en:"No limits recorded — all top-market components observed."},
+    cultureTitle:{ar:"ثقافة المستهلك ونبض السوق",en:"Consumer culture & market pulse"},cultureSub:{ar:"عناوين ومقالات مرصودة من بحث الويب — ما يهتم به المستهلك فعلياً.",en:"Observed headlines & articles from web search — what the consumer actually cares about."},cultureNeed:{ar:"غير مرصود — يتطلب مفتاح بحث الويب (SEARCH_API_KEY). فعّله في الإعدادات؛ لا نختلق اهتماماً.",en:"Not observed — requires a web-search key (SEARCH_API_KEY). Enable it in Settings; we never invent interest."},
     readyTitle:{ar:"ابدأ بالبحث عن منتج",en:"Start by searching a product"},readyP:{ar:"اكتب اسم منتج سعودي لتصفية أسواق تصديره وترتيبها عبر سنوات الدراسة.",en:"Type a Saudi product to shortlist and rank its export markets across the study years."},readyFoot:{ar:"النظام لا يُنشئ بيانات — كل رقم يحمل مصدره وثقته وتاريخه، وكل فجوة تُعلن بسببها.",en:"The system never creates data — every number carries its source, confidence and date, and every gap is declared with its reason."},
     readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"النظام لا يخمّن رمز HS — التصنيف الضعيف يُعلن بدل أن يُخترع.",en:"The system never guesses an HS code — a weak classification is declared, not invented."},
     settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"المفاتيح تُحفظ محلياً في متصفحك. لتفعيلها فعلياً اضبطها في متغيّرات البيئة على الخادم بنفس الأسماء.",en:"Keys are stored locally in your browser. To activate them, set them as server environment variables with the same names."},
@@ -367,6 +368,7 @@
   function buildBody(deepen){
     var span=Math.max(2,Math.min(10,S.yearTo-S.yearFrom+1));
     var b={product:S.product,year:S.yearTo,persist:true,with_trend:true,trend_span:span,with_requirements:true,with_competitors:true,
+      with_websearch:!!S.keys.SEARCH,
       with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS};
     if(S.card.cost_per_unit!=null){b.product_card={cost_per_unit:S.card.cost_per_unit,tier:S.card.tier||null,monthly_capacity:S.card.monthly_capacity!=null?S.card.monthly_capacity:null,shipping_per_unit:S.card.shipping_per_unit!=null?S.card.shipping_per_unit:null};}
     if(S.card.own_price!=null)b.own_price=S.card.own_price;
@@ -440,7 +442,7 @@
       $("#resultArea").innerHTML=pipeHTML()+'<section class="card ready" style="margin-top:var(--s5)"><h2>'+esc(t("noClass"))+'</h2><p>'+esc(S.result.note||"")+'</p><div class="foot">'+esc(t("noClassFoot"))+'</div></section>';return;}
     renderCompleteness();
     var ms=S.result.markets,sel=ms.filter(function(m){return m.id===S.selId;})[0]||ms[0];S.selId=sel&&sel.id;
-    $("#resultArea").innerHTML=pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+'</div>';
+    $("#resultArea").innerHTML=pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+cultureBlock()+'</div>';
     bindEvents();
   }
   function bindEvents(){
@@ -567,6 +569,19 @@
     return '<div class="duo"><section class="card panel"><h3>'+esc(t("reportLimits"))+'</h3><div class="sub">'+esc(t("limitsSub"))+'</div>'+lim+'</section>'+
       '<section class="card panel"><h3>'+esc(t("yourPos"))+'</h3><div class="sub">'+esc((cp&&cp.market)||"")+'</div>'+cpb+'</section></div>';
   }
+  function cultureBlock(){
+    var v=S.result.view||{},culture=v.culture||[];
+    var body;
+    if(culture.length){
+      body='<ul class="list">'+culture.slice(0,8).map(function(c){
+        var title=esc(c.title||"");
+        return '<li>'+(c.link?'<a href="'+esc(c.link)+'" target="_blank" rel="noopener noreferrer">'+title+'</a>':title)+'</li>';
+      }).join("")+'</ul>';
+    }else{
+      body='<div class="callout warn">'+esc(t("cultureNeed"))+'</div>';
+    }
+    return '<section class="card panel" style="margin-top:var(--s5)"><h3>'+esc(t("cultureTitle"))+'</h3><div class="sub">'+esc(t("cultureSub"))+'</div>'+body+'</section>';
+  }
   function renderReady(){
     $("#completeness").classList.add("hidden");
     if(!S.product){$("#resultArea").innerHTML='<section class="card ready"><h2>'+esc(t("readyTitle"))+'</h2><p>'+esc(t("readyP"))+'</p><div class="foot">'+esc(t("readyFoot"))+'</div></section>';return;}
@@ -582,7 +597,8 @@
     {tg:"trends",nm:{ar:"Google Trends",en:"Google Trends"},ds:{ar:"الطلب والموسمية.",en:"Demand & seasonality."}},
     {k:"WITS",nm:{ar:"WITS / WTO",en:"WITS / WTO"},ds:{ar:"الرسوم الجمركية المطبّقة.",en:"Applied tariffs."}},
     {k:"FAOSTAT",nm:{ar:"FAOSTAT",en:"FAOSTAT"},ds:{ar:"الاستهلاك للفرد (غذائي).",en:"Per-capita food supply."}},
-    {k:"MAPS",nm:{ar:"Google Maps",en:"Google Maps"},ds:{ar:"المصانع والموزّعون بأسمائهم.",en:"Named factories & distributors."}}];
+    {k:"MAPS",nm:{ar:"Google Maps",en:"Google Maps"},ds:{ar:"المصانع والموزّعون بأسمائهم.",en:"Named factories & distributors."}},
+    {k:"SEARCH",nm:{ar:"بحث الويب (Serper)",en:"Web Search (Serper)"},ds:{ar:"ثقافة المستهلك ونبض السوق — عناوين ومقالات مرصودة.",en:"Consumer culture & market pulse — observed headlines & articles."}}];
   var PAID=[{k:"LOCALPRICE",nm:{ar:"أسعار السوق المحلي",en:"Local market prices"},ds:{ar:"أسعار الرفّ الفعلية (أمازون/نون/جوميا) + مقارنة سعرك.",en:"Real shelf prices (Amazon/Noon/Jumia) + your price comparison."}},
     {k:"VOLZA",nm:{ar:"Volza",en:"Volza"},ds:{ar:"المستوردون بالاسم من بوالص الشحن.",en:"Named importers from shipping bills."}},
     {k:"EXPLEE",nm:{ar:"explee",en:"explee"},ds:{ar:"مشترون وجهات اتصال B2B.",en:"B2B buyers & contacts."}}];
