@@ -7,8 +7,11 @@ never crash, never fabricate). Module-level `app` is None when fastapi is missin
 Run:  python3 api.py   (needs `pip install fastapi uvicorn`).
 """
 import dataclasses
+import hmac
 import logging
 import os
+import threading
+import time
 
 log = logging.getLogger(__name__)
 
@@ -234,12 +237,51 @@ def create_app():
         return _json(_index_search(q, limit))
 
     def _require_key(request: Request) -> None:
-        """حارس المصادقة (الموجة ٠) — 401 before any agent when key mismatches."""
+        """حارس المصادقة — 401 when the key mismatches, constant-time (L-1).
+
+        يُطبَّق على مسارات القراءة الحسّاسة أيضاً (C-1): التحليلات المحفوظة
+        تحمل بطاقة المنتج الاقتصادية، ومعرّفاتها متسلسلة — بلا هذا الحارس
+        يقرؤها أي مجهول بالتعداد. المقارنة عبر hmac.compare_digest لتفادي
+        تسريب التوقيت. غير مضبوط SILK_API_KEY => وضع تطوير مفتوح (لا انحدار).
+        """
         expected = _api_key_expected()
-        if expected and request.headers.get("x-api-key", "") != expected:
+        if not expected:
+            return
+        got = request.headers.get("x-api-key", "")
+        if not hmac.compare_digest(got, expected):   # constant-time (L-1)
             raise HTTPException(status_code=401,
                                 detail="missing or invalid API key "
                                        "(send X-API-Key header)")
+
+    # تحديد معدّل بسيط بالذاكرة (M-1) — in-memory fixed-window rate limit.
+    # نافذة ثابتة لكل هوية (X-API-Key إن وُجد وإلا IP)؛ التجاوز = 429.
+    # يكفي أداةً داخلية (لا Redis)؛ الحالة لكل نسخة تطبيق (تُعاد تهيئتها في
+    # الاختبارات). SILK_RATE_LIMIT=0 يعطّله؛ الافتراضي 120 طلباً/60 ثانية.
+    _rl_max = int(os.environ.get("SILK_RATE_LIMIT", "120") or "120")
+    _rl_window = max(1, int(os.environ.get("SILK_RATE_WINDOW", "60") or "60"))
+    _rl_lock = threading.Lock()
+    _rl_hits: dict[str, tuple[int, int]] = {}
+
+    def _rate_limit(request: Request) -> None:
+        """حدّ المعدّل — raise 429 when a client exceeds the window budget."""
+        if _rl_max <= 0:
+            return
+        ident = (request.headers.get("x-api-key")
+                 or (request.client.host if request.client else "anon"))
+        win = int(time.time()) // _rl_window
+        with _rl_lock:
+            w, c = _rl_hits.get(ident, (win, 0))
+            if w != win:
+                w, c = win, 0
+            c += 1
+            _rl_hits[ident] = (w, c)
+            if len(_rl_hits) > 4096:          # backstop against unbounded growth
+                _rl_hits.clear()
+        if c > _rl_max:
+            raise HTTPException(
+                status_code=429,
+                detail=f"rate limit exceeded ({_rl_max}/{_rl_window}s) — "
+                       "slow down or raise SILK_RATE_LIMIT")
 
     def _guard_paid(req) -> None:
         """حارسا المدفوع — 503 لمفاتيح غير محمية، ثم 429 للسقف، ثم التسجيل."""
@@ -273,6 +315,7 @@ def create_app():
         حارس الموجة ٠ (المصادقة) يعمل قبل أي وكيل.
         """
         _require_key(request)
+        _rate_limit(request)
         result = silk_engine.analyze(
             req.product, year=req.year, with_trends=req.with_trends,
             with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
@@ -299,6 +342,7 @@ def create_app():
         السقف) يعملان قبل أي وكيل.
         """
         _require_key(request)
+        _rate_limit(request)
         _guard_paid(req)
         import silk_context
         with silk_context.deepen_context():
@@ -338,6 +382,7 @@ def create_app():
         مباشرة إلى /analyze أو /deepen (زر "حلّل هذه الفرصة"، §11.5-3).
         """
         _require_key(request)
+        _rate_limit(request)
         import silk_discovery
         return _json(silk_discovery.discover(
             req.market_iso3, req.year, sector=req.sector,
@@ -359,6 +404,7 @@ def create_app():
         جلب. سنة بلا بيانات = فجوة معلنة لا صفر. يغذّي تبويب «الاتجاه» في الواجهة.
         """
         _require_key(request)
+        _rate_limit(request)
         import silk_trend
         from silk_data_layer import ISO3_TO_M49
         m49 = ISO3_TO_M49.get((req.market_iso3 or "").upper())
@@ -396,13 +442,24 @@ def create_app():
         ])
 
     @app.get("/analyses")
-    def analyses():
-        """اسرد التحليلات المحفوظة — list persisted analyses (metadata only)."""
+    def analyses(request: Request):
+        """اسرد التحليلات المحفوظة — list persisted analyses (metadata only).
+
+        C-1: محروسة بالمصادقة — الجرد يكشف ما يُحلَّل من منتجات/أسواق.
+        """
+        _require_key(request)
+        _rate_limit(request)
         return _json(silk_storage.list_analyses())
 
     @app.get("/analyses/{analysis_id}")
-    def analysis(analysis_id: int):
-        """أعد تحليلًا محفوظًا — fetch one persisted analysis, or 404."""
+    def analysis(analysis_id: int, request: Request):
+        """أعد تحليلًا محفوظًا — fetch one persisted analysis, or 404.
+
+        C-1: محروسة — البلوب المخزّن يحمل بطاقة المنتج الاقتصادية،
+        والمعرّفات متسلسلة، فبلا مصادقة يقرؤها مجهول بالتعداد.
+        """
+        _require_key(request)
+        _rate_limit(request)
         found = silk_storage.get_analysis(analysis_id)
         if found is None:
             raise HTTPException(status_code=404,
@@ -410,8 +467,13 @@ def create_app():
         return _json(found)
 
     @app.get("/analyses/{analysis_id}/brief")
-    def brief(analysis_id: int):
-        """المختصر (§10.4) — one-page mobile-style brief from the ONE template."""
+    def brief(analysis_id: int, request: Request):
+        """المختصر (§10.4) — one-page mobile-style brief from the ONE template.
+
+        C-1: محروسة — تشتق من التحليل المخزّن نفسه (بطاقة/هوامش).
+        """
+        _require_key(request)
+        _rate_limit(request)
         found = silk_storage.get_analysis(analysis_id)
         if found is None:
             raise HTTPException(status_code=404,
@@ -422,11 +484,13 @@ def create_app():
         return PlainTextResponse(render_brief(build_view(found)))
 
     @app.get("/analyses/{analysis_id}/report.docx")
-    def report_docx(analysis_id: int):
+    def report_docx(analysis_id: int, request: Request):
         """التقرير الكامل Word (§10.3) — derived from the ONE template.
 
-        404 للتحليل المفقود؛ 501 بتلميح تثبيت واضح إن غابت python-docx.
+        C-1: محروسة. 404 للتحليل المفقود؛ 501 بلا python-docx.
         """
+        _require_key(request)
+        _rate_limit(request)
         found = silk_storage.get_analysis(analysis_id)
         if found is None:
             raise HTTPException(status_code=404,
