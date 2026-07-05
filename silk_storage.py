@@ -17,6 +17,15 @@ log = logging.getLogger(__name__)
 _DEFAULT_PATH = "data/silk.db"
 
 
+def _db_path() -> str:
+    """مسار قاعدة التحليلات وقت النداء — resolve at call time (env or default).
+
+    `SILK_DB` يوجّه الملف لقرص دائم في النشر (Railway volume على /data مثلًا)
+    دون حجب ملفات data/ المرجعية. Env override for persistent-disk deploys.
+    """
+    return os.environ.get("SILK_DB", "").strip() or _DEFAULT_PATH
+
+
 def _connect(path: str) -> sqlite3.Connection:
     """افتح اتصالًا وأنشئ المجلد — open a connection, making parent dir if needed."""
     parent = os.path.dirname(path)
@@ -27,12 +36,13 @@ def _connect(path: str) -> sqlite3.Connection:
     return conn
 
 
-def init_db(path: str = _DEFAULT_PATH) -> None:
+def init_db(path: str | None = None) -> None:
     """أنشئ الجداول (idempotent) — create tables if absent. Safe to call repeatedly.
 
     الموجة ١: عمودا `outcome` + `outcome_date` (سجل النتائج الفعلية التراكمي).
     قواعد قديمة بلا العمودين تُرحَّل بـ ALTER TABLE آمن لا يمسّ أي بيانات قائمة.
     """
+    path = path or _db_path()
     with _connect(path) as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS analyses ("
@@ -55,12 +65,13 @@ def init_db(path: str = _DEFAULT_PATH) -> None:
                 conn.execute(f"ALTER TABLE analyses ADD COLUMN {col} TEXT")
 
 
-def save_analysis(result: dict, path: str = _DEFAULT_PATH) -> int:
+def save_analysis(result: dict, path: str | None = None) -> int:
     """خزّن نتيجة تحليل وأعد المعرّف — store an analyze() result, return its row id.
 
     The full dict is json.dumps'd into json_blob; per-market scores are also
     flattened into market_scores for quick listing/querying.
     """
+    path = path or _db_path()
     init_db(path)
     blob = json.dumps(result, ensure_ascii=False, default=_json_default)
     with _connect(path) as conn:
@@ -93,7 +104,7 @@ def set_outcome(analysis_id: int, outcome: str,
     (تاريخ اليوم). يعيد False إن لم يوجد التحليل — لا إنشاء ضمني.
     path=None يقرأ المسار الافتراضي وقت النداء (قابل للتوجيه في الاختبارات).
     """
-    path = path or _DEFAULT_PATH
+    path = path or _db_path()
     if not os.path.exists(path):
         return False
     init_db(path)  # يضمن وجود العمودين على القواعد الأقدم (ترحيل آمن)
@@ -105,8 +116,9 @@ def set_outcome(analysis_id: int, outcome: str,
     return cur.rowcount > 0
 
 
-def list_analyses(path: str = _DEFAULT_PATH) -> list[dict]:
+def list_analyses(path: str | None = None) -> list[dict]:
     """اسرد التحليلات المحفوظة — list saved analyses (newest first), metadata only."""
+    path = path or _db_path()
     if not os.path.exists(path):
         return []
     init_db(path)  # ترحيل آمن للقواعد الأقدم قبل قراءة عمودي outcome
@@ -123,7 +135,7 @@ def get_analysis(analysis_id: int, path: str | None = None) -> dict | None:
 
     path=None يقرأ المسار الافتراضي وقت النداء (قابل للتوجيه في الاختبارات).
     """
-    path = path or _DEFAULT_PATH
+    path = path or _db_path()
     if not os.path.exists(path):
         return None
     with _connect(path) as conn:

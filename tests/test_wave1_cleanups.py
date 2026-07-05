@@ -106,6 +106,27 @@ def test_outcome_columns_and_set_outcome_roundtrip():
     assert storage.set_outcome(99999, "x", db) is False        # لا إنشاء ضمني
 
 
+def test_silk_db_env_redirects_storage():
+    # SILK_DB يوجّه قاعدة التحليلات وقت النداء (نشر بقرص دائم — Railway volume)
+    # دون تمرير path صريح؛ يُقرأ عند كل نداء لا عند الاستيراد.
+    import silk_storage as storage
+
+    db = os.path.join(tempfile.mkdtemp(), "envdir", "silk_env.db")
+    old = os.environ.get("SILK_DB")
+    os.environ["SILK_DB"] = db
+    try:
+        aid = storage.save_analysis(
+            {"product": "env-demo", "hs_code": "000000", "markets": []})
+        assert os.path.exists(db)                        # كُتبت حيث وجّه المتغير
+        assert storage.get_analysis(aid)["product"] == "env-demo"
+        assert any(r["id"] == aid for r in storage.list_analyses())
+    finally:
+        if old is None:
+            os.environ.pop("SILK_DB", None)
+        else:
+            os.environ["SILK_DB"] = old
+
+
 def test_outcome_migration_on_old_schema_db():
     # قاعدة قديمة بلا العمودين => init_db يرحّلها بلا مساس بالصفوف القائمة.
     import sqlite3
