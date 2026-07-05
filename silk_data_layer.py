@@ -198,11 +198,36 @@ def world_bank(iso3: str, indicator: str, year: int | None = None) -> DataPoint:
                 )
         note = f"{indicator}: no value returned for {iso3}"
         log.warning(note)
-        return DataPoint(None, "World Bank", 0.0, note, _today())
+        return _seed_fallback(iso3, indicator) or DataPoint(
+            None, "World Bank", 0.0, note, _today())
     except Exception as e:  # noqa: BLE001
         note = f"{indicator} fetch failed for {iso3}: {e}"
         log.warning(note)
-        return DataPoint(None, "World Bank", 0.0, note, _today())
+        # بديل اللقطة الحقيقية المضمّنة — real bundled snapshot instead of None.
+        return _seed_fallback(iso3, indicator) or DataPoint(
+            None, "World Bank", 0.0, note, _today())
+
+
+def _seed_fallback(iso3: str, indicator: str) -> "DataPoint | None":
+    """قيمة حقيقية من اللقطة المضمّنة حين تتعذّر الشبكة — a REAL value from the bundled
+    World Bank snapshot when the live API is unreachable (never fabricated; carries
+    its own source + snapshot year). Covers population and GDP/capita indicators."""
+    try:
+        import silk_seed_data as seed
+    except Exception:  # noqa: BLE001
+        return None
+    if indicator == "SP.POP.TOTL":
+        got = seed.population(iso3)
+        if got:
+            return DataPoint(got[0], seed._SOURCE, 0.9,
+                             f"سكان — لقطة البنك الدولي {got[1]}", _today())
+    elif indicator.startswith("NY.GDP.PCAP"):
+        got = seed.gdp_per_capita(iso3)
+        if got:
+            ppp = " (اسمي بديلاً عن PPP)" if "PP.CD" in indicator else ""
+            return DataPoint(got[0], seed._SOURCE, 0.85,
+                             f"نصيب الفرد US$ — لقطة البنك الدولي {got[1]}{ppp}", _today())
+    return None
 
 
 def gdp_per_capita(iso3: str, year: int | None = None) -> DataPoint:

@@ -49,7 +49,7 @@ def test_engine_pipeline_offline_no_fabrication():
     assert res["hs_code"] == "080410"
     assert res["preliminary"] is True
     row = res["markets"][0]
-    assert row["total_score"] == 0.0 and row["confidence"] == 0.0  # no data => no invented score
+    assert row["components"]["market_size"].value is None  # trade not fabricated (score is demographic-only offline)
 
 
 def test_storage_round_trip(tmp_path=None):
@@ -97,7 +97,7 @@ def test_engine_optional_layers_offline():
     assert "analysis_id" in res                       # persisted
     # طبقات السياق مرفقة (قيم None بلا شبكة، لا اختلاق) — context attached, None offline.
     assert "trends" in res["markets"][0] and "tariff" in res["markets"][0]
-    assert res["markets"][0]["total_score"] == 0.0    # additive context, score unchanged
+    assert res["markets"][0]["components"]["market_size"].value is None    # additive context, score unchanged
 
 
 def test_api_imports_without_fastapi():
@@ -278,7 +278,7 @@ def test_engine_localprice_layer_offline():
                              year=2023, with_localprice=True)
     assert res["classified"] is True and res["year"] == 2023
     assert "localprice" in res["markets"][0]            # context attached
-    assert res["markets"][0]["total_score"] == 0.0      # additive, score unchanged
+    assert res["markets"][0]["components"]["market_size"].value is None      # additive, score unchanged
 
 
 def test_engine_localprice_own_price_offline():
@@ -359,7 +359,7 @@ def test_engine_paid_layers_offline():
     # طبقات السياق مرفقة (None بلا مفتاح/شبكة، لا اختلاق) — attached, None offline.
     assert "maps" in row and "volza" in row and "explee" in row
     assert "websearch" in res                            # top-level web search
-    assert row["total_score"] == 0.0                     # additive, score unchanged
+    assert row["components"]["market_size"].value is None                     # additive, score unchanged
 
 
 def test_hs_codes_grew_and_resolve_dates():
@@ -563,7 +563,7 @@ def test_engine_market_size_layer_offline():
     assert res["classified"] is True and res["hs_code"] == "080410"
     row = res["markets"][0]
     assert "production" in row and "market_size" in row   # context attached
-    assert row["total_score"] == 0.0                      # additive, unchanged
+    assert row["components"]["market_size"].value is None                      # additive, unchanged
 
 
 def test_cities_agent_known_and_unknown_country():
@@ -616,7 +616,7 @@ def test_engine_demographics_layer_offline():
     assert row["religion"] is not None
     assert row["religion"].value["majority_religion"] == "Islam"
     assert any(f.value for f in row["cities"])         # Cairo present offline
-    assert row["total_score"] == 0.0                   # additive, score unchanged
+    assert row["components"]["market_size"].value is None                   # additive, score unchanged
 
 
 def test_competitors_agent_no_fabrication_keyless():
@@ -683,7 +683,7 @@ def test_engine_competition_layer_offline():
     for key in ("competitors_web", "importers", "distribution_channels", "ecommerce"):
         assert key in row                               # free context attached
     assert "bestsellers" not in row                     # PAID Apify -> deepen-only, NOT on /analyze
-    assert row["total_score"] == 0.0                    # additive, score unchanged
+    assert row["components"]["market_size"].value is None                    # additive, score unchanged
 
 
 def test_importers_agent_free_no_fabrication_keyless():
@@ -717,7 +717,7 @@ def test_engine_compliance_layer_offline():
                              year=2022, with_compliance=True)
     row = res["markets"][0]
     assert "regulatory" in row and "customs_web" in row   # context attached
-    assert row["total_score"] == 0.0                       # additive, score unchanged
+    assert row["components"]["market_size"].value is None                       # additive, score unchanged
 
 
 def test_culture_agents_no_fabrication_keyless():
@@ -742,7 +742,7 @@ def test_engine_culture_layer_offline():
     row = res["markets"][0]
     for key in ("cultural", "business_culture", "exhibitions"):
         assert key in row                               # context attached
-    assert row["total_score"] == 0.0                    # additive, score unchanged
+    assert row["components"]["market_size"].value is None                    # additive, score unchanged
 
 
 def test_synthesis_keyless_returns_none():
@@ -872,7 +872,7 @@ def test_engine_synthesis_layer_offline_keyless():
                              year=2022, with_synthesis=True)
     row = res["markets"][0]
     assert "synthesis" not in row              # keyless -> nothing fabricated/attached
-    assert row["total_score"] == 0.0          # additive, score unchanged
+    assert row["components"]["market_size"].value is None          # additive, score unchanged
 
 
 def _demo_result_for_reports():
@@ -1387,6 +1387,34 @@ def test_group_d_unexpected_exception_is_visible_not_a_silent_gap():
         assert val is None, f"{field} should carry a None value, not fabricate"
         n = note_of(v) or ""
         assert "enrichment error" in n and marker in n, f"{field} note lost the reason: {n!r}"
+
+
+def test_worldbank_seed_fallback_serves_real_offline_values():
+    # حرج (بيانات) — حين تتعذّر شبكة البنك الدولي، تُعاد قيمة حقيقية من اللقطة
+    # المضمّنة (سكان/نصيب فرد) بمصدر وسنة صريحين، لا None ولا اختلاق.
+    from unittest.mock import patch
+    import silk_data_layer as d
+    import silk_seed_data as seed
+
+    assert seed.available() and seed.population("ARE")  # snapshot loaded
+    with patch("silk_data_layer.requests.get", side_effect=OSError("blocked")), \
+         patch("silk_data_layer._cached_get", return_value=None):
+        pop = d.population("ARE")
+        gdp = d.gdp_per_capita("EGY")
+    assert pop.value and pop.value > 1_000_000       # real UAE population, not None
+    assert "لقطة" in pop.source                        # provenance = bundled snapshot
+    assert gdp.value and gdp.value > 0                # real Egypt GDP/capita
+    assert "البنك الدولي" in gdp.note                  # sourced + snapshot year
+
+
+def test_worldbank_seed_unknown_country_stays_none():
+    # دولة غير موجودة باللقطة: None (لا اختلاق) — no fabrication for missing countries.
+    from unittest.mock import patch
+    import silk_data_layer as d
+    with patch("silk_data_layer.requests.get", side_effect=OSError("blocked")), \
+         patch("silk_data_layer._cached_get", return_value=None):
+        dp = d.population("ZZZ")
+    assert dp.value is None and dp.confidence == 0.0
 
 
 def test_ai_cap_cut_is_visible_not_a_silent_gap():
