@@ -115,6 +115,28 @@ def test_acceptance_4_zero_new_data_sources():
     assert imported <= allowed, imported                # صفر مصادر جديدة
 
 
+def test_totals_missing_primary_value_never_masquerades_as_zero():
+    # سجل بلا primaryValue رقمية يُسقَط ولا يُعدّ صفراً — صفر مختلق هنا
+    # يولّد نسبة نمو/حصة مختلقة في الإشارات اللاحقة (المبدأ التأسيسي).
+    import silk_discovery as d
+
+    recs = [
+        {"cmdCode": "080410", "primaryValue": 1_000_000.0},
+        {"cmdCode": "080410"},                          # مفقود => يُسقَط لا 0
+        {"cmdCode": "090111", "primaryValue": None},    # كل سجلاته بلا قيمة
+        {"cmdCode": "520100", "primaryValue": "n/a"},   # غير رقمي => يُسقَط
+    ]
+    totals = d._totals_by_hs(recs)
+    assert totals == {"080410": 1_000_000.0}            # لا مدخلات صفرية مختلقة
+    assert "090111" not in totals and "520100" not in totals
+    # وبالتبعية: لا إشارة نمو مختلقة من صفر قديم مزيّف — no fabricated growth.
+    older = d._totals_by_hs([{"cmdCode": "080410", "primaryValue": None}])
+    assert d.growth_signal(older, totals, (2020, 2022)) == {}
+    # كل السجلات بلا قيم => قاموس فارغ = مسار الفجوة المعلنة في discover().
+    assert d._totals_by_hs([{"cmdCode": "080410"},
+                            {"cmdCode": "090111", "primaryValue": None}]) == {}
+
+
 def test_discover_offline_declares_gaps_no_fabrication():
     # بلا شبكة: قائمة فارغة + فجوات معلنة (كل جلبة فاشلة مسماة) — لا اختلاق.
     import silk_discovery as d

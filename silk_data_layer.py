@@ -134,6 +134,23 @@ def partner_name(code: object) -> str:
     return PARTNER_NAMES.get(str(code), str(code))
 
 
+def primary_value(rec: dict) -> float | None:
+    """القيمة الرقمية لسجل كومتريد — the record's numeric 'primaryValue', or None.
+
+    سجل ناقص/مشوّه بلا قيمة رقمية حقيقية **ليس صفراً** — عدّه صفراً اختلاقُ
+    رقم (المبدأ التأسيسي)؛ يعيد None ليُسقِطه المستهلك ويعلن الفجوة بدل جمعه.
+    A partial/malformed record must never masquerade as a genuine 0: callers
+    drop None and declare the gap instead of summing a fabricated zero.
+    """
+    v = rec.get("primaryValue")
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def comtrade_trade(
     hs_code: str,
     reporter_m49: object,

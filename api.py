@@ -250,13 +250,15 @@ def create_app():
                            + ") but SILK_API_KEY is not — refusing to run "
                              "paid layers unauthenticated. Set SILK_API_KEY "
                              "(and send X-API-Key) or unset the paid keys.")
-        if paid_requested and silk_usage.would_exceed_cap(paid_requested):
+        # فحص السقف والتسجيل في معاملة ذرّية واحدة — لا نافذة سباق بين
+        # القراءة والكتابة (طلبان متزامنان لا يتجاوزان السقف معًا).
+        # Atomic check-and-reserve: no TOCTOU window between read and write.
+        if paid_requested and not silk_usage.try_reserve_paid_calls(
+                paid_requested):
             raise HTTPException(
                 status_code=429,
                 detail="daily paid-layer cap reached (SILK_PAID_DAILY_CAP) — "
                        "retry tomorrow or raise the cap")
-        if paid_requested:
-            silk_usage.record_paid_calls(paid_requested)
 
     @app.post("/analyze")
     def analyze(req: AnalyzeRequest, request: Request):

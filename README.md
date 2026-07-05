@@ -169,14 +169,14 @@ docker run -p 8000:8000 silk-api
 
 **CI** (`.github/workflows/ci.yml`): يثبّت `requirements.txt` (بما فيها `fastapi`/`uvicorn`) + `pytest` ويشغّل `python -m pytest tests/ -q` عند كل push / PR.
 
-### النشر · Deployment (Render — خدمة واحدة)
+### النشر · Deployment (Railway — خدمة واحدة)
 
-خدمة Render واحدة تقدّم **الواجهة + الـ API معًا** (`api.py` يضيف `web/` على `/`)، فلا حاجة لـ Netlify ولا لصق رابط:
+خدمة Railway واحدة تقدّم **الواجهة + الـ API معًا** (`api.py` يضيف `web/` على `/`)، فلا حاجة لـ Netlify ولا لصق رابط. الدليل الكامل خطوة بخطوة: **`docs/DEPLOY_RAILWAY.md`**.
 
-1. Render → **New +** → **Web Service** (أو Blueprint يقرأ `render.yaml`)، اربط المستودع، فرع `main`.
-   - Build: `pip install -r requirements.txt`  ·  Start: `uvicorn api:app --host 0.0.0.0 --port $PORT`  ·  Python 3.11 (`.python-version`).
-2. افتح رابط الخدمة (مثل `https://...onrender.com`) → **تظهر الواجهة مباشرةً**. اترك حقل «رابط الباك-إند» فارغًا (نفس الخدمة) → اكتب المنتج → حلّل.
-3. تحقّق من `/<الرابط>/health` → `{"status":"ok"}`.
+1. Railway → **New Project** → **Deploy from GitHub repo**، اربط المستودع، فرع `main`. البناء عبر `Dockerfile` والضبط عبر `railway.json` (فحص صحة على `/health`) — تلقائيان.
+2. أضف **Volume** مركّبًا على `/data` واضبط `SILK_DB=/data/silk.db` و`SILK_USAGE_DB=/data/usage.db` (لا تركّب القرص فوق `data/` — يحوي ملفات CSV مرجعية).
+3. **Settings → Networking → Generate Domain**، افتح الرابط → **تظهر الواجهة مباشرةً**. اترك حقل «رابط الباك-إند» فارغًا (نفس الخدمة) → اكتب المنتج → حلّل.
+4. تحقّق من `/<الرابط>/health` → `{"status":"ok"}`.
 
 > بديل اختياري: نشر الواجهة وحدها على Netlify (`netlify.toml`, `publish = web`) ووضع رابط الـ API في الحقل؛ حينها فعّل `CORS_ORIGINS` بدومين Netlify (CORS مهيّأ في `api.py`).
 

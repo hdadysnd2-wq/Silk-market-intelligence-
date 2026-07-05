@@ -17,6 +17,7 @@ from silk_data_layer import (
     gdp_per_capita,
     population,
     partner_name,
+    primary_value,
 )
 from silk_data_layer_v2 import ppp_per_capita, market_competitors
 
@@ -109,15 +110,28 @@ class TradeFlowAgent(BaseAgent):
         findings: list[DataPoint] = []
         for flow, label in (("M", "imports"), ("X", "exports")):
             recs = comtrade_trade(hs, market, year, flow=flow, partner=0)
-            total = sum(float(r.get("primaryValue") or 0) for r in recs) if recs else None
-            if total is None:
+            # سجل بلا primaryValue رقمية لا يُجمع كصفر — لا اختلاق (المبدأ التأسيسي).
+            # Records lacking a numeric primaryValue are dropped, never summed as 0.
+            vals = [v for v in (primary_value(r) for r in recs) if v is not None]
+            dropped = len(recs) - len(vals)
+            if not recs:
                 findings.append(DataPoint(
                     None, "UN Comtrade", 0.0,
                     f"HS{hs} {label} for market {market} {year}: no data / fetch failed"))
-            else:
+            elif not vals:
                 findings.append(DataPoint(
-                    total, "UN Comtrade", 0.9,
-                    f"HS{hs} total {label} (World) to market {market} {year}, USD"))
+                    None, "UN Comtrade", 0.0,
+                    f"HS{hs} {label} for market {market} {year}: "
+                    f"سجلات بلا قيم رقمية ({dropped}) — payload records lacked "
+                    "numeric primaryValue, no value to report"))
+            else:
+                note = f"HS{hs} total {label} (World) to market {market} {year}, USD"
+                conf = 0.9
+                if dropped:
+                    conf = 0.7  # مجموع جزئي: سجلات بلا قيمة أُسقطت — partial sum
+                    note += (f"؛ {dropped} سجل بلا قيمة رقمية أُسقط من الجمع — "
+                             f"{dropped} record(s) lacked primaryValue, excluded")
+                findings.append(DataPoint(sum(vals), "UN Comtrade", conf, note))
         real = _real(findings)
         failed = not real
         summary = ("لا توجد بيانات تجارة — no trade data available"
