@@ -155,7 +155,7 @@ def _normalize(raw: dict[str, float], value: float) -> float:
     return (value - lo) / (hi - lo)
 
 
-def rank_markets(hs_code: str, countries: list[dict] = COUNTRIES,
+def rank_markets(hs_code: str, countries: list[dict] | None = None,
                  year: int = 2022) -> list[dict]:
     """رتّب الأسواق لرمز HS — rank markets best-first by a weighted, audited score.
 
@@ -164,6 +164,8 @@ def rank_markets(hs_code: str, countries: list[dict] = COUNTRIES,
     Missing components are skipped and lower that row's confidence; weights are
     renormalized over present components so rows stay comparable. Never fabricates.
     """
+    countries = countries or COUNTRIES
+
     # 1) اجمع المكوّنات الخام لكل دولة — gather raw components per country.
     rows: list[dict] = []
     for c in countries:

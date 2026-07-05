@@ -118,6 +118,32 @@ def test_paid_cap_counts_and_allows_within_cap():
         assert r.status_code == 429
 
 
+def test_paid_cap_reserve_is_atomic_under_concurrency():
+    # سباق TOCTOU: N خيوط تحجز معًا بسقف K < N => بالضبط K تنجح والعدّاد = K.
+    # (الفحص والتسجيل معاملة واحدة — لا يمرّ طلبان متزامنان قرب الحدّ معًا.)
+    import threading
+    import silk_usage
+    usage_db = os.path.join(tempfile.mkdtemp(), "usage.db")
+    n_threads, cap = 8, 3
+    with _env(SILK_PAID_DAILY_CAP=str(cap), SILK_USAGE_DB=usage_db):
+        results = []
+        barrier = threading.Barrier(n_threads)  # انطلاقة متزامنة لكشف السباق
+
+        def _reserve_one():
+            barrier.wait()
+            results.append(silk_usage.try_reserve_paid_calls(1, usage_db))
+
+        threads = [threading.Thread(target=_reserve_one)
+                   for _ in range(n_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(results) == n_threads
+        assert sum(results) == cap  # بالضبط بقدر السقف — لا أكثر ولا أقل
+        assert silk_usage.paid_calls_today(usage_db) == cap  # لا تجاوز مسجَّل
+
+
 def test_injection_text_is_isolated():
     # نص عدائي في نتائج الوكلاء يُعزل بين وسمي RAW_FINDINGS ولا يكسر العزل.
     import silk_ai_judge as judge

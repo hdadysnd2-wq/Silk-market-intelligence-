@@ -93,8 +93,51 @@ def record_paid_calls(n: int, path: str | None = None) -> None:
 
 
 def would_exceed_cap(requested: int, path: str | None = None) -> bool:
-    """هل يتجاوز الطلب السقف؟ — True when cap is set AND today+requested > cap."""
+    """هل يتجاوز الطلب السقف؟ — True when cap is set AND today+requested > cap.
+
+    فحص إخباري فقط (قراءة بلا حجز) — للحجز الفعلي استعمل
+    try_reserve_paid_calls الذرّية. Informational read only; the enforcing
+    path must use the atomic try_reserve_paid_calls instead.
+    """
     cap = daily_cap()
     if cap is None or requested <= 0:
         return False
     return paid_calls_today(path) + requested > cap
+
+
+def try_reserve_paid_calls(n: int, path: str | None = None) -> bool:
+    """احجز n تفعيلات ذرّيًا — atomic check-and-reserve in ONE transaction.
+
+    سدّ ثغرة السباق (TOCTOU): القراءة والتسجيل داخل معاملة واحدة
+    (BEGIN IMMEDIATE تأخذ قفل الكتابة قبل القراءة)، فلا يمكن لطلبين
+    متزامنين قرب حدّ السقف أن يقرآ "تحت السقف" معًا ثم يسجّلا معًا.
+    Two concurrent /deepen requests can no longer both pass the cap check.
+
+    - يعيد True والحجز مسجَّل، أو False (تجاوز السقف) وبلا أي تسجيل.
+    - بلا سقف (SILK_PAID_DAILY_CAP غير مضبوط) => يسجّل ويعيد True دائمًا.
+    - عند فشل القاعدة يعيد True (fail-open) — العدّاد لا يُسقط الخدمة أبدًا،
+      كسلوك record_paid_calls القائم. On DB failure: log and fail open.
+    """
+    if n <= 0:
+        return True
+    cap = daily_cap()
+    try:
+        with _connect(path or _db_path()) as conn:
+            # قفل كتابة فوري قبل القراءة — write lock BEFORE the read.
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT calls FROM paid_usage WHERE day = ?", (_today(),)
+            ).fetchone()
+            current = int(row[0]) if row else 0
+            if cap is not None and current + n > cap:
+                conn.rollback()  # لا حجز عند الرفض — nothing recorded on refusal
+                return False
+            conn.execute(
+                "INSERT INTO paid_usage (day, calls) VALUES (?, ?) "
+                "ON CONFLICT(day) DO UPDATE SET calls = calls + excluded.calls",
+                (_today(), n),
+            )
+        return True  # الخروج من with يُنهي المعاملة بالالتزام — commits on exit
+    except Exception as e:  # noqa: BLE001 — counter must never crash the API
+        log.warning("usage counter reserve failed: %s", e)
+        return True

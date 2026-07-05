@@ -1,5 +1,15 @@
 # تقرير تدقيق حالة المستودع — منصة سِلك
 
+> **تنبيه تاريخي (2026-07-05):** هذه الوثيقة لقطة زمنية عند الإيداع
+> `a7c36bb` (2026-07-02) **قبل** دمج الموجات 0–5c. الموجات المدموجة
+> نفّذت معظم ما ورد أدناه بوصفه "غير موجود" (مثل `correlation.py`
+> و`/deepen` و`BaseAgent` و`samples/` وأعمدة `outcome`). للحالة الراهنة
+> اقرأ `CLAUDE.md` والكود نفسه — لا هذه الوثيقة.
+> *Historical note (2026-07-05): this document is a point-in-time
+> snapshot at commit `a7c36bb`; waves 0–5c have since been merged and
+> implemented most items listed here as "not found". For the current
+> state, read `CLAUDE.md` and the code itself.*
+
 > **نوع المهمة:** تدقيق قراءة فقط — لم يُعدَّل أي كود أو ملف قائم.
 > **نطاق الفحص:** كامل ملفات المستودع على فرع `main`
 > (آخر إيداع وقت التدقيق: `a7c36bb`).

@@ -220,9 +220,7 @@ class RequirementsAgent(BaseAgent):
                    + f"+ {len(exit_items)} Saudi-exit item(s)"
                    + (" | الأهلية أولاً: البنود التالية مشروطة بها"
                       if eligibility_first else ""))
-        report = AgentReport(self.name, findings, False, summary)
-        report.summary = summary
-        return report
+        return AgentReport(self.name, findings, False, summary)
 
 
 if __name__ == "__main__":
