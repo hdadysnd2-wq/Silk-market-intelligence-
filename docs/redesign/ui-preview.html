@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>سِلك · إعادة تصميم Claude — عرض المكوّنات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ===== Claude Design tokens — light ===== */
+  :root{
+    --paper:#FAFAF8; --surface:#FFFFFF; --ink:#1C1D22; --muted:#6B6E76; --faint:#9A9DA5;
+    --line:#ECEBE6; --line-2:#F4F3EF;
+    --accent:#3E4CC0; --accent-ink:#2C368F; --accent-soft:#EEF0FB;
+    --go:#3F7A55; --go-soft:#EAF2EC; --gap:#9A7A2E; --gap-soft:#F6EFDD; --no:#A6503F; --no-soft:#F6E9E5;
+    --s1:4px; --s2:8px; --s3:12px; --s4:20px; --s5:32px; --s6:48px;
+    --r:10px; --r-lg:16px;
+    --sh:0 1px 2px rgba(20,20,30,.04),0 8px 24px rgba(20,20,30,.05);
+    --ar:"IBM Plex Sans Arabic",system-ui,Tahoma,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --ease:cubic-bezier(.2,.6,.3,1);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#131418; --surface:#1B1D23; --ink:#ECECEA; --muted:#9A9DA6; --faint:#71747D;
+      --line:#2A2C33; --line-2:#23252C;
+      --accent:#8A97F0; --accent-ink:#AAB4F6; --accent-soft:#23263A;
+      --go:#7FB894; --go-soft:#1E2A22; --gap:#D4B36B; --gap-soft:#2C2718; --no:#D89184; --no-soft:#2E1F1B;
+      --sh:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#131418; --surface:#1B1D23; --ink:#ECECEA; --muted:#9A9DA6; --faint:#71747D;
+    --line:#2A2C33; --line-2:#23252C;
+    --accent:#8A97F0; --accent-ink:#AAB4F6; --accent-soft:#23263A;
+    --go:#7FB894; --go-soft:#1E2A22; --gap:#D4B36B; --gap-soft:#2C2718; --no:#D89184; --no-soft:#2E1F1B;
+    --sh:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"]{
+    --paper:#FAFAF8; --surface:#FFFFFF; --ink:#1C1D22; --muted:#6B6E76; --faint:#9A9DA5;
+    --line:#ECEBE6; --line-2:#F4F3EF;
+    --accent:#3E4CC0; --accent-ink:#2C368F; --accent-soft:#EEF0FB;
+    --go:#3F7A55; --go-soft:#EAF2EC; --gap:#9A7A2E; --gap-soft:#F6EFDD; --no:#A6503F; --no-soft:#F6E9E5;
+    --sh:0 1px 2px rgba(20,20,30,.04),0 8px 24px rgba(20,20,30,.05);
+  }
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ar);
+    font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+    transition:background .3s var(--ease),color .3s var(--ease)}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+  button{font-family:inherit;cursor:pointer}
+  a{color:var(--accent);text-decoration:none}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  /* header */
+  header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--paper) 82%,transparent);
+    backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid var(--line)}
+  .hrow{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);padding:16px 0}
+  .brand{display:flex;align-items:center;gap:var(--s3)}
+  .mark{width:34px;height:34px;border-radius:10px;background:var(--accent);display:grid;place-items:center;
+    color:#fff;font-weight:700;font-size:17px}
+  .btitle{font-size:16px;font-weight:600;line-height:1.2}
+  .bsub{font-size:12.5px;color:var(--muted)}
+  .head-right{display:flex;align-items:center;gap:var(--s3)}
+  .eyebrow-pill{font-size:11.5px;color:var(--faint);border:1px solid var(--line);border-radius:40px;
+    padding:5px 12px;background:var(--surface)}
+  @media(max-width:720px){.eyebrow-pill{display:none}}
+  .icon-btn{display:inline-grid;place-items:center;width:38px;height:38px;background:var(--surface);
+    border:1px solid var(--line);border-radius:10px;color:var(--muted);transition:.18s var(--ease)}
+  .icon-btn:hover{color:var(--accent);border-color:var(--accent)}
+
+  /* section rhythm */
+  main{padding:var(--s5) 0 var(--s6)}
+  .stack{display:flex;flex-direction:column;gap:var(--s4)}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;font-weight:600;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--accent-ink)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh)}
+
+  /* ===== decision hero ===== */
+  .hero{padding:var(--s5);position:relative;overflow:hidden}
+  .hero-top{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;margin-bottom:var(--s3)}
+  .verdict-pill{font-size:12.5px;font-weight:600;padding:5px 13px;border-radius:40px}
+  .v-go{background:var(--go-soft);color:var(--go)} .v-gap{background:var(--gap-soft);color:var(--gap)}
+  .v-no{background:var(--no-soft);color:var(--no)}
+  .chip{font-size:12px;color:var(--muted);background:var(--line-2);padding:4px 11px;border-radius:40px}
+  .chip.accent{color:var(--accent-ink);background:var(--accent-soft)}
+  .hero-grid{display:grid;grid-template-columns:1fr auto;gap:var(--s5);align-items:center}
+  @media(max-width:720px){.hero-grid{grid-template-columns:1fr}}
+  .hero-verdict{font-size:29px;font-weight:700;line-height:1.25;text-wrap:balance;margin:0 0 var(--s2)}
+  .hero-why{font-size:15px;color:var(--muted);line-height:1.7;max-width:62ch}
+  .brief{margin:var(--s4) 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--s2)}
+  .brief li{font-size:13.5px;color:var(--muted);padding-inline-start:18px;position:relative;line-height:1.6}
+  .brief li::before{content:"";position:absolute;inset-inline-start:0;top:9px;width:6px;height:6px;
+    border-radius:50%;background:var(--accent)}
+  /* confidence ring */
+  .ring{--p:71;width:132px;height:132px;border-radius:50%;display:grid;place-items:center;
+    background:conic-gradient(var(--accent) calc(var(--p)*1%),var(--line-2) 0)}
+  .ring .inner{width:104px;height:104px;border-radius:50%;background:var(--surface);display:grid;
+    place-items:center;text-align:center}
+  .ring .n{font-family:var(--mono);font-size:30px;font-weight:600;color:var(--ink);line-height:1}
+  .ring .l{font-size:11px;color:var(--faint);margin-top:3px}
+  .actions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s4)}
+  .btn{display:inline-flex;align-items:center;gap:7px;border-radius:10px;padding:10px 16px;font-size:13.5px;
+    font-weight:500;transition:.18s var(--ease)}
+  .btn-primary{background:var(--accent);color:#fff;border:0}
+  .btn-primary:hover{background:var(--accent-ink)}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  .btn-ghost:hover{color:var(--accent);border-color:var(--accent)}
+
+  /* ===== agent pipeline (quiet) ===== */
+  .pipe{padding:var(--s4) var(--s5)}
+  .pipe-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s4);gap:var(--s3);flex-wrap:wrap}
+  .status{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;padding:5px 12px;border-radius:40px;
+    background:var(--go-soft);color:var(--go)}
+  .status .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+  .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s3);position:relative}
+  @media(max-width:820px){.flow{grid-template-columns:repeat(2,1fr)}}
+  .node{display:flex;flex-direction:column;gap:var(--s1);padding:var(--s3);border-radius:var(--r);
+    background:var(--line-2)}
+  .node.gap{background:var(--gap-soft)}
+  .nname{font-size:13px;font-weight:600}
+  .ndesc{font-size:11.5px;color:var(--muted);line-height:1.45}
+  .nfoot{display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:2px}
+  .nfoot .dot{width:6px;height:6px;border-radius:50%;flex:none}
+  .nfoot b{font-family:var(--mono);font-weight:600}
+
+  /* ===== two-column body ===== */
+  .body-grid{display:grid;grid-template-columns:1.7fr 1fr;gap:var(--s4);align-items:start}
+  @media(max-width:900px){.body-grid{grid-template-columns:1fr}}
+
+  /* market table */
+  .tbl{padding:var(--s2) 0;overflow:hidden}
+  .thead,.trow{display:grid;grid-template-columns:34px 1.4fr 1fr .9fr 1.3fr auto;align-items:center;gap:var(--s3);
+    padding:12px var(--s4)}
+  .thead{font-size:11.5px;color:var(--faint);letter-spacing:.02em}
+  .trow{width:100%;text-align:start;background:transparent;border:0;border-top:1px solid var(--line-2);
+    color:inherit;font-size:inherit;transition:.15s var(--ease)}
+  .trow:hover{background:var(--line-2)}
+  .trow.sel{background:var(--accent-soft);box-shadow:inset 2px 0 0 var(--accent)}
+  .rk{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--accent-ink)}
+  .cty{display:flex;align-items:center;gap:8px;min-width:0}
+  .ccode{font-family:var(--mono);font-size:10.5px;background:var(--line-2);padding:2px 6px;border-radius:5px;color:var(--muted)}
+  .cname{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .val{font-size:14px;font-weight:600}
+  .share.hi{color:var(--accent-ink)}
+  .gap-txt{font-size:12.5px;color:var(--faint);border-bottom:1px dotted var(--faint);cursor:help}
+  .scell{display:flex;align-items:center;gap:8px}
+  .sval{font-family:var(--mono);font-weight:600;color:var(--accent-ink);font-size:14px;min-width:26px}
+  .track{flex:1;height:5px;background:var(--line-2);border-radius:5px;overflow:hidden}
+  .fill{height:100%;background:var(--accent);border-radius:5px}
+  .cov{font-size:11px;color:var(--muted);background:var(--line-2);padding:3px 9px;border-radius:40px;white-space:nowrap;cursor:help}
+  .srcstrip{padding:11px var(--s4);font-size:11.5px;color:var(--faint);font-family:var(--mono);border-top:1px solid var(--line-2)}
+
+  /* market detail */
+  .detail{padding:var(--s4)}
+  .dtop{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s1);flex-wrap:wrap}
+  .dcountry{font-size:22px;font-weight:700;margin:var(--s1) 0 0}
+  .bigscore{display:flex;align-items:baseline;gap:6px;margin:var(--s2) 0;direction:ltr;justify-content:flex-end}
+  .bigscore .n{font-family:var(--mono);font-size:46px;font-weight:600;color:var(--accent-ink);line-height:.9}
+  .bigscore .o{font-size:15px;color:var(--faint)}
+  .dsub{font-size:12px;color:var(--muted);margin-bottom:var(--s4);line-height:1.6}
+  .comps{display:flex;flex-direction:column;gap:var(--s2)}
+  .comp{background:var(--line-2);border-radius:var(--r);padding:12px 13px}
+  .comp-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .comp-nm{font-size:12.5px;font-weight:600}
+  .comp-w{font-size:11px;color:var(--faint)}
+  .comp-v{font-size:17px;font-weight:600;margin-top:3px;font-family:var(--mono)}
+  .gapline{display:inline-flex;align-items:center;gap:6px;margin-top:3px;font-size:12.5px;font-weight:600;color:var(--gap)}
+  .gapline .dot{width:6px;height:6px;border-radius:50%;background:var(--gap)}
+  /* the whisper: provenance */
+  .prov{font-size:11px;color:var(--faint);font-family:var(--mono);margin-top:5px;direction:ltr;text-align:left}
+  .jury{margin-top:var(--s4);padding:13px 14px;background:var(--accent-soft);border-radius:var(--r)}
+  .jury-h{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .badge{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.05em;color:#fff;
+    background:var(--accent);padding:4px 10px;border-radius:40px}
+  .jury-meta{font-size:12px;color:var(--muted);font-family:var(--mono)}
+  .jury-txt{margin-top:7px;font-size:13px;line-height:1.6}
+
+  /* credibility pair */
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
+  @media(max-width:900px){.duo{grid-template-columns:1fr}}
+  .panel{padding:var(--s4) var(--s4) calc(var(--s4) + 2px)}
+  .panel h3{margin:0 0 3px;font-size:15px;font-weight:600}
+  .panel .sub{font-size:12px;color:var(--muted);margin-bottom:var(--s3);line-height:1.6}
+  .limits{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+  .limits li{font-size:13px;color:var(--ink);line-height:1.6;padding-inline-start:18px;position:relative}
+  .limits li::before{content:"—";position:absolute;inset-inline-start:0;color:var(--gap)}
+  .cp-cover{font-size:12.5px;color:var(--muted);background:var(--line-2);border-radius:var(--r);padding:10px 12px;line-height:1.6;margin-bottom:var(--s3)}
+  .cp-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+  .cp-list li{font-size:13px;line-height:1.65}
+  .cp-foot{margin-top:var(--s3);font-size:11px;color:var(--faint)}
+
+  .note-banner{max-width:1180px;margin:0 auto;padding:0 24px}
+  .note-inner{font-size:12.5px;color:var(--muted);background:var(--accent-soft);border-radius:var(--r);
+    padding:11px 14px;line-height:1.6;margin-bottom:var(--s4)}
+  footer{border-top:1px solid var(--line);margin-top:var(--s6);padding:var(--s4) 0;color:var(--faint);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap hrow">
+    <div class="brand">
+      <div class="mark">س</div>
+      <div>
+        <div class="btitle">منصة سِلك · ذكاء الأسواق</div>
+        <div class="bsub">إعادة تصميم Claude — عرض المكوّنات (بيانات مثال)</div>
+      </div>
+    </div>
+    <div class="head-right">
+      <span class="eyebrow-pill">لا نختلق بيانات — الفجوات تُعلن ولا تُقدَّر</span>
+      <button class="icon-btn" id="themeBtn" title="تبديل الوضع الفاتح/الداكن" aria-label="تبديل الوضع">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="note-banner"><div class="note-inner" style="margin-top:var(--s4)">
+  هذه صفحة عرض ثابتة للنظام البصري الجديد — قيمها أمثلة توضّح الشكل، لا نتيجة تحليل حيّة.
+  كل الأرقام هنا مصحوبة بمصدرها كما في المنصة الفعلية.
+</div></div>
+
+<main class="wrap stack">
+
+  <!-- ===== DECISION HERO ===== -->
+  <section class="card hero">
+    <div class="hero-top">
+      <span class="verdict-pill v-go">قرار مبدئي</span>
+      <span class="chip">السوق الأول: الإمارات</span>
+      <span class="chip accent num">HS 080410 · ثقة 0.92</span>
+      <span class="chip num">بيانات 2023</span>
+      <span class="chip">مرحلة التوليف 2 (+كلود)</span>
+    </div>
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow">القرار · DECISION</div>
+        <h1 class="hero-verdict">مبدئي إيجابي — الإمارات سوق دخول واقعي للتمور السعودية الفاخرة.</h1>
+        <p class="hero-why">لماذا: حجم استيراد مرتفع (‏$412M) وحصة سعودية قائمة (34%) تخفّض حاجز الثقة،
+          مع دخل فرد مرتفع يدعم الفئة الفاخرة. الفجوة الوحيدة: أسعار التجزئة المرصودة تحتاج تعميقاً مدفوعاً.</p>
+        <ul class="brief">
+          <li>أقرب منافس قابل للمنافسة: <b>Bateel</b> — هامشك عند مضاهاة سعره 22%.</li>
+          <li>أفضل باب دخول مرصود: سلاسل التجزئة الفاخرة (واقعية — تتطلب توثيق منشأ).</li>
+          <li>حدّ معلن: تركّز المنافسة (HHI) غير مرصود لهذه السنة — أُعلن ولم يُقدَّر.</li>
+        </ul>
+        <div class="actions">
+          <button class="btn btn-primary">دراسة عميقة · Volza/explee</button>
+          <button class="btn btn-ghost">تقرير Word</button>
+          <button class="btn btn-ghost">المختصر</button>
+          <button class="btn btn-ghost">تصدير CSV</button>
+        </div>
+      </div>
+      <div class="ring" style="--p:71" role="img" aria-label="ثقة القرار 0.71">
+        <div class="inner"><div><div class="n">0.71</div><div class="l">ثقة القرار</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== AGENT PIPELINE (quiet status) ===== -->
+  <section class="card pipe">
+    <div class="pipe-head">
+      <div class="eyebrow">خط الوكلاء والمصادر · AGENT PIPELINE</div>
+      <span class="status"><span class="dot"></span>اكتمل — تغطية 4/4 وكلاء</span>
+    </div>
+    <div class="flow">
+      <div class="node">
+        <div class="nname">المصنّف (HS)</div>
+        <div class="ndesc">اسم المنتج → رمز HS6</div>
+        <div class="nfoot"><span class="dot" style="background:var(--go)"></span><span><b>080410</b> · ثقة 0.92</span></div>
+      </div>
+      <div class="node">
+        <div class="nname">وكيل التجارة</div>
+        <div class="ndesc">UN Comtrade · الاستيراد</div>
+        <div class="nfoot"><span class="dot" style="background:var(--go)"></span><span><b>3/3</b> أسواق مرصودة</span></div>
+      </div>
+      <div class="node">
+        <div class="nname">وكيل الاقتصاد</div>
+        <div class="ndesc">World Bank · دخل الفرد</div>
+        <div class="nfoot"><span class="dot" style="background:var(--go)"></span><span><b>3/3</b> أسواق مرصودة</span></div>
+      </div>
+      <div class="node gap">
+        <div class="nname">وكيل المنافسة</div>
+        <div class="ndesc">Comtrade · حصص المورّدين</div>
+        <div class="nfoot"><span class="dot" style="background:var(--gap)"></span><span>فجوة معلنة · 1/3</span></div>
+      </div>
+      <div class="node">
+        <div class="nname">لجنة التحكيم</div>
+        <div class="ndesc">توزن النتائج → القرار</div>
+        <div class="nfoot"><span class="dot" style="background:var(--accent)"></span><span>مرحلة <b>2</b> (+كلود)</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== BODY: table + detail ===== -->
+  <div class="body-grid">
+    <section class="card tbl">
+      <div class="thead">
+        <div>#</div><div>السوق</div><div>الاستيراد</div><div>حصة السعودية</div><div>النقاط</div><div>التغطية</div>
+      </div>
+      <button class="trow sel">
+        <div class="rk">1</div>
+        <div class="cty"><span class="ccode">AE</span><span class="cname">الإمارات</span></div>
+        <div><span class="val num" title="UN Comtrade · ثقة 0.9 · 2024-06">$412M</span></div>
+        <div><span class="share hi val num" title="UN Comtrade · ثقة 0.9">34%</span></div>
+        <div class="scell"><span class="sval">71</span><span class="track"><span class="fill" style="width:71%"></span></span></div>
+        <div><span class="cov" title="مكوّنات مرصودة 4 من 4">4/4 · عالية</span></div>
+      </button>
+      <button class="trow">
+        <div class="rk">2</div>
+        <div class="cty"><span class="ccode">GB</span><span class="cname">المملكة المتحدة</span></div>
+        <div><span class="val num" title="UN Comtrade · ثقة 0.9">$188M</span></div>
+        <div><span class="share val num">9%</span></div>
+        <div class="scell"><span class="sval">63</span><span class="track"><span class="fill" style="width:63%"></span></span></div>
+        <div><span class="cov" title="مكوّنات مرصودة 4 من 4">4/4 · عالية</span></div>
+      </button>
+      <button class="trow">
+        <div class="rk">3</div>
+        <div class="cty"><span class="ccode">DE</span><span class="cname">ألمانيا</span></div>
+        <div><span class="val num" title="UN Comtrade · ثقة 0.9">$134M</span></div>
+        <div><span class="gap-txt" title="UN Comtrade · ثقة 0.0 — لا حصة سعودية مرصودة لهذه السنة">غير مرصود</span></div>
+        <div class="scell"><span class="sval">58</span><span class="track"><span class="fill" style="width:58%"></span></span></div>
+        <div><span class="cov" title="مكوّنات مرصودة 3 من 4">3/4 · متوسطة</span></div>
+      </button>
+      <button class="trow">
+        <div class="rk">4</div>
+        <div class="cty"><span class="ccode">US</span><span class="cname">الولايات المتحدة</span></div>
+        <div><span class="val num" title="UN Comtrade · ثقة 0.9">$96M</span></div>
+        <div><span class="share val num">4%</span></div>
+        <div class="scell"><span class="sval">51</span><span class="track"><span class="fill" style="width:51%"></span></span></div>
+        <div><span class="cov" title="مكوّنات مرصودة 4 من 4">4/4 · عالية</span></div>
+      </button>
+      <div class="srcstrip">المصادر: UN Comtrade · World Bank · التغطية = مكوّنات مرصودة من 4</div>
+    </section>
+
+    <aside class="card detail">
+      <div class="dtop">
+        <span class="ccode num">AE</span>
+        <span class="chip">المرتبة 1</span>
+        <span class="chip num" title="ثقة الصف كما حسبها المحرّك">ثقة الصف 0.71</span>
+      </div>
+      <div class="dcountry">الإمارات</div>
+      <div class="bigscore"><span class="n">71</span><span class="o">/100</span></div>
+      <div class="dsub">النقاط مركّبة من 4 مكوّنات موزونة — المفقود يخفض الثقة ولا يُعوَّض برقم مخمّن.</div>
+
+      <div class="comps">
+        <div class="comp">
+          <div class="comp-h"><span class="comp-nm">حجم الاستيراد</span><span class="comp-w">وزن 40%</span></div>
+          <div class="comp-v">$412M</div>
+          <div class="prov">UN Comtrade · ثقة 0.9 · 2024-06-12</div>
+        </div>
+        <div class="comp">
+          <div class="comp-h"><span class="comp-nm">حصة السعودية</span><span class="comp-w">وزن 20%</span></div>
+          <div class="comp-v">34%</div>
+          <div class="prov">UN Comtrade · ثقة 0.9 · 2024-06-12</div>
+        </div>
+        <div class="comp">
+          <div class="comp-h"><span class="comp-nm">دخل الفرد (PPP)</span><span class="comp-w">وزن 25%</span></div>
+          <div class="comp-v">$78,255</div>
+          <div class="prov">World Bank · ثقة 0.95 · NY.GDP.PCAP.PP.CD 2023</div>
+        </div>
+        <div class="comp">
+          <div class="comp-h"><span class="comp-nm">تركّز المنافسة HHI</span><span class="comp-w">وزن 15% · أقل = أسهل</span></div>
+          <div class="gapline"><span class="dot"></span>فجوة معلنة</div>
+          <div class="prov">UN Comtrade · ثقة 0.0 — لا سجلّ منافسين لهذه السنة</div>
+        </div>
+      </div>
+
+      <div class="jury">
+        <div class="jury-h"><span class="badge">كلود · الحَكَم</span>
+          <span class="verdict-pill v-go">GO</span>
+          <span class="jury-meta">ثقة 0.71</span></div>
+        <div class="jury-txt">حصة سعودية قائمة وقرب لوجستي يجعلان الإمارات باب دخول واقعياً؛
+          التوصية: توثيق منشأ فاخر واستهداف قنوات التجزئة المتخصّصة قبل التوسّع.</div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ===== CREDIBILITY PAIR ===== -->
+  <div class="duo">
+    <section class="card panel">
+      <h3>موقعك التنافسي</h3>
+      <div class="sub">خيوط مربوطة من نتائج الوكلاء في الذاكرة حصراً — سوق الإمارات.</div>
+      <div class="cp-cover">تغطية: منافس واحد بسعر مرصود من أصل 3 مرشّحين؛ بابا دخول مرصودان.</div>
+      <ul class="cp-list">
+        <li>ضد <b>Bateel</b>: سعر مرصود <span class="num">120 AED</span> — هامشك عند المضاهاة <b class="num">22%</b> وعند البيع أقل 10% <b class="num">14%</b>.</li>
+        <li>أفضل باب دخول: <b>سلاسل التجزئة الفاخرة</b> — واقعية (تتطلب توثيق منشأ).</li>
+        <li><span style="color:var(--faint)">مستورد مرشّح: Al Foah (غير موثّق — فعّل Volza للتوثيق).</span></li>
+      </ul>
+      <div class="cp-foot">الخيوط الناقصة تُعلن ولا تُخترع — «سعر غير مرصود» حين يغيب.</div>
+    </section>
+
+    <section class="card panel">
+      <h3>حدود هذا التقرير</h3>
+      <div class="sub">ما لا يعرفه النظام يُقال صراحةً — الفجوات تُعلن ولا تُقدَّر.</div>
+      <ul class="limits">
+        <li>ألمانيا: حصة السعودية غير مرصودة لسنة 2023.</li>
+        <li>الإمارات: تركّز المنافسة (HHI) غير مرصود — أُسقط من النقاط، لم يُخمّن.</li>
+        <li>أسعار التجزئة الفعلية تتطلب تعميقاً مدفوعاً (LOCALPRICE) — غير مفعّل.</li>
+        <li>القرب اللوجستي فجوة معلنة لا محسوبة (خارج نطاق المصادر الحالية).</li>
+      </ul>
+    </section>
+  </div>
+
+</main>
+
+<footer><div class="wrap">سِلك · نظام تصميم Claude — عرض ثابت للمكوّنات · فاتح/داكن · RTL. راجع <span class="num">DESIGN_SYSTEM.md</span> و<span class="num">REDESIGN_PROPOSAL.md</span>.</div></footer>
+
+<script>
+  (function(){
+    var root=document.documentElement, btn=document.getElementById("themeBtn");
+    function cur(){return root.getAttribute("data-theme")|| (matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");}
+    btn.addEventListener("click",function(){
+      root.setAttribute("data-theme", cur()==="dark"?"light":"dark");
+    });
+  })();
+</script>
+</body>
+</html>
