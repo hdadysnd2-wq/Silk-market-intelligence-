@@ -906,13 +906,21 @@ def test_reports_build_docx_with_disclaimer():
     # افتح المختصر وتحقق من وجود التذييل والحكم — reopen and check content.
     import io
     import docx
-    doc = docx.Document(io.BytesIO(short))
-    text = "\n".join(p.text for p in doc.paragraphs)
+
+    def _all_text(doc):  # نصّ الفقرات + خلايا الجداول (الحكم الآن داخل شريط/بطاقة)
+        parts = [p.text for p in doc.paragraphs]
+        for tb in doc.tables:
+            for r in tb.rows:
+                for c in r.cells:
+                    parts.append(c.text)
+        return "\n".join(parts)
+
+    text = _all_text(docx.Document(io.BytesIO(short)))
     assert "إخلاء مسؤولية" in text            # mandatory disclaimer present
     assert "الخلاصة التنفيذية" in text        # executive summary present
-    assert "WATCH" in text                     # verdict carried from synthesis
+    assert "WATCH" in text                     # verdict carried from synthesis (in the banner)
     # قسم «تحليل كلود» ليس أجوف: يعرض السرد الكامل (فرص/مخاطر/توصيات) لا فجوات فقط.
-    full_txt = "\n".join(p.text for p in docx.Document(io.BytesIO(full)).paragraphs)
+    full_txt = _all_text(docx.Document(io.BytesIO(full)))
     assert "تحليل كلود" in full_txt
     assert "الفرص" in full_txt and "المخاطر" in full_txt and "التوصيات" in full_txt
     assert "حضور سعودي" in full_txt            # an actual opportunity string rendered

@@ -55,6 +55,52 @@ def _rgb(t):
     return RGBColor(*t)
 
 
+def _hex(t):
+    return "%02X%02X%02X" % t
+
+
+def _shade(cell, rgb_tuple):
+    """ظلّل خلية جدول بلون — fill a table cell background (for bands/cards/verdict)."""
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    tcPr = cell._tc.get_or_add_tcPr()
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:fill"), _hex(rgb_tuple))
+    tcPr.append(shd)
+
+
+def _no_borders(table):
+    """أزل حدود الجدول — borderless table (used for bands & KPI cards)."""
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    tblPr = table._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        el = OxmlElement(f"w:{edge}")
+        el.set(qn("w:val"), "none")
+        borders.append(el)
+    tblPr.append(borders)
+
+
+def _band(doc, text, *, fill=_PETROL, color=(0xFF, 0xFF, 0xFF), size=22, bold=True):
+    """شريط لوني عرضيّ — a full-width colored band (cover header/footer, section rule)."""
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    table = doc.add_table(rows=1, cols=1)
+    _no_borders(table)
+    cell = table.rows[0].cells[0]
+    _shade(cell, fill)
+    p = cell.paragraphs[0]
+    _rtl(p)
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(text)
+    run.bold = bold
+    run.font.size = Pt(size)
+    run.font.color.rgb = _rgb(color)
+    return table
+
+
 def _rtl(paragraph):
     """اجعل الفقرة من اليمين لليسار — mark a paragraph right-to-left (Arabic)."""
     from docx.oxml.ns import qn
@@ -214,27 +260,68 @@ def _new_doc():
 def _cover(doc, result, subtitle):
     from docx.shared import Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    # شريط الهوية العلوي — top brand band gives immediate visual weight.
+    _band(doc, "منصة سِلك · ذكاء الأسواق", fill=_PETROL, color=(0xFF, 0xFF, 0xFF), size=24)
+    # شعار/رمز — a simple emblem mark under the band.
+    for _ in range(2):
+        doc.add_paragraph()
+    emblem = _para(doc, "◆", bold=True, size=40, color=_GOLD)
+    emblem.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    s = _para(doc, subtitle, bold=True, size=17, color=_GOLD)
+    s.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    prod = _para(doc, str(result.get("product", _NA)), bold=True, size=22, color=_PETROL)
+    prod.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    hs = _para(doc, f"رمز HS {result.get('hs_code', _NA)}", size=13, color=_INK)
+    hs.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for _ in range(2):
+        doc.add_paragraph()
+    # شريط ملخّص على الغلاف: السوق الأعلى + الحكم + النقاط — a cover KPI strip.
+    markets = result.get("markets") or []
+    top = markets[0] if markets else {}
+    es = _exec_summary(result)
+    score = top.get("total_score")
+    score_s = _NA if score is None else f"{int(score * 100)}/100" if score <= 1 else f"{score}"
+    _kpi_cards(doc, [
+        ("السوق الأعلى", str(es["top_market"])),
+        ("الحكم المبدئي", str(es["verdict"])),
+        ("قوة الترشيح", score_s),
+    ])
     for _ in range(3):
         doc.add_paragraph()
-    t = _para(doc, "منصة سِلك · ذكاء الأسواق", bold=True, size=26, color=_PETROL)
-    t.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    s = _para(doc, subtitle, bold=True, size=16, color=_GOLD)
-    s.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    prod = f"{result.get('product', _NA)}  (HS {result.get('hs_code', _NA)})"
-    p = _para(doc, prod, size=14)
-    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    yr = _para(doc, f"سنة البيانات: {result.get('year', _NA)}", size=12)
-    yr.alignment = WD_ALIGN_PARAGRAPH.CENTER
     today = datetime.date.today().isoformat()
-    d = _para(doc, f"تاريخ التقرير: {today}", size=11, color=_INK)
-    d.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    meta = _para(doc, f"سنة البيانات: {result.get('year', _NA)}   ·   تاريخ التقرير: {today}",
+                 size=11, color=_INK)
+    meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+
+def _kpi_cards(doc, pairs):
+    """صف بطاقات مؤشّرات — a row of shaded KPI cards (label + big value)."""
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    table = doc.add_table(rows=2, cols=len(pairs))
+    _no_borders(table)
+    table.alignment = 1  # center
+    for i, (label, value) in enumerate(pairs):
+        lc = table.rows[0].cells[i]
+        vc = table.rows[1].cells[i]
+        _shade(lc, _PETROL)
+        _shade(vc, (0xF2, 0xF4, 0xF4))
+        lp = lc.paragraphs[0]; _rtl(lp); lp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        lr = lp.add_run(label); lr.bold = True; lr.font.size = Pt(10)
+        lr.font.color.rgb = _rgb((0xFF, 0xFF, 0xFF))
+        vp = vc.paragraphs[0]; _rtl(vp); vp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        vr = vp.add_run(str(value)); vr.bold = True; vr.font.size = Pt(15)
+        vr.font.color.rgb = _rgb(_PETROL)
+    return table
 
 
 def _summary_section(doc, result):
     _heading(doc, "الخلاصة التنفيذية", level=1)
     es = _exec_summary(result)
     _para(doc, f"السوق الأعلى ترشيحاً: {es['top_market']}", bold=True)
-    _para(doc, f"الحكم: {es['verdict']}", bold=True, color=_PETROL)
+    # شريط الحكم البارز — a prominent verdict banner (gold), not a plain line.
+    _band(doc, f"الحكم المبدئي:  {es['verdict']}", fill=_GOLD, color=_INK, size=15)
+    doc.add_paragraph()
     if not es["has_synthesis"]:
         _para(doc, "ملاحظة: لم تُفعّل طبقة التركيب (Claude)؛ الحكم من اللجنة "
                    "الحتمية. فعّل with_synthesis لفرص/مخاطر مفصّلة.", size=9)
@@ -268,12 +355,22 @@ def _key_numbers_table(doc, result):
         cells[1].text = value
 
 
+def _score_bar(score):
+    """شريط نصّي لقوة الترشيح — a compact text bar (████░░) for a 0..1 or 0..100 score."""
+    if score is None:
+        return _NA
+    pct = score * 100 if score <= 1 else score
+    pct = max(0, min(100, pct))
+    filled = int(round(pct / 10))
+    return "█" * filled + "░" * (10 - filled) + f"  {int(pct)}"
+
+
 def _markets_ranking_table(doc, result):
     _heading(doc, "الأسواق مرتّبة", level=1)
     markets = result.get("markets") or []
     table = doc.add_table(rows=1, cols=5)
     table.style = "Light Grid Accent 1"
-    for i, h in enumerate(("#", "السوق", "الاستيراد", "حصة السعودية %", "النقاط")):
+    for i, h in enumerate(("#", "السوق", "الاستيراد", "حصة السعودية %", "قوة الترشيح")):
         table.rows[0].cells[i].paragraphs[0].add_run(h).bold = True
     for i, m in enumerate(markets, 1):
         comps = m.get("components", {}) or {}
@@ -283,7 +380,7 @@ def _markets_ranking_table(doc, result):
         cells[1].text = str(m.get("country") or _NA)
         cells[2].text = _fmt_usd(_dpv(comps.get("market_size")))
         cells[3].text = _NA if share is None else f"{share}%"
-        cells[4].text = _NA if m.get("total_score") is None else f"{m.get('total_score')}"
+        cells[4].text = _score_bar(m.get("total_score"))
 
 
 def _synthesis_section(doc, result):
@@ -409,6 +506,7 @@ def build_full_report(result: dict) -> bytes:
     _toc(doc)
     doc.add_page_break()
     _summary_section(doc, result)
+    _key_numbers_table(doc, result)   # أهم الأرقام في التقرير الكامل أيضاً — headline KPIs
     _synthesis_section(doc, result)
     _markets_ranking_table(doc, result)
     _group_details(doc, result)
