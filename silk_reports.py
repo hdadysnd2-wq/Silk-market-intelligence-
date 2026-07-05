@@ -495,8 +495,190 @@ def _save(doc) -> bytes:
     return buf.getvalue()
 
 
+def _kv_table(doc, pairs, *, header=("المؤشّر", "القيمة")):
+    """جدول مؤشّر/قيمة — a labeled two-column table (overview blocks)."""
+    table = doc.add_table(rows=1, cols=2)
+    table.style = "Light Grid Accent 1"
+    h = table.rows[0].cells
+    h[0].paragraphs[0].add_run(header[0]).bold = True
+    h[1].paragraphs[0].add_run(header[1]).bold = True
+    for label, value in pairs:
+        c = table.add_row().cells
+        c[0].text = str(label)
+        c[1].text = _NA if value in (None, "") else str(value)
+    return table
+
+
+def _competitor_table(doc, competitors):
+    """جدول الدول المنافسة وحصصها — competing suppliers table (partner/share/value)."""
+    rows = [c for c in (competitors or []) if isinstance(c, dict)]
+    if not rows:
+        return False
+    _para(doc, "الدول المنافسة على السوق (بحصصها من الاستيراد):", bold=True, color=_PETROL)
+    table = doc.add_table(rows=1, cols=3)
+    table.style = "Light Grid Accent 1"
+    for i, hh in enumerate(("المورّد المنافس", "الحصة %", "القيمة")):
+        table.rows[0].cells[i].paragraphs[0].add_run(hh).bold = True
+    for c in rows[:8]:
+        cells = table.add_row().cells
+        cells[0].text = str(c.get("partner") or c.get("name") or _NA)
+        sh = c.get("share")
+        cells[1].text = _NA if sh is None else f"{sh}%"
+        cells[2].text = _fmt_usd(c.get("value_usd"))
+    return True
+
+
+def _facts_block(doc, title, *keys_source, limit=8):
+    """كتلة حقائق مقروءة تحت عنوان — a titled bullet block from one or more fields."""
+    facts = []
+    for src in keys_source:
+        facts += _facts_of(src)
+    if not facts:
+        return False
+    _para(doc, title, bold=True, color=_GOLD)
+    for f in facts[:limit]:
+        _rtl(doc.add_paragraph(f, style="List Bullet"))
+    return True
+
+
+def _price_positioning(doc, m):
+    """موضع السعر — own price vs. observed local listings (if computed)."""
+    pc = m.get("price_comparison")
+    if not isinstance(pc, dict) or pc.get("your_price") is None or not pc.get("listings_count"):
+        return _facts_block(doc, "إشارات أسعار التجزئة (بحث ويب):", m.get("localprice"))
+    _kv_table(doc, [
+        ("سعرك المُدخل", pc.get("your_price")),
+        ("متوسط السوق المرصود", pc.get("market_avg")),
+        ("أدنى–أعلى", f"{pc.get('market_min')} – {pc.get('market_max')}"),
+        ("عدد القوائم المقارَنة", pc.get("listings_count")),
+        ("الموقع التنافسي", pc.get("verdict")),
+    ], header=("مقارنة السعر", "القيمة"))
+    return True
+
+
+def _market_deep_dive(doc, m, rank):
+    """دراسة سوق معمّقة — a full per-market deep-dive section with tables + narrative."""
+    country = m.get("country") or m.get("iso3") or _NA
+    comps = m.get("components", {}) or {}
+    _heading(doc, f"دراسة السوق #{rank}: {country}", level=1)
+
+    # 1) لمحة عامة — overview KV table
+    tariff = m.get("tariff")
+    tariff_v = _dpv(tariff) if tariff else None
+    _kv_table(doc, [
+        ("قوة الترشيح", _score_bar(m.get("total_score"))),
+        ("حجم استيراد السوق", _fmt_usd(_dpv(comps.get("market_size")))),
+        ("حصة السعودية الحالية", (_NA if _dpv(comps.get("saudi_position")) is None
+                                  else f"{_dpv(comps.get('saudi_position'))}%")),
+        ("دخل الفرد (PPP)", _fmt_usd(m.get("income_ppp"))),
+        ("عدد السكان", _fmt_num(m.get("population"))),
+        ("المنافس المهيمن", m.get("top_competitor")),
+        ("التعريفة المطبّقة", (_NA if tariff_v is None else f"{tariff_v}%")),
+    ], header=("لمحة عامة عن السوق", "القيمة"))
+
+    # 2) المشهد التنافسي — competitive landscape
+    _heading(doc, "المشهد التنافسي والتوزيع", level=2)
+    _competitor_table(doc, m.get("competitors"))
+    _facts_block(doc, "لاعبون بالاسم (بحث ويب):", m.get("competitors_web"),
+                 m.get("importers"))
+    _facts_block(doc, "قنوات التوزيع والتجارة الإلكترونية:", m.get("distribution_channels"),
+                 m.get("ecommerce"))
+
+    # 3) السعر والاشتراطات — price + regulatory
+    _heading(doc, "السعر والاشتراطات التنظيمية", level=2)
+    _price_positioning(doc, m)
+    _facts_block(doc, "اشتراطات التغليف/الملصقات/الشهادات:", m.get("regulatory"))
+    _facts_block(doc, "الجمارك الرسمية:", m.get("customs_web"))
+
+    # 4) الثقافة والسلوك التجاري — culture + business
+    _heading(doc, "الثقافة والسلوك التجاري", level=2)
+    _facts_block(doc, "عادات الاستهلاك ونمط الحياة:", m.get("cultural"))
+    _facts_block(doc, "أعراف التفاوض والدفع وآداب العمل:", m.get("business_culture"))
+    _facts_block(doc, "المعارض التجارية:", m.get("exhibitions"))
+    _facts_block(doc, "مؤشّر الطلب (Google Trends):", m.get("trends"))
+    _facts_block(doc, "الديموغرافيا والمدن والعملة:", m.get("cities"),
+                 m.get("religion"), m.get("currency_risk"))
+
+    # 5) تحليل كلود لهذا السوق — Claude's synthesis for THIS market
+    if m.get("synthesis"):
+        _heading(doc, "تحليل كلود", level=2)
+        _one_market_synthesis(doc, m["synthesis"])
+
+
+def _one_market_synthesis(doc, syn):
+    """يعرض تركيب كلود لسوق واحد — render one market's synthesis fully (reused)."""
+    conf = syn.get("confidence")
+    conf_s = "" if conf is None else f"  ·  الثقة: {conf}"
+    _band(doc, f"الحكم المبدئي:  {syn.get('verdict', _NA)}{conf_s}", fill=_GOLD,
+          color=_INK, size=14)
+    if syn.get("confidence_basis"):
+        _para(doc, str(syn["confidence_basis"]), size=9, color=_INK)
+
+    def _bul(title, items):
+        if not items:
+            return
+        _para(doc, title, bold=True, color=_PETROL)
+        for it in items:
+            _rtl(doc.add_paragraph(str(it), style="List Bullet"))
+
+    for label, text in (syn.get("summaries") or {}).items():
+        _para(doc, str(label), bold=True, color=_GOLD)
+        _para(doc, str(text))
+    _bul("الفرص", syn.get("opportunities"))
+    _bul("المخاطر", syn.get("risks"))
+    _bul("التوصيات", syn.get("recommendations"))
+    _bul("فجوات البيانات", syn.get("gaps"))
+    _para(doc, f"المصدر: {syn.get('by', 'Claude')} · قرار أوّلي", size=9, color=_INK)
+
+
+def _methodology_section(doc, result):
+    """المنهجية والمصادر — how the study was built (credibility, no fabrication)."""
+    _heading(doc, "المنهجية ومبدأ البيانات", level=1)
+    _para(doc, "تعتمد هذه الدراسة على بيانات عامة حقيقية فقط، معالَجة عبر طبقات وكلاء "
+               "متخصّصة ثم مُركّبة بحكم أوّلي. المبدأ التأسيسي: لا اختلاق — كل قيمة غير "
+               "متوفّرة تُعلَّم صراحةً «غير متوفّر» ولا تُقدَّر برقم.")
+    _kv_table(doc, [
+        ("التجارة وحجم السوق", "UN Comtrade + World Bank WITS (استيراد، حصص، تعريفة)"),
+        ("الاقتصاد والديموغرافيا", "World Bank + مراجع سكانية/دينية/عملات"),
+        ("المنافسة والتوزيع", "بحث ويب ديناميكي (منافسون، قنوات، تجارة إلكترونية)"),
+        ("السعر والاشتراطات", "بحث ويب (أسعار تجزئة، تنظيمي، جمارك رسمية)"),
+        ("الثقافة والسلوك", "بحث ويب + Google Trends"),
+        ("التركيب والحكم", f"Claude (تركيب على مرحلتين) — قرار أوّلي لا نهائي"),
+    ], header=("طبقة البيانات", "المصدر"))
+    _para(doc, "الثقة مصنّفة نوعياً (عالية/متوسطة/منخفضة) ومحسوبة من تغطية البيانات "
+               "لكل سوق، لا رقماً تقديرياً.", size=9, color=_INK)
+
+
+def _sources_appendix(doc, result):
+    """ملحق المصادر — the consolidated list of provenance tags seen across markets."""
+    seen = []
+    for m in result.get("markets") or []:
+        comps = m.get("components", {}) or {}
+        for c in comps.values():
+            src = c.get("source") if isinstance(c, dict) else None
+            if src and src not in seen:
+                seen.append(src)
+        for key in ("competitors_web", "distribution_channels", "regulatory",
+                    "customs_web", "localprice", "cultural", "business_culture",
+                    "exhibitions", "trends", "tariff"):
+            for f in (m.get(key) or []) if isinstance(m.get(key), list) else [m.get(key)]:
+                src = (f.get("source") if isinstance(f, dict) else
+                       getattr(f, "source", None))
+                if src and src not in seen:
+                    seen.append(src)
+    if not seen:
+        return
+    _heading(doc, "ملحق: المصادر", level=1)
+    for s in seen:
+        _rtl(doc.add_paragraph(str(s), style="List Bullet"))
+
+
 def build_full_report(result: dict) -> bytes:
-    """التقرير الكامل — full Word report bytes. Raises RuntimeError if docx absent."""
+    """التقرير الكامل — a comprehensive multi-section market study (Word bytes).
+
+    غلاف + محتويات + خلاصة تنفيذية + منهجية ومصادر + ترتيب الأسواق + دراسة معمّقة
+    لكل سوق من الأعلى (لمحة، منافسة، سعر/تنظيم، ثقافة، حكم كلود) + ملحق مصادر +
+    إخلاء مسؤولية. Raises RuntimeError if python-docx is absent."""
     if not available():
         raise RuntimeError("python-docx not installed — run: pip install python-docx")
     doc = _new_doc()
@@ -507,9 +689,15 @@ def build_full_report(result: dict) -> bytes:
     doc.add_page_break()
     _summary_section(doc, result)
     _key_numbers_table(doc, result)   # أهم الأرقام في التقرير الكامل أيضاً — headline KPIs
-    _synthesis_section(doc, result)
+    doc.add_page_break()
+    _methodology_section(doc, result)
+    doc.add_page_break()
     _markets_ranking_table(doc, result)
-    _group_details(doc, result)
+    # دراسة معمّقة لأعلى ٣ أسواق — a full deep-dive per top market.
+    for rank, m in enumerate((result.get("markets") or [])[:3], 1):
+        doc.add_page_break()
+        _market_deep_dive(doc, m, rank)
+    _sources_appendix(doc, result)
     _disclaimer_block(doc)
     return _save(doc)
 
