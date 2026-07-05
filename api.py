@@ -130,6 +130,25 @@ def create_app():
         app.add_middleware(CORSMiddleware, allow_origins=allow,
                            allow_methods=["*"], allow_headers=["*"])
 
+    # ترويسات أمان على كل ردّ (L-2) — security headers on every response.
+    # CSP خطّ أساس يسمح بأنماط/سكربتات الصفحة المضمّنة وخطوط Google (الواجهة
+    # ملف واحد بأنماط وسكربت مضمّنين)؛ التشديد (nonces / خط ذاتي الاستضافة =
+    # L-3) لاحقاً. nosniff يمنع تخمين نوع المحتوى؛ Referrer-Policy يحدّ التسريب.
+    _CSP = ("default-src 'self'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "script-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; connect-src 'self'; "
+            "base-uri 'self'; frame-ancestors 'none'")
+
+    @app.middleware("http")
+    async def _security_headers(request, call_next):  # noqa: ANN001, ANN201
+        resp = await call_next(request)
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        resp.headers.setdefault("Content-Security-Policy", _CSP)
+        return resp
+
     class ProductCard(BaseModel):
         """بطاقة المنتج (الموجة ٤، vision §2) — اختيارية، تفعّل محرّك التقاطع."""
         cost_per_unit: float

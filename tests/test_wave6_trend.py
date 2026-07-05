@@ -166,7 +166,7 @@ def test_trend_endpoint_auth_and_graceful_gaps():
                                         "market_iso3": "ZZ!"},
                         headers={"X-API-Key": "trend-secret"})
         assert r.status_code == 422
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/trend",
                             json={"hs_code": "080410", "market_iso3": "ARE",

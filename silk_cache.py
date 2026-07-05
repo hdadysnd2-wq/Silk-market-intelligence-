@@ -27,11 +27,15 @@ def _key(url: str, params: dict | None) -> str:
 
 
 def cached_get(
-    url: str, params: dict | None = None, ttl_seconds: int = 86400
+    url: str, params: dict | None = None, ttl_seconds: int = 86400,
+    fetcher=None,
 ) -> dict | list | None:
     """جلب مع تخزين مؤقت — GET JSON, serving fresh cache or fetching live.
 
     Returns parsed JSON (dict|list), or None on any network/parse error.
+    `fetcher(url, params)` يُحقن من طبقة البيانات لاستعمال الجلسة المجمّعة
+    (keep-alive)؛ بدونه يسقط إلى requests.get (تشغيل مستقل). Injected pooled
+    getter for connection reuse; falls back to requests.get standalone.
     """
     path = os.path.join(_CACHE_DIR, _key(url, params) + ".json")
     if os.path.exists(path) and (time.time() - os.path.getmtime(path)) < ttl_seconds:
@@ -48,7 +52,8 @@ def cached_get(
         return None
 
     try:
-        resp = requests.get(url, params=params, timeout=_TIMEOUT)
+        resp = (fetcher(url, params) if fetcher is not None
+                else requests.get(url, params=params, timeout=_TIMEOUT))
         resp.raise_for_status()
         data = resp.json()
     except Exception as exc:  # network/HTTP/JSON — never crash, never fabricate

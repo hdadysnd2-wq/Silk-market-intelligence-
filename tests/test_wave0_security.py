@@ -62,7 +62,7 @@ def test_analyze_ok_with_api_key_offline():
     from unittest.mock import patch
     with _env(SILK_API_KEY="secret-key"):
         client = _client()
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/analyze", json={"product": "تمور"},
                             headers={"X-API-Key": "secret-key"})
@@ -75,7 +75,7 @@ def test_analyze_keyless_dev_mode_still_open():
     from unittest.mock import patch
     with _env(SILK_API_KEY=None):
         client = _client()
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/analyze", json={"product": "تمور"})
     assert r.status_code == 200
@@ -92,7 +92,7 @@ def test_deepen_429_over_paid_cap():
         r = client.post("/deepen",
                         json={"product": "تمور", "with_localprice": True})
         assert r.status_code == 429
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/analyze", json={"product": "تمور"})
         assert r.status_code == 200  # الطبقات المجانية لا يحدّها السقف
@@ -106,7 +106,7 @@ def test_paid_cap_counts_and_allows_within_cap():
     with _env(SILK_API_KEY=None, SILK_PAID_DAILY_CAP="2",
               SILK_USAGE_DB=usage_db):
         client = _client()
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/deepen", json={"product": "تمور",
                                              "with_volza": True,
@@ -204,7 +204,7 @@ def test_503_when_paid_keys_present_without_auth():
         h = client.get("/health").json()
         assert any("SILK_API_KEY" in w for w in h.get("warnings", []))
         # المسار المجاني لا يتأثر — free path unaffected.
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/analyze", json={"product": "تمور"})
         assert r.status_code == 200
@@ -216,7 +216,7 @@ def test_paid_keys_protected_when_auth_set_no_503():
     with _env(SILK_API_KEY="prod-secret", SILK_PAID_DAILY_CAP=None,
               VOLZA_API_KEY="paid-key-present"):
         client = _client()
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/deepen", json={"product": "تمور",
                                              "with_volza": True},
@@ -234,7 +234,7 @@ def test_dev_mode_valid_only_without_paid_keys():
               SILK_PAID_DAILY_CAP=None):
         client = _client()
         assert "warnings" not in client.get("/health").json()
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/deepen", json={"product": "تمور",
                                              "with_volza": True})
