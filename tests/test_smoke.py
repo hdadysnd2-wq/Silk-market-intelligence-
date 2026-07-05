@@ -120,7 +120,7 @@ def test_api_deepen_endpoint_own_price_offline():
     # لا نستخدم _block_network هنا: تعطّل socket.socket عالمياً يكسر نقل TestClient
     # الداخلي (asyncio socketpair)؛ بدلاً منها نعطّل requests.get فقط — نفس الأثر
     # الحتمي (لا شبكة => لا بيانات) بلا التصادم مع بنية الاختبار التحتية.
-    with patch("requests.get", side_effect=OSError("network disabled for hermetic test")):
+    with patch("requests.sessions.Session.request", side_effect=OSError("network disabled for hermetic test")):
         r = client.post("/deepen", json={
             "product": "تمور", "year": 2022,
             "with_localprice": True, "own_price": 25.0,

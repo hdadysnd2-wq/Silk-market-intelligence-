@@ -202,7 +202,7 @@ def test_api_product_card_and_view():
     import api
 
     client = TestClient(api.create_app())
-    with patch("requests.get",
+    with patch("requests.sessions.Session.request",
                side_effect=OSError("network disabled for hermetic test")):
         r = client.post("/analyze", json={
             "product": "تمور", "year": 2022,

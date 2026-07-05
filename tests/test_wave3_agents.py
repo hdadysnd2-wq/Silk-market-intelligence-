@@ -152,7 +152,7 @@ def test_api_analyze_accepts_wave3_flags():
     import api
 
     client = TestClient(api.create_app())
-    with patch("requests.get",
+    with patch("requests.sessions.Session.request",
                side_effect=OSError("network disabled for hermetic test")), \
          patch("requests.post",
                side_effect=OSError("network disabled for hermetic test")):

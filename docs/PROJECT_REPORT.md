@@ -62,7 +62,7 @@ Auth is configured yet the read routes ignore it → any anonymous client enumer
 
 ### 🟡 LOW
 - **L-1 · timing-unsafe key compare** — `api.py:239` (`!=`). *Fixed in PR (compare_digest).*
-- **L-2 · no security headers** on the `/`-mounted static UI (`api.py:440-442`) — no CSP/X-Content-Type-Options/Referrer-Policy. *Open.* Fix: a headers middleware.
+- **L-2 · no security headers** on the `/`-mounted static UI — no CSP/X-Content-Type-Options/Referrer-Policy. *RESOLVED (Wave 8): a security-headers middleware now sets CSP + `nosniff` + `Referrer-Policy` on every response (`api.py`).*
 - **L-3 · third-party font CDN** (`web/index.html:9`, `fonts.googleapis.com`) — supply-chain + breaks under strict CSP/offline. *Open.* Fix: self-host IBM Plex.
 - **M-3 (owner-deferred)** — settings UI stores provider keys in `localStorage` the client never sends (`web/index.html` settings). Reconsider only if multi-user.
 
@@ -176,7 +176,7 @@ Tested in headless Chromium against the served app (intercepted `/analyze` to po
 
 **P0 — Security (LANDED in PR #31):** C-1 read-auth, M-1 rate limit, M-2 fail-closed, L-1 constant-time. **Ops action:** set `SILK_API_KEY` in Railway Variables — `.env.example:17` ships blank and `railway.json` doesn't set it, so without it the guard is a dev-mode no-op (`docs/DEPLOY_RAILWAY.md:40`).
 
-**P1 — Concurrency (next PR):**
+**P1 — Concurrency (LANDED, Wave 8):** `rank_markets` now fans the ~38 markets out over `ThreadPoolExecutor(max_workers=16)` with a pooled keep-alive `requests.Session`, and the duplicate income fetch (Q4) is removed. **Measured before/after** (same §4 harness): **228→152 HTTP calls** and **3.51s→0.19s @15ms** (~18.5×). Example below.
 ```python
 # silk_market_ranker.py — fan out the 38 markets; keep sync path for hermetic tests
 from concurrent.futures import ThreadPoolExecutor

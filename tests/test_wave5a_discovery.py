@@ -165,7 +165,7 @@ def test_discover_endpoint_auth_and_shape():
         client = TestClient(api.create_app())
         r = client.post("/discover", json={"market_iso3": "ARE"})
         assert r.status_code == 401                          # قبل أي جلب
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/discover", json={"market_iso3": "ARE"},
                             headers={"X-API-Key": "disc-secret"})

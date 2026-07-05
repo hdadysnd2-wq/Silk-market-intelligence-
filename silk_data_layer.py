@@ -55,6 +55,21 @@ def _comtrade_url() -> str:
     return ENDPOINTS["comtrade_data"] if COMTRADE_KEY else ENDPOINTS["comtrade"]
 
 
+# جلسة مشتركة بـkeep-alive (P2) — one pooled Session so the ~150 fan-out calls
+# per analysis reuse TCP/TLS connections instead of a fresh handshake each.
+# stdlib requests فقط (لا httpx، لا تبعية جديدة). الاختبارات الهيرمتية تقطع
+# requests.sessions.Session.request فتقطع هذه الجلسة و requests.get معاً (كلاهما
+# يمرّ عبر Session.request)، فيبقى قطع الشبكة شاملاً.
+_session = requests.Session()
+_session.mount("https://", requests.adapters.HTTPAdapter(
+    pool_connections=16, pool_maxsize=16, max_retries=0))
+
+
+def _http_get(url: str, params: dict | None = None):
+    """جلب عبر الجلسة المجمّعة — pooled keep-alive GET (P2)."""
+    return _session.get(url, params=params, timeout=_TIMEOUT)
+
+
 @dataclass
 class DataPoint:
     """نقطة بيانات موثّقة — a value plus its provenance."""
@@ -80,7 +95,7 @@ def _cached_get(url: str, params: dict) -> object:
     """
     try:
         from silk_cache import cached_get
-        return cached_get(url, params)
+        return cached_get(url, params, fetcher=_http_get)  # pooled fetch (P2)
     except Exception as e:  # noqa: BLE001 — cache is best-effort, never break the layer
         log.warning("cache layer unavailable (%s); using direct fetch", e)
         return None
@@ -179,7 +194,7 @@ def comtrade_trade(
     try:
         payload = _cached_get(url, params)
         if payload is None:  # cache miss + fetch failed -> same graceful [] as before
-            r = requests.get(url, params=params, timeout=_TIMEOUT)
+            r = _http_get(url, params)
             r.raise_for_status()
             payload = r.json()
         data = payload.get("data") or []
@@ -203,7 +218,7 @@ def world_bank(iso3: str, indicator: str, year: int | None = None) -> DataPoint:
     try:
         payload = _cached_get(url, params)
         if payload is None:  # cache miss + fetch failed -> fall back to direct GET
-            r = requests.get(url, params=params, timeout=_TIMEOUT)
+            r = _http_get(url, params)
             r.raise_for_status()
             payload = r.json()
         records = payload[1] if isinstance(payload, list) and len(payload) > 1 else []

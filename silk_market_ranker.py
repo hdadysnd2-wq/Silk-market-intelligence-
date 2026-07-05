@@ -8,6 +8,7 @@ layer). Missing component => skipped + lowered row confidence; never fabricated.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from silk_data_layer import (
     DataPoint,
@@ -101,23 +102,58 @@ def _saudi_position_component(comps: list[DataPoint]) -> DataPoint:
     return DataPoint(share, "UN Comtrade", 0.9, note=note, retrieved_at=_today())
 
 
-def _demand_capacity_component(iso3: str, year: int) -> DataPoint:
-    """طاقة الطلب — القوة الشرائية للفرد (ثراء السوق، لا حجمه).
+def _income_dp(iso3: str, year: int) -> DataPoint:
+    """الدخل مرّة واحدة — fetch income ONCE (PPP, GDP fallback).
 
-    purchasing power PER CAPITA (PPP, GDP/cap fallback). NOT multiplied by
-    population — multiplying by population made the largest economies (USA, China)
-    dominate every product. Per-capita wealth measures willingness/ability to pay,
-    so ranking now differentiates by product (market size already captures volume).
+    يُعاد استعماله لمكوّن طاقة الطلب ولحقل income_ppp باللوحة معاً — كان يُجلب
+    مرّتين (Q4)، فيُهدر نداءً/قراءة ذاكرة لكل سوق. Fetched once, reused for both.
     """
     inc = ppp_per_capita(iso3, year)
     if inc.value is None:
         inc = gdp_per_capita(iso3, year)
+    return inc
+
+
+def _demand_capacity_component(inc: DataPoint, iso3: str, year: int) -> DataPoint:
+    """طاقة الطلب — القوة الشرائية للفرد من دخل مُجلَب مسبقاً (ثراء السوق، لا حجمه).
+
+    purchasing power PER CAPITA (PPP, GDP/cap fallback), computed from the income
+    DataPoint already fetched by _income_dp (no second fetch). NOT multiplied by
+    population — that made the largest economies dominate every product.
+    """
     if inc.value is None:
         return DataPoint(None, "World Bank", 0.0,
                          note=f"no income data for {iso3} {year}",
                          retrieved_at=_today())
     return DataPoint(float(inc.value), "World Bank", 0.9,
                      note=inc.note, retrieved_at=_today())
+
+
+def _gather_row(hs_code: str, c: dict, year: int) -> dict:
+    """اجمع مكوّنات سوق واحد — all fetches for ONE market (runs in a worker thread).
+
+    مستقل تماماً عن بقية الأسواق (لا حالة مشتركة قابلة للتحوّر)، فيُوزَّع على
+    الخيوط بأمان. الدخل يُجلب مرّة واحدة (Q4) ويُعاد استعماله.
+    """
+    iso3, m49 = c["iso3"], c["m49"]
+    # نداء Comtrade واحد لكل سوق يعطي الحجم والمنافسين معًا — ONE call: size + rivals.
+    mi = market_imports(hs_code, m49, year)
+    comps = mi["competitors"]
+    inc = _income_dp(iso3, year)                 # الدخل مرّة واحدة (Q4)
+    pop = population(iso3, year)
+    comp_dps = {
+        "market_size": _market_size_component(mi["total_usd"], hs_code, m49, year),
+        "saudi_position": _saudi_position_component(comps),
+        "demand_capacity": _demand_capacity_component(inc, iso3, year),
+        "competition": _competition_component(comps),
+    }
+    return {
+        "iso3": iso3, "m49": m49, "components": comp_dps,
+        "income_ppp": inc.value,                 # يُعاد استعمال نفس الجلب
+        "population": pop.value,
+        "competitors": _competitor_list(comps),
+        "top_competitor": _top_competitor(comps),
+    }
 
 
 def _top_competitor(comps: list[DataPoint]) -> str | None:
@@ -156,42 +192,26 @@ def _normalize(raw: dict[str, float], value: float) -> float:
 
 
 def rank_markets(hs_code: str, countries: list[dict] | None = None,
-                 year: int = 2022) -> list[dict]:
+                 year: int = 2022, max_workers: int = 16) -> list[dict]:
     """رتّب الأسواق لرمز HS — rank markets best-first by a weighted, audited score.
 
     Each result: {country, iso3, m49, total_score, confidence, components}
     where components[name] = the component DataPoint (provenance + raw value).
     Missing components are skipped and lower that row's confidence; weights are
     renormalized over present components so rows stay comparable. Never fabricates.
+
+    P1: الأسواق تُجمَع **بالتوازي** عبر ThreadPoolExecutor (I/O شبكي حاجب)، وكل
+    سوق مستقل فالتطبيع يقع بعد اكتمال الجمع؛ `ex.map` يحفظ الترتيب فالنتيجة
+    مطابقة للتسلسلي. الجلسة المجمّعة (silk_data_layer._session) تعيد استعمال
+    الاتصالات عبر الخيوط. Markets are gathered concurrently; identical output.
     """
     countries = countries or COUNTRIES
 
-    # 1) اجمع المكوّنات الخام لكل دولة — gather raw components per country.
-    rows: list[dict] = []
-    for c in countries:
-        iso3, m49 = c["iso3"], c["m49"]
-        # نداء Comtrade واحد لكل سوق يعطي الحجم والمنافسين معًا — ONE call: size + rivals.
-        mi = market_imports(hs_code, m49, year)
-        comps = mi["competitors"]
-        comp_dps = {
-            "market_size": _market_size_component(mi["total_usd"], hs_code, m49, year),
-            "saudi_position": _saudi_position_component(comps),
-            "demand_capacity": _demand_capacity_component(iso3, year),
-            "competition": _competition_component(comps),
-        }
-        # حقول إضافية خام للوحة المعلومات — additive raw fields for the dashboard
-        # UI (raw value or None, never fabricated). Reuse `comps` already fetched.
-        inc = ppp_per_capita(iso3, year)
-        if inc.value is None:
-            inc = gdp_per_capita(iso3, year)
-        pop = population(iso3, year)
-        rows.append({
-            "iso3": iso3, "m49": m49, "components": comp_dps,
-            "income_ppp": inc.value,
-            "population": pop.value,
-            "competitors": _competitor_list(comps),
-            "top_competitor": _top_competitor(comps),
-        })
+    # 1) اجمع المكوّنات الخام لكل دولة بالتوازي — gather raw components concurrently.
+    workers = max(1, min(max_workers, len(countries)))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        rows: list[dict] = list(
+            ex.map(lambda c: _gather_row(hs_code, c, year), countries))
 
     # 2) جداول القيم الخام لكل مكوّن عبر الدول — per-component raw value tables.
     raw_tables: dict[str, dict[str, float]] = {k: {} for k in WEIGHTS}

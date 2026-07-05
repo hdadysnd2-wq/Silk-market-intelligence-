@@ -116,7 +116,7 @@ def test_analyze_endpoint_cannot_activate_paid_layers():
     from unittest.mock import patch
 
     client = _client()
-    with patch("requests.get",
+    with patch("requests.sessions.Session.request",
                side_effect=OSError("network disabled for hermetic test")):
         r = client.post("/analyze", json={
             "product": "تمور", "year": 2022,
@@ -154,7 +154,7 @@ def test_deepen_runs_paid_agents_through_context():
     with _env(SILK_API_KEY=None, SILK_PAID_DAILY_CAP=None,
               VOLZA_API_KEY=None):
         client = _client()
-        with patch("requests.get",
+        with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/deepen", json={"product": "تمور", "year": 2022,
                                              "with_volza": True})
