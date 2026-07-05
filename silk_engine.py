@@ -33,6 +33,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_ai: bool = False,
             with_competitors: bool = False, with_channels: bool = False,
             with_importers: bool = False, with_requirements: bool = False,
+            with_trend: bool = False, trend_span: int = 5,
             product_card: dict | None = None,
             hs_code: str | None = None,
             persist: bool = False, db_path: str = "data/silk.db",
@@ -143,6 +144,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                       "importers", "silk_importers_agent", "ImportersAgent")
     if with_requirements:
         _enrich_requirements(ranked[:_ENRICH_TOP], hs.value)
+    if with_trend:
+        _enrich_trend(ranked[:_ENRICH_TOP], hs.value, year, trend_span)
 
     # 3c) محرّك التقاطع (الموجة ٤) — يعمل فقط عند وجود بطاقة المنتج.
     if product_card:
@@ -335,6 +338,21 @@ def _enrich_named(rows: list[dict], product_name: str, key: str,
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("%s enrichment failed for %s: %s", key, row.get("iso3"), e)
             row[key] = [_enrich_error_dp(cls, e)]
+
+
+def _enrich_trend(rows: list[dict], hs_code: str, end_year: int,
+                  span: int = 5) -> None:
+    """أضف خط الاتجاه متعدد السنوات لكل سوق — attach the multi-year import trend
+    (row['trend']). صفر مصادر جديدة (Comtrade)؛ سنة بلا بيانات = فجوة معلنة لا
+    صفر. Graceful: أي فشل => dict بخطأ موسوم لا إسقاط التحليل (نمط الموجة ٤)."""
+    from silk_trend import import_trend  # lazy: optional layer
+    for row in rows:
+        try:
+            row["trend"] = import_trend(hs_code, row.get("m49"), end_year, span)
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("trend enrichment failed for %s: %s", row.get("iso3"), e)
+            row["trend"] = {"error": f"trend error: {type(e).__name__}: {e}",
+                            "source": "UN Comtrade"}
 
 
 def _enrich_requirements(rows: list[dict], hs_code: str) -> None:

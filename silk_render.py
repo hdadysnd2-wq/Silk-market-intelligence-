@@ -94,6 +94,36 @@ def _brief(decision: dict, cp: dict) -> list[str]:
     return lines
 
 
+def _completeness(markets: list) -> dict:
+    """مؤشر اكتمال الدراسة — how much of the study is OBSERVED vs. declared gaps.
+
+    يعدّ المكوّنات المرصودة (`value is not None`) عبر كل الأسواق ويعطي نسبة
+    مئوية + تفصيلاً لكل مكوّن. لا يعدّل رقماً — قراءة فقط؛ يبني ثقة المستخدم
+    بإظهار «كم% من الدراسة مرصود فعلاً» بدل إيحاء زائف بالاكتمال (المبدأ
+    التأسيسي: الفجوات معلنة). Pure read-only; observed/total across markets.
+    """
+    total = observed = 0
+    by_component: dict[str, dict] = {}
+    for row in markets:
+        for name, c in (row.get("components") or {}).items():
+            present = _dp(c).get("value") is not None
+            total += 1
+            observed += 1 if present else 0
+            b = by_component.setdefault(name, {"observed": 0, "total": 0})
+            b["total"] += 1
+            b["observed"] += 1 if present else 0
+    pct = round(100.0 * observed / total, 1) if total else 0.0
+    if pct >= 75:
+        label = "دراسة شبه مكتملة — most components observed"
+    elif pct >= 40:
+        label = "دراسة جزئية — الفجوات معلنة، partial with declared gaps"
+    else:
+        label = "بيانات ضعيفة — thin data, gaps dominate"
+    return {"observed": observed, "total": total, "pct": pct,
+            "gap_count": total - observed, "by_component": by_component,
+            "label": label}
+
+
 def build_view(result: dict) -> dict:
     """ابنِ نموذج العرض القانوني — the ONE canonical view-model (vision §10.1).
 
@@ -123,6 +153,9 @@ def build_view(result: dict) -> dict:
             "recommendation": row.get("recommendation"),
             "quality_flags": row.get("quality_flags") or [],
             "has_competitive_position": "competitive_position" in row,
+            # §سنوات الدراسة: خط الاتجاه متعدد السنوات إن فُعِّل (with_trend)،
+            # وإلا None — الواجهة تعرضه أو تعلن «يتطلب تفعيل مدى السنوات».
+            "trend": row.get("trend"),
         })
     limits = [f"{m['country']}: {f}" for m in markets[:5]
               for f in (m.get("quality_flags") or [])]
@@ -135,6 +168,7 @@ def build_view(result: dict) -> dict:
         "classified": result.get("classified", False),
         "decision": decision,
         "competitive_position": cp,
+        "completeness": _completeness(markets),
         "markets": view_markets,
         "brief": _brief(decision, cp),
         "limits": limits,
