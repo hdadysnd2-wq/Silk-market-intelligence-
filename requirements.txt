@@ -4,8 +4,10 @@ fastapi>=0.110
 uvicorn>=0.29
 # تقرير Word الكامل (silk_reports.py):
 python-docx>=1.1
+# وكيل Google Trends — «اهتمام المستهلك» والموسمية (silk_trends_agent).
+# مثبّت الآن ليعمل في النشر؛ الاستيراد كسول فالنواة تعمل بدونه، ويتدهور بأمان
+# عند فشل الشبكة (لا اختلاق). Enabled so consumer-interest/seasonality works.
+pytrends>=4.9
 # --- اختياري · OPTIONAL (core library imports & runs without these) ---
 # واجهة Streamlit (for app.py):  streamlit run app.py
 # streamlit>=1.30
-# وكيل Google Trends (silk_trends_agent):
-# pytrends>=4.9

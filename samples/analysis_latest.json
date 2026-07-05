@@ -19,127 +19,187 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 784 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for ARE 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
       "population": null,
       "competitors": [],
       "top_competitor": null,
+      "competitors_named": [
+        {
+          "value": null,
+          "source": "Web Search (Serper)",
+          "confidence": 0.0,
+          "note": "requires SEARCH_API_KEY",
+          "retrieved_at": "2026-07-05"
+        }
+      ],
       "requirements": [
         {
           "value": {
             "item": "شهادة حلال من جهة معتمدة لمنتجات اللحوم والدواجن ومشتقاتها",
             "authority": "المركز الخليجي للاعتماد GAC / الجهات المعتمدة بالسوق",
             "direction": "entry",
-            "source_url": "https://www.gac.org.sa"
+            "source_url": "https://www.gac.org.sa",
+            "seq": 20
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.7,
           "note": "مرجع طبقة ١ — تحقق من الجهة المعتمدة بالسوق قبل الشحن؛ مزامنة ربع سنوية",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "مطابقة المواصفات القياسية الخليجية (GSO) للفئات الخاضعة وشهادة المطابقة",
             "authority": "هيئة التقييس لدول مجلس التعاون GSO",
             "direction": "entry",
-            "source_url": "https://www.gso.org.sa"
+            "source_url": "https://www.gso.org.sa",
+            "seq": 30
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ — الفئات الخاضعة تتغير؛ تحقق من اللائحة الفنية للفئة",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "بطاقة غذائية عربية (أو ثنائية) مطابقة للمواصفة الخليجية للبطاقات الغذائية",
             "authority": "GSO / جهة الرقابة الغذائية بالسوق",
             "direction": "entry",
-            "source_url": "https://www.gso.org.sa"
+            "source_url": "https://www.gso.org.sa",
+            "seq": 40
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ — راجع متطلبات البطاقة المحدثة للفئة",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "تسجيل المنتج الغذائي قبل الاستيراد لدى الجهة الاتحادية/بلدية الإمارة المستهدفة",
             "authority": "وزارة التغير المناخي والبيئة / بلديات الإمارات",
             "direction": "entry",
-            "source_url": "https://www.moccae.gov.ae"
+            "source_url": "https://www.moccae.gov.ae",
+            "seq": 50
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ — الإجراء يختلف بين الإمارات (دبي: منتجي)؛ تحقق محلياً",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "شهادة المنشأ السعودية للصادرات (وزارة التجارة / الغرف التجارية)",
             "authority": "وزارة التجارة",
             "direction": "exit",
-            "source_url": "https://mc.gov.sa"
+            "source_url": "https://mc.gov.sa",
+            "seq": 20
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.8,
           "note": "مرجع طبقة ١ (اتجاه الخروج) — مطلوبة لأغلب الأسواق لإثبات المنشأ والتفضيلات",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "متطلبات SFDA لتصدير الفئات الخاضعة (منشآت مرخّصة وشهادات صحية عند طلب سوق الوجهة)",
             "authority": "الهيئة العامة للغذاء والدواء SFDA",
             "direction": "exit",
-            "source_url": "https://www.sfda.gov.sa"
+            "source_url": "https://www.sfda.gov.sa",
+            "seq": 30
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.7,
-          "note": "مرجع طبقة ١ (اتجاه الخروج) — بعض أسواق الوجهة تشترط شهادة صحية/حلال من المصدر",
-          "retrieved_at": "2026-07-02"
+          "note": "مرجع طبقة ١ (اتجاه الخروج) — بعض أسواق الوجهة تشترط شهادة صحية/حلال من المصدر؛ اعتماد المنشأة أوروبياً يمر عبر SFDA",
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "التسجيل في بوابة هيئة تنمية الصادرات السعودية (خدمات وبرامج دعم المصدرين)",
             "authority": "هيئة تنمية الصادرات السعودية",
             "direction": "exit",
-            "source_url": "https://saudiexports.sa"
+            "source_url": "https://saudiexports.sa",
+            "seq": 40
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ (اتجاه الخروج) — اختياري داعم لا إلزامي جمركياً",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       ],
+      "trend": {
+        "hs_code": "080410",
+        "market_m49": "784",
+        "years": [
+          2019,
+          2020,
+          2021,
+          2022
+        ],
+        "series": [
+          {
+            "year": 2019,
+            "value": null,
+            "observed": false
+          },
+          {
+            "year": 2020,
+            "value": null,
+            "observed": false
+          },
+          {
+            "year": 2021,
+            "value": null,
+            "observed": false
+          },
+          {
+            "year": 2022,
+            "value": null,
+            "observed": false
+          }
+        ],
+        "growth_pct": null,
+        "cagr_pct": null,
+        "observed_years": [],
+        "gap_years": [
+          2019,
+          2020,
+          2021,
+          2022
+        ],
+        "source": "UN Comtrade",
+        "retrieved_at": "2026-07-05",
+        "note": "بيانات غير كافية لخط الاتجاه — 0/4 سنة مرصودة (insufficient data for a trend)"
+      },
       "competitive_position": {
         "product_card": {
-          "cost_per_unit": 12.5,
-          "unit": "kg",
+          "cost_per_unit": 6.5,
+          "unit": null,
           "tier": "premium",
-          "monthly_capacity": null,
-          "shipping_per_unit": 2.0
+          "monthly_capacity": 20000.0,
+          "shipping_per_unit": 1.2
         },
         "competitor_threads": [],
         "feasibility_threads": [],
@@ -189,115 +249,174 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 634 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for QAT 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
       "population": null,
       "competitors": [],
       "top_competitor": null,
+      "competitors_named": [
+        {
+          "value": null,
+          "source": "Web Search (Serper)",
+          "confidence": 0.0,
+          "note": "requires SEARCH_API_KEY",
+          "retrieved_at": "2026-07-05"
+        }
+      ],
       "requirements": [
         {
           "value": {
             "item": "شهادة حلال من جهة معتمدة لمنتجات اللحوم والدواجن ومشتقاتها",
             "authority": "المركز الخليجي للاعتماد GAC / الجهات المعتمدة بالسوق",
             "direction": "entry",
-            "source_url": "https://www.gac.org.sa"
+            "source_url": "https://www.gac.org.sa",
+            "seq": 20
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.7,
           "note": "مرجع طبقة ١ — تحقق من الجهة المعتمدة بالسوق قبل الشحن؛ مزامنة ربع سنوية",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "مطابقة المواصفات القياسية الخليجية (GSO) للفئات الخاضعة وشهادة المطابقة",
             "authority": "هيئة التقييس لدول مجلس التعاون GSO",
             "direction": "entry",
-            "source_url": "https://www.gso.org.sa"
+            "source_url": "https://www.gso.org.sa",
+            "seq": 30
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ — الفئات الخاضعة تتغير؛ تحقق من اللائحة الفنية للفئة",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "بطاقة غذائية عربية (أو ثنائية) مطابقة للمواصفة الخليجية للبطاقات الغذائية",
             "authority": "GSO / جهة الرقابة الغذائية بالسوق",
             "direction": "entry",
-            "source_url": "https://www.gso.org.sa"
+            "source_url": "https://www.gso.org.sa",
+            "seq": 40
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ — راجع متطلبات البطاقة المحدثة للفئة",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "شهادة المنشأ السعودية للصادرات (وزارة التجارة / الغرف التجارية)",
             "authority": "وزارة التجارة",
             "direction": "exit",
-            "source_url": "https://mc.gov.sa"
+            "source_url": "https://mc.gov.sa",
+            "seq": 20
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.8,
           "note": "مرجع طبقة ١ (اتجاه الخروج) — مطلوبة لأغلب الأسواق لإثبات المنشأ والتفضيلات",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "متطلبات SFDA لتصدير الفئات الخاضعة (منشآت مرخّصة وشهادات صحية عند طلب سوق الوجهة)",
             "authority": "الهيئة العامة للغذاء والدواء SFDA",
             "direction": "exit",
-            "source_url": "https://www.sfda.gov.sa"
+            "source_url": "https://www.sfda.gov.sa",
+            "seq": 30
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.7,
-          "note": "مرجع طبقة ١ (اتجاه الخروج) — بعض أسواق الوجهة تشترط شهادة صحية/حلال من المصدر",
-          "retrieved_at": "2026-07-02"
+          "note": "مرجع طبقة ١ (اتجاه الخروج) — بعض أسواق الوجهة تشترط شهادة صحية/حلال من المصدر؛ اعتماد المنشأة أوروبياً يمر عبر SFDA",
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "التسجيل في بوابة هيئة تنمية الصادرات السعودية (خدمات وبرامج دعم المصدرين)",
             "authority": "هيئة تنمية الصادرات السعودية",
             "direction": "exit",
-            "source_url": "https://saudiexports.sa"
+            "source_url": "https://saudiexports.sa",
+            "seq": 40
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ (اتجاه الخروج) — اختياري داعم لا إلزامي جمركياً",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       ],
+      "trend": {
+        "hs_code": "080410",
+        "market_m49": "634",
+        "years": [
+          2019,
+          2020,
+          2021,
+          2022
+        ],
+        "series": [
+          {
+            "year": 2019,
+            "value": null,
+            "observed": false
+          },
+          {
+            "year": 2020,
+            "value": null,
+            "observed": false
+          },
+          {
+            "year": 2021,
+            "value": null,
+            "observed": false
+          },
+          {
+            "year": 2022,
+            "value": null,
+            "observed": false
+          }
+        ],
+        "growth_pct": null,
+        "cagr_pct": null,
+        "observed_years": [],
+        "gap_years": [
+          2019,
+          2020,
+          2021,
+          2022
+        ],
+        "source": "UN Comtrade",
+        "retrieved_at": "2026-07-05",
+        "note": "بيانات غير كافية لخط الاتجاه — 0/4 سنة مرصودة (insufficient data for a trend)"
+      },
       "competitive_position": {
         "product_card": {
-          "cost_per_unit": 12.5,
-          "unit": "kg",
+          "cost_per_unit": 6.5,
+          "unit": null,
           "tier": "premium",
-          "monthly_capacity": null,
-          "shipping_per_unit": 2.0
+          "monthly_capacity": 20000.0,
+          "shipping_per_unit": 1.2
         },
         "competitor_threads": [],
         "feasibility_threads": [],
@@ -347,115 +466,174 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 414 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for KWT 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
       "population": null,
       "competitors": [],
       "top_competitor": null,
+      "competitors_named": [
+        {
+          "value": null,
+          "source": "Web Search (Serper)",
+          "confidence": 0.0,
+          "note": "requires SEARCH_API_KEY",
+          "retrieved_at": "2026-07-05"
+        }
+      ],
       "requirements": [
         {
           "value": {
             "item": "شهادة حلال من جهة معتمدة لمنتجات اللحوم والدواجن ومشتقاتها",
             "authority": "المركز الخليجي للاعتماد GAC / الجهات المعتمدة بالسوق",
             "direction": "entry",
-            "source_url": "https://www.gac.org.sa"
+            "source_url": "https://www.gac.org.sa",
+            "seq": 20
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.7,
           "note": "مرجع طبقة ١ — تحقق من الجهة المعتمدة بالسوق قبل الشحن؛ مزامنة ربع سنوية",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "مطابقة المواصفات القياسية الخليجية (GSO) للفئات الخاضعة وشهادة المطابقة",
             "authority": "هيئة التقييس لدول مجلس التعاون GSO",
             "direction": "entry",
-            "source_url": "https://www.gso.org.sa"
+            "source_url": "https://www.gso.org.sa",
+            "seq": 30
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ — الفئات الخاضعة تتغير؛ تحقق من اللائحة الفنية للفئة",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "بطاقة غذائية عربية (أو ثنائية) مطابقة للمواصفة الخليجية للبطاقات الغذائية",
             "authority": "GSO / جهة الرقابة الغذائية بالسوق",
             "direction": "entry",
-            "source_url": "https://www.gso.org.sa"
+            "source_url": "https://www.gso.org.sa",
+            "seq": 40
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ — راجع متطلبات البطاقة المحدثة للفئة",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "شهادة المنشأ السعودية للصادرات (وزارة التجارة / الغرف التجارية)",
             "authority": "وزارة التجارة",
             "direction": "exit",
-            "source_url": "https://mc.gov.sa"
+            "source_url": "https://mc.gov.sa",
+            "seq": 20
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.8,
           "note": "مرجع طبقة ١ (اتجاه الخروج) — مطلوبة لأغلب الأسواق لإثبات المنشأ والتفضيلات",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "متطلبات SFDA لتصدير الفئات الخاضعة (منشآت مرخّصة وشهادات صحية عند طلب سوق الوجهة)",
             "authority": "الهيئة العامة للغذاء والدواء SFDA",
             "direction": "exit",
-            "source_url": "https://www.sfda.gov.sa"
+            "source_url": "https://www.sfda.gov.sa",
+            "seq": 30
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.7,
-          "note": "مرجع طبقة ١ (اتجاه الخروج) — بعض أسواق الوجهة تشترط شهادة صحية/حلال من المصدر",
-          "retrieved_at": "2026-07-02"
+          "note": "مرجع طبقة ١ (اتجاه الخروج) — بعض أسواق الوجهة تشترط شهادة صحية/حلال من المصدر؛ اعتماد المنشأة أوروبياً يمر عبر SFDA",
+          "retrieved_at": "2026-07-05"
         },
         {
           "value": {
             "item": "التسجيل في بوابة هيئة تنمية الصادرات السعودية (خدمات وبرامج دعم المصدرين)",
             "authority": "هيئة تنمية الصادرات السعودية",
             "direction": "exit",
-            "source_url": "https://saudiexports.sa"
+            "source_url": "https://saudiexports.sa",
+            "seq": 40
           },
-          "source": "Silk L1 requirements reference (official portals)",
+          "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
           "confidence": 0.6,
           "note": "مرجع طبقة ١ (اتجاه الخروج) — اختياري داعم لا إلزامي جمركياً",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       ],
+      "trend": {
+        "hs_code": "080410",
+        "market_m49": "414",
+        "years": [
+          2019,
+          2020,
+          2021,
+          2022
+        ],
+        "series": [
+          {
+            "year": 2019,
+            "value": null,
+            "observed": false
+          },
+          {
+            "year": 2020,
+            "value": null,
+            "observed": false
+          },
+          {
+            "year": 2021,
+            "value": null,
+            "observed": false
+          },
+          {
+            "year": 2022,
+            "value": null,
+            "observed": false
+          }
+        ],
+        "growth_pct": null,
+        "cagr_pct": null,
+        "observed_years": [],
+        "gap_years": [
+          2019,
+          2020,
+          2021,
+          2022
+        ],
+        "source": "UN Comtrade",
+        "retrieved_at": "2026-07-05",
+        "note": "بيانات غير كافية لخط الاتجاه — 0/4 سنة مرصودة (insufficient data for a trend)"
+      },
       "competitive_position": {
         "product_card": {
-          "cost_per_unit": 12.5,
-          "unit": "kg",
+          "cost_per_unit": 6.5,
+          "unit": null,
           "tier": "premium",
-          "monthly_capacity": null,
-          "shipping_per_unit": 2.0
+          "monthly_capacity": 20000.0,
+          "shipping_per_unit": 1.2
         },
         "competitor_threads": [],
         "feasibility_threads": [],
@@ -505,28 +683,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 512 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for OMN 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -550,28 +728,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 048 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for BHR 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -595,28 +773,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 400 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for JOR 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -640,28 +818,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 422 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for LBN 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -685,28 +863,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 818 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for EGY 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -730,28 +908,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 504 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for MAR 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -775,28 +953,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 788 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for TUN 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -820,28 +998,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 012 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for DZA 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -865,28 +1043,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 368 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for IRQ 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -910,28 +1088,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 792 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for TUR 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -955,28 +1133,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 887 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for YEM 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1000,28 +1178,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 710 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for ZAF 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1045,28 +1223,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 566 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for NGA 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1090,28 +1268,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 404 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for KEN 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1135,28 +1313,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 231 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for ETH 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1180,28 +1358,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 288 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for GHA 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1225,28 +1403,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 356 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for IND 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1270,28 +1448,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 586 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for PAK 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1315,28 +1493,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 050 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for BGD 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1360,28 +1538,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 360 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for IDN 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1405,28 +1583,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 458 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for MYS 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1450,28 +1628,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 702 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for SGP 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1495,28 +1673,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 764 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for THA 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1540,28 +1718,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 704 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for VNM 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1585,28 +1763,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 156 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for CHN 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1630,28 +1808,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 392 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for JPN 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1675,28 +1853,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 410 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for KOR 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1720,28 +1898,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 826 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for GBR 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1765,28 +1943,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 276 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for DEU 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1810,28 +1988,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 250 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for FRA 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1855,28 +2033,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 380 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for ITA 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1900,28 +2078,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 724 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for ESP 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1945,28 +2123,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 528 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for NLD 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -1990,28 +2168,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 840 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for USA 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -2035,28 +2213,28 @@
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no import total HS080410 -> 124 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "saudi_position": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "demand_capacity": {
           "value": null,
           "source": "World Bank",
           "confidence": 0.0,
           "note": "no income data for CAN 2022",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         },
         "competition": {
           "value": null,
           "source": "UN Comtrade",
           "confidence": 0.0,
           "note": "no competitor data",
-          "retrieved_at": "2026-07-02"
+          "retrieved_at": "2026-07-05"
         }
       },
       "income_ppp": null,
@@ -2070,6 +2248,15 @@
     }
   ],
   "note": "نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. Preliminary, real public data only; gaps flagged, not estimated.",
+  "websearch": [
+    {
+      "value": null,
+      "source": "Web Search (Serper)",
+      "confidence": 0.0,
+      "note": "requires SEARCH_API_KEY",
+      "retrieved_at": "2026-07-05"
+    }
+  ],
   "quality_summary": {
     "markets_checked": 38,
     "markets_flagged": 38,
@@ -2111,6 +2298,31 @@
       "best_door": null,
       "note": "خيوط مربوطة من نتائج الوكلاء في الذاكرة حصراً — صفر استدعاءات خارجية؛ كل نقص معلن لا مُخمّن."
     },
+    "completeness": {
+      "observed": 0,
+      "total": 152,
+      "pct": 0.0,
+      "gap_count": 152,
+      "by_component": {
+        "market_size": {
+          "observed": 0,
+          "total": 38
+        },
+        "saudi_position": {
+          "observed": 0,
+          "total": 38
+        },
+        "demand_capacity": {
+          "observed": 0,
+          "total": 38
+        },
+        "competition": {
+          "observed": 0,
+          "total": 38
+        }
+      },
+      "label": "بيانات ضعيفة — thin data, gaps dominate"
+    },
     "markets": [
       {
         "country": "United Arab Emirates",
@@ -2118,11 +2330,93 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 784 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for ARE 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "United Arab Emirates: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": true
+        "has_competitive_position": true,
+        "trend": {
+          "hs_code": "080410",
+          "market_m49": "784",
+          "years": [
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "series": [
+            {
+              "year": 2019,
+              "value": null,
+              "observed": false
+            },
+            {
+              "year": 2020,
+              "value": null,
+              "observed": false
+            },
+            {
+              "year": 2021,
+              "value": null,
+              "observed": false
+            },
+            {
+              "year": 2022,
+              "value": null,
+              "observed": false
+            }
+          ],
+          "growth_pct": null,
+          "cagr_pct": null,
+          "observed_years": [],
+          "gap_years": [
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "source": "UN Comtrade",
+          "retrieved_at": "2026-07-05",
+          "note": "بيانات غير كافية لخط الاتجاه — 0/4 سنة مرصودة (insufficient data for a trend)"
+        },
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Qatar",
@@ -2130,11 +2424,93 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 634 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for QAT 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Qatar: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": true
+        "has_competitive_position": true,
+        "trend": {
+          "hs_code": "080410",
+          "market_m49": "634",
+          "years": [
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "series": [
+            {
+              "year": 2019,
+              "value": null,
+              "observed": false
+            },
+            {
+              "year": 2020,
+              "value": null,
+              "observed": false
+            },
+            {
+              "year": 2021,
+              "value": null,
+              "observed": false
+            },
+            {
+              "year": 2022,
+              "value": null,
+              "observed": false
+            }
+          ],
+          "growth_pct": null,
+          "cagr_pct": null,
+          "observed_years": [],
+          "gap_years": [
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "source": "UN Comtrade",
+          "retrieved_at": "2026-07-05",
+          "note": "بيانات غير كافية لخط الاتجاه — 0/4 سنة مرصودة (insufficient data for a trend)"
+        },
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Kuwait",
@@ -2142,11 +2518,93 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 414 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for KWT 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Kuwait: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": true
+        "has_competitive_position": true,
+        "trend": {
+          "hs_code": "080410",
+          "market_m49": "414",
+          "years": [
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "series": [
+            {
+              "year": 2019,
+              "value": null,
+              "observed": false
+            },
+            {
+              "year": 2020,
+              "value": null,
+              "observed": false
+            },
+            {
+              "year": 2021,
+              "value": null,
+              "observed": false
+            },
+            {
+              "year": 2022,
+              "value": null,
+              "observed": false
+            }
+          ],
+          "growth_pct": null,
+          "cagr_pct": null,
+          "observed_years": [],
+          "gap_years": [
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "source": "UN Comtrade",
+          "retrieved_at": "2026-07-05",
+          "note": "بيانات غير كافية لخط الاتجاه — 0/4 سنة مرصودة (insufficient data for a trend)"
+        },
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Oman",
@@ -2154,11 +2612,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 512 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for OMN 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Oman: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Bahrain",
@@ -2166,11 +2663,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 048 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for BHR 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Bahrain: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Jordan",
@@ -2178,11 +2714,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 400 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for JOR 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Jordan: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Lebanon",
@@ -2190,11 +2765,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 422 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for LBN 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Lebanon: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Egypt",
@@ -2202,11 +2816,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 818 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for EGY 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Egypt: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Morocco",
@@ -2214,11 +2867,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 504 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for MAR 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Morocco: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Tunisia",
@@ -2226,11 +2918,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 788 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for TUN 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Tunisia: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Algeria",
@@ -2238,11 +2969,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 012 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for DZA 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Algeria: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Iraq",
@@ -2250,11 +3020,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 368 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for IRQ 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Iraq: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Turkey",
@@ -2262,11 +3071,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 792 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for TUR 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Turkey: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Yemen",
@@ -2274,11 +3122,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 887 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for YEM 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Yemen: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "South Africa",
@@ -2286,11 +3173,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 710 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for ZAF 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "South Africa: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Nigeria",
@@ -2298,11 +3224,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 566 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for NGA 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Nigeria: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Kenya",
@@ -2310,11 +3275,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 404 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for KEN 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Kenya: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Ethiopia",
@@ -2322,11 +3326,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 231 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for ETH 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Ethiopia: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Ghana",
@@ -2334,11 +3377,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 288 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for GHA 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Ghana: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "India",
@@ -2346,11 +3428,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 356 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for IND 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "India: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Pakistan",
@@ -2358,11 +3479,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 586 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for PAK 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Pakistan: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Bangladesh",
@@ -2370,11 +3530,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 050 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for BGD 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Bangladesh: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Indonesia",
@@ -2382,11 +3581,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 360 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for IDN 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Indonesia: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Malaysia",
@@ -2394,11 +3632,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 458 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for MYS 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Malaysia: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Singapore",
@@ -2406,11 +3683,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 702 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for SGP 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Singapore: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Thailand",
@@ -2418,11 +3734,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 764 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for THA 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Thailand: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Viet Nam",
@@ -2430,11 +3785,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 704 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for VNM 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Viet Nam: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "China",
@@ -2442,11 +3836,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 156 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for CHN 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "China: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Japan",
@@ -2454,11 +3887,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 392 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for JPN 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Japan: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "South Korea",
@@ -2466,11 +3938,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 410 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for KOR 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "South Korea: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "United Kingdom",
@@ -2478,11 +3989,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 826 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for GBR 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "United Kingdom: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Germany",
@@ -2490,11 +4040,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 276 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for DEU 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Germany: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "France",
@@ -2502,11 +4091,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 250 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for FRA 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "France: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Italy",
@@ -2514,11 +4142,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 380 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for ITA 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Italy: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Spain",
@@ -2526,11 +4193,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 724 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for ESP 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Spain: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Netherlands",
@@ -2538,11 +4244,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 528 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for NLD 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Netherlands: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "United States",
@@ -2550,11 +4295,50 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 840 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for USA 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "United States: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       },
       {
         "country": "Canada",
@@ -2562,13 +4346,53 @@
         "score": 0.0,
         "confidence": 0.0,
         "components_present": "0/4",
+        "components_detail": [
+          {
+            "name": "market_size",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no import total HS080410 -> 124 2022"
+          },
+          {
+            "name": "saudi_position",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          },
+          {
+            "name": "demand_capacity",
+            "value": null,
+            "source": "World Bank",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no income data for CAN 2022"
+          },
+          {
+            "name": "competition",
+            "value": null,
+            "source": "UN Comtrade",
+            "confidence": 0.0,
+            "retrieved_at": "2026-07-05",
+            "note": "no competitor data"
+          }
+        ],
         "recommendation": "Canada: لا بيانات كافية — insufficient data (preliminary).",
         "quality_flags": [
           "all components missing — no usable data for this market"
         ],
-        "has_competitive_position": false
+        "has_competitive_position": false,
+        "trend": null,
+        "prices": [],
+        "named_competitors": [],
+        "supplier_countries": [],
+        "suppliers": []
       }
     ],
+    "culture": [],
     "brief": [
       "القرار: NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات (ثقة 0.0) — United Arab Emirates",
       "لا منافس بسعر مرصود بعد — فعّل with_localprice/deepen",

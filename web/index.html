@@ -56,7 +56,11 @@
   .appbar-row{display:flex;align-items:center;gap:var(--s4);height:64px}
   .brand{display:flex;align-items:center;gap:var(--s3);min-width:0}
   .logo{width:40px;height:40px;border-radius:8px;background:var(--brand);display:grid;place-items:center;color:#fff;font-weight:700;font-size:20px;flex:none}
-  .brand .t{font-size:18px;font-weight:600;line-height:1.2;white-space:nowrap}.brand .s{font-size:13px;color:var(--text-3)}
+  .brand .t{font-size:18px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.brand .s{font-size:13px;color:var(--text-3)}
+  @media(max-width:560px){.appbar-row{gap:var(--s2)}.brand .t{font-size:15px}
+    #runBtn span[data-t]{display:none}                 /* U2: زر أيقونة فقط على الجوال */
+    #runBtn{padding-inline:12px}.seg button{min-width:auto;padding:8px 11px}
+    .iconbtn{width:40px;height:40px}}
   .spacer{flex:1}.actions{display:flex;align-items:center;gap:var(--s3)}
   @media(max-width:720px){.brand .s{display:none}}
   .seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:var(--r);overflow:hidden}
@@ -129,6 +133,9 @@
   .step .sf{display:flex;align-items:center;gap:7px;font-size:13px;margin-top:2px}.step .sf .dot{width:7px;height:7px;border-radius:50%;flex:none}.step .sf b{font-family:var(--mono)}
   .body-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:var(--s4);align-items:start}
   @media(max-width:960px){.body-grid{grid-template-columns:1fr}}
+  /* U2: أبناء الشبكة min-width:0 كي ينكمش الجدول العريض بدل دفع تمرير أفقي للصفحة */
+  .body-grid>*,.duo>*{min-width:0}
+  table.dt tbody tr:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
   .dt-head{display:flex;align-items:center;justify-content:space-between;padding:var(--s4) var(--s5);border-bottom:1px solid var(--border)}
   .dt-head h3{margin:0;font-size:18px;font-weight:600}.dt-head .cnt{font-size:14px;color:var(--text-3)}
   table.dt{width:100%;border-collapse:collapse}
@@ -200,7 +207,7 @@
     <div class="seg" id="langSeg" role="group" aria-label="Language"><button data-lang="ar" class="on">العربية</button><button data-lang="en">EN</button></div>
     <button class="iconbtn" id="settingsBtn" aria-label="Settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg></button>
     <button class="iconbtn" id="themeBtn" aria-label="Theme"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19"/></svg></button>
-    <button class="btn btn-primary" id="runBtn" disabled><span data-t="analyze"></span></button>
+    <button class="btn btn-primary" id="runBtn" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9z"/></svg><span data-t="analyze"></span></button>
   </div>
 </div></header>
 
@@ -282,6 +289,7 @@
     complianceEntry:{ar:"اشتراطات الدخول والخروج",en:"Entry & exit requirements"},officialSrc:{ar:"المصدر الرسمي",en:"Official source"},
     juryTitle:{ar:"لجنة التحكيم",en:"Jury committee"},claudeJudge:{ar:"كلود · الحَكَم",en:"Claude · Judge"},coverageL:{ar:"تغطية",en:"Coverage"},gapsL:{ar:"فجوات",en:"Gaps"},
     reportLimits:{ar:"حدود هذا التقرير",en:"Limits of this report"},limitsSub:{ar:"ما لا يعرفه النظام يُقال صراحةً — الفجوات تُعلن ولا تُقدَّر.",en:"What the system doesn't know is stated plainly — gaps declared, not estimated."},noLimits:{ar:"لا حدود مسجّلة — كل مكوّنات الأسواق الأولى مرصودة.",en:"No limits recorded — all top-market components observed."},
+    cultureTitle:{ar:"ثقافة المستهلك ونبض السوق",en:"Consumer culture & market pulse"},cultureSub:{ar:"عناوين ومقالات مرصودة من بحث الويب — ما يهتم به المستهلك فعلياً.",en:"Observed headlines & articles from web search — what the consumer actually cares about."},cultureNeed:{ar:"غير مرصود — يتطلب مفتاح بحث الويب (SEARCH_API_KEY). فعّله في الإعدادات؛ لا نختلق اهتماماً.",en:"Not observed — requires a web-search key (SEARCH_API_KEY). Enable it in Settings; we never invent interest."},
     readyTitle:{ar:"ابدأ بالبحث عن منتج",en:"Start by searching a product"},readyP:{ar:"اكتب اسم منتج سعودي لتصفية أسواق تصديره وترتيبها عبر سنوات الدراسة.",en:"Type a Saudi product to shortlist and rank its export markets across the study years."},readyFoot:{ar:"النظام لا يُنشئ بيانات — كل رقم يحمل مصدره وثقته وتاريخه، وكل فجوة تُعلن بسببها.",en:"The system never creates data — every number carries its source, confidence and date, and every gap is declared with its reason."},
     readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"النظام لا يخمّن رمز HS — التصنيف الضعيف يُعلن بدل أن يُخترع.",en:"The system never guesses an HS code — a weak classification is declared, not invented."},
     settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"المفاتيح تُحفظ محلياً في متصفحك. لتفعيلها فعلياً اضبطها في متغيّرات البيئة على الخادم بنفس الأسماء.",en:"Keys are stored locally in your browser. To activate them, set them as server environment variables with the same names."},
@@ -360,6 +368,7 @@
   function buildBody(deepen){
     var span=Math.max(2,Math.min(10,S.yearTo-S.yearFrom+1));
     var b={product:S.product,year:S.yearTo,persist:true,with_trend:true,trend_span:span,with_requirements:true,with_competitors:true,
+      with_websearch:!!S.keys.SEARCH,
       with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS};
     if(S.card.cost_per_unit!=null){b.product_card={cost_per_unit:S.card.cost_per_unit,tier:S.card.tier||null,monthly_capacity:S.card.monthly_capacity!=null?S.card.monthly_capacity:null,shipping_per_unit:S.card.shipping_per_unit!=null?S.card.shipping_per_unit:null};}
     if(S.card.own_price!=null)b.own_price=S.card.own_price;
@@ -433,11 +442,15 @@
       $("#resultArea").innerHTML=pipeHTML()+'<section class="card ready" style="margin-top:var(--s5)"><h2>'+esc(t("noClass"))+'</h2><p>'+esc(S.result.note||"")+'</p><div class="foot">'+esc(t("noClassFoot"))+'</div></section>';return;}
     renderCompleteness();
     var ms=S.result.markets,sel=ms.filter(function(m){return m.id===S.selId;})[0]||ms[0];S.selId=sel&&sel.id;
-    $("#resultArea").innerHTML=pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+'</div>';
+    $("#resultArea").innerHTML=pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+cultureBlock()+'</div>';
     bindEvents();
   }
   function bindEvents(){
-    $$("#resultArea tbody tr").forEach(function(tr){tr.addEventListener("click",function(){S.selId=this.getAttribute("data-id");render();});});
+    $$("#resultArea tbody tr").forEach(function(tr){
+      function pick(){S.selId=tr.getAttribute("data-id");render();}
+      tr.addEventListener("click",pick);
+      tr.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();}});
+    });
     $$("#resultArea .tab").forEach(function(b){b.addEventListener("click",function(){S.tab=this.getAttribute("data-tab");render();});});
     var d=$("#deepBtn");if(d)d.addEventListener("click",runDeepen);
     var j=$("#jsonBtn");if(j)j.addEventListener("click",exportJson);
@@ -467,7 +480,7 @@
       var imp=m.import_value!=null?'<span class="num" style="font-weight:600" title="'+esc(prov(c.market_size))+'">'+fmtUSD(m.import_value)+'</span>':'<span class="gap-txt" title="'+esc((c.market_size&&c.market_size.note)||"")+'">'+esc(t("notObserved"))+'</span>';
       var sh=m.saudi_share!=null?'<span class="num" style="font-weight:600'+(m.saudi_share>=30?';color:var(--primary)':'')+'" title="'+esc(prov(c.saudi_position))+'">'+m.saudi_share+'%</span>':'<span class="gap-txt">'+esc(t("notObserved"))+'</span>';
       var tr=m.trend||{},trc=(tr.series?spark(tr.series,64,26):'<span class="gap-txt">'+esc(t("notObserved"))+'</span>')+" "+growthTag(tr.growth_pct);
-      return '<tr class="'+(m.id===(sel&&sel.id)?"sel":"")+'" data-id="'+m.id+'"><td><span class="rk">'+(ms.indexOf(m)+1)+'</span></td>'+
+      return '<tr class="'+(m.id===(sel&&sel.id)?"sel":"")+'" data-id="'+m.id+'" tabindex="0" role="button" aria-label="'+esc(m.country)+'"><td><span class="rk">'+(ms.indexOf(m)+1)+'</span></td>'+
         '<td><div class="cty"><span class="flag">'+esc(m.code)+'</span><span class="cname">'+esc(m.country)+'</span></div></td>'+
         '<td>'+imp+'</td><td><div class="trend">'+trc+'</div></td><td>'+sh+'</td>'+
         '<td><div class="bar"><span class="bv">'+(m.score==null?"—":m.score)+'</span><span class="track"><span class="fill" style="width:'+(m.score||0)+'%"></span></span></div></td>'+
@@ -556,6 +569,19 @@
     return '<div class="duo"><section class="card panel"><h3>'+esc(t("reportLimits"))+'</h3><div class="sub">'+esc(t("limitsSub"))+'</div>'+lim+'</section>'+
       '<section class="card panel"><h3>'+esc(t("yourPos"))+'</h3><div class="sub">'+esc((cp&&cp.market)||"")+'</div>'+cpb+'</section></div>';
   }
+  function cultureBlock(){
+    var v=S.result.view||{},culture=v.culture||[];
+    var body;
+    if(culture.length){
+      body='<ul class="list">'+culture.slice(0,8).map(function(c){
+        var title=esc(c.title||"");
+        return '<li>'+(c.link?'<a href="'+esc(c.link)+'" target="_blank" rel="noopener noreferrer">'+title+'</a>':title)+'</li>';
+      }).join("")+'</ul>';
+    }else{
+      body='<div class="callout warn">'+esc(t("cultureNeed"))+'</div>';
+    }
+    return '<section class="card panel" style="margin-top:var(--s5)"><h3>'+esc(t("cultureTitle"))+'</h3><div class="sub">'+esc(t("cultureSub"))+'</div>'+body+'</section>';
+  }
   function renderReady(){
     $("#completeness").classList.add("hidden");
     if(!S.product){$("#resultArea").innerHTML='<section class="card ready"><h2>'+esc(t("readyTitle"))+'</h2><p>'+esc(t("readyP"))+'</p><div class="foot">'+esc(t("readyFoot"))+'</div></section>';return;}
@@ -571,7 +597,8 @@
     {tg:"trends",nm:{ar:"Google Trends",en:"Google Trends"},ds:{ar:"الطلب والموسمية.",en:"Demand & seasonality."}},
     {k:"WITS",nm:{ar:"WITS / WTO",en:"WITS / WTO"},ds:{ar:"الرسوم الجمركية المطبّقة.",en:"Applied tariffs."}},
     {k:"FAOSTAT",nm:{ar:"FAOSTAT",en:"FAOSTAT"},ds:{ar:"الاستهلاك للفرد (غذائي).",en:"Per-capita food supply."}},
-    {k:"MAPS",nm:{ar:"Google Maps",en:"Google Maps"},ds:{ar:"المصانع والموزّعون بأسمائهم.",en:"Named factories & distributors."}}];
+    {k:"MAPS",nm:{ar:"Google Maps",en:"Google Maps"},ds:{ar:"المصانع والموزّعون بأسمائهم.",en:"Named factories & distributors."}},
+    {k:"SEARCH",nm:{ar:"بحث الويب (Serper)",en:"Web Search (Serper)"},ds:{ar:"ثقافة المستهلك ونبض السوق — عناوين ومقالات مرصودة.",en:"Consumer culture & market pulse — observed headlines & articles."}}];
   var PAID=[{k:"LOCALPRICE",nm:{ar:"أسعار السوق المحلي",en:"Local market prices"},ds:{ar:"أسعار الرفّ الفعلية (أمازون/نون/جوميا) + مقارنة سعرك.",en:"Real shelf prices (Amazon/Noon/Jumia) + your price comparison."}},
     {k:"VOLZA",nm:{ar:"Volza",en:"Volza"},ds:{ar:"المستوردون بالاسم من بوالص الشحن.",en:"Named importers from shipping bills."}},
     {k:"EXPLEE",nm:{ar:"explee",en:"explee"},ds:{ar:"مشترون وجهات اتصال B2B.",en:"B2B buyers & contacts."}}];

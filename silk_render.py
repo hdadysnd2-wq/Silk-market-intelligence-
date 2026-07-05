@@ -124,6 +124,71 @@ def _completeness(markets: list) -> dict:
             "label": label}
 
 
+def _fval(f: object) -> object:
+    """قيمة نتيجة — .value whether DataPoint, dict, or a plain value."""
+    if isinstance(f, dict):
+        return f.get("value")
+    return getattr(f, "value", f)
+
+
+def _real_list(x: object) -> list:
+    """قيم مرصودة فقط — real values from a DataPoint-or-list field ([] if none)."""
+    if x is None:
+        return []
+    items = x if isinstance(x, list) else [x]
+    out = []
+    for f in items:
+        v = _fval(f)
+        if v is not None:
+            out.append(v)
+    return out
+
+
+def _prices(row: dict) -> list:
+    """أسعار السوق المرصودة — observed retail listings (localprice layer)."""
+    out = []
+    for v in _real_list(row.get("localprice")):
+        if isinstance(v, dict) and v.get("price") is not None:
+            out.append({"title": v.get("title"), "price": v.get("price"),
+                        "currency": v.get("currency"), "store": v.get("store")})
+    return out
+
+
+def _named_competitors(row: dict) -> list:
+    """منافسون بالاسم — named-competitor candidates (web layer)."""
+    out = []
+    for v in _real_list(row.get("competitors_named")):
+        name = (v.get("title") or v.get("name")) if isinstance(v, dict) else v
+        if name:
+            out.append(str(name))
+    return out
+
+
+def _suppliers(row: dict) -> list:
+    """موردون/أعمال بالاسم — named businesses (maps/volza/explee)."""
+    out = []
+    for key, src in (("maps", "Google Maps"), ("volza", "Volza"),
+                     ("explee", "explee")):
+        for v in _real_list(row.get(key)):
+            name = v.get("name") if isinstance(v, dict) else v
+            if name:
+                out.append({"name": str(name), "source": src})
+    return out
+
+
+def _culture(result: dict) -> list:
+    """ثقافة المستهلك — consumer-culture web findings (websearch layer)."""
+    out = []
+    for v in _real_list(result.get("websearch")):
+        if isinstance(v, dict):
+            title = v.get("title") or v.get("snippet")
+            if title:
+                out.append({"title": str(title), "link": v.get("link")})
+        elif v:
+            out.append({"title": str(v), "link": None})
+    return out
+
+
 def build_view(result: dict) -> dict:
     """ابنِ نموذج العرض القانوني — the ONE canonical view-model (vision §10.1).
 
@@ -156,6 +221,12 @@ def build_view(result: dict) -> dict:
             # §سنوات الدراسة: خط الاتجاه متعدد السنوات إن فُعِّل (with_trend)،
             # وإلا None — الواجهة تعرضه أو تعلن «يتطلب تفعيل مدى السنوات».
             "trend": row.get("trend"),
+            # طبقات الإثراء المرصودة (أسعار/منافسون/موردون) — يعرضها التقرير
+            # والواجهة؛ الفارغ يُعلن «غير مرصود» لا يُخترع.
+            "prices": _prices(row),
+            "named_competitors": _named_competitors(row),
+            "supplier_countries": row.get("competitors") or [],
+            "suppliers": _suppliers(row),
         })
     limits = [f"{m['country']}: {f}" for m in markets[:5]
               for f in (m.get("quality_flags") or [])]
@@ -170,6 +241,7 @@ def build_view(result: dict) -> dict:
         "competitive_position": cp,
         "completeness": _completeness(markets),
         "markets": view_markets,
+        "culture": _culture(result),          # ثقافة المستهلك (بحث الويب)
         "brief": _brief(decision, cp),
         "limits": limits,
         "note": result.get("note"),
