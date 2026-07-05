@@ -23,7 +23,8 @@ from __future__ import annotations
 import functools
 import logging
 
-from silk_data_layer import DataPoint, comtrade_trade, ISO3_TO_M49, _today
+from silk_data_layer import (DataPoint, comtrade_trade, primary_value,
+                             ISO3_TO_M49, _today)
 
 log = logging.getLogger(__name__)
 
@@ -55,13 +56,22 @@ def _hs_names() -> dict:
 
 
 def _totals_by_hs(records: list[dict]) -> dict[str, float]:
-    """إجمالي الاستيراد لكل رمز — total import value per HS code from records."""
+    """إجمالي الاستيراد لكل رمز — total import value per HS code from records.
+
+    سجل بلا primaryValue رقمية يُسقَط ولا يُعدّ صفراً — صفرٌ مختلق هنا يولّد
+    نسبة نمو/حصة مختلقة لاحقاً (المبدأ التأسيسي). Records lacking a numeric
+    value are dropped, never counted as 0 (a fabricated 0 would fabricate a
+    growth rate or Saudi share downstream).
+    """
     out: dict[str, float] = {}
     for rec in records or []:
         code = str(rec.get("cmdCode") or "").strip()
         if not code or code == "TOTAL":
             continue
-        out[code] = out.get(code, 0.0) + float(rec.get("primaryValue") or 0)
+        val = primary_value(rec)
+        if val is None:
+            continue
+        out[code] = out.get(code, 0.0) + val
     return out
 
 

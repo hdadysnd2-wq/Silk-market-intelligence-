@@ -327,6 +327,71 @@ def test_rank_markets_has_dashboard_fields():
         assert key in row  # additive key present (value may be None offline)
 
 
+def test_tradeflow_missing_primary_value_not_summed_as_zero():
+    # سجل كومتريد بلا primaryValue لا يُجمع كصفر — المجموع من القيم الحقيقية فقط،
+    # والإسقاط مُعلن في الملاحظة والثقة تنخفض (لا اختلاق صفر واثق).
+    import silk_agents as ag
+
+    mixed = [
+        {"partnerCode": 0, "primaryValue": 1_000_000.0},
+        {"partnerCode": 0},                        # الحقل مفقود كلياً
+        {"partnerCode": 0, "primaryValue": None},  # None صريح
+    ]
+    orig = ag.comtrade_trade
+    ag.comtrade_trade = lambda *a, **k: [dict(r) for r in mixed]
+    try:
+        with _block_network():
+            rep = ag.TradeFlowAgent().run(
+                {"hs_code": "080410", "market_m49": "784", "year": 2022})
+    finally:
+        ag.comtrade_trade = orig
+    assert rep.failed is False
+    assert len(rep.findings) == 2                  # imports + exports
+    for dp in rep.findings:
+        assert dp.value == 1_000_000.0             # المفقود لم يُحسب صفراً
+        assert dp.confidence < 0.9                 # مجموع جزئي => ثقة أدنى
+        assert "بلا قيمة رقمية" in dp.note          # الإسقاط مُعلن، لا صامت
+
+
+def test_tradeflow_all_records_missing_value_is_declared_gap():
+    # كل السجلات بلا قيمة رقمية => فجوة معلنة (None بثقة 0.0) لا مجموع 0 مختلق.
+    import silk_agents as ag
+
+    valueless = [{"partnerCode": 0, "primaryValue": None}, {"partnerCode": 0}]
+    orig = ag.comtrade_trade
+    ag.comtrade_trade = lambda *a, **k: [dict(r) for r in valueless]
+    try:
+        with _block_network():
+            rep = ag.TradeFlowAgent().run(
+                {"hs_code": "080410", "market_m49": "784", "year": 2022})
+    finally:
+        ag.comtrade_trade = orig
+    assert rep.failed is True
+    for dp in rep.findings:
+        assert dp.value is None and dp.confidence == 0.0   # فجوة، لا صفر
+        assert "بلا قيم رقمية" in dp.note                   # السبب مُعلن
+
+
+def test_market_imports_missing_value_no_fabricated_zero_competitor():
+    # شريك بلا primaryValue لا يظهر منافساً بقيمة 0$ — يُسقَط ولا يُختلق.
+    import silk_data_layer_v2 as v2
+
+    fake = [
+        {"partnerCode": 0, "primaryValue": None},          # صفّ العالم بلا قيمة
+        {"partnerCode": 788, "primaryValue": 75_700_000.0},
+        {"partnerCode": 682},                              # بلا قيمة => يُسقَط
+    ]
+    orig = v2.comtrade_trade
+    v2.comtrade_trade = lambda *a, **k: [dict(r) for r in fake]
+    try:
+        mi = v2.market_imports("080410", "504", 2023)
+    finally:
+        v2.comtrade_trade = orig
+    assert mi["total_usd"] == 75_700_000.0        # لا اعتماد على عالمٍ صفري مختلق
+    assert len(mi["competitors"]) == 1            # لا منافس بـ0$ مختلق
+    assert mi["competitors"][0].value["code"] == "788"
+
+
 def test_index_helper_matches_dates():
     # مساعد /index يطابق "تمور" ويرجع رمز التمر 080410 — offline, no network.
     import api

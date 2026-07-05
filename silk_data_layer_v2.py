@@ -11,6 +11,7 @@ from silk_data_layer import (
     DataPoint,
     comtrade_trade,
     partner_name,
+    primary_value,
     world_bank,
     _today,
 )
@@ -44,7 +45,9 @@ def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
     totals: dict[str, float] = {}
     for rec in recs:
         code = str(rec.get("partnerCode"))
-        val = float(rec.get("primaryValue") or 0)
+        val = primary_value(rec)
+        if val is None:  # سجل بلا قيمة رقمية لا يُعدّ صفراً — لا اختلاق منافس بـ0$
+            continue
         if code == "0":  # World aggregate = total market imports (market size)
             world = val
             continue
