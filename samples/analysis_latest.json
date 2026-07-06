@@ -85,7 +85,7 @@
         "value": null,
         "source": "World Bank WITS",
         "confidence": 0.0,
-        "note": "WITS unavailable: TypeError for HS080410 SAU->CHN 2023: a bytes-like object is required, not 'MagicMock'",
+        "note": "WITS unavailable: OSError for HS080410 SAU->CHN 2023: hermetic: WITS not doubled — فجوة معلنة",
         "retrieved_at": "2026-07-06"
       },
       "faostat": {
@@ -436,8 +436,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "competitor": {
             "agent": "competitor",
@@ -538,24 +538,7 @@
                 "metric": "named_companies",
                 "value": [
                   {
-                    "name": "top تمور brands importers distributors c — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات top تمور brands importers dist",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: top تمور brands importers dist",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
+                    "kind": "entity",
                     "name": "موزّع تمور distributor i — نموذج A",
                     "address": "Trade District 12",
                     "rating": 4.4,
@@ -563,11 +546,36 @@
                     "retrieved_at": "2026-07-06"
                   },
                   {
+                    "kind": "entity",
                     "name": "مستورد تمور distributor i — نموذج B",
                     "address": "Market St 7",
                     "rating": 4.1,
                     "via": "Google Maps",
                     "retrieved_at": "2026-07-06"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "top تمور brands importers distributors c — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات top تمور brands importers dist",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: top تمور brands importers dist",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                   }
                 ],
                 "unit": null,
@@ -575,44 +583,44 @@
                 "formula": null,
                 "sources": [
                   {
-                    "source": "Web Search (Serper)",
+                    "source": "Google Maps",
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Google Maps",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
                     "url": "https://example.org/a"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/b"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/c"
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
                   }
                 ],
-                "note": "مرشّحون بالاسم غير موثَّقين (ثقة 0.4) — أكّدهم قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
+                "note": "كيانات Google Maps بالاسم (غير موثَّقة، ثقة 0.4) + مراجع ويب للمراجعة اليدوية — أكّدها قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
               }
             ],
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "regulatory": {
             "agent": "regulatory",
@@ -692,12 +700,12 @@
               }
             ],
             "gaps": [
-              "tariff_applied_pct: WITS unavailable: TypeError for HS080410 SAU->CHN 2023: a bytes-like object is required, not 'MagicMock'"
+              "tariff_applied_pct: WITS unavailable: OSError for HS080410 SAU->CHN 2023: hermetic: WITS not doubled — فجوة معلنة"
             ],
             "rejected": [],
             "coverage": 0.75,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "pricing": {
             "agent": "pricing",
@@ -803,8 +811,8 @@
             ],
             "rejected": [],
             "coverage": 0.8,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "risk": {
             "agent": "risk",
@@ -912,8 +920,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "consumer_demand": {
             "agent": "consumer_demand",
@@ -1007,8 +1015,8 @@
             ],
             "rejected": [],
             "coverage": 0.83,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "supplier": {
             "agent": "supplier",
@@ -1020,42 +1028,7 @@
                 "metric": "saudi_suppliers",
                 "value": [
                   {
-                    "name": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات تمور manufacturers suppliers S",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: تمور manufacturers suppliers S",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مصانع موردي تمور السعودية — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات مصانع موردي تمور السعودية",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: مصانع موردي تمور السعودية",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
+                    "kind": "entity",
                     "name": "موزّع تمور مصنع مورد الس — نموذج A",
                     "address": "Trade District 12",
                     "rating": 4.4,
@@ -1063,11 +1036,60 @@
                     "retrieved_at": "2026-07-06"
                   },
                   {
+                    "kind": "entity",
                     "name": "مستورد تمور مصنع مورد الس — نموذج B",
                     "address": "Market St 7",
                     "rating": 4.1,
                     "via": "Google Maps",
                     "retrieved_at": "2026-07-06"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات تمور manufacturers suppliers S",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: تمور manufacturers suppliers S",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مصانع موردي تمور السعودية — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات مصانع موردي تمور السعودية",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: مصانع موردي تمور السعودية",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                   }
                 ],
                 "unit": null,
@@ -1075,42 +1097,6 @@
                 "formula": null,
                 "sources": [
                   {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/a"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/b"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/c"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/a"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/b"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/c"
-                  },
-                  {
                     "source": "Google Maps",
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
@@ -1121,6 +1107,42 @@
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
                     "url": null
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/a"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/b"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/c"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/a"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/b"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/c"
                   }
                 ],
                 "note": "مرشّحو توريد سعوديون (جانب المنشأ) — غير موثَّقين، أكّدهم قبل التعاقد"
@@ -1129,24 +1151,7 @@
                 "metric": "target_distributors",
                 "value": [
                   {
-                    "name": "تمور importers wholesale distributors in — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات تمور importers wholesale distr",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: تمور importers wholesale distr",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
+                    "kind": "entity",
                     "name": "موزّع تمور wholesale dis — نموذج A",
                     "address": "Trade District 12",
                     "rating": 4.4,
@@ -1154,11 +1159,36 @@
                     "retrieved_at": "2026-07-06"
                   },
                   {
+                    "kind": "entity",
                     "name": "مستورد تمور wholesale dis — نموذج B",
                     "address": "Market St 7",
                     "rating": 4.1,
                     "via": "Google Maps",
                     "retrieved_at": "2026-07-06"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "تمور importers wholesale distributors in — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات تمور importers wholesale distr",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: تمور importers wholesale distr",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                   }
                 ],
                 "unit": null,
@@ -1166,34 +1196,34 @@
                 "formula": null,
                 "sources": [
                   {
-                    "source": "Web Search (Serper)",
+                    "source": "Google Maps",
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Google Maps",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
                     "url": "https://example.org/a"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/b"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/c"
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
                   }
                 ],
                 "note": "مرشّحو توزيع في China — غير موثَّقين؛ الترقية الموثّقة عبر /deepen"
@@ -1202,8 +1232,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           }
         },
         "coverage": 0.91,
@@ -1562,7 +1592,7 @@
         "value": null,
         "source": "World Bank WITS",
         "confidence": 0.0,
-        "note": "WITS unavailable: TypeError for HS080410 SAU->ARE 2023: a bytes-like object is required, not 'MagicMock'",
+        "note": "WITS unavailable: OSError for HS080410 SAU->ARE 2023: hermetic: WITS not doubled — فجوة معلنة",
         "retrieved_at": "2026-07-06"
       },
       "faostat": {
@@ -1883,8 +1913,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "competitor": {
             "agent": "competitor",
@@ -1896,24 +1926,7 @@
                 "metric": "named_companies",
                 "value": [
                   {
-                    "name": "top تمور brands importers distributors c — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات top تمور brands importers dist",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: top تمور brands importers dist",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
+                    "kind": "entity",
                     "name": "موزّع تمور distributor i — نموذج A",
                     "address": "Trade District 12",
                     "rating": 4.4,
@@ -1921,11 +1934,36 @@
                     "retrieved_at": "2026-07-06"
                   },
                   {
+                    "kind": "entity",
                     "name": "مستورد تمور distributor i — نموذج B",
                     "address": "Market St 7",
                     "rating": 4.1,
                     "via": "Google Maps",
                     "retrieved_at": "2026-07-06"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "top تمور brands importers distributors c — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات top تمور brands importers dist",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: top تمور brands importers dist",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                   }
                 ],
                 "unit": null,
@@ -1933,37 +1971,37 @@
                 "formula": null,
                 "sources": [
                   {
-                    "source": "Web Search (Serper)",
+                    "source": "Google Maps",
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Google Maps",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
                     "url": "https://example.org/a"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/b"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/c"
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
                   }
                 ],
-                "note": "مرشّحون بالاسم غير موثَّقين (ثقة 0.4) — أكّدهم قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
+                "note": "كيانات Google Maps بالاسم (غير موثَّقة، ثقة 0.4) + مراجع ويب للمراجعة اليدوية — أكّدها قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
               }
             ],
             "gaps": [
@@ -1971,8 +2009,8 @@
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "regulatory": {
             "agent": "regulatory",
@@ -2080,12 +2118,12 @@
               }
             ],
             "gaps": [
-              "tariff_applied_pct: WITS unavailable: TypeError for HS080410 SAU->ARE 2023: a bytes-like object is required, not 'MagicMock'"
+              "tariff_applied_pct: WITS unavailable: OSError for HS080410 SAU->ARE 2023: hermetic: WITS not doubled — فجوة معلنة"
             ],
             "rejected": [],
             "coverage": 0.75,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "pricing": {
             "agent": "pricing",
@@ -2146,8 +2184,8 @@
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "risk": {
             "agent": "risk",
@@ -2164,8 +2202,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "consumer_demand": {
             "agent": "consumer_demand",
@@ -2229,8 +2267,8 @@
             ],
             "rejected": [],
             "coverage": 0.5,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "supplier": {
             "agent": "supplier",
@@ -2242,42 +2280,7 @@
                 "metric": "saudi_suppliers",
                 "value": [
                   {
-                    "name": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات تمور manufacturers suppliers S",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: تمور manufacturers suppliers S",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مصانع موردي تمور السعودية — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات مصانع موردي تمور السعودية",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: مصانع موردي تمور السعودية",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
+                    "kind": "entity",
                     "name": "موزّع تمور مصنع مورد الس — نموذج A",
                     "address": "Trade District 12",
                     "rating": 4.4,
@@ -2285,11 +2288,60 @@
                     "retrieved_at": "2026-07-06"
                   },
                   {
+                    "kind": "entity",
                     "name": "مستورد تمور مصنع مورد الس — نموذج B",
                     "address": "Market St 7",
                     "rating": 4.1,
                     "via": "Google Maps",
                     "retrieved_at": "2026-07-06"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات تمور manufacturers suppliers S",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: تمور manufacturers suppliers S",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مصانع موردي تمور السعودية — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات مصانع موردي تمور السعودية",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: مصانع موردي تمور السعودية",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                   }
                 ],
                 "unit": null,
@@ -2297,42 +2349,6 @@
                 "formula": null,
                 "sources": [
                   {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/a"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/b"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/c"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/a"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/b"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/c"
-                  },
-                  {
                     "source": "Google Maps",
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
@@ -2343,6 +2359,42 @@
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
                     "url": null
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/a"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/b"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/c"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/a"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/b"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/c"
                   }
                 ],
                 "note": "مرشّحو توريد سعوديون (جانب المنشأ) — غير موثَّقين، أكّدهم قبل التعاقد"
@@ -2351,24 +2403,7 @@
                 "metric": "target_distributors",
                 "value": [
                   {
-                    "name": "تمور importers wholesale distributors in — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات تمور importers wholesale distr",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: تمور importers wholesale distr",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
+                    "kind": "entity",
                     "name": "موزّع تمور wholesale dis — نموذج A",
                     "address": "Trade District 12",
                     "rating": 4.4,
@@ -2376,11 +2411,36 @@
                     "retrieved_at": "2026-07-06"
                   },
                   {
+                    "kind": "entity",
                     "name": "مستورد تمور wholesale dis — نموذج B",
                     "address": "Market St 7",
                     "rating": 4.1,
                     "via": "Google Maps",
                     "retrieved_at": "2026-07-06"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "تمور importers wholesale distributors in — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات تمور importers wholesale distr",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: تمور importers wholesale distr",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                   }
                 ],
                 "unit": null,
@@ -2388,34 +2448,34 @@
                 "formula": null,
                 "sources": [
                   {
-                    "source": "Web Search (Serper)",
+                    "source": "Google Maps",
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Google Maps",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
                     "url": "https://example.org/a"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/b"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/c"
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
                   }
                 ],
                 "note": "مرشّحو توزيع في United Arab Emirates — غير موثَّقين؛ الترقية الموثّقة عبر /deepen"
@@ -2424,8 +2484,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           }
         },
         "coverage": 0.38,
@@ -2799,7 +2859,7 @@
         "value": null,
         "source": "World Bank WITS",
         "confidence": 0.0,
-        "note": "WITS unavailable: TypeError for HS080410 SAU->QAT 2023: a bytes-like object is required, not 'MagicMock'",
+        "note": "WITS unavailable: OSError for HS080410 SAU->QAT 2023: hermetic: WITS not doubled — فجوة معلنة",
         "retrieved_at": "2026-07-06"
       },
       "faostat": {
@@ -3107,8 +3167,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "competitor": {
             "agent": "competitor",
@@ -3120,24 +3180,7 @@
                 "metric": "named_companies",
                 "value": [
                   {
-                    "name": "top تمور brands importers distributors c — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات top تمور brands importers dist",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: top تمور brands importers dist",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
+                    "kind": "entity",
                     "name": "موزّع تمور distributor i — نموذج A",
                     "address": "Trade District 12",
                     "rating": 4.4,
@@ -3145,11 +3188,36 @@
                     "retrieved_at": "2026-07-06"
                   },
                   {
+                    "kind": "entity",
                     "name": "مستورد تمور distributor i — نموذج B",
                     "address": "Market St 7",
                     "rating": 4.1,
                     "via": "Google Maps",
                     "retrieved_at": "2026-07-06"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "top تمور brands importers distributors c — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات top تمور brands importers dist",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: top تمور brands importers dist",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                   }
                 ],
                 "unit": null,
@@ -3157,37 +3225,37 @@
                 "formula": null,
                 "sources": [
                   {
-                    "source": "Web Search (Serper)",
+                    "source": "Google Maps",
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Google Maps",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
                     "url": "https://example.org/a"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/b"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/c"
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
                   }
                 ],
-                "note": "مرشّحون بالاسم غير موثَّقين (ثقة 0.4) — أكّدهم قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
+                "note": "كيانات Google Maps بالاسم (غير موثَّقة، ثقة 0.4) + مراجع ويب للمراجعة اليدوية — أكّدها قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
               }
             ],
             "gaps": [
@@ -3195,8 +3263,8 @@
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "regulatory": {
             "agent": "regulatory",
@@ -3297,12 +3365,12 @@
               }
             ],
             "gaps": [
-              "tariff_applied_pct: WITS unavailable: TypeError for HS080410 SAU->QAT 2023: a bytes-like object is required, not 'MagicMock'"
+              "tariff_applied_pct: WITS unavailable: OSError for HS080410 SAU->QAT 2023: hermetic: WITS not doubled — فجوة معلنة"
             ],
             "rejected": [],
             "coverage": 0.75,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "pricing": {
             "agent": "pricing",
@@ -3363,8 +3431,8 @@
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "risk": {
             "agent": "risk",
@@ -3381,8 +3449,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "consumer_demand": {
             "agent": "consumer_demand",
@@ -3446,8 +3514,8 @@
             ],
             "rejected": [],
             "coverage": 0.5,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           },
           "supplier": {
             "agent": "supplier",
@@ -3459,42 +3527,7 @@
                 "metric": "saudi_suppliers",
                 "value": [
                   {
-                    "name": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات تمور manufacturers suppliers S",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: تمور manufacturers suppliers S",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مصانع موردي تمور السعودية — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات مصانع موردي تمور السعودية",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: مصانع موردي تمور السعودية",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
+                    "kind": "entity",
                     "name": "موزّع تمور مصنع مورد الس — نموذج A",
                     "address": "Trade District 12",
                     "rating": 4.4,
@@ -3502,11 +3535,60 @@
                     "retrieved_at": "2026-07-06"
                   },
                   {
+                    "kind": "entity",
                     "name": "مستورد تمور مصنع مورد الس — نموذج B",
                     "address": "Market St 7",
                     "rating": 4.1,
                     "via": "Google Maps",
                     "retrieved_at": "2026-07-06"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات تمور manufacturers suppliers S",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: تمور manufacturers suppliers S",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مصانع موردي تمور السعودية — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات مصانع موردي تمور السعودية",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: مصانع موردي تمور السعودية",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                   }
                 ],
                 "unit": null,
@@ -3514,42 +3596,6 @@
                 "formula": null,
                 "sources": [
                   {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/a"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/b"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/c"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/a"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/b"
-                  },
-                  {
-                    "source": "Web Search (Serper)",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": "https://example.org/c"
-                  },
-                  {
                     "source": "Google Maps",
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
@@ -3560,6 +3606,42 @@
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
                     "url": null
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/a"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/b"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/c"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/a"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/b"
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
+                    "url": "https://example.org/c"
                   }
                 ],
                 "note": "مرشّحو توريد سعوديون (جانب المنشأ) — غير موثَّقين، أكّدهم قبل التعاقد"
@@ -3568,24 +3650,7 @@
                 "metric": "target_distributors",
                 "value": [
                   {
-                    "name": "تمور importers wholesale distributors in — تقرير سوق 2024",
-                    "url": "https://example.org/a",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "دليل قنوات تمور importers wholesale distr",
-                    "url": "https://example.org/b",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
-                    "name": "مستوردون: تمور importers wholesale distr",
-                    "url": "https://example.org/c",
-                    "via": "Serper",
-                    "retrieved_at": "2026-07-06"
-                  },
-                  {
+                    "kind": "entity",
                     "name": "موزّع تمور wholesale dis — نموذج A",
                     "address": "Trade District 12",
                     "rating": 4.4,
@@ -3593,11 +3658,36 @@
                     "retrieved_at": "2026-07-06"
                   },
                   {
+                    "kind": "entity",
                     "name": "مستورد تمور wholesale dis — نموذج B",
                     "address": "Market St 7",
                     "rating": 4.1,
                     "via": "Google Maps",
                     "retrieved_at": "2026-07-06"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "تمور importers wholesale distributors in — تقرير سوق 2024",
+                    "url": "https://example.org/a",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "دليل قنوات تمور importers wholesale distr",
+                    "url": "https://example.org/b",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                  },
+                  {
+                    "kind": "reference",
+                    "title": "مستوردون: تمور importers wholesale distr",
+                    "url": "https://example.org/c",
+                    "via": "Serper",
+                    "retrieved_at": "2026-07-06",
+                    "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                   }
                 ],
                 "unit": null,
@@ -3605,34 +3695,34 @@
                 "formula": null,
                 "sources": [
                   {
-                    "source": "Web Search (Serper)",
+                    "source": "Google Maps",
                     "retrieved_at": "2026-07-06",
                     "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Google Maps",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.4,
+                    "url": null
+                  },
+                  {
+                    "source": "Web Search (Serper)",
+                    "retrieved_at": "2026-07-06",
+                    "confidence": 0.3,
                     "url": "https://example.org/a"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/b"
                   },
                   {
                     "source": "Web Search (Serper)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
+                    "confidence": 0.3,
                     "url": "https://example.org/c"
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
-                  },
-                  {
-                    "source": "Google Maps",
-                    "retrieved_at": "2026-07-06",
-                    "confidence": 0.4,
-                    "url": null
                   }
                 ],
                 "note": "مرشّحو توزيع في Qatar — غير موثَّقين؛ الترقية الموثّقة عبر /deepen"
@@ -3641,8 +3731,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:19:17+00:00",
-            "finished_at": "2026-07-06T12:19:17+00:00"
+            "started_at": "2026-07-06T12:47:45+00:00",
+            "finished_at": "2026-07-06T12:47:45+00:00"
           }
         },
         "coverage": 0.38,
@@ -5581,15 +5671,16 @@
     "total_flags": 38,
     "note": "تنبيهات جودة فقط؛ الأرقام لم تُغيّر — quality flags only; underlying numbers unchanged."
   },
-  "analysis_id": 1,
+  "analysis_id": 3,
   "view": {
+    "test_run": true,
     "header": {
       "product": "تمور",
       "hs_code": "080410",
       "origin": "SAU",
       "target_market": "China",
       "date": "2026-07-06",
-      "coverage_pct": 80.0
+      "coverage_pct": 64.0
     },
     "product": "تمور",
     "hs_code": "080410",
@@ -5598,11 +5689,13 @@
     "preliminary": true,
     "classified": true,
     "decision": {
-      "verdict": "NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات",
-      "confidence": 0.0,
-      "why": "تغطية الوكلاء 0/3 وفجوات: TradeFlowAgent, EconomicAgent, CompetitionAgent",
+      "verdict": "CONDITIONAL-GO",
+      "confidence": 0.91,
+      "score": 0.554,
+      "why": "score 0.554 في النطاق الشرطي أو الثقة 0.91 دون 0.6 أو شروط مفتوحة (1)",
       "market": "China",
-      "stage": 1
+      "stage": "silk.decision/v1 — المحرك الموزون §8 (الحكم الوحيد)",
+      "sufficiency": "بوابة كفاية البيانات: 0/3 وكلاء أساسيون لديهم بيانات؛ فجوات: TradeFlowAgent، EconomicAgent، CompetitionAgent"
     },
     "competitive_position": {
       "available": true,
@@ -5950,10 +6043,10 @@
             "low_confidence": true
           },
           "demand": {
-            "attempted": 3,
-            "contributed": 1,
-            "score": 0.33,
-            "single_source": true,
+            "attempted": 2,
+            "contributed": 0,
+            "score": 0.0,
+            "single_source": false,
             "low_confidence": true
           },
           "risk": {
@@ -5964,10 +6057,10 @@
             "low_confidence": true
           },
           "trend": {
-            "attempted": 0,
-            "contributed": 0,
-            "score": 0.0,
-            "single_source": false,
+            "attempted": 6,
+            "contributed": 1,
+            "score": 0.17,
+            "single_source": true,
             "low_confidence": true
           }
         },
@@ -6005,12 +6098,11 @@
             "sources_attempted": []
           },
           "demand": {
-            "status": "ok",
-            "contributed": 1,
+            "status": "insufficient",
+            "contributed": 0,
             "threshold": 1,
             "sources_attempted": [
               "FAOSTAT",
-              "Google Trends",
               "World Bank"
             ]
           },
@@ -6024,9 +6116,12 @@
           },
           "trend": {
             "status": "insufficient",
-            "contributed": 0,
+            "contributed": 1,
             "threshold": 2,
-            "sources_attempted": []
+            "sources_attempted": [
+              "Google Trends",
+              "UN Comtrade"
+            ]
           }
         },
         "research": {
@@ -6122,8 +6217,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "competitor": {
               "agent": "competitor",
@@ -6224,24 +6319,7 @@
                   "metric": "named_companies",
                   "value": [
                     {
-                      "name": "top تمور brands importers distributors c — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات top تمور brands importers dist",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: top تمور brands importers dist",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
+                      "kind": "entity",
                       "name": "موزّع تمور distributor i — نموذج A",
                       "address": "Trade District 12",
                       "rating": 4.4,
@@ -6249,11 +6327,36 @@
                       "retrieved_at": "2026-07-06"
                     },
                     {
+                      "kind": "entity",
                       "name": "مستورد تمور distributor i — نموذج B",
                       "address": "Market St 7",
                       "rating": 4.1,
                       "via": "Google Maps",
                       "retrieved_at": "2026-07-06"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "top تمور brands importers distributors c — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات top تمور brands importers dist",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: top تمور brands importers dist",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                     }
                   ],
                   "unit": null,
@@ -6261,44 +6364,44 @@
                   "formula": null,
                   "sources": [
                     {
-                      "source": "Web Search (Serper)",
+                      "source": "Google Maps",
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Google Maps",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
                       "url": "https://example.org/a"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/b"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/c"
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
                     }
                   ],
-                  "note": "مرشّحون بالاسم غير موثَّقين (ثقة 0.4) — أكّدهم قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
+                  "note": "كيانات Google Maps بالاسم (غير موثَّقة، ثقة 0.4) + مراجع ويب للمراجعة اليدوية — أكّدها قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
                 }
               ],
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "regulatory": {
               "agent": "regulatory",
@@ -6378,12 +6481,12 @@
                 }
               ],
               "gaps": [
-                "tariff_applied_pct: WITS unavailable: TypeError for HS080410 SAU->CHN 2023: a bytes-like object is required, not 'MagicMock'"
+                "tariff_applied_pct: WITS unavailable: OSError for HS080410 SAU->CHN 2023: hermetic: WITS not doubled — فجوة معلنة"
               ],
               "rejected": [],
               "coverage": 0.75,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "pricing": {
               "agent": "pricing",
@@ -6489,8 +6592,8 @@
               ],
               "rejected": [],
               "coverage": 0.8,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "risk": {
               "agent": "risk",
@@ -6598,8 +6701,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "consumer_demand": {
               "agent": "consumer_demand",
@@ -6693,8 +6796,8 @@
               ],
               "rejected": [],
               "coverage": 0.83,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "supplier": {
               "agent": "supplier",
@@ -6706,42 +6809,7 @@
                   "metric": "saudi_suppliers",
                   "value": [
                     {
-                      "name": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات تمور manufacturers suppliers S",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: تمور manufacturers suppliers S",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مصانع موردي تمور السعودية — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات مصانع موردي تمور السعودية",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: مصانع موردي تمور السعودية",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
+                      "kind": "entity",
                       "name": "موزّع تمور مصنع مورد الس — نموذج A",
                       "address": "Trade District 12",
                       "rating": 4.4,
@@ -6749,11 +6817,60 @@
                       "retrieved_at": "2026-07-06"
                     },
                     {
+                      "kind": "entity",
                       "name": "مستورد تمور مصنع مورد الس — نموذج B",
                       "address": "Market St 7",
                       "rating": 4.1,
                       "via": "Google Maps",
                       "retrieved_at": "2026-07-06"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات تمور manufacturers suppliers S",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: تمور manufacturers suppliers S",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مصانع موردي تمور السعودية — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات مصانع موردي تمور السعودية",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: مصانع موردي تمور السعودية",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                     }
                   ],
                   "unit": null,
@@ -6761,42 +6878,6 @@
                   "formula": null,
                   "sources": [
                     {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/a"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/b"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/c"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/a"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/b"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/c"
-                    },
-                    {
                       "source": "Google Maps",
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
@@ -6807,6 +6888,42 @@
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
                       "url": null
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/a"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/b"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/c"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/a"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/b"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/c"
                     }
                   ],
                   "note": "مرشّحو توريد سعوديون (جانب المنشأ) — غير موثَّقين، أكّدهم قبل التعاقد"
@@ -6815,24 +6932,7 @@
                   "metric": "target_distributors",
                   "value": [
                     {
-                      "name": "تمور importers wholesale distributors in — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات تمور importers wholesale distr",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: تمور importers wholesale distr",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
+                      "kind": "entity",
                       "name": "موزّع تمور wholesale dis — نموذج A",
                       "address": "Trade District 12",
                       "rating": 4.4,
@@ -6840,11 +6940,36 @@
                       "retrieved_at": "2026-07-06"
                     },
                     {
+                      "kind": "entity",
                       "name": "مستورد تمور wholesale dis — نموذج B",
                       "address": "Market St 7",
                       "rating": 4.1,
                       "via": "Google Maps",
                       "retrieved_at": "2026-07-06"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "تمور importers wholesale distributors in — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات تمور importers wholesale distr",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: تمور importers wholesale distr",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                     }
                   ],
                   "unit": null,
@@ -6852,34 +6977,34 @@
                   "formula": null,
                   "sources": [
                     {
-                      "source": "Web Search (Serper)",
+                      "source": "Google Maps",
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Google Maps",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
                       "url": "https://example.org/a"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/b"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/c"
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
                     }
                   ],
                   "note": "مرشّحو توزيع في China — غير موثَّقين؛ الترقية الموثّقة عبر /deepen"
@@ -6888,8 +7013,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             }
           },
           "coverage": 0.91,
@@ -7042,42 +7167,7 @@
         "supplier_directory": {
           "saudi": [
             {
-              "name": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
-              "url": "https://example.org/a",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "دليل قنوات تمور manufacturers suppliers S",
-              "url": "https://example.org/b",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مستوردون: تمور manufacturers suppliers S",
-              "url": "https://example.org/c",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مصانع موردي تمور السعودية — تقرير سوق 2024",
-              "url": "https://example.org/a",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "دليل قنوات مصانع موردي تمور السعودية",
-              "url": "https://example.org/b",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مستوردون: مصانع موردي تمور السعودية",
-              "url": "https://example.org/c",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
+              "kind": "entity",
               "name": "موزّع تمور مصنع مورد الس — نموذج A",
               "address": "Trade District 12",
               "rating": 4.4,
@@ -7085,33 +7175,65 @@
               "retrieved_at": "2026-07-06"
             },
             {
+              "kind": "entity",
               "name": "مستورد تمور مصنع مورد الس — نموذج B",
               "address": "Market St 7",
               "rating": 4.1,
               "via": "Google Maps",
               "retrieved_at": "2026-07-06"
+            },
+            {
+              "kind": "reference",
+              "title": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
+              "url": "https://example.org/a",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "دليل قنوات تمور manufacturers suppliers S",
+              "url": "https://example.org/b",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مستوردون: تمور manufacturers suppliers S",
+              "url": "https://example.org/c",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مصانع موردي تمور السعودية — تقرير سوق 2024",
+              "url": "https://example.org/a",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "دليل قنوات مصانع موردي تمور السعودية",
+              "url": "https://example.org/b",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مستوردون: مصانع موردي تمور السعودية",
+              "url": "https://example.org/c",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
             }
           ],
           "target": [
             {
-              "name": "تمور importers wholesale distributors in — تقرير سوق 2024",
-              "url": "https://example.org/a",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "دليل قنوات تمور importers wholesale distr",
-              "url": "https://example.org/b",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مستوردون: تمور importers wholesale distr",
-              "url": "https://example.org/c",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
+              "kind": "entity",
               "name": "موزّع تمور wholesale dis — نموذج A",
               "address": "Trade District 12",
               "rating": 4.4,
@@ -7119,11 +7241,36 @@
               "retrieved_at": "2026-07-06"
             },
             {
+              "kind": "entity",
               "name": "مستورد تمور wholesale dis — نموذج B",
               "address": "Market St 7",
               "rating": 4.1,
               "via": "Google Maps",
               "retrieved_at": "2026-07-06"
+            },
+            {
+              "kind": "reference",
+              "title": "تمور importers wholesale distributors in — تقرير سوق 2024",
+              "url": "https://example.org/a",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "دليل قنوات تمور importers wholesale distr",
+              "url": "https://example.org/b",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مستوردون: تمور importers wholesale distr",
+              "url": "https://example.org/c",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
             }
           ],
           "note": "مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل التعاقد؛ الترقية الموثّقة عبر /deepen"
@@ -7302,10 +7449,10 @@
             "low_confidence": true
           },
           "demand": {
-            "attempted": 3,
-            "contributed": 1,
-            "score": 0.33,
-            "single_source": true,
+            "attempted": 2,
+            "contributed": 0,
+            "score": 0.0,
+            "single_source": false,
             "low_confidence": true
           },
           "risk": {
@@ -7316,10 +7463,10 @@
             "low_confidence": true
           },
           "trend": {
-            "attempted": 0,
-            "contributed": 0,
-            "score": 0.0,
-            "single_source": false,
+            "attempted": 6,
+            "contributed": 1,
+            "score": 0.17,
+            "single_source": true,
             "low_confidence": true
           }
         },
@@ -7357,12 +7504,11 @@
             "sources_attempted": []
           },
           "demand": {
-            "status": "ok",
-            "contributed": 1,
+            "status": "insufficient",
+            "contributed": 0,
             "threshold": 1,
             "sources_attempted": [
               "FAOSTAT",
-              "Google Trends",
               "World Bank"
             ]
           },
@@ -7376,9 +7522,12 @@
           },
           "trend": {
             "status": "insufficient",
-            "contributed": 0,
+            "contributed": 1,
             "threshold": 2,
-            "sources_attempted": []
+            "sources_attempted": [
+              "Google Trends",
+              "UN Comtrade"
+            ]
           }
         },
         "research": {
@@ -7399,8 +7548,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "competitor": {
               "agent": "competitor",
@@ -7412,24 +7561,7 @@
                   "metric": "named_companies",
                   "value": [
                     {
-                      "name": "top تمور brands importers distributors c — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات top تمور brands importers dist",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: top تمور brands importers dist",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
+                      "kind": "entity",
                       "name": "موزّع تمور distributor i — نموذج A",
                       "address": "Trade District 12",
                       "rating": 4.4,
@@ -7437,11 +7569,36 @@
                       "retrieved_at": "2026-07-06"
                     },
                     {
+                      "kind": "entity",
                       "name": "مستورد تمور distributor i — نموذج B",
                       "address": "Market St 7",
                       "rating": 4.1,
                       "via": "Google Maps",
                       "retrieved_at": "2026-07-06"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "top تمور brands importers distributors c — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات top تمور brands importers dist",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: top تمور brands importers dist",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                     }
                   ],
                   "unit": null,
@@ -7449,37 +7606,37 @@
                   "formula": null,
                   "sources": [
                     {
-                      "source": "Web Search (Serper)",
+                      "source": "Google Maps",
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Google Maps",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
                       "url": "https://example.org/a"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/b"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/c"
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
                     }
                   ],
-                  "note": "مرشّحون بالاسم غير موثَّقين (ثقة 0.4) — أكّدهم قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
+                  "note": "كيانات Google Maps بالاسم (غير موثَّقة، ثقة 0.4) + مراجع ويب للمراجعة اليدوية — أكّدها قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
                 }
               ],
               "gaps": [
@@ -7487,8 +7644,8 @@
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "regulatory": {
               "agent": "regulatory",
@@ -7596,12 +7753,12 @@
                 }
               ],
               "gaps": [
-                "tariff_applied_pct: WITS unavailable: TypeError for HS080410 SAU->ARE 2023: a bytes-like object is required, not 'MagicMock'"
+                "tariff_applied_pct: WITS unavailable: OSError for HS080410 SAU->ARE 2023: hermetic: WITS not doubled — فجوة معلنة"
               ],
               "rejected": [],
               "coverage": 0.75,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "pricing": {
               "agent": "pricing",
@@ -7662,8 +7819,8 @@
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "risk": {
               "agent": "risk",
@@ -7680,8 +7837,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "consumer_demand": {
               "agent": "consumer_demand",
@@ -7745,8 +7902,8 @@
               ],
               "rejected": [],
               "coverage": 0.5,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "supplier": {
               "agent": "supplier",
@@ -7758,42 +7915,7 @@
                   "metric": "saudi_suppliers",
                   "value": [
                     {
-                      "name": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات تمور manufacturers suppliers S",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: تمور manufacturers suppliers S",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مصانع موردي تمور السعودية — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات مصانع موردي تمور السعودية",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: مصانع موردي تمور السعودية",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
+                      "kind": "entity",
                       "name": "موزّع تمور مصنع مورد الس — نموذج A",
                       "address": "Trade District 12",
                       "rating": 4.4,
@@ -7801,11 +7923,60 @@
                       "retrieved_at": "2026-07-06"
                     },
                     {
+                      "kind": "entity",
                       "name": "مستورد تمور مصنع مورد الس — نموذج B",
                       "address": "Market St 7",
                       "rating": 4.1,
                       "via": "Google Maps",
                       "retrieved_at": "2026-07-06"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات تمور manufacturers suppliers S",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: تمور manufacturers suppliers S",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مصانع موردي تمور السعودية — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات مصانع موردي تمور السعودية",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: مصانع موردي تمور السعودية",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                     }
                   ],
                   "unit": null,
@@ -7813,42 +7984,6 @@
                   "formula": null,
                   "sources": [
                     {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/a"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/b"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/c"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/a"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/b"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/c"
-                    },
-                    {
                       "source": "Google Maps",
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
@@ -7859,6 +7994,42 @@
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
                       "url": null
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/a"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/b"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/c"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/a"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/b"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/c"
                     }
                   ],
                   "note": "مرشّحو توريد سعوديون (جانب المنشأ) — غير موثَّقين، أكّدهم قبل التعاقد"
@@ -7867,24 +8038,7 @@
                   "metric": "target_distributors",
                   "value": [
                     {
-                      "name": "تمور importers wholesale distributors in — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات تمور importers wholesale distr",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: تمور importers wholesale distr",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
+                      "kind": "entity",
                       "name": "موزّع تمور wholesale dis — نموذج A",
                       "address": "Trade District 12",
                       "rating": 4.4,
@@ -7892,11 +8046,36 @@
                       "retrieved_at": "2026-07-06"
                     },
                     {
+                      "kind": "entity",
                       "name": "مستورد تمور wholesale dis — نموذج B",
                       "address": "Market St 7",
                       "rating": 4.1,
                       "via": "Google Maps",
                       "retrieved_at": "2026-07-06"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "تمور importers wholesale distributors in — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات تمور importers wholesale distr",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: تمور importers wholesale distr",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                     }
                   ],
                   "unit": null,
@@ -7904,34 +8083,34 @@
                   "formula": null,
                   "sources": [
                     {
-                      "source": "Web Search (Serper)",
+                      "source": "Google Maps",
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Google Maps",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
                       "url": "https://example.org/a"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/b"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/c"
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
                     }
                   ],
                   "note": "مرشّحو توزيع في United Arab Emirates — غير موثَّقين؛ الترقية الموثّقة عبر /deepen"
@@ -7940,8 +8119,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             }
           },
           "coverage": 0.38,
@@ -8101,42 +8280,7 @@
         "supplier_directory": {
           "saudi": [
             {
-              "name": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
-              "url": "https://example.org/a",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "دليل قنوات تمور manufacturers suppliers S",
-              "url": "https://example.org/b",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مستوردون: تمور manufacturers suppliers S",
-              "url": "https://example.org/c",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مصانع موردي تمور السعودية — تقرير سوق 2024",
-              "url": "https://example.org/a",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "دليل قنوات مصانع موردي تمور السعودية",
-              "url": "https://example.org/b",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مستوردون: مصانع موردي تمور السعودية",
-              "url": "https://example.org/c",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
+              "kind": "entity",
               "name": "موزّع تمور مصنع مورد الس — نموذج A",
               "address": "Trade District 12",
               "rating": 4.4,
@@ -8144,33 +8288,65 @@
               "retrieved_at": "2026-07-06"
             },
             {
+              "kind": "entity",
               "name": "مستورد تمور مصنع مورد الس — نموذج B",
               "address": "Market St 7",
               "rating": 4.1,
               "via": "Google Maps",
               "retrieved_at": "2026-07-06"
+            },
+            {
+              "kind": "reference",
+              "title": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
+              "url": "https://example.org/a",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "دليل قنوات تمور manufacturers suppliers S",
+              "url": "https://example.org/b",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مستوردون: تمور manufacturers suppliers S",
+              "url": "https://example.org/c",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مصانع موردي تمور السعودية — تقرير سوق 2024",
+              "url": "https://example.org/a",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "دليل قنوات مصانع موردي تمور السعودية",
+              "url": "https://example.org/b",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مستوردون: مصانع موردي تمور السعودية",
+              "url": "https://example.org/c",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
             }
           ],
           "target": [
             {
-              "name": "تمور importers wholesale distributors in — تقرير سوق 2024",
-              "url": "https://example.org/a",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "دليل قنوات تمور importers wholesale distr",
-              "url": "https://example.org/b",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مستوردون: تمور importers wholesale distr",
-              "url": "https://example.org/c",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
+              "kind": "entity",
               "name": "موزّع تمور wholesale dis — نموذج A",
               "address": "Trade District 12",
               "rating": 4.4,
@@ -8178,11 +8354,36 @@
               "retrieved_at": "2026-07-06"
             },
             {
+              "kind": "entity",
               "name": "مستورد تمور wholesale dis — نموذج B",
               "address": "Market St 7",
               "rating": 4.1,
               "via": "Google Maps",
               "retrieved_at": "2026-07-06"
+            },
+            {
+              "kind": "reference",
+              "title": "تمور importers wholesale distributors in — تقرير سوق 2024",
+              "url": "https://example.org/a",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "دليل قنوات تمور importers wholesale distr",
+              "url": "https://example.org/b",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مستوردون: تمور importers wholesale distr",
+              "url": "https://example.org/c",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
             }
           ],
           "note": "مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل التعاقد؛ الترقية الموثّقة عبر /deepen"
@@ -8361,10 +8562,10 @@
             "low_confidence": true
           },
           "demand": {
-            "attempted": 3,
-            "contributed": 1,
-            "score": 0.33,
-            "single_source": true,
+            "attempted": 2,
+            "contributed": 0,
+            "score": 0.0,
+            "single_source": false,
             "low_confidence": true
           },
           "risk": {
@@ -8375,10 +8576,10 @@
             "low_confidence": true
           },
           "trend": {
-            "attempted": 0,
-            "contributed": 0,
-            "score": 0.0,
-            "single_source": false,
+            "attempted": 6,
+            "contributed": 1,
+            "score": 0.17,
+            "single_source": true,
             "low_confidence": true
           }
         },
@@ -8416,12 +8617,11 @@
             "sources_attempted": []
           },
           "demand": {
-            "status": "ok",
-            "contributed": 1,
+            "status": "insufficient",
+            "contributed": 0,
             "threshold": 1,
             "sources_attempted": [
               "FAOSTAT",
-              "Google Trends",
               "World Bank"
             ]
           },
@@ -8435,9 +8635,12 @@
           },
           "trend": {
             "status": "insufficient",
-            "contributed": 0,
+            "contributed": 1,
             "threshold": 2,
-            "sources_attempted": []
+            "sources_attempted": [
+              "Google Trends",
+              "UN Comtrade"
+            ]
           }
         },
         "research": {
@@ -8458,8 +8661,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "competitor": {
               "agent": "competitor",
@@ -8471,24 +8674,7 @@
                   "metric": "named_companies",
                   "value": [
                     {
-                      "name": "top تمور brands importers distributors c — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات top تمور brands importers dist",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: top تمور brands importers dist",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
+                      "kind": "entity",
                       "name": "موزّع تمور distributor i — نموذج A",
                       "address": "Trade District 12",
                       "rating": 4.4,
@@ -8496,11 +8682,36 @@
                       "retrieved_at": "2026-07-06"
                     },
                     {
+                      "kind": "entity",
                       "name": "مستورد تمور distributor i — نموذج B",
                       "address": "Market St 7",
                       "rating": 4.1,
                       "via": "Google Maps",
                       "retrieved_at": "2026-07-06"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "top تمور brands importers distributors c — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات top تمور brands importers dist",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: top تمور brands importers dist",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                     }
                   ],
                   "unit": null,
@@ -8508,37 +8719,37 @@
                   "formula": null,
                   "sources": [
                     {
-                      "source": "Web Search (Serper)",
+                      "source": "Google Maps",
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Google Maps",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
                       "url": "https://example.org/a"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/b"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/c"
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
                     }
                   ],
-                  "note": "مرشّحون بالاسم غير موثَّقين (ثقة 0.4) — أكّدهم قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
+                  "note": "كيانات Google Maps بالاسم (غير موثَّقة، ثقة 0.4) + مراجع ويب للمراجعة اليدوية — أكّدها قبل الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
                 }
               ],
               "gaps": [
@@ -8546,8 +8757,8 @@
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "regulatory": {
               "agent": "regulatory",
@@ -8648,12 +8859,12 @@
                 }
               ],
               "gaps": [
-                "tariff_applied_pct: WITS unavailable: TypeError for HS080410 SAU->QAT 2023: a bytes-like object is required, not 'MagicMock'"
+                "tariff_applied_pct: WITS unavailable: OSError for HS080410 SAU->QAT 2023: hermetic: WITS not doubled — فجوة معلنة"
               ],
               "rejected": [],
               "coverage": 0.75,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "pricing": {
               "agent": "pricing",
@@ -8714,8 +8925,8 @@
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "risk": {
               "agent": "risk",
@@ -8732,8 +8943,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "consumer_demand": {
               "agent": "consumer_demand",
@@ -8797,8 +9008,8 @@
               ],
               "rejected": [],
               "coverage": 0.5,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             },
             "supplier": {
               "agent": "supplier",
@@ -8810,42 +9021,7 @@
                   "metric": "saudi_suppliers",
                   "value": [
                     {
-                      "name": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات تمور manufacturers suppliers S",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: تمور manufacturers suppliers S",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مصانع موردي تمور السعودية — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات مصانع موردي تمور السعودية",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: مصانع موردي تمور السعودية",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
+                      "kind": "entity",
                       "name": "موزّع تمور مصنع مورد الس — نموذج A",
                       "address": "Trade District 12",
                       "rating": 4.4,
@@ -8853,11 +9029,60 @@
                       "retrieved_at": "2026-07-06"
                     },
                     {
+                      "kind": "entity",
                       "name": "مستورد تمور مصنع مورد الس — نموذج B",
                       "address": "Market St 7",
                       "rating": 4.1,
                       "via": "Google Maps",
                       "retrieved_at": "2026-07-06"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات تمور manufacturers suppliers S",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: تمور manufacturers suppliers S",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مصانع موردي تمور السعودية — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات مصانع موردي تمور السعودية",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: مصانع موردي تمور السعودية",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                     }
                   ],
                   "unit": null,
@@ -8865,42 +9090,6 @@
                   "formula": null,
                   "sources": [
                     {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/a"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/b"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/c"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/a"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/b"
-                    },
-                    {
-                      "source": "Web Search (Serper)",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": "https://example.org/c"
-                    },
-                    {
                       "source": "Google Maps",
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
@@ -8911,6 +9100,42 @@
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
                       "url": null
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/a"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/b"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/c"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/a"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/b"
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
+                      "url": "https://example.org/c"
                     }
                   ],
                   "note": "مرشّحو توريد سعوديون (جانب المنشأ) — غير موثَّقين، أكّدهم قبل التعاقد"
@@ -8919,24 +9144,7 @@
                   "metric": "target_distributors",
                   "value": [
                     {
-                      "name": "تمور importers wholesale distributors in — تقرير سوق 2024",
-                      "url": "https://example.org/a",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "دليل قنوات تمور importers wholesale distr",
-                      "url": "https://example.org/b",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
-                      "name": "مستوردون: تمور importers wholesale distr",
-                      "url": "https://example.org/c",
-                      "via": "Serper",
-                      "retrieved_at": "2026-07-06"
-                    },
-                    {
+                      "kind": "entity",
                       "name": "موزّع تمور wholesale dis — نموذج A",
                       "address": "Trade District 12",
                       "rating": 4.4,
@@ -8944,11 +9152,36 @@
                       "retrieved_at": "2026-07-06"
                     },
                     {
+                      "kind": "entity",
                       "name": "مستورد تمور wholesale dis — نموذج B",
                       "address": "Market St 7",
                       "rating": 4.1,
                       "via": "Google Maps",
                       "retrieved_at": "2026-07-06"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "تمور importers wholesale distributors in — تقرير سوق 2024",
+                      "url": "https://example.org/a",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "دليل قنوات تمور importers wholesale distr",
+                      "url": "https://example.org/b",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+                    },
+                    {
+                      "kind": "reference",
+                      "title": "مستوردون: تمور importers wholesale distr",
+                      "url": "https://example.org/c",
+                      "via": "Serper",
+                      "retrieved_at": "2026-07-06",
+                      "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
                     }
                   ],
                   "unit": null,
@@ -8956,34 +9189,34 @@
                   "formula": null,
                   "sources": [
                     {
-                      "source": "Web Search (Serper)",
+                      "source": "Google Maps",
                       "retrieved_at": "2026-07-06",
                       "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Google Maps",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.4,
+                      "url": null
+                    },
+                    {
+                      "source": "Web Search (Serper)",
+                      "retrieved_at": "2026-07-06",
+                      "confidence": 0.3,
                       "url": "https://example.org/a"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/b"
                     },
                     {
                       "source": "Web Search (Serper)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
+                      "confidence": 0.3,
                       "url": "https://example.org/c"
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
-                    },
-                    {
-                      "source": "Google Maps",
-                      "retrieved_at": "2026-07-06",
-                      "confidence": 0.4,
-                      "url": null
                     }
                   ],
                   "note": "مرشّحو توزيع في Qatar — غير موثَّقين؛ الترقية الموثّقة عبر /deepen"
@@ -8992,8 +9225,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:19:17+00:00",
-              "finished_at": "2026-07-06T12:19:17+00:00"
+              "started_at": "2026-07-06T12:47:45+00:00",
+              "finished_at": "2026-07-06T12:47:45+00:00"
             }
           },
           "coverage": 0.38,
@@ -9153,42 +9386,7 @@
         "supplier_directory": {
           "saudi": [
             {
-              "name": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
-              "url": "https://example.org/a",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "دليل قنوات تمور manufacturers suppliers S",
-              "url": "https://example.org/b",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مستوردون: تمور manufacturers suppliers S",
-              "url": "https://example.org/c",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مصانع موردي تمور السعودية — تقرير سوق 2024",
-              "url": "https://example.org/a",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "دليل قنوات مصانع موردي تمور السعودية",
-              "url": "https://example.org/b",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مستوردون: مصانع موردي تمور السعودية",
-              "url": "https://example.org/c",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
+              "kind": "entity",
               "name": "موزّع تمور مصنع مورد الس — نموذج A",
               "address": "Trade District 12",
               "rating": 4.4,
@@ -9196,33 +9394,65 @@
               "retrieved_at": "2026-07-06"
             },
             {
+              "kind": "entity",
               "name": "مستورد تمور مصنع مورد الس — نموذج B",
               "address": "Market St 7",
               "rating": 4.1,
               "via": "Google Maps",
               "retrieved_at": "2026-07-06"
+            },
+            {
+              "kind": "reference",
+              "title": "تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024",
+              "url": "https://example.org/a",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "دليل قنوات تمور manufacturers suppliers S",
+              "url": "https://example.org/b",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مستوردون: تمور manufacturers suppliers S",
+              "url": "https://example.org/c",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مصانع موردي تمور السعودية — تقرير سوق 2024",
+              "url": "https://example.org/a",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "دليل قنوات مصانع موردي تمور السعودية",
+              "url": "https://example.org/b",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مستوردون: مصانع موردي تمور السعودية",
+              "url": "https://example.org/c",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
             }
           ],
           "target": [
             {
-              "name": "تمور importers wholesale distributors in — تقرير سوق 2024",
-              "url": "https://example.org/a",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "دليل قنوات تمور importers wholesale distr",
-              "url": "https://example.org/b",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
-              "name": "مستوردون: تمور importers wholesale distr",
-              "url": "https://example.org/c",
-              "via": "Serper",
-              "retrieved_at": "2026-07-06"
-            },
-            {
+              "kind": "entity",
               "name": "موزّع تمور wholesale dis — نموذج A",
               "address": "Trade District 12",
               "rating": 4.4,
@@ -9230,11 +9460,36 @@
               "retrieved_at": "2026-07-06"
             },
             {
+              "kind": "entity",
               "name": "مستورد تمور wholesale dis — نموذج B",
               "address": "Market St 7",
               "rating": 4.1,
               "via": "Google Maps",
               "retrieved_at": "2026-07-06"
+            },
+            {
+              "kind": "reference",
+              "title": "تمور importers wholesale distributors in — تقرير سوق 2024",
+              "url": "https://example.org/a",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "دليل قنوات تمور importers wholesale distr",
+              "url": "https://example.org/b",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
+            },
+            {
+              "kind": "reference",
+              "title": "مستوردون: تمور importers wholesale distr",
+              "url": "https://example.org/c",
+              "via": "Serper",
+              "retrieved_at": "2026-07-06",
+              "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"
             }
           ],
           "note": "مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل التعاقد؛ الترقية الموثّقة عبر /deepen"
@@ -15066,7 +15321,7 @@
       }
     ],
     "brief": [
-      "القرار: NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات (ثقة 0.0) — China",
+      "القرار: CONDITIONAL-GO (ثقة 0.91) — China",
       "لا منافس بسعر مرصود بعد — فعّل with_localprice/deepen",
       "أفضل باب دخول مرصود: online marketplaces e-commerce sites sel — تقرير سوق 2024 (واقعية — قناة إلكترونية مفتوحة)"
     ],
@@ -15129,9 +15384,9 @@
         "attempted": 3,
         "contributed": 0,
         "failures": [
-          "WITS unavailable: TypeError for HS080410 SAU->CHN 2023: a bytes-like object is required, not 'MagicMock'",
-          "WITS unavailable: TypeError for HS080410 SAU->ARE 2023: a bytes-like object is required, not 'MagicMock'",
-          "WITS unavailable: TypeError for HS080410 SAU->QAT 2023: a bytes-like object is required, not 'MagicMock'"
+          "WITS unavailable: OSError for HS080410 SAU->CHN 2023: hermetic: WITS not doubled — فجوة معلنة",
+          "WITS unavailable: OSError for HS080410 SAU->ARE 2023: hermetic: WITS not doubled — فجوة معلنة",
+          "WITS unavailable: OSError for HS080410 SAU->QAT 2023: hermetic: WITS not doubled — فجوة معلنة"
         ]
       },
       {

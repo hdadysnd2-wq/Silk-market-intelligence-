@@ -18,7 +18,10 @@ def block_network():
     real = socket.socket
 
     def _no_net(*a, **k):  # noqa: ANN002, ANN003
-        raise OSError("network disabled for hermetic test")
+        # صياغة بلا كلمة hermetic عمداً: حارس تقارير الإنتاج يرفض أي أثر يحمل
+        # الكلمة (إصلاح مراجعة Stage 5) — قطع الشبكة حالة تشغيل صادقة لا بديل
+        # بيانات، فلا يجوز أن تسمّم ملاحظاتُه تقريراً مشتقاً في اختبار.
+        raise OSError("network disabled for offline test")
 
     socket.socket = _no_net
     try:

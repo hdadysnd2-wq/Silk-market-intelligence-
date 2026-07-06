@@ -106,6 +106,11 @@ class _HermeticHTTP:
         self.hits.setdefault(url.split("/")[2], 0)
         self.hits[url.split("/")[2]] += 1
         q = (params or {}).get("query") or (params or {}).get("q") or ""
+        if "wits" in url:
+            # WITS غير مُبدَل عمداً — فشل معلن نظيف؛ مطابقة "worldbank" في
+            # wits.worldbank.org كانت تعيد Mock فيتسرب MagicMock إلى ملاحظة
+            # الفشل (إصلاح مراجعة Stage 5).
+            raise OSError("hermetic: WITS not doubled — فجوة معلنة")
         if "maps.googleapis" in url:
             return self._resp({"status": "OK", "results": [
                 {"name": f"موزّع {q[:18]} — نموذج A", "rating": 4.4,
@@ -134,6 +139,7 @@ class _HermeticHTTP:
 def run_case(case, hermetic: bool):
     import silk_engine, silk_render
     if hermetic:
+        os.environ["SILK_HERMETIC"] = "1"   # راية TEST RUN في كل المشتقات
         os.environ["SILK_STORE_DB"] = os.path.join(tempfile.mkdtemp(), "s.db")
         _seed_hermetic_store(case)
         os.environ.setdefault("SEARCH_API_KEY", "hermetic-double")

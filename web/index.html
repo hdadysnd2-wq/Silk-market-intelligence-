@@ -342,6 +342,8 @@
     needResearch:{ar:"يتطلب with_research (سياسة الخادم تفعّله تلقائياً)",en:"Requires with_research (server policy enables it automatically)"},
     modeledBadge:{ar:"مُقدَّر — نموذج بافتراضات معلنة",en:"Modeled — declared assumptions"},
     unverified:{ar:"غير موثَّق",en:"Unverified"},mdReport:{ar:"تقرير Markdown",en:"Markdown report"},
+    refManual:{ar:"مرجع للمراجعة اليدوية — ليس اسم كيان",en:"Reference for manual review — not an entity name"},
+    testRun:{ar:"تشغيل برهاني ببدائل موسومة، ليس تقريراً إنتاجياً",en:"Hermetic test run with labeled doubles — not a production report"},
     noItem:{ar:"لا بند مرصوداً",en:"No item observed"},yesL:{ar:"نعم",en:"Yes"},noL:{ar:"لا",en:"No"},
     scoreL:{ar:"الدرجة",en:"Score"},pillarsL:{ar:"الأعمدة الأربعة",en:"The four pillars"},
     pMarket:{ar:"السوق",en:"Market"},pCompetition:{ar:"المنافسة",en:"Competition"},pRegulatory:{ar:"التنظيم",en:"Regulatory"},pProfit:{ar:"الربحية",en:"Profit"},
@@ -515,7 +517,7 @@
       $("#resultArea").innerHTML=pipeHTML()+'<section class="card ready" style="margin-top:var(--s5)"><h2>'+esc(t("noClass"))+'</h2><p>'+esc(S.result.note||"")+'</p><div class="foot">'+esc(t("noClassFoot"))+'</div></section>';return;}
     renderCompleteness();
     var ms=S.result.markets,sel=ms.filter(function(m){return m.id===S.selId;})[0]||ms[0];S.selId=sel&&sel.id;
-    $("#resultArea").innerHTML=pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+cultureBlock()+'</div>';
+    $("#resultArea").innerHTML=testRunBanner()+pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+cultureBlock()+'</div>';
     bindEvents();
   }
   function bindEvents(){
@@ -700,8 +702,17 @@
   function scrShell(titleKey,inner){
     var ms=vmarkets(),sw='';
     if(ms.length)sw='<div class="field" style="min-width:220px"><label>'+esc(t("marketSel"))+'</label><div class="control" style="height:42px"><select id="mktSel">'+ms.map(function(m,i){return '<option value="'+i+'"'+(i===S.mktIdx?' selected':'')+'>'+esc(m.country||m.iso3||("#"+(i+1)))+'</option>';}).join('')+'</select></div></div>';
-    return '<div class="scr-head"><h1 class="scr-title">'+esc(t(titleKey))+'</h1>'+sw+'</div>'+inner;
+    return testRunBanner()+'<div class="scr-head"><h1 class="scr-title">'+esc(t(titleKey))+'</h1>'+sw+'</div>'+inner;
   }
+  // راية التشغيل البرهاني — SILK_HERMETIC على الخادم = view.test_run؛ لافتة
+  // ظاهرة في كل الشاشات (إصلاح مراجعة Stage 5): لا يُعرض برهان كأنه إنتاج.
+  function testRunBanner(){
+    var v=S.result&&S.result.view;
+    if(!v||!v.test_run)return '';
+    return '<section class="card err" style="padding:var(--s3) var(--s4);margin-bottom:var(--s4);font-weight:600">⚠ TEST RUN — '+esc(t("testRun"))+'</section>';
+  }
+  // نوع المرشّح: عنوان بحث ويب ليس اسم كيان (ثغرة ٢) — يُعرض «مرجع للمراجعة».
+  function candKind(c){c=c||{};if(c.kind)return c.kind;return c.via==="Google Maps"?"entity":"reference";}
   function noAnalysisCard(){return '<div class="scr-head"><h1 class="scr-title">'+esc(t("nav"+S.screen))+'</h1></div><section class="card ready"><h2>'+esc(t("readyTitle"))+'</h2><p>'+esc(t("runFirst"))+'</p><button class="btn btn-primary" id="goRunBtn">'+esc(t("goRun"))+'</button></section>';}
   function needResearchCard(err){return '<section class="card ready"><p>'+esc(t("needResearch"))+'</p>'+(err?'<div class="err" style="margin-top:12px;text-align:start">'+esc(String(err))+'</div>':'')+'</section>';}
   function researchBanner(m){return research(m)?'':'<section class="card" style="padding:var(--s4);margin-bottom:var(--s4)"><span class="gapline"><span class="dot"></span>'+esc(t("needResearch"))+'</span></section>';}
@@ -762,8 +773,9 @@
       rows.slice(0,10).map(function(s){s=s||{};var nm=s.partner||s.country||s.name||"—";return '<tr><td>'+esc(String(nm))+'</td><td class="num">'+(s.share!=null?esc(fmtPct(s.share)):gapT())+'</td><td class="num">'+(s.value_usd!=null?fmtUSD(s.value_usd):gapT())+'</td></tr>';}).join("")+'</tbody></table></div>'+(scF&&srcLine(scF)?'<div class="prov">'+esc(srcLine(scF))+'</div>':'');}
     else tbl='<div class="callout warn">'+esc(t("notObserved"))+'</div>';
     var ncF=rFind(ag,"named_companies"),named=(ncF&&ncF.value)||[],nc;
-    if(named.length){nc=named.slice(0,12).map(function(c){c=c||{};var nm=esc(c.name||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
-      return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(t("unverified"))+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+'</span></div>';}).join("")+
+    if(named.length){nc=named.slice(0,12).map(function(c){c=c||{};var isRef=candKind(c)==="reference";var nm=esc((isRef?(c.title||c.name):(c.name||c.title))||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
+      var tag=isRef?t("refManual"):t("unverified");
+      return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(tag)+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+'</span></div>';}).join("")+
       (ncF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(ncF.note)+'</div>':'');}
     else nc='<div class="callout warn">'+esc((ncF&&ncF.note)||t("notObserved"))+'</div>';
     return scrShell("nav4",researchBanner(m)+
@@ -841,8 +853,9 @@
       prv.map(function(b){b=b||{};return '<tr><td>'+esc(b.source||"")+'</td><td class="num">'+esc(String(b.contributed))+'/'+esc(String(b.attempted))+'</td><td style="font-size:12px;color:var(--text-3)">'+esc((b.failures||[]).join(" | "))+'</td></tr>';}).join("")+'</tbody></table></div>':'<div class="callout">'+esc(t("notObserved"))+'</div>';
     var dir=(m&&m.supplier_directory)||{};
     function dirList(arr){arr=arr||[];if(!arr.length)return '<div class="callout warn">'+esc(t("notObserved"))+'</div>';
-      return arr.slice(0,10).map(function(c){c=c||{};var nm=esc(c.name||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
-        return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(t("unverified"))+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+(c.address?' · '+esc(c.address):'')+'</span></div>';}).join("");}
+      return arr.slice(0,10).map(function(c){c=c||{};var isRef=candKind(c)==="reference";var nm=esc((isRef?(c.title||c.name):(c.name||c.title))||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
+        var tag=isRef?t("refManual"):t("unverified");
+        return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(tag)+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+(c.address?' · '+esc(c.address):'')+'</span></div>';}).join("");}
     h+='<div class="sec-ttl">'+esc(t("dirHdr"))+'</div><div class="duo"><section class="card panel"><h3>'+esc(t("dirSaudi"))+'</h3>'+dirList(dir.saudi)+'</section><section class="card panel"><h3>'+esc(t("dirTarget"))+'</h3>'+dirList(dir.target)+'</section></div>'+
       (dir.note?'<div class="callout warn" style="margin-top:var(--s3)">'+esc(dir.note)+'</div>':'');
     el.innerHTML=h;

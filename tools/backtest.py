@@ -70,6 +70,7 @@ def run(demo: bool = False) -> dict:
     for case in load_cases():
         if demo:
             import tempfile
+            os.environ["SILK_HERMETIC"] = "1"   # وسم TEST RUN — ليس دليلاً
             os.environ["SILK_STORE_DB"] = os.path.join(tempfile.mkdtemp(), "b.db")
             _seed_demo_store(case)
         bundle = orch.run_market({

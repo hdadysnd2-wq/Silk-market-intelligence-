@@ -316,35 +316,53 @@ class CompetitorAgent(ResearchAgent):
             gaps.append(f"الطبقة الدولية: لا صفوف شركاء HS{hs} {iso3} {year} — "
                         "كومتريد غير متاح والمخزن بارد")
 
-        # الطبقة ٢ — شركات بالاسم: رابط + تاريخ لكل مرشّح، موسومة «غير موثَّقة».
-        named, refs = [], []
+        # الطبقة ٢ — كيانات ومراجع (إصلاح مراجعة Stage 5، ثغرة ٢): أسماء الأعمال
+        # الحقيقية تأتي من Google Places حصراً (kind=entity)؛ نتائج بحث الويب
+        # عناوين صفحات لا أسماء كيانات فتُدرج «مرجعاً للمراجعة اليدوية»
+        # (kind=reference) — لا يُعرض عنوان بحث كاسم منافس أبداً.
         product, market = task.get("product", ""), task.get("market_name", iso3)
-        from silk_websearch_agent import web_search
-        for dp in web_search(
-                f"top {product} brands importers distributors companies in {market}", 5):
-            if dp.value:
-                named.append({"name": dp.value.get("title", ""),
-                              "url": dp.value.get("link", ""),
-                              "via": "Serper", "retrieved_at": dp.retrieved_at})
-                refs.append(_src("Web Search (Serper)", 0.4,
-                                 url=dp.value.get("link"),
-                                 retrieved_at=dp.retrieved_at))
-        from silk_maps_agent import find_places
-        for dp in find_places(f"{product} distributor importer {market}"):
-            if dp.value:
-                named.append({"name": dp.value.get("name", ""),
-                              "address": dp.value.get("address"),
-                              "rating": dp.value.get("rating"),
-                              "via": "Google Maps", "retrieved_at": dp.retrieved_at})
-                refs.append(_src("Google Maps", 0.4, retrieved_at=dp.retrieved_at))
+        named, refs = _entities_and_references(
+            web_queries=[f"top {product} brands importers distributors "
+                         f"companies in {market}"],
+            maps_query=f"{product} distributor importer {market}")
         if named:
             F.append(_f("named_companies", named, refs,
-                        note="مرشّحون بالاسم غير موثَّقين (ثقة 0.4) — أكّدهم قبل "
+                        note="كيانات Google Maps بالاسم (غير موثَّقة، ثقة 0.4) "
+                             "+ مراجع ويب للمراجعة اليدوية — أكّدها قبل "
                              "الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"))
         else:
             gaps.append("الطبقة الاسمية (شركات): تتطلب SEARCH_API_KEY و/أو "
                         "GOOGLE_MAPS_API_KEY في بيئة الخادم — لا أسماء مخترعة")
         return F, gaps
+
+
+def _entities_and_references(web_queries: list[str], maps_query: str,
+                             region: str | None = None,
+                             num: int = 4) -> tuple[list[dict], list[dict]]:
+    """مرشّحون مفصولون بالنوع — entities (Google Places names) vs references
+    (web-result titles for manual review). عنوان بحث ليس اسم كيان (ثغرة ٢)."""
+    out, refs = [], []
+    from silk_maps_agent import find_places
+    from silk_websearch_agent import web_search
+    for dp in find_places(maps_query, region=region):
+        if dp.value:
+            out.append({"kind": "entity", "name": dp.value.get("name", ""),
+                        "address": dp.value.get("address"),
+                        "rating": dp.value.get("rating"),
+                        "via": "Google Maps", "retrieved_at": dp.retrieved_at})
+            refs.append(_src("Google Maps", 0.4, retrieved_at=dp.retrieved_at))
+    for q in web_queries:
+        for dp in web_search(q, num):
+            if dp.value:
+                out.append({"kind": "reference",
+                            "title": dp.value.get("title", ""),
+                            "url": dp.value.get("link", ""),
+                            "via": "Serper", "retrieved_at": dp.retrieved_at,
+                            "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"})
+                refs.append(_src("Web Search (Serper)", 0.3,
+                                 url=dp.value.get("link"),
+                                 retrieved_at=dp.retrieved_at))
+    return out, refs
 
 
 # ── ٣) الوكيل التنظيمي · regulatory ──────────────────────────────────────────
@@ -693,33 +711,7 @@ class SupplierAgent(ResearchAgent):
         gaps: list[str] = []
         product = task.get("product", "")
         market = task.get("market_name", task.get("iso3", ""))
-        from silk_maps_agent import find_places
-        from silk_websearch_agent import web_search
-
-        def _collect(queries_web, query_maps, region=None):
-            out, refs = [], []
-            for q in queries_web:
-                for dp in web_search(q, 4):
-                    if dp.value:
-                        out.append({"name": dp.value.get("title", ""),
-                                    "url": dp.value.get("link", ""),
-                                    "via": "Serper",
-                                    "retrieved_at": dp.retrieved_at})
-                        refs.append(_src("Web Search (Serper)", 0.4,
-                                         url=dp.value.get("link"),
-                                         retrieved_at=dp.retrieved_at))
-            for dp in find_places(query_maps, region=region):
-                if dp.value:
-                    out.append({"name": dp.value.get("name", ""),
-                                "address": dp.value.get("address"),
-                                "rating": dp.value.get("rating"),
-                                "via": "Google Maps",
-                                "retrieved_at": dp.retrieved_at})
-                    refs.append(_src("Google Maps", 0.4,
-                                     retrieved_at=dp.retrieved_at))
-            return out, refs
-
-        sa, sa_refs = _collect(
+        sa, sa_refs = _entities_and_references(
             [f"{product} manufacturers suppliers Saudi Arabia",
              f"مصانع موردي {product} السعودية"],
             f"{product} مصنع مورد السعودية", region="sa")
@@ -730,7 +722,7 @@ class SupplierAgent(ResearchAgent):
         else:
             gaps.append("saudi_suppliers: يتطلب SEARCH_API_KEY / "
                         "GOOGLE_MAPS_API_KEY — لا أسماء مخترعة")
-        tg, tg_refs = _collect(
+        tg, tg_refs = _entities_and_references(
             [f"{product} importers wholesale distributors in {market}"],
             f"{product} wholesale distributor {market}")
         if tg:

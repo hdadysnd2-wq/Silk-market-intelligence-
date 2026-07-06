@@ -21,6 +21,28 @@ log = logging.getLogger(__name__)
 
 _DOCX_HINT = "python-docx غير مثبتة — pip install python-docx"
 
+# آثار برهانية لا يجوز أن تبلغ تقرير إنتاج أبداً — hermetic-only markers.
+_HERMETIC_MARKERS = ("MagicMock", "example.org", "hermetic", "demo double",
+                     "بدائل موسومة")
+
+
+def _assert_production_clean(view: dict) -> None:
+    """حارس الإنتاج (إصلاح مراجعة Stage 5): أي أثر برهاني في تشغيلة غير موسومة
+    SILK_HERMETIC = رفض توليد التقرير بصوت عالٍ — لا تقرير مسموماً بصمت.
+    التشغيلات البرهانية الموسومة تمرّ وتحمل لافتة TEST RUN الظاهرة بدلاً من ذلك.
+    """
+    import os as _os
+    if _os.environ.get("SILK_HERMETIC") or view.get("test_run"):
+        return
+    import json as _json
+    blob = _json.dumps(view, ensure_ascii=False, default=str)
+    for marker in _HERMETIC_MARKERS:
+        if marker in blob:
+            raise RuntimeError(
+                f"hermetic artifact '{marker}' found in a production report "
+                "view — رفض التوليد: أثر برهاني في تقرير إنتاجي (اضبط "
+                "SILK_HERMETIC=1 للتشغيلات البرهانية)")
+
 
 def _fmt(v: object) -> str:
     """تنسيق قيمة للعرض — display formatting (None = فجوة معلنة)."""
@@ -97,10 +119,16 @@ def _f_srcline(f: dict | None) -> str:
 
 
 def _entry_text(e: object) -> str:
-    """سطر مرشّح (شركة/مورّد) — one candidate line: name/url/address/via/date."""
+    """سطر مرشّح (شركة/مورّد) — one candidate line: name/url/address/via/date.
+
+    إصلاح مراجعة Stage 5 (ثغرة ٢): بند kind=reference عنوانُ صفحة ويب لا اسم
+    كيان — يُطبع دائماً بوسم «مرجع للمراجعة اليدوية»، لا كمنافس بالاسم.
+    """
     if not isinstance(e, dict):
         return str(e)
-    bits = [str(e.get("name") or e.get("title") or "؟")]
+    is_ref = _candidate_kind(e) == "reference"
+    label = str(e.get("name") or e.get("title") or "؟")
+    bits = [f"مرجع للمراجعة اليدوية: {label}" if is_ref else label]
     if e.get("url"):
         bits.append(str(e["url"]))
     if e.get("address"):
@@ -110,6 +138,25 @@ def _entry_text(e: object) -> str:
     if e.get("retrieved_at"):
         bits.append(f"سُحب: {e['retrieved_at']}")
     return " — ".join(bits)
+
+
+def _candidate_kind(e: object) -> str:
+    """نوع المرشّح — entity (اسم Google Places) أم reference (عنوان بحث ويب)."""
+    if not isinstance(e, dict):
+        return "reference"
+    if e.get("kind") in ("entity", "reference"):
+        return e["kind"]
+    # توافُق خلفي: بنود قديمة بلا kind — Maps كيان، وكل ما جاء من بحث الويب مرجع.
+    if e.get("via") == "Google Maps":
+        return "entity"
+    return "reference"
+
+
+def _split_candidates(items: list) -> tuple[list, list]:
+    """افصل الكيانات عن المراجع — entities first, web references second."""
+    ents = [e for e in (items or []) if _candidate_kind(e) == "entity"]
+    refs = [e for e in (items or []) if _candidate_kind(e) == "reference"]
+    return ents, refs
 
 
 def _listing_text(v: object) -> str:
@@ -151,6 +198,7 @@ def _entry_decision_of(m: dict) -> tuple[dict | None, str]:
 
 def render_brief(view: dict, dashboard_url: str = "/") -> str:
     """المختصر (§10.4) — صفحة واحدة بتصميم "رسالة جوال"، من القالب حصراً."""
+    _assert_production_clean(view)
     d = view.get("decision") or {}
     cp = view.get("competitive_position") or {}
     top = (view.get("markets") or [{}])[0]
@@ -163,7 +211,9 @@ def render_brief(view: dict, dashboard_url: str = "/") -> str:
             break
     if not numbers:
         numbers = ["• لا أرقام مرصودة — الفجوات معلنة بالتقرير الكامل"]
-    L = [f"سِلك | {view.get('product')} (HS {view.get('hs_code')}) — "
+    L = ([] if not view.get("test_run") else
+         ["⚠ TEST RUN — تشغيل برهاني ببدائل موسومة، ليس تقريراً إنتاجياً"])
+    L += [f"سِلك | {view.get('product')} (HS {view.get('hs_code')}) — "
          f"{view.get('year')} | مبدئي",
          "",
          view.get("brief", [""])[0] if view.get("brief") else
@@ -254,12 +304,19 @@ def _docx_competition_research(doc, m: dict) -> None:
         return
     doc.add_heading("شركات بالاسم (مرشّحون غير موثَّقين)", level=2)
     named = (_rfind(ag, "named_companies") or {}).get("value") or []
-    if named:
-        for n in named[:10]:
+    ents, refs = _split_candidates(named)
+    if ents:
+        for n in ents[:10]:
             doc.add_paragraph(_entry_text(n), style="List Bullet")
-        doc.add_paragraph("مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل أي تعاقد.")
+        doc.add_paragraph("كيانات غير موثَّقة (ثقة 0.4) — أكّدها قبل أي تعاقد.")
     else:
-        doc.add_paragraph("لا شركات مرشّحة بالاسم مرصودة — فجوة معلنة")
+        doc.add_paragraph("لا كيانات مرصودة بالاسم — فجوة معلنة "
+                          "(أسماء الأعمال تأتي من Google Places حصراً)")
+    if refs:
+        doc.add_heading("مراجع ويب للمراجعة اليدوية (ليست أسماء منافسين)",
+                        level=2)
+        for n in refs[:8]:
+            doc.add_paragraph(_entry_text(n), style="List Bullet")
     doc.add_paragraph("الطبقة الدولية (تركّز الموردين — UN Comtrade):")
     for metric in ("hhi", "top_supplier_share_pct", "saudi_share_pct"):
         f = _rfind(ag, metric)
@@ -396,9 +453,13 @@ def render_docx(view: dict, path: str) -> str:
     except ImportError as exc:
         raise RuntimeError(_DOCX_HINT) from exc
 
+    _assert_production_clean(view)
     doc = Document()
     # ١) الخلاصة التنفيذية أولاً (نجحت باختبار الخمس ثوانٍ — تُثبَّت).
     doc.add_heading(f"سِلك — تقرير سوق: {view.get('product')}", 0)
+    if view.get("test_run"):
+        doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة "
+                          "(SILK_HERMETIC)، ليس تقريراً إنتاجياً")
     # ترويسة 2B-د: منتج/HS/سوق مستهدف/تاريخ/تغطية إجمالية % — في الصدارة دائماً.
     h = view.get("header") or {}
     doc.add_paragraph(
@@ -412,6 +473,9 @@ def render_docx(view: dict, path: str) -> str:
                       f"(ثقة {d.get('confidence')}) — السوق الأول: "
                       f"{d.get('market') or '؟'}")
     doc.add_paragraph(f"لماذا: {d.get('why') or ''}")
+    # حكم واحد لا حكمان: عند حكم المحرك §8 تُطبع الجورية سطرَ كفاية بيانات فقط.
+    if d.get("sufficiency"):
+        doc.add_paragraph(d["sufficiency"])
     doc.add_paragraph(f"رمز HS: {view.get('hs_code')} "
                       f"(ثقة التصنيف {view.get('hs_confidence')}) | "
                       f"سنة البيانات: {view.get('year')} | "
@@ -432,7 +496,9 @@ def render_docx(view: dict, path: str) -> str:
                 doc.add_paragraph(gap, style="List Bullet")
         for t in cp.get("competitor_threads") or []:
             if not t.get("observed_price"):
-                doc.add_paragraph(f"{t['name']}: {t['price_flag']} "
+                # خيوط بحث الويب مراجع لا كيانات (ثغرة ٢) — لا توحي باسم منافس.
+                doc.add_paragraph(f"مرجع ويب للمراجعة: {t['name']} — "
+                                  f"{t['price_flag']} "
                                   f"(اكتمال الخيط {t['thread_completeness']})",
                                   style="List Bullet")
     else:
@@ -485,7 +551,9 @@ def render_docx(view: dict, path: str) -> str:
             doc.add_paragraph(f"{c.get('partner')}: {c.get('share')}% "
                               f"({_fmt(c.get('value_usd'))}$)", style="List Bullet")
     if named:
-        doc.add_paragraph("شركات منافسة بالاسم:")
+        # عناوين بحث ويب (الطبقة القديمة) — مراجع للمراجعة اليدوية لا أسماء (ثغرة ٢).
+        doc.add_paragraph("مراجع ويب عن المنافسة (للمراجعة اليدوية — "
+                          "ليست أسماء منافسين):")
         for n in named[:8]:
             doc.add_paragraph(str(n), style="List Bullet")
 
@@ -589,10 +657,14 @@ def render_markdown(view: dict) -> str:
     """
     from silk_render import insufficient_line
 
+    _assert_production_clean(view)
     h = view.get("header") or {}
     top_m = (view.get("markets") or [{}])[0]
     st_all = top_m.get("section_status") or {}
     L: list[str] = []
+    if view.get("test_run"):
+        L += ["> ⚠ **TEST RUN** — تشغيل برهاني ببدائل موسومة (SILK_HERMETIC)، "
+              "ليس تقريراً إنتاجياً", ""]
 
     # ── الترويسة كجدول — header table ────────────────────────────────────────
     L += [f"# سِلك — تقرير سوق: {view.get('product')}", "",
@@ -606,13 +678,15 @@ def render_markdown(view: dict) -> str:
           f"| سنة البيانات | {_md_cell(view.get('year'))} |",
           f"| تغطية البيانات الإجمالية | {h.get('coverage_pct')}% |", ""]
 
-    # ── الخلاصة التنفيذية — executive summary ───────────────────────────────
+    # ── الخلاصة التنفيذية — executive summary (حكم واحد لا حكمان) ───────────
     d = view.get("decision") or {}
     L += ["## الخلاصة التنفيذية", "",
-          f"- القرار (هيئة المحلفين): **{d.get('verdict') or 'تعذّر الحكم'}** "
+          f"- القرار: **{d.get('verdict') or 'تعذّر الحكم'}** "
           f"(ثقة {d.get('confidence')}) — السوق الأول: {d.get('market') or '؟'}",
-          f"- لماذا: {d.get('why') or ''}",
-          "- النتيجة أوّلية لا نهائية.", ""]
+          f"- لماذا: {d.get('why') or ''}"]
+    if d.get("sufficiency"):
+        L.append(f"- {d['sufficiency']}")
+    L += ["- النتيجة أوّلية لا نهائية.", ""]
 
     # ── قرار الدخول §8 — weighted entry decision ────────────────────────────
     L += ["## قرار الدخول (المحرك الموزون §8)", ""]
@@ -665,7 +739,8 @@ def render_markdown(view: dict) -> str:
                 L.append(f"  - {gap}")
         for t in cp.get("competitor_threads") or []:
             if not t.get("observed_price"):
-                L.append(f"- {t['name']}: {t['price_flag']} "
+                # خيوط بحث الويب مراجع لا كيانات (ثغرة ٢).
+                L.append(f"- مرجع ويب للمراجعة: {t['name']} — {t['price_flag']} "
                          f"(اكتمال الخيط {t['thread_completeness']})")
     else:
         L.append(str(cp.get("note") or ""))
@@ -706,15 +781,20 @@ def render_markdown(view: dict) -> str:
             if isinstance(c, dict):
                 L.append(f"- {c.get('partner')}: {c.get('share')}% "
                          f"({_fmt(c.get('value_usd'))}$) ({_f_srcline(sc_f)})")
-        L += ["", "**شركات بالاسم (مرشّحون غير موثَّقين):**"]
         named_rc = (_rfind(comp, "named_companies") or {}).get("value") or []
-        if named_rc:
-            for n in named_rc[:10]:
+        ents_rc, refs_rc = _split_candidates(named_rc)
+        L += ["", "**شركات بالاسم (كيانات Google Places، غير موثَّقة):**"]
+        if ents_rc:
+            for n in ents_rc[:10]:
                 L.append(f"- {_entry_text(n)}")
-            L.append("- ملاحظة: مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل "
+            L.append("- ملاحظة: كيانات غير موثَّقة (ثقة 0.4) — أكّدها قبل "
                      "أي تعاقد.")
         else:
-            L.append("- لا شركات مرشّحة بالاسم مرصودة — فجوة معلنة")
+            L.append("- لا كيانات مرصودة بالاسم — فجوة معلنة (أسماء الأعمال "
+                     "تأتي من Google Places حصراً)")
+        if refs_rc:
+            L += ["", "**مراجع ويب للمراجعة اليدوية (ليست أسماء منافسين):**",
+                  *[f"- {_entry_text(n)}" for n in refs_rc[:8]]]
         L.append("")
     else:
         L += [r_absent or "وكيل المنافسة بلا اكتشافات — فجوة معلنة", ""]
@@ -727,7 +807,8 @@ def render_markdown(view: dict) -> str:
             L.append(f"- {c.get('partner')}: {c.get('share')}% "
                      f"({_fmt(c.get('value_usd'))}$) (المصدر: UN Comtrade)")
         for n in (top_m.get("named_competitors") or [])[:8]:
-            L.append(f"- منافس بالاسم: {n}")
+            # عناوين بحث (الطبقة القديمة) — مراجع لا أسماء منافسين (ثغرة ٢).
+            L.append(f"- مرجع ويب للمراجعة اليدوية: {n}")
         L.append("")
 
     # ── التسعير بطبقتيه — border models + gated retail layer ────────────────

@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 log = logging.getLogger(__name__)
 
@@ -201,10 +202,39 @@ _SECTION_FIELDS = {
     "regulatory": ("requirements", "tariff"),
     "competitors": ("competitors", "competitors_named", "maps"),
     "pricing": ("prices", "localprice"),
-    "demand": ("faostat", "trends"),
+    "demand": ("faostat",),
     "risk": ("risk",),
-    "trend": ("trend",),
+    # إصلاح مراجعة Stage 5 (ثغرة ٣): حقائق Google Trends تُحسب لقسم الاتجاه —
+    # كانت «الاتجاه 0/0» بينما Trends أسهمت فعلاً لأن خط السنوات dict بلا
+    # حقل value مباشر وطبقة trends كانت محسوبة على الطلب.
+    "trend": ("trends",),
 }
+
+
+def _section_dps(row: dict, sec: str) -> list[dict]:
+    """نقاط بيانات قسم واحد — the ONE fact-to-section extractor (تُستخدم في
+    التغطية والبوابة معاً كي يستحيل اختلافهما)."""
+    dps: list[dict] = []
+    if sec == "market_size":
+        comps = row.get("components") or {}
+        for k in ("market_size", "saudi_position", "competition"):
+            _walk_dps(comps.get(k), dps)
+    elif sec == "demand":
+        comps = row.get("components") or {}
+        _walk_dps(comps.get("demand_capacity"), dps)
+        _walk_dps(row.get("faostat"), dps)
+    elif sec == "trend":
+        # سلسلة الاتجاه متعدد السنوات: dict بسنوات مرصودة/فجوات — كل سنة حقيقة.
+        tr = row.get("trend") or {}
+        for pt in tr.get("series") or []:
+            dps.append({"source": tr.get("source", "UN Comtrade"),
+                        "value": pt.get("value"),
+                        "note": f"سنة {pt.get('year')} من خط الاتجاه"})
+        _walk_dps(row.get("trends"), dps)      # إشارة Google Trends
+    else:
+        for f in _SECTION_FIELDS.get(sec, ()):
+            _walk_dps(row.get(f), dps)
+    return dps
 
 
 def _walk_dps(obj, out):
@@ -244,22 +274,8 @@ def _section_coverage(row: dict) -> dict:
     """درجة تغطية لكل قسم — {section: {attempted, contributed, score, single_source,
     low_confidence}}. قسم بمصدر واحد فقط يُعلَّم منخفض الثقة (قاعدة 2A)."""
     out: dict[str, dict] = {}
-    for section, fields in _SECTION_FIELDS.items():
-        dps: list[dict] = []
-        if section == "market_size":
-            comps = row.get("components") or {}
-            for k in ("market_size", "saudi_position", "competition"):
-                if k in comps:
-                    _walk_dps(comps[k], dps)
-        elif section == "demand":
-            comps = row.get("components") or {}
-            if "demand_capacity" in comps:
-                _walk_dps(comps["demand_capacity"], dps)
-            for f in fields:
-                _walk_dps(row.get(f), dps)
-        else:
-            for f in fields:
-                _walk_dps(row.get(f), dps)
+    for section in _SECTION_FIELDS:
+        dps = _section_dps(row, section)
         att = len(dps)
         con = sum(1 for d in dps if d.get("value") is not None)
         srcs = {str(d.get("source")) for d in dps if d.get("value") is not None}
@@ -290,24 +306,11 @@ def _section_status(row: dict) -> dict:
     """حالة كل قسم بعد بوابة العتبة — {section: {status, contributed, threshold,
     sources_attempted}}. status: ok | insufficient."""
     cov = _section_coverage(row)
-    dps_by_sec: dict[str, list] = {}
     out: dict[str, dict] = {}
     for sec, c in cov.items():
         thr = SECTION_THRESHOLDS.get(sec, 1)
-        # المصادر المُحاوَلة لهذا القسم (للجملة الصريحة عند النقص)
-        dps: list[dict] = []
-        if sec == "market_size":
-            comps = row.get("components") or {}
-            for k in ("market_size", "saudi_position", "competition"):
-                _walk_dps(comps.get(k), dps)
-        elif sec == "demand":
-            comps = row.get("components") or {}
-            _walk_dps(comps.get("demand_capacity"), dps)
-            _walk_dps(row.get("faostat"), dps)
-            _walk_dps(row.get("trends"), dps)
-        else:
-            for f in _SECTION_FIELDS.get(sec, ()):  # nosec — قاموس داخلي
-                _walk_dps(row.get(f), dps)
+        # نفس المستخرج الواحد — يستحيل اختلاف البوابة عن التغطية (ثغرة ٣).
+        dps = _section_dps(row, sec)
         attempted_sources = sorted({str(d.get("source")) for d in dps
                                     if d.get("source")})
         out[sec] = {
@@ -436,6 +439,24 @@ def build_view(result: dict) -> dict:
     markets = result.get("markets") or []
     top = markets[0] if markets else None
     decision = _decision(top)
+    # حكم واحد لا حكمان (إصلاح مراجعة Stage 5): عند وجود قرار المحرك الموزون
+    # (§8) الصالح فهو **الحكم الوحيد** في كل التقرير — هيئة المحلفين تتحول إلى
+    # سطر كفاية بيانات بلا كلمة حكم (خطة §8a: الجورية بوابة كفاية لا قرار).
+    ed_top = (top or {}).get("decision") or {}
+    if ed_top.get("schema") and not ed_top.get("error"):
+        jury = (top or {}).get("jury") or {}
+        decision = {
+            "verdict": ed_top.get("verdict"),
+            "confidence": ed_top.get("confidence"),
+            "score": ed_top.get("score"),
+            "why": ed_top.get("why"),
+            "market": (top or {}).get("country"),
+            "stage": "silk.decision/v1 — المحرك الموزون §8 (الحكم الوحيد)",
+            "sufficiency": (f"بوابة كفاية البيانات: {jury.get('agents_with_data', 0)}/"
+                            f"{jury.get('agents_total', 0)} وكلاء أساسيون لديهم "
+                            f"بيانات؛ فجوات: "
+                            f"{'، '.join(jury.get('data_gaps', [])) or 'لا شيء'}"),
+        }
     cp = _competitive_position(top)
     view_markets = []
     for row in markets:
@@ -495,6 +516,9 @@ def build_view(result: dict) -> dict:
         "coverage_pct": round(100 * con / att, 1) if att else 0.0,
     }
     view = {
+        # راية التشغيل البرهاني: العواذف تضبط SILK_HERMETIC — كل المشتقات تطبع
+        # لافتة TEST RUN؛ وفي الإنتاج يرفض المولّد أي أثر برهاني (silk_reports).
+        "test_run": bool(os.environ.get("SILK_HERMETIC")),
         "header": header,
         "product": result.get("product"), "hs_code": result.get("hs_code"),
         "hs_confidence": result.get("hs_confidence"),
@@ -515,7 +539,10 @@ def build_view(result: dict) -> dict:
 
 def render_text(view: dict) -> str:
     """نص الطرفية من القالب — terminal rendering derived from the view only."""
-    L = ["═" * 60, f"المنتج / Product : {view.get('product')}"]
+    L = ["═" * 60]
+    if view.get("test_run"):
+        L.append("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة، ليس تقريراً إنتاجياً")
+    L.append(f"المنتج / Product : {view.get('product')}")
     if not view.get("classified"):
         L += ["الحالة: تعذّر التصنيف — could not classify",
               *(f"  حد: {x}" for x in view.get("limits", [])[:3]), "═" * 60]
@@ -561,7 +588,9 @@ def render_text(view: dict) -> str:
                      f"{f['margin_at_10pct_below']}%")
         for t in cp.get("competitor_threads") or []:
             if not t.get("observed_price"):
-                L.append(f"  {t['name'][:40]}: {t['price_flag']} "
+                # خيوط بحث الويب مراجع لا كيانات (إصلاح مراجعة Stage 5، ثغرة ٢).
+                L.append(f"  مرجع ويب للمراجعة: {t['name'][:40]} — "
+                         f"{t['price_flag']} "
                          f"(اكتمال الخيط {t['thread_completeness']})")
     else:
         L.append(f"  {cp.get('note')}")

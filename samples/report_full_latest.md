@@ -1,3 +1,5 @@
+> ⚠ **TEST RUN** — تشغيل برهاني ببدائل موسومة (SILK_HERMETIC)، ليس تقريراً إنتاجياً
+
 # سِلك — تقرير سوق: تمور
 
 | البند | القيمة |
@@ -8,12 +10,13 @@
 | السوق المستهدف | China |
 | التاريخ | 2026-07-06 |
 | سنة البيانات | 2023 |
-| تغطية البيانات الإجمالية | 80.0% |
+| تغطية البيانات الإجمالية | 64.0% |
 
 ## الخلاصة التنفيذية
 
-- القرار (هيئة المحلفين): **NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات** (ثقة 0.0) — السوق الأول: China
-- لماذا: تغطية الوكلاء 0/3 وفجوات: TradeFlowAgent, EconomicAgent, CompetitionAgent
+- القرار: **CONDITIONAL-GO** (ثقة 0.91) — السوق الأول: China
+- لماذا: score 0.554 في النطاق الشرطي أو الثقة 0.91 دون 0.6 أو شروط مفتوحة (1)
+- بوابة كفاية البيانات: 0/3 وكلاء أساسيون لديهم بيانات؛ فجوات: TradeFlowAgent، EconomicAgent، CompetitionAgent
 - النتيجة أوّلية لا نهائية.
 
 ## قرار الدخول (المحرك الموزون §8)
@@ -43,9 +46,9 @@
 ## موقعك التنافسي
 
 - التغطية: 0 من 3 منافساً لهم أسعار مرصودة — لرفع التغطية فعّل طبقة التعميق
-- top تمور brands manufacturers competitor — تقرير سوق 2024: سعر غير مرصود — price not observed (اكتمال الخيط 2/4)
-- دليل قنوات top تمور brands manufacturers : سعر غير مرصود — price not observed (اكتمال الخيط 2/4)
-- مستوردون: top تمور brands manufacturers : سعر غير مرصود — price not observed (اكتمال الخيط 2/4)
+- مرجع ويب للمراجعة: top تمور brands manufacturers competitor — تقرير سوق 2024 — سعر غير مرصود — price not observed (اكتمال الخيط 2/4)
+- مرجع ويب للمراجعة: دليل قنوات top تمور brands manufacturers  — سعر غير مرصود — price not observed (اكتمال الخيط 2/4)
+- مرجع ويب للمراجعة: مستوردون: top تمور brands manufacturers  — سعر غير مرصود — price not observed (اكتمال الخيط 2/4)
 
 ## حجم السوق — TAM/SAM/SOM
 
@@ -66,21 +69,23 @@
 - Tunisia: 16.84% (8,000,000$) (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
 - United Arab Emirates: 13.68% (6,500,000$) (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
 
-**شركات بالاسم (مرشّحون غير موثَّقين):**
-- top تمور brands importers distributors c — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
-- دليل قنوات top تمور brands importers dist — https://example.org/b — عبر Serper — سُحب: 2026-07-06
-- مستوردون: top تمور brands importers dist — https://example.org/c — عبر Serper — سُحب: 2026-07-06
+**شركات بالاسم (كيانات Google Places، غير موثَّقة):**
 - موزّع تمور distributor i — نموذج A — العنوان: Trade District 12 — عبر Google Maps — سُحب: 2026-07-06
 - مستورد تمور distributor i — نموذج B — العنوان: Market St 7 — عبر Google Maps — سُحب: 2026-07-06
-- ملاحظة: مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل أي تعاقد.
+- ملاحظة: كيانات غير موثَّقة (ثقة 0.4) — أكّدها قبل أي تعاقد.
+
+**مراجع ويب للمراجعة اليدوية (ليست أسماء منافسين):**
+- مرجع للمراجعة اليدوية: top تمور brands importers distributors c — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: دليل قنوات top تمور brands importers dist — https://example.org/b — عبر Serper — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: مستوردون: top تمور brands importers dist — https://example.org/c — عبر Serper — سُحب: 2026-07-06
 
 - Saudi Arabia: 40.0% (19,000,000$) (المصدر: UN Comtrade)
 - Iran: 29.47% (14,000,000$) (المصدر: UN Comtrade)
 - Tunisia: 16.84% (8,000,000$) (المصدر: UN Comtrade)
 - United Arab Emirates: 13.68% (6,500,000$) (المصدر: UN Comtrade)
-- منافس بالاسم: top تمور brands manufacturers competitor — تقرير سوق 2024
-- منافس بالاسم: دليل قنوات top تمور brands manufacturers 
-- منافس بالاسم: مستوردون: top تمور brands manufacturers 
+- مرجع ويب للمراجعة اليدوية: top تمور brands manufacturers competitor — تقرير سوق 2024
+- مرجع ويب للمراجعة اليدوية: دليل قنوات top تمور brands manufacturers 
+- مرجع ويب للمراجعة اليدوية: مستوردون: top تمور brands manufacturers 
 
 ## التسعير بطبقتيه
 
@@ -124,21 +129,21 @@
 ## دليل المورّدين والمصنّعين
 
 **مورّدون ومصنّعون سعوديون:**
-- تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
-- دليل قنوات تمور manufacturers suppliers S — https://example.org/b — عبر Serper — سُحب: 2026-07-06
-- مستوردون: تمور manufacturers suppliers S — https://example.org/c — عبر Serper — سُحب: 2026-07-06
-- مصانع موردي تمور السعودية — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
-- دليل قنوات مصانع موردي تمور السعودية — https://example.org/b — عبر Serper — سُحب: 2026-07-06
-- مستوردون: مصانع موردي تمور السعودية — https://example.org/c — عبر Serper — سُحب: 2026-07-06
 - موزّع تمور مصنع مورد الس — نموذج A — العنوان: Trade District 12 — عبر Google Maps — سُحب: 2026-07-06
 - مستورد تمور مصنع مورد الس — نموذج B — العنوان: Market St 7 — عبر Google Maps — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: دليل قنوات تمور manufacturers suppliers S — https://example.org/b — عبر Serper — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: مستوردون: تمور manufacturers suppliers S — https://example.org/c — عبر Serper — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: مصانع موردي تمور السعودية — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: دليل قنوات مصانع موردي تمور السعودية — https://example.org/b — عبر Serper — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: مستوردون: مصانع موردي تمور السعودية — https://example.org/c — عبر Serper — سُحب: 2026-07-06
 
 **موزّعون ومستوردون في السوق المستهدف:**
-- تمور importers wholesale distributors in — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
-- دليل قنوات تمور importers wholesale distr — https://example.org/b — عبر Serper — سُحب: 2026-07-06
-- مستوردون: تمور importers wholesale distr — https://example.org/c — عبر Serper — سُحب: 2026-07-06
 - موزّع تمور wholesale dis — نموذج A — العنوان: Trade District 12 — عبر Google Maps — سُحب: 2026-07-06
 - مستورد تمور wholesale dis — نموذج B — العنوان: Market St 7 — عبر Google Maps — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: تمور importers wholesale distributors in — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: دليل قنوات تمور importers wholesale distr — https://example.org/b — عبر Serper — سُحب: 2026-07-06
+- مرجع للمراجعة اليدوية: مستوردون: تمور importers wholesale distr — https://example.org/c — عبر Serper — سُحب: 2026-07-06
 
 > مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل التعاقد؛ الترقية الموثّقة عبر /deepen
 
@@ -148,7 +153,7 @@
 - متطلبات SFDA لتصدير الفئات الخاضعة (منشآت مرخّصة وشهادات صحية عند طلب سوق الوجهة) — الجهة: الهيئة العامة للغذاء والدواء SFDA — الاتجاه: exit — https://www.sfda.gov.sa
 - التسجيل في بوابة هيئة تنمية الصادرات السعودية (خدمات وبرامج دعم المصدرين) — الجهة: هيئة تنمية الصادرات السعودية — الاتجاه: exit — https://saudiexports.sa
 - (المصدر: Silk L1 requirements reference (official portals / EUR-Lex) | سُحب: 2026-07-06 | ثقة: 0.8)
-- فجوة معلنة: tariff_applied_pct: WITS unavailable: TypeError for HS080410 SAU->CHN 2023: a bytes-like object is required, not 'MagicMock'
+- فجوة معلنة: tariff_applied_pct: WITS unavailable: OSError for HS080410 SAU->CHN 2023: hermetic: WITS not doubled — فجوة معلنة
 
 ## سجل المخاطر
 
@@ -165,10 +170,11 @@
 - المنافسون بالاسم: 5/5 (درجة 1.0)
 - الأسعار: 0/0 (درجة 0.0) ⚠ مصدر واحد — ثقة منخفضة
   - بيانات غير كافية لقسم «الأسعار» (0/1 حقائق سوقية) — المصادر المُحاوَلة: لا مصادر مُحاوَلة
-- الطلب والقدرة: 1/3 (درجة 0.33) ⚠ مصدر واحد — ثقة منخفضة
+- الطلب والقدرة: 0/2 (درجة 0.0) ⚠ مصدر واحد — ثقة منخفضة
+  - بيانات غير كافية لقسم «الطلب والقدرة» (0/1 حقائق سوقية) — المصادر المُحاوَلة: FAOSTAT، World Bank
 - المخاطر: 4/4 (درجة 1.0) ⚠ مصدر واحد — ثقة منخفضة
-- الاتجاه: 0/0 (درجة 0.0) ⚠ مصدر واحد — ثقة منخفضة
-  - بيانات غير كافية لقسم «الاتجاه» (0/2 حقائق سوقية) — المصادر المُحاوَلة: لا مصادر مُحاوَلة
+- الاتجاه: 1/6 (درجة 0.17) ⚠ مصدر واحد — ثقة منخفضة
+  - بيانات غير كافية لقسم «الاتجاه» (1/2 حقائق سوقية) — المصادر المُحاوَلة: Google Trends، UN Comtrade
 
 ## ملحق: أثر المصادر (المحاولات والإسهام)
 
@@ -186,9 +192,9 @@
   - فشل مُسجَّل: no competitor data
 - Google Trends: أسهم 3 من 3 محاولة
 - World Bank WITS: أسهم 0 من 3 محاولة
-  - فشل مُسجَّل: WITS unavailable: TypeError for HS080410 SAU->CHN 2023: a bytes-like object is required, not 'MagicMock'
-  - فشل مُسجَّل: WITS unavailable: TypeError for HS080410 SAU->ARE 2023: a bytes-like object is required, not 'MagicMock'
-  - فشل مُسجَّل: WITS unavailable: TypeError for HS080410 SAU->QAT 2023: a bytes-like object is required, not 'MagicMock'
+  - فشل مُسجَّل: WITS unavailable: OSError for HS080410 SAU->CHN 2023: hermetic: WITS not doubled — فجوة معلنة
+  - فشل مُسجَّل: WITS unavailable: OSError for HS080410 SAU->ARE 2023: hermetic: WITS not doubled — فجوة معلنة
+  - فشل مُسجَّل: WITS unavailable: OSError for HS080410 SAU->QAT 2023: hermetic: WITS not doubled — فجوة معلنة
 - FAOSTAT: أسهم 0 من 3 محاولة
   - فشل مُسجَّل: FAOSTAT unavailable: fetch failed for CHN/تمور: hermetic: host not doubled (may require auth)
   - فشل مُسجَّل: FAOSTAT unavailable: fetch failed for ARE/تمور: hermetic: host not doubled (may require auth)
@@ -204,7 +210,7 @@
 
 ## التوصية / المختصر
 
-- القرار: NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات (ثقة 0.0) — China
+- القرار: CONDITIONAL-GO (ثقة 0.91) — China
 - لا منافس بسعر مرصود بعد — فعّل with_localprice/deepen
 - أفضل باب دخول مرصود: online marketplaces e-commerce sites sel — تقرير سوق 2024 (واقعية — قناة إلكترونية مفتوحة)
 
