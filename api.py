@@ -356,12 +356,24 @@ def create_app():
         يُحاول متى وُجد مفتاحه في بيئة الخادم. أعلام العميل لا تُعطّل مصدراً —
         كانت البوابة المشتقة من لوحة مفاتيح المتصفح سببَ إظلام 8/12 مصدراً
         (docs/SOURCE_AUDIT.md). المدفوع يبقى بنيوياً في /deepen فقط.
+
+        قرار المالك (مراجعة التشغيل الحي، 2026-07-06): with_competitors/
+        with_channels/with_importers (الموجة ٣) عُطِّلت هنا نهائياً — صارت
+        زائدة عن حاجتها بعد `with_research` (المرحلة ٣، §4b): CompetitorAgent
+        وSupplierAgent يبحثان نفس السؤال (منافسون/موزّعون بالاسم) عبر
+        Serper/Maps، فتضاعف الاستهلاك بلا فائدة وتكرّر نفس المحتوى في قسمين
+        مختلفين من التقرير الواحد (وquotas Serper/Trends محدودة — لاحظنا
+        429 من Google Trends في التشغيل الحي). الوكيلان القائمان (silk_
+        competitors_agent.py، silk_channels_agent.py، silk_importers_agent.py)
+        يبقيان دون حذف — silk_engine.analyze لا يزال يقبل هذه الأعلام
+        مباشرة (اختبارات test_wave3_agents.py)، فقط سياسة الخادم توقفت عن
+        تفعيلها تلقائياً.
         """
         return {
             "with_trends": True, "with_tariffs": True, "with_faostat": True,
             "with_requirements": True, "with_trend": True,
-            "with_competitors": True, "with_channels": True,
-            "with_importers": True, "with_risk": True, "with_research": True,
+            "with_competitors": False, "with_channels": False,
+            "with_importers": False, "with_risk": True, "with_research": True,
             "with_websearch": bool(os.environ.get("SEARCH_API_KEY", "").strip()),
             "with_maps": bool(os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()),
         }

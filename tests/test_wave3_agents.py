@@ -143,7 +143,11 @@ def test_engine_wave3_layers_offline():
 
 
 def test_api_analyze_accepts_wave3_flags():
-    # الأعلام الأربعة مجانية => متاحة على المسار العادي /analyze.
+    # with_requirements يبقى مفروضاً من سياسة الخادم (Stage 2A). with_competitors
+    # مُعطَّل نهائياً منذ قرار مراجعة التشغيل الحي (2026-07-06) — صار زائداً عن
+    # حاجته بعد with_research (المرحلة ٣): السند لا يزال يقبل العلم بنيوياً
+    # (silk_engine.analyze مباشرة، انظر باقي هذا الملف)، فقط سياسة الخادم لم
+    # تعد تفعّله على /analyze العادي — لا يظهر competitors_named هنا بعد اليوم.
     import pytest
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")
@@ -161,4 +165,5 @@ def test_api_analyze_accepts_wave3_flags():
                                           "with_competitors": True})
     assert r.status_code == 200
     row = r.json()["markets"][0]
-    assert "requirements" in row and "competitors_named" in row
+    assert "requirements" in row
+    assert "competitors_named" not in row

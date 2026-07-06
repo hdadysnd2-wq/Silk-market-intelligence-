@@ -65,9 +65,15 @@ def test_source_policy_is_server_decided_and_client_cannot_disable():
                                               "with_trends": False})
         assert r.status_code == 200
         for flag in ("with_trends", "with_tariffs", "with_faostat",
-                     "with_requirements", "with_trend", "with_competitors",
-                     "with_channels", "with_importers", "with_risk"):
+                     "with_requirements", "with_trend", "with_risk",
+                     "with_research"):
             assert captured.get(flag) is True, flag
+        # قرار مراجعة التشغيل الحي: الموجة ٣ الاسمية (Serper فقط) زائدة عن
+        # حاجتها بعد with_research (المرحلة ٣ تغطي نفس السؤال) — معطَّلة
+        # دائماً من سياسة الخادم الآن، والعميل لا يقدر يشغّلها (نفس القاعدة
+        # الصلبة: علم العميل لا يُشغِّل ولا يُعطِّل مصدراً).
+        for flag in ("with_competitors", "with_channels", "with_importers"):
+            assert captured.get(flag) is False, flag
         # المفتاحيّ المجاني: يتبع مفتاح الخادم لا الواجهة.
         assert captured.get("with_websearch") is False
         assert captured.get("with_maps") is False
@@ -162,6 +168,31 @@ def test_view_has_section_coverage_and_provenance_appendix():
     wb = [b for b in prov if b["source"] == "World Bank"]
     assert wb and wb[0]["attempted"] >= 1
     assert wb[0]["contributed"] == 0 and wb[0]["failures"]
+
+
+def test_client_cannot_reenable_retired_wave3_named_agents():
+    """قرار مراجعة التشغيل الحي: الموجة ٣ الاسمية معطَّلة دائماً — العميل لا
+    يقدر يعيد تشغيلها حتى لو أرسلها صراحةً true (نفس القاعدة الصلبة، بالاتجاه
+    المعاكس: علم العميل لا يُشغِّل مصدراً كما لا يُطفئه)."""
+    import pytest
+    pytest.importorskip("fastapi"); pytest.importorskip("httpx")
+    with _env(SILK_API_KEY=None, SILK_RATE_LIMIT="0",
+              SILK_STORE_DB=_tmp_store_env()):
+        client, _ = _client()
+        captured = {}
+
+        def spy(product, **kw):
+            captured.update(kw)
+            return {"product": product, "classified": False, "markets": [],
+                    "hs_code": None, "hs_note": "x", "note": "x"}
+
+        with mock.patch("silk_engine.analyze", spy):
+            client.post("/analyze", json={"product": "تمور",
+                                          "with_competitors": True,
+                                          "with_channels": True,
+                                          "with_importers": True})
+        for flag in ("with_competitors", "with_channels", "with_importers"):
+            assert captured.get(flag) is False, flag
 
 
 def test_market_size_cross_validation_flags_20pct_divergence():
