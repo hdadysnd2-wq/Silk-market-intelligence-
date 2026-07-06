@@ -349,7 +349,7 @@ def create_app():
             "with_trends": True, "with_tariffs": True, "with_faostat": True,
             "with_requirements": True, "with_trend": True,
             "with_competitors": True, "with_channels": True,
-            "with_importers": True, "with_risk": True,
+            "with_importers": True, "with_risk": True, "with_research": True,
             "with_websearch": bool(os.environ.get("SEARCH_API_KEY", "").strip()),
             "with_maps": bool(os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()),
         }

@@ -34,7 +34,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_competitors: bool = False, with_channels: bool = False,
             with_importers: bool = False, with_requirements: bool = False,
             with_trend: bool = False, trend_span: int = 5,
-            with_risk: bool = False,
+            with_risk: bool = False, with_research: bool = False,
             product_card: dict | None = None,
             hs_code: str | None = None,
             persist: bool = False, db_path: str = "data/silk.db",
@@ -147,6 +147,9 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_requirements(ranked[:_ENRICH_TOP], hs.value)
     if with_risk:
         _enrich_risk(ranked[:_ENRICH_TOP])
+    if with_research:
+        _enrich_research(ranked[:_ENRICH_TOP], product_name, hs.value, year,
+                         product_card)
     if with_trend:
         _enrich_trend(ranked[:_ENRICH_TOP], hs.value, year, trend_span)
 
@@ -277,6 +280,30 @@ def _enrich_risk(rows: list[dict]) -> None:
             log.warning("risk enrichment failed for %s: %s", iso3, e)
             findings = [_enrich_error_dp("World Bank", "risk", e)]
         row["risk"] = findings
+
+
+def _enrich_research(rows: list[dict], product_name: str, hs_code: str,
+                     year: int, product_card: dict | None) -> None:
+    """حزمة وكلاء البحث السبعة لكل سوق (Stage 3، §4b) — row['research'].
+
+    المنسّق نفسه غير محاجز داخلياً (فشل وكيل = مغلف failed بسببه)؛ وهذا الغلاف
+    يضمن ألا يُسقط فشلُ المنسّق كلَّه التحليلَ — خطأ موسوم لا غياب صامت.
+    """
+    from silk_research import ResearchOrchestrator  # lazy: optional layer
+    orch = ResearchOrchestrator()
+    for row in rows:
+        try:
+            row["research"] = orch.run_market({
+                "product": product_name, "hs6": hs_code,
+                "iso3": row.get("iso3"), "m49": row.get("m49"),
+                "iso2": row.get("iso2"),
+                "market_name": row.get("country") or row.get("iso3"),
+                "year": year, "product_card": product_card})
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("research enrichment failed for %s: %s",
+                        row.get("iso3"), e)
+            row["research"] = {"error": f"research error: {type(e).__name__}: {e}",
+                               "agents": {}, "coverage": 0.0}
 
 
 def _enrich_trends(rows: list[dict], product_name: str) -> None:

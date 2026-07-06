@@ -323,6 +323,34 @@ def load_settings_into_env(overwrite: bool = False) -> int:
     return n
 
 
+def get_trade_flow(hs6: str, reporter_iso3: str, partner_iso3: str,
+                   year: int, flow: str = "M") -> dict | None:
+    """صف تدفق واحد بكامل أعمدته — one flow row (incl. qty_kg) or None. لا اختلاق:
+    غياب الصف = None، وقيمة/وزن غائبان يبقيان None في الصف نفسه."""
+    with connect() as conn:
+        row = conn.execute(_q(
+            "SELECT * FROM trade_flows WHERE hs6=? AND reporter_iso3=? "
+            "AND partner_iso3=? AND year=? AND flow=? "
+            "ORDER BY retrieved_at DESC LIMIT 1"),
+            (hs6, reporter_iso3, partner_iso3, int(year), flow)).fetchone()
+    return dict(row) if row else None
+
+
+def record_agent_run(agent: str, hs6: str, iso3: str, status: str,
+                     coverage: float, started_at: str, finished_at: str,
+                     note: str = "", analysis_id: int | None = None) -> int:
+    """سجّل تشغيلة وكيل بحث — Stage 3 §4b: صف لكل تشغيلة لشاشة الإدارة (M6)."""
+    with connect() as conn:
+        cur = conn.cursor()
+        cur.execute(_q(
+            "INSERT INTO agent_runs (analysis_id, agent, hs6, iso3, status, "
+            "coverage, started_at, finished_at, note) VALUES (?,?,?,?,?,?,?,?,?)"),
+            (analysis_id, agent, hs6, iso3, status, float(coverage),
+             started_at, finished_at, note))
+        conn.commit()
+        return cur.lastrowid
+
+
 def get_indicator_series(iso3: str, indicator: str, years: int = 6) -> list[dict]:
     """سلسلة سنوات لمؤشر — last N years (asc) for volatility computations."""
     with connect() as conn:
