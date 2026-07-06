@@ -101,6 +101,61 @@ Migrations: sequential `migrations/00N_*.sql` + tiny runner (stdlib); every mile
 
 ---
 
+## 4b. Multi-agent research architecture — وكلاء البحث المتخصصون
+
+The existing `ResearchManager` + `BaseAgent` evolve into a schema-validated **Orchestrator + five specialized research agents**. This layer sits between the data pipeline (§4) and the decision engine (§8): collectors fill the fact store → agents read facts (+ targeted live calls within budget) → orchestrator validates & aggregates → decision engine consumes pillar inputs → report consumes section outputs.
+
+### The five research agents
+
+| Agent | Scope | Data sources | Feeds |
+|---|---|---|---|
+| **1. Market Size Agent** | TAM/SAM/SOM for HS6×market: TAM = observed total imports; SAM = TAM × disclosed segment filters (product-card tier); SOM = capacity/price-position scenario. Growth: YoY, CAGR, seasonality | `trade_flows` (Comtrade, free-keyed), Trends (optional), product card | Pillar: market attractiveness · Report §2–3 |
+| **2. Competitor Agent** | Exporters to target market with shares + HHI; named-company candidates; positioning (price tier vs. yours via correlation) | `trade_flows` partners (Comtrade), Serper candidates (0.4-conf, flagged unverified), Volza/Explee (paid, deepen-only), correlation threads | Pillar: competition intensity · Report §4 |
+| **3. Regulatory Agent** | Customs procedure, applied tariff, standards/certifications (halal, labeling, animal-origin chain), trade agreements (GCC/GAFTA/EU flags) | WITS (free), `requirements_l1.csv` + live verify (Serper), `markets` reference (agreement flags), `indicators` | Pillar: regulatory fit · Report §6 |
+| **4. Pricing Agent** | Target-market retail prices, price trend, your position percentile, margin-at-match, landed-cost line | Web price signals (Serper, free), SerpApi structured listings (paid, deepen-only), correlation feasibility thread, tariff (landed cost) | Pillar: profitability margin · Report §7 |
+| **5. Risk Agent** *(new)* | Political stability, currency risk, logistics risk, supplier-concentration & data-coverage risk | **All free via existing WB collector:** WGI (`PV.EST`, `RQ.EST`), LPI (`LP.LPI.OVRL.XQ`), FX series (`PA.NUS.FCRF`) volatility + bundled peg reference; HHI from `trade_flows` | Risk register + critical-risk gate + confidence modifiers · Report §10 |
+
+### Output schema (per agent, pydantic-validated)
+
+```json
+{
+  "agent": "market_size", "hs6": "080410", "iso3": "ARE",
+  "status": "complete | partial | failed",
+  "findings": [{"metric": "tam_usd", "value": 270000000,
+                "modeled": false, "formula": null,
+                "sources": [{"source": "UN Comtrade", "retrieved_at": "…", "confidence": 0.9}],
+                "note": "…"}],
+  "gaps": ["som: no product_card capacity supplied"],
+  "coverage": 0.75, "started_at": "…", "finished_at": "…"
+}
+```
+
+Schema rules enforce the doctrine **per agent**: every finding requires a non-empty `sources[]`; `value=null` requires a `gaps[]` entry; any `modeled:true` figure requires `formula` + inputs. A finding violating the schema is **rejected at validation**, logged, and downgraded to a gap — it can never reach the fact store, the report, or the decision engine uncited.
+
+### Orchestrator (`silk/analysis/orchestrator.py`)
+
+Evolves `ResearchManager`; keeps `BaseAgent`'s structural guards (paid-outside-deepen impossible; silent failure impossible). Responsibilities:
+1. **Parallel dispatch** — the five agents per target market via `ThreadPoolExecutor`, each with a timeout; shared read access to the fact store, live calls only through the budgeted collectors (§4).
+2. **Schema validation** — each output validated against its pydantic schema; invalid → `status:"failed"` with reason.
+3. **Aggregation** — validated findings upserted into `indicators`/`trade_flows`/analysis rows with provenance; section outputs attached to the analysis for `build_view`.
+4. **Hand-off** — emits the pillar-input bundle consumed by the weighted decision engine (§8) and the section bundle consumed by the report (§7).
+
+### Failure handling (non-blocking, honest)
+
+If an agent fails or times out: its **report section renders as `⚠ ناقص — incomplete`** with the failure reason and what source/key would complete it; its **pillar is treated as missing** → §8's missing-pillar policy applies (weights renormalized, the gap becomes a Conditional-Go condition); overall **confidence is reduced** by the coverage formula (`confidence = Σ agent_coverage×weight / Σ weight`, staleness-decayed) — computed, printed with its basis. One failed agent **never blocks** the other four or the report; a `collection_runs`-style `agent_runs` row records every run for the admin screen.
+
+### Milestone placement
+
+| Component | Milestone |
+|---|---|
+| Risk-agent data substrate (WGI/LPI/FX indicators via WB collector + peg reference CSV) | **M2** (data pipeline) |
+| Orchestrator + all five agents v1 + schemas + failure handling (Pricing v1 = free web signals; paid listings stay deepen-only) | **M3a** |
+| Decision engine consuming the pillar bundle | **M3b** |
+| Report sections wired to agent outputs (incl. `⚠ incomplete` rendering); Pricing deepen integration | **M4** |
+| Agent-run visibility (admin screen: per-agent status/coverage/budget) | **M6** |
+
+---
+
 ## 5. API specification (`/v1`, FastAPI)
 
 Conventions: error envelope `{"error":{"code","message","details?"}}`; cursor pagination `?limit=&after=` (limit clamped ≤100); all bodies pydantic-validated; OpenAPI served at `/v1/docs`.
@@ -158,7 +213,7 @@ Every number keeps its source line; every modeled figure shows formula + inputs;
 
 ## 8. Market-entry decision engine (`silk/decision/`)
 
-**Score = 0.30·MarketAttractiveness + 0.25·(1 − CompetitionIntensity) + 0.20·RegulatoryFit + 0.25·ProfitabilityMargin** — each pillar ∈ [0,1], computed from facts only:
+**Score = 0.30·MarketAttractiveness + 0.25·(1 − CompetitionIntensity) + 0.20·RegulatoryFit + 0.25·ProfitabilityMargin** — each pillar ∈ [0,1], computed **exclusively from the validated agent bundle (§4b)**: Market Size Agent → attractiveness, Competitor Agent → intensity, Regulatory Agent → fit, Pricing Agent → profitability; the Risk Agent contributes the risk register, the critical-risk gate, and confidence modifiers. Pillar inputs:
 
 | Pillar | Inputs (all provenance-tagged) |
 |---|---|
@@ -226,8 +281,9 @@ Every number keeps its source line; every modeled figure shows formula + inputs;
 |---|---|---|---|
 | **M0** | Hotfixes | PATCH outcome auth+rate-limit; clamp /index limit; gate /sources key flags; pin deps; conftest.py shared `_block_network` | suite green + new regression tests |
 | **M1** | Storage & schema | migrations runner; §3 schema; import legacy silk.db; storage adapter (SQLite/Postgres) | CRUD tests; legacy import verified |
-| **M2** | Data pipeline | fact-store reads in ranker/agents; Comtrade budgeted collector + backoff; WB bulk + seed port; per-source TTL cache; worker refresh + collection_runs | keyless=honest-limited, keyed=38/38 in test-double; budget ledger tests |
-| **M3** | Decision engine | pillars, scoring, verdict mapping, conditions/risks/first-steps, confidence; jury as sufficiency gate | golden-case tests incl. missing-pillar & Conditional-Go |
+| **M2** | Data pipeline | fact-store reads in ranker/agents; Comtrade budgeted collector + backoff; WB bulk (**+ WGI/LPI/FX for Risk Agent**) + seed port; per-source TTL cache; worker refresh + collection_runs | keyless=honest-limited, keyed=38/38 in test-double; budget ledger tests |
+| **M3a** | Research agents & orchestrator (§4b) | five agents v1 + output schemas + parallel orchestrator + validation + non-blocking failure handling + agent_runs | per-agent schema tests; one-agent-down → 4 sections + reduced confidence |
+| **M3b** | Decision engine | pillars **from the agent bundle**, scoring, verdict mapping, conditions/risks/first-steps, confidence; jury as sufficiency gate | golden-case tests incl. missing-pillar & Conditional-Go |
 | **M4** | Reports | full template §7 (docx+md), SWOT/regulatory/channels wiring, TAM-SAM-SOM disclosed models; realistic committed sample | structure tests; sample renders non-empty |
 | **M5** | API v1 | versioning, envelope, pagination, auth/roles endpoints, admin routes; legacy aliases | endpoint tests incl. role matrix |
 | **M6** | UI system + screens | tokens/components; login, dashboard, search-flow, decision, report viewer, history, admin | Playwright smoke per screen, AR+EN |
