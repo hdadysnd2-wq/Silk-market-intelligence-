@@ -1,12 +1,14 @@
-سِلك | تمور (HS 080410) — 2022 | مبدئي
+سِلك | تمور (HS 080410) — 2023 | مبدئي
 
-القرار: NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات (ثقة 0.0) — United Arab Emirates
+القرار: NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات (ثقة 0.0) — China
 
 أرقام حاسمة (بمصادرها):
-• لا أرقام مرصودة — الفجوات معلنة بالتقرير الكامل
+• market_size: 61,000,000 [UN Comtrade]
+• saudi_position: 40.0 [UN Comtrade]
+• competition: 0.2939 [UN Comtrade]
 
 لا منافس بسعر مرصود بعد — فعّل with_localprice/deepen
-لا أبواب دخول مرصودة — فعّل with_channels
+أفضل باب دخول مرصود: online marketplaces e-commerce sites sel — تقرير سوق 2024 (واقعية — قناة إلكترونية مفتوحة)
 
 التفاصيل الكاملة باللوحة: /
 كل رقم بمصدره؛ النواقص معلنة لا مخمّنة — قرار أوّلي لا نهائي.

@@ -196,6 +196,31 @@
   .stbadge{font-size:12px;padding:4px 11px;border-radius:40px;white-space:nowrap}.st-on{background:var(--success-soft);color:var(--success)}.st-off{background:var(--surface-2);color:var(--text-2)}
   .keyin{font-family:var(--mono);font-size:14px;border:1px solid var(--border-strong);border-radius:var(--r);padding:10px 12px;width:220px;max-width:40vw;outline:0;background:var(--surface);color:var(--text)}.keyin:focus{border-color:var(--primary)}
   .switch{width:46px;height:26px;border-radius:40px;background:var(--border-strong);position:relative;border:0;transition:.2s var(--ease);flex:none}.switch.on{background:var(--primary)}.switch .k{position:absolute;top:3px;inset-inline-start:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s var(--ease)}.switch.on .k{inset-inline-start:23px}
+  /* شاشات §9 الثماني — شريط تنقّل ثابت + بطاقات مقاييس · the eight-screen nav (Stage 6) */
+  nav.scrnav{position:sticky;top:64px;z-index:45;background:var(--surface);border-bottom:1px solid var(--border)}
+  .scrnav-row{display:flex;gap:2px;overflow-x:auto}
+  .scrnav-row button{display:inline-flex;align-items:center;gap:8px;padding:12px 14px;font-size:14px;font-weight:600;border:0;background:transparent;color:var(--text-2);border-bottom:3px solid transparent;white-space:nowrap;transition:.15s var(--ease)}
+  .scrnav-row button:hover{color:var(--text);background:var(--hover)}
+  .scrnav-row button.on{color:var(--primary);border-bottom-color:var(--primary)}
+  .scrnav-row .sn-n{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:1px 6px}
+  .scr-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s4);flex-wrap:wrap;margin:var(--s5) 0 var(--s4)}
+  .scr-title{font-size:24px;font-weight:700;margin:0}
+  .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--s3);margin-top:var(--s3)}
+  .mcard{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--s4);min-width:0}
+  .mc-l{font-size:13px;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mc-v{font-size:24px;font-weight:700;margin-top:6px;word-break:break-word}
+  .mc-f{font-size:12px;color:var(--text-3);margin-top:4px;font-family:var(--mono);direction:ltr;text-align:start;word-break:break-word}
+  .modeled{font-size:11px;font-weight:700;background:var(--warning-soft);color:var(--warning);padding:2px 8px;border-radius:40px;white-space:nowrap}
+  .unverified{font-size:11px;font-weight:700;background:var(--surface-2);border:1px solid var(--border);color:var(--text-3);padding:2px 8px;border-radius:40px;white-space:nowrap}
+  .pillar{margin-bottom:14px}
+  .pillar .ph{display:flex;justify-content:space-between;gap:10px;font-size:14px;font-weight:600}
+  .pillar .track{height:10px;background:var(--surface-2);border-radius:6px;overflow:hidden;margin-top:6px}
+  .pillar .fill{height:100%;background:var(--primary);border-radius:6px}
+  .swotgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3);margin-top:var(--s3)}
+  @media(max-width:720px){.swotgrid{grid-template-columns:1fr}}
+  .swotcell{border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--s4);background:var(--surface-2)}
+  .swotcell h4{margin:0 0 10px;font-size:15px}
+  .score-big{font-family:var(--mono);font-size:52px;font-weight:600;line-height:1}
   footer{border-top:1px solid var(--border);padding:var(--s5) 0;color:var(--text-3);font-size:14px}
 </style>
 </head>
@@ -210,6 +235,17 @@
     <button class="btn btn-primary" id="runBtn" disabled><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9z"/></svg><span data-t="analyze"></span></button>
   </div>
 </div></header>
+
+<nav class="scrnav"><div class="shell scrnav-row" id="scrnav">
+  <button data-scr="1" class="on"><span class="sn-n">1</span><span data-t="nav1"></span></button>
+  <button data-scr="2"><span class="sn-n">2</span><span data-t="nav2"></span></button>
+  <button data-scr="3"><span class="sn-n">3</span><span data-t="nav3"></span></button>
+  <button data-scr="4"><span class="sn-n">4</span><span data-t="nav4"></span></button>
+  <button data-scr="5"><span class="sn-n">5</span><span data-t="nav5"></span></button>
+  <button data-scr="6"><span class="sn-n">6</span><span data-t="nav6"></span></button>
+  <button data-scr="7"><span class="sn-n">7</span><span data-t="nav7"></span></button>
+  <button data-scr="8"><span class="sn-n">8</span><span data-t="nav8"></span></button>
+</div></nav>
 
 <main id="dashboard" class="shell">
   <div class="cmdbar">
@@ -237,7 +273,9 @@
   <div id="resultArea"></div>
 </main>
 
-<main id="settings" class="shell hidden"><div class="settings"><h1 data-t="settingsTitle"></h1><div class="sub" data-t="settingsSub"></div><div id="settingsBody"></div></div></main>
+<main id="screens" class="shell hidden"><div id="screenBody" style="padding-bottom:var(--s7)"></div></main>
+
+<main id="settings" class="shell hidden"><div class="settings"><h1 data-t="settingsTitle"></h1><div class="sub" data-t="settingsSub"></div><div id="settingsBody"></div><div id="dataPanels"></div></div></main>
 
 <footer><div class="shell"><span data-t="footer"></span></div></footer>
 
@@ -295,11 +333,47 @@
     settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"أدخل المفاتيح ثم «حفظ في الخادم» — تُخزَّن في خادمك وتُفعَّل فوراً (متغيرات بيئة النشر تبقى الأعلى سلطة).",en:"Enter keys then “Save to server” — stored on your server and active immediately (deploy env vars still win)."},saveServer:{ar:"حفظ في الخادم",en:"Save to server"},saved:{ar:"حُفظت المفاتيح في الخادم",en:"Keys saved to server"},adminKey:{ar:"مفتاح الخدمة (X-API-Key) إن كانت المصادقة مفعّلة",en:"Service key (X-API-Key) if auth is enabled"},
     secAI:{ar:"الذكاء الاصطناعي",en:"AI"},secFree:{ar:"مصادر مجانية",en:"Free sources"},secPaid:{ar:"مصادر مدفوعة",en:"Paid sources"},connected:{ar:"متصل",en:"Connected"},needsKey:{ar:"يحتاج مفتاح",en:"Needs key"},keyless:{ar:"متصل · بلا مفتاح",en:"Connected · keyless"},
     footer:{ar:"سِلك · واجهة مؤسسية ثنائية اللغة (Carbon × Redwood) · بيانات عامة حقيقية فقط · فاتح/داكن · RTL/LTR",en:"Silk · Bilingual enterprise UI (Carbon × Redwood) · Real public data only · Light/Dark · RTL/LTR"},
-    reqFail:{ar:"فشل الطلب",en:"Request failed"},langSwitched:{ar:"تم التبديل إلى العربية",en:"Switched to English"}
+    reqFail:{ar:"فشل الطلب",en:"Request failed"},langSwitched:{ar:"تم التبديل إلى العربية",en:"Switched to English"},
+    nav1:{ar:"تحليل جديد",en:"New analysis"},nav2:{ar:"القرار",en:"Decision"},nav3:{ar:"حجم السوق",en:"Market size"},nav4:{ar:"المنافسة",en:"Competition"},
+    nav5:{ar:"التسعير",en:"Pricing"},nav6:{ar:"الاشتراطات",en:"Requirements"},nav7:{ar:"الطلب والمخاطر",en:"Demand & risk"},nav8:{ar:"المصادر والإعدادات",en:"Sources & settings"},
+    marketSel:{ar:"السوق",en:"Market"},
+    runFirst:{ar:"شغّل تحليلاً أولاً من شاشة «تحليل جديد» — كل الشاشات تُشتق من نموذج العرض القانوني نفسه.",en:"Run an analysis first from “New analysis” — every screen derives from the same canonical view-model."},
+    goRun:{ar:"إلى شاشة التحليل",en:"Go to analysis"},
+    needResearch:{ar:"يتطلب with_research (سياسة الخادم تفعّله تلقائياً)",en:"Requires with_research (server policy enables it automatically)"},
+    modeledBadge:{ar:"مُقدَّر — نموذج بافتراضات معلنة",en:"Modeled — declared assumptions"},
+    unverified:{ar:"غير موثَّق",en:"Unverified"},mdReport:{ar:"تقرير Markdown",en:"Markdown report"},
+    noItem:{ar:"لا بند مرصوداً",en:"No item observed"},yesL:{ar:"نعم",en:"Yes"},noL:{ar:"لا",en:"No"},
+    scoreL:{ar:"الدرجة",en:"Score"},pillarsL:{ar:"الأعمدة الأربعة",en:"The four pillars"},
+    pMarket:{ar:"السوق",en:"Market"},pCompetition:{ar:"المنافسة",en:"Competition"},pRegulatory:{ar:"التنظيم",en:"Regulatory"},pProfit:{ar:"الربحية",en:"Profit"},
+    weightsL:{ar:"خيارا الأوزان A/B",en:"Weight options A/B"},optionL:{ar:"خيار",en:"Option"},activeOpt:{ar:"المعتمد",en:"Active"},
+    conditionsL:{ar:"الشروط",en:"Conditions"},firstStepsL:{ar:"الخطوات الأولى",en:"First steps"},
+    risksL:{ar:"سجل المخاطر",en:"Risk register"},colRisk:{ar:"الخطر",en:"Risk"},colSeverity:{ar:"الشدة",en:"Severity"},colEvidence:{ar:"الدليل",en:"Evidence"},
+    missingPillarsL:{ar:"أعمدة غائبة",en:"Missing pillars"},
+    criticalRiskL:{ar:"بوابة خطر حرجة مفتوحة (PV.EST < −1.5) — القرار NO-GO قاعدياً",en:"Critical risk gate open (PV.EST < −1.5) — rule-based NO-GO"},
+    gapsHdr:{ar:"فجوات معلنة",en:"Declared gaps"},
+    tamL:{ar:"TAM — إجمالي واردات السوق",en:"TAM — total market imports"},samL:{ar:"SAM — السوق القابل للخدمة",en:"SAM — serviceable market"},somL:{ar:"SOM — الحصة القابلة للتحصيل",en:"SOM — obtainable share"},
+    growthL:{ar:"نمو الواردات",en:"Import growth"},
+    intlLayer:{ar:"الطبقة الدولية — حصص المورّدين",en:"International layer — supplier shares"},namedLayer:{ar:"شركات بالاسم",en:"Named companies"},
+    hhiL:{ar:"تركّز المنافسة HHI",en:"Competition HHI"},topShareL:{ar:"حصة المورّد الأكبر",en:"Top supplier share"},saudiShareL:{ar:"الحصة السعودية",en:"Saudi share"},colValueL:{ar:"القيمة",en:"Value"},
+    borderLayer:{ar:"الطبقة الحدودية — قيم الوحدة",en:"Border layer — unit values"},
+    uvL:{ar:"قيمة الوحدة الحدودية $/kg",en:"Border unit value $/kg"},suvL:{ar:"قيمة الوحدة السعودية $/kg",en:"Saudi border unit value $/kg"},marginBL:{ar:"الهامش عند الحدود",en:"Margin at border"},
+    retailLayer:{ar:"أسعار التجزئة",en:"Retail prices"},retailRefs:{ar:"مراجع سعرية (روابط مؤرّخة)",en:"Retail references (dated links)"},storeL:{ar:"المتجر",en:"Store"},
+    reqList:{ar:"قائمة الاشتراطات (بند + جهة + رابط)",en:"Requirements checklist (item + authority + link)"},
+    tariffL:{ar:"التعريفة المطبّقة",en:"Applied tariff"},reqCount:{ar:"عدد البنود",en:"Items count"},
+    eligGateL:{ar:"بوابة أهلية أمامية: منشأة معتمدة (EU 2017/625) قبل أي بند لاحق — لا بند يُعد قابلاً للاستيفاء قبل عبورها",en:"Front eligibility gate: EU 2017/625 listed establishment required before any later item"},
+    demandHdr:{ar:"الطلب الاستهلاكي",en:"Consumer demand"},riskHdr:{ar:"مؤشرات المخاطر",en:"Risk indicators"},
+    swotHdr:{ar:"SWOT قاعدي",en:"Rule-based SWOT"},segmentsHdr:{ar:"شرائح العملاء",en:"Customer segments"},
+    gdpL:{ar:"دخل الفرد",en:"GDP per capita"},popL:{ar:"السكان",en:"Population"},supplyL:{ar:"الاستهلاك للفرد kg",en:"Per-capita supply kg"},searchL:{ar:"اهتمام البحث /100",en:"Search interest /100"},muslimL:{ar:"حصة المسلمين",en:"Muslim share"},ramadanL:{ar:"موسمية رمضان",en:"Ramadan seasonality"},
+    wgiPolL:{ar:"استقرار سياسي WGI",en:"Political stability WGI"},wgiRegL:{ar:"جودة تنظيمية WGI",en:"Regulatory quality WGI"},lpiL:{ar:"اللوجستيات LPI",en:"Logistics LPI"},fxL:{ar:"تقلب العملة",en:"FX volatility"},hhiRiskL:{ar:"تركّز التوريد HHI",en:"Supplier concentration HHI"},critL:{ar:"خطر حرج",en:"Critical risk"},
+    swotS:{ar:"قوة",en:"Strengths"},swotW:{ar:"ضعف",en:"Weaknesses"},swotO:{ar:"فرص",en:"Opportunities"},swotT:{ar:"تهديدات",en:"Threats"},
+    covSec:{ar:"تغطية الأقسام",en:"Section coverage"},sectionL:{ar:"القسم",en:"Section"},statusL:{ar:"الحالة",en:"Status"},singleSrc:{ar:"مصدر واحد",en:"single source"},
+    provHdr:{ar:"أثر المصادر — لا فشل صامتاً",en:"Source provenance — no silent failure"},colSource:{ar:"المصدر",en:"Source"},colContrib:{ar:"مُسهم/مُحاوَل",en:"Contributed/attempted"},colFail:{ar:"أمثلة فشل",en:"Failure examples"},
+    dirHdr:{ar:"دليل المورّدين",en:"Supplier directory"},dirSaudi:{ar:"مرشّحون سعوديون (منشأ)",en:"Saudi candidates (origin)"},dirTarget:{ar:"موزّعون في السوق المستهدف",en:"Target-market distributors"},
+    agComplete:{ar:"مكتمل",en:"complete"},agPartial:{ar:"جزئي",en:"partial"},agFailed:{ar:"فشل",en:"failed"}
   };
   var S={lang:localStorage.getItem("silk_lang")||"ar",adminKey:localStorage.getItem("silk_admin_key")||"",product:"",hs:"",selId:null,running:false,raw:null,result:null,sentFlags:{},tab:"position",query:"",
     yearFrom:2019,yearTo:2023,card:JSON.parse(localStorage.getItem("silk_card")||"{}"),
-    keys:JSON.parse(localStorage.getItem("silk_keys")||"{}"),toggles:JSON.parse(localStorage.getItem("silk_toggles")||"{}"),view:"dashboard"};
+    keys:JSON.parse(localStorage.getItem("silk_keys")||"{}"),toggles:JSON.parse(localStorage.getItem("silk_toggles")||"{}"),screen:1,mktIdx:0};
   function t(k){var e=I18N[k];return e?e[S.lang]:k;}
   function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"");}
   function saveCard(){localStorage.setItem("silk_card",JSON.stringify(S.card));}
@@ -385,10 +459,10 @@
   }
   function runDeepen(){
     if(!S.product)return;var paid=buildBody(true);
-    if(!paid.with_localprice&&!paid.with_volza&&!paid.with_explee&&!paid.with_ai){S.view="settings";applyView();return;}
+    if(!paid.with_localprice&&!paid.with_volza&&!paid.with_explee&&!paid.with_ai){setScreen(8);return;}
     S.running=true;S.sentFlags=paid;applyLang();postJSON("/deepen",paid).then(onResult).catch(onError);
   }
-  function onResult(res){S.running=false;$("#runBtn").disabled=false;S.raw=res;S.result=mapResult(res);S.selId=S.result.markets&&S.result.markets[0]&&S.result.markets[0].id;applyLang();render();}
+  function onResult(res){S.running=false;$("#runBtn").disabled=false;S.raw=res;S.result=mapResult(res);S.selId=S.result.markets&&S.result.markets[0]&&S.result.markets[0].id;S.mktIdx=0;applyLang();render();applyView();}
   function onError(e){S.running=false;$("#runBtn").disabled=false;applyLang();$("#completeness").classList.add("hidden");$("#resultArea").innerHTML='<section class="card err">'+esc(t("reqFail"))+': '+esc(e.message)+'</section>';}
 
   function confLabel(c){return c==null?"—":(c>=.66?t("high"):c>=.33?t("medium"):t("low"));}
@@ -465,7 +539,7 @@
     var brief=(v.brief||[]).map(function(l){return '<li>'+esc(l)+'</li>';}).join("");
     var conf=d.confidence!=null?d.confidence:0,p=Math.round((conf||0)*100);
     var acts='<div class="d-actions"><button class="btn btn-primary" id="deepBtn">'+esc(t("deepen"))+'</button>'+
-      (S.result.analysis_id!=null?'<a class="btn btn-secondary" href="'+esc(base()+"/analyses/"+S.result.analysis_id+"/report.docx")+'" download>'+esc(t("wordReport"))+'</a><a class="btn btn-ghost" href="'+esc(base()+"/analyses/"+S.result.analysis_id+"/brief")+'" target="_blank" rel="noopener">'+esc(t("brief"))+'</a>':'')+
+      (S.result.analysis_id!=null?'<a class="btn btn-secondary" href="'+esc(base()+"/analyses/"+S.result.analysis_id+"/report.docx")+'" download>'+esc(t("wordReport"))+'</a><a class="btn btn-ghost" href="'+esc(base()+"/analyses/"+S.result.analysis_id+"/report.md")+'" target="_blank" rel="noopener">'+esc(t("mdReport"))+'</a><a class="btn btn-ghost" href="'+esc(base()+"/analyses/"+S.result.analysis_id+"/brief")+'" target="_blank" rel="noopener">'+esc(t("brief"))+'</a>':'')+
       '<button class="btn btn-ghost" id="csvBtn">'+esc(t("exportCsv"))+'</button><button class="btn btn-ghost" id="jsonBtn">'+esc(t("exportJson"))+'</button></div>';
     return '<section class="card decision '+tn+'"><div class="d-head">'+chips+'</div><div class="d-grid"><div>'+
       '<div class="eyebrow">'+esc(t("decision"))+'</div><h1 class="d-verdict">'+esc(d.verdict||t("noVerdict"))+'</h1>'+
@@ -590,6 +664,198 @@
   function exportJson(){var raw=S.raw;if(!raw)return;var a=document.createElement("a");a.href="data:application/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(raw,null,2));a.download="silk_"+(S.product||"analysis")+".json";a.click();}
   function exportCsv(){if(!S.result||!S.result.classified)return;var rows=[["rank","country","code","import_usd","saudi_share_pct","score","confidence","growth_pct"]];S.result.markets.forEach(function(m,i){rows.push([i+1,m.country,m.code,m.import_value,m.saudi_share,m.score,m.confidence,m.trend&&m.trend.growth_pct]);});var csv=rows.map(function(r){return r.map(function(x){return x==null?"":'"'+String(x).replace(/"/g,'""')+'"';}).join(",");}).join("\n");var a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download="silk_"+(S.product||"report")+".csv";a.click();}
 
+  // ── شاشات §9 (٢–٧) — تُشتق حصراً من نموذج العرض القانوني view (silk_render.build_view)
+  //    لا قراءة مباشرة لنتيجة المحرك ولا أي نداء شبكة من طبقة العرض هذه.
+  //    EN: screens 2–7 derive strictly from result.view; no engine reads, no network.
+  function vw(){return S.result&&S.result.view;}
+  function vmarkets(){var v=vw();return (v&&v.markets)||[];}
+  function curM(){var ms=vmarkets();if(!ms.length)return null;if(S.mktIdx>=ms.length)S.mktIdx=0;return ms[S.mktIdx];}
+  function research(m){var r=m&&m.research;return (r&&!r.error&&r.agents)?r:null;}
+  function rAgent(m,name){var r=research(m);return (r&&r.agents[name])||null;}
+  function rFind(ag,metric){var fs=(ag&&ag.findings)||[];for(var i=0;i<fs.length;i++)if(fs[i]&&fs[i].metric===metric)return fs[i];return null;}
+  // سطر المصدر لكل رقم (قاعدة ٢) — source · retrieved_at · confidence per finding
+  function srcLine(f){var ss=(f&&f.sources)||[],seen={},parts=[];ss.forEach(function(s){if(!s)return;var b=[];if(s.source)b.push(s.source);if(s.retrieved_at)b.push(s.retrieved_at);if(s.confidence!=null)b.push((S.lang==="ar"?"ثقة ":"conf ")+s.confidence);var ln=b.join(" · ");if(ln&&!seen[ln]){seen[ln]=1;parts.push(ln);}});return parts.slice(0,3).join(" | ");}
+  function fmtPct(v){return (typeof v==="number"?Math.round(v*100)/100:v)+"%";}
+  function fmtNum(v){var n=Number(v);return isNaN(n)?String(v):n.toLocaleString("en-US");}
+  function fmtBool(v){return v===true?t("yesL"):v===false?t("noL"):String(v);}
+  function gapT(){return '<span class="gap-txt">'+esc(t("notObserved"))+'</span>';}
+  // بطاقة مقياس: القيمة أو «غير مرصود» + شارة «مُقدَّر» والمعادلة + سطر المصدر — أبداً ليست صفراً
+  function metricCard(label,f,fmt){
+    var has=f&&f.value!=null,h='<div class="mcard"><div class="mc-l">'+esc(label);
+    if(f&&f.modeled)h+=' <span class="modeled">'+esc(t("modeledBadge"))+'</span>';
+    h+='</div>';
+    if(has){var val=fmt?fmt(f.value):String(f.value);h+='<div class="mc-v num">'+esc(String(val))+((!fmt&&f.unit)?' <span style="font-size:13px;color:var(--text-3)">'+esc(f.unit)+'</span>':'')+'</div>';}
+    else h+='<div class="mc-v">'+gapT()+'</div>';
+    if(f&&f.modeled&&f.formula)h+='<div class="mc-f">'+esc(f.formula)+'</div>';
+    var pl=srcLine(f);if(pl)h+='<div class="prov">'+esc(pl)+'</div>';
+    if(f&&f.note)h+='<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(f.note)+'</div>';
+    return h+'</div>';
+  }
+  function agentChip(ag){
+    if(!ag)return '<span class="stbadge st-off">'+esc(t("notObserved"))+'</span>';
+    var m={complete:["st-on",t("agComplete")],partial:["st-off",t("agPartial")],failed:["st-off",t("agFailed")]}[ag.status]||["st-off",String(ag.status||"")];
+    return '<span class="stbadge '+m[0]+'">'+esc(m[1])+(ag.coverage!=null?' · '+Math.round(ag.coverage*100)+'%':'')+'</span>';
+  }
+  function gapsBlock(ag){var gs=(ag&&ag.gaps)||[];if(!gs.length)return '';return '<div class="subhead">'+esc(t("gapsHdr"))+'</div>'+gs.map(function(g){return '<div class="gapline" style="display:flex;align-items:flex-start;font-weight:500"><span class="dot" style="margin-top:7px"></span><span style="flex:1">'+esc(g)+'</span></div>';}).join('');}
+  function scrShell(titleKey,inner){
+    var ms=vmarkets(),sw='';
+    if(ms.length)sw='<div class="field" style="min-width:220px"><label>'+esc(t("marketSel"))+'</label><div class="control" style="height:42px"><select id="mktSel">'+ms.map(function(m,i){return '<option value="'+i+'"'+(i===S.mktIdx?' selected':'')+'>'+esc(m.country||m.iso3||("#"+(i+1)))+'</option>';}).join('')+'</select></div></div>';
+    return '<div class="scr-head"><h1 class="scr-title">'+esc(t(titleKey))+'</h1>'+sw+'</div>'+inner;
+  }
+  function noAnalysisCard(){return '<div class="scr-head"><h1 class="scr-title">'+esc(t("nav"+S.screen))+'</h1></div><section class="card ready"><h2>'+esc(t("readyTitle"))+'</h2><p>'+esc(t("runFirst"))+'</p><button class="btn btn-primary" id="goRunBtn">'+esc(t("goRun"))+'</button></section>';}
+  function needResearchCard(err){return '<section class="card ready"><p>'+esc(t("needResearch"))+'</p>'+(err?'<div class="err" style="margin-top:12px;text-align:start">'+esc(String(err))+'</div>':'')+'</section>';}
+  function researchBanner(m){return research(m)?'':'<section class="card" style="padding:var(--s4);margin-bottom:var(--s4)"><span class="gapline"><span class="dot"></span>'+esc(t("needResearch"))+'</span></section>';}
+  // ٢) القرار — بطاقة entry_decision (silk.decision/v1)
+  function screen2(){
+    var m=curM();if(!m)return noAnalysisCard();
+    var ed=m.entry_decision;
+    if(!ed||ed.error)return scrShell("nav2",needResearchCard(ed&&ed.error));
+    var tn=ed.verdict==="GO"?"go":ed.verdict==="NO-GO"?"no":"watch";
+    var badgeCls=tn==="go"?"b-go":tn==="no"?"b-no":"b-watch";
+    var pills=[["market","pMarket"],["competition","pCompetition"],["regulatory","pRegulatory"],["profit","pProfit"]].map(function(p){
+      var d=(ed.pillars||{})[p[0]]||{},v=d.value;
+      var bar='<div class="track">'+(v!=null?'<span class="fill" style="width:'+Math.round(v*100)+'%"></span>':'')+'</div>';
+      var miss=(d.missing||[]).length?'<div class="gapline" style="font-size:12px"><span class="dot"></span>'+esc((S.lang==="ar"?"غائب: ":"missing: ")+d.missing.join("، "))+'</div>':'';
+      return '<div class="pillar"><div class="ph"><span>'+esc(t(p[1]))+'</span><span class="num">'+(v==null?gapT():v)+'</span></div>'+bar+(d.basis?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(d.basis)+'</div>':'')+miss+'</div>';
+    }).join("");
+    var sbo=ed.scores_by_option||{};
+    var opts='<div class="duo">'+["A","B"].map(function(k){
+      var on=ed.weights_option===k;
+      return '<div class="comp" style="'+(on?'border-color:var(--primary)':'')+'"><div class="comp-h"><span class="comp-nm">'+esc(t("optionL"))+' '+k+'</span>'+(on?'<span class="badge b-info">'+esc(t("activeOpt"))+'</span>':'')+'</div><div class="comp-v num">'+(sbo[k]==null?gapT():esc(String(sbo[k])))+'</div></div>';
+    }).join("")+'</div>'+(ed.weights_note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(ed.weights_note)+'</div>':'');
+    var crit=ed.critical_risk?'<div class="callout warn" style="border-color:var(--danger);background:var(--danger-soft);font-weight:600">'+esc(t("criticalRiskL"))+'</div>':'';
+    var missP=(ed.missing_pillars||[]).length?'<div class="gapline"><span class="dot"></span>'+esc(t("missingPillarsL"))+': '+esc(ed.missing_pillars.join("، "))+'</div>':'';
+    var conds=(ed.conditions||[]).length?'<div class="subhead">'+esc(t("conditionsL"))+'</div><ul class="limits">'+ed.conditions.map(function(c){return '<li>'+esc(c)+'</li>';}).join("")+'</ul>':'';
+    var steps=(ed.first_steps||[]).length?'<div class="subhead">'+esc(t("firstStepsL"))+'</div><ul class="list">'+ed.first_steps.map(function(c){return '<li>'+esc(c)+'</li>';}).join("")+'</ul>':'';
+    var risks='';
+    if((ed.risks||[]).length)risks='<div class="subhead">'+esc(t("risksL"))+'</div><div style="overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colRisk"))+'</th><th>'+esc(t("colSeverity"))+'</th><th>'+esc(t("colEvidence"))+'</th></tr></thead><tbody>'+
+      ed.risks.map(function(r){r=r||{};var sev=String(r.severity||"");var col=(sev.indexOf("عال")>=0||/high/i.test(sev))?"var(--danger)":"var(--warning)";return '<tr><td>'+esc(r.risk||"")+'</td><td><span style="color:'+col+';font-weight:600">'+esc(sev)+'</span></td><td style="font-size:13px">'+esc(r.evidence||"")+'</td></tr>';}).join("")+'</tbody></table></div>';
+    return scrShell("nav2",
+      '<section class="card decision '+tn+'"><div class="d-head"><span class="badge '+badgeCls+'" style="font-size:16px;padding:8px 18px">'+esc(ed.verdict||"")+'</span>'+(ed.schema?'<span class="tag num">'+esc(ed.schema)+'</span>':'')+'</div>'+
+      '<div class="d-grid"><div>'+
+      (ed.why?'<p class="d-why"><b>'+esc(t("whyLabel"))+':</b> '+esc(ed.why)+'</p>':'')+crit+missP+
+      '<div class="subhead">'+esc(t("pillarsL"))+'</div>'+pills+
+      '<div class="subhead">'+esc(t("weightsL"))+'</div>'+opts+conds+steps+risks+
+      (ed.note?'<div class="callout">'+esc(ed.note)+'</div>':'')+
+      '</div><div><div class="score-big num" style="text-align:center">'+(ed.score==null?gapT():esc(String(ed.score)))+'</div><div style="text-align:center;color:var(--text-3);font-size:13px;margin-top:4px">'+esc(t("scoreL"))+' /1</div>'+
+      '<div style="text-align:center;margin-top:14px"><span class="tag num">'+esc(t("confLabel"))+' '+(ed.confidence==null?"—":esc(String(ed.confidence)))+'</span></div>'+
+      (ed.confidence_basis?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:center">'+esc(ed.confidence_basis)+'</div>':'')+
+      '</div></div></section>');
+  }
+  // ٣) حجم السوق — TAM/SAM/SOM + نمو/CAGR من research.agents.market_size
+  function screen3(){
+    var m=curM();if(!m)return noAnalysisCard();
+    if(!research(m))return scrShell("nav3",needResearchCard(m.research&&m.research.error));
+    var ag=rAgent(m,"market_size");
+    return scrShell("nav3",'<section class="card panel"><div class="pipe-head"><h3>'+esc(t("nav3"))+'</h3>'+agentChip(ag)+'</div>'+
+      '<div class="mgrid">'+metricCard(t("tamL"),rFind(ag,"tam_usd"),fmtUSD)+metricCard(t("samL"),rFind(ag,"sam_usd"),fmtUSD)+metricCard(t("somL"),rFind(ag,"som_usd"),fmtUSD)+
+      metricCard(t("growthL"),rFind(ag,"import_growth_pct"),fmtPct)+metricCard(t("cagr"),rFind(ag,"import_cagr_pct"),fmtPct)+'</div>'+gapsBlock(ag)+'</section>');
+  }
+  // ٤) المنافسة — الطبقة الدولية (حصص) ثم الشركات بالاسم
+  function screen4(){
+    var m=curM();if(!m)return noAnalysisCard();
+    var ag=rAgent(m,"competitor");
+    var cards='<div class="mgrid">'+metricCard(t("hhiL"),rFind(ag,"hhi"))+metricCard(t("topShareL"),rFind(ag,"top_supplier_share_pct"),fmtPct)+metricCard(t("saudiShareL"),rFind(ag,"saudi_share_pct"),fmtPct)+'</div>';
+    var scF=rFind(ag,"supplier_countries"),rows=(scF&&scF.value)||m.supplier_countries||[];
+    var tbl;
+    if(rows.length){tbl='<div style="overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colMarket"))+'</th><th>'+esc(t("colShare"))+'</th><th>'+esc(t("colValueL"))+'</th></tr></thead><tbody>'+
+      rows.slice(0,10).map(function(s){s=s||{};var nm=s.partner||s.country||s.name||"—";return '<tr><td>'+esc(String(nm))+'</td><td class="num">'+(s.share!=null?esc(fmtPct(s.share)):gapT())+'</td><td class="num">'+(s.value_usd!=null?fmtUSD(s.value_usd):gapT())+'</td></tr>';}).join("")+'</tbody></table></div>'+(scF&&srcLine(scF)?'<div class="prov">'+esc(srcLine(scF))+'</div>':'');}
+    else tbl='<div class="callout warn">'+esc(t("notObserved"))+'</div>';
+    var ncF=rFind(ag,"named_companies"),named=(ncF&&ncF.value)||[],nc;
+    if(named.length){nc=named.slice(0,12).map(function(c){c=c||{};var nm=esc(c.name||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
+      return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(t("unverified"))+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+'</span></div>';}).join("")+
+      (ncF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(ncF.note)+'</div>':'');}
+    else nc='<div class="callout warn">'+esc((ncF&&ncF.note)||t("notObserved"))+'</div>';
+    return scrShell("nav4",researchBanner(m)+
+      '<section class="card panel"><div class="pipe-head"><h3>'+esc(t("intlLayer"))+'</h3>'+agentChip(ag)+'</div>'+cards+'<div class="subhead">'+esc(t("supplierCountries"))+'</div>'+tbl+gapsBlock(ag)+'</section>'+
+      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("namedLayer"))+'</h3>'+nc+'</section>');
+  }
+  // ٥) التسعير — الطبقة الحدودية بمعادلاتها + التجزئة أو فجوة /deepen الصريحة
+  function screen5(){
+    var m=curM();if(!m)return noAnalysisCard();
+    var ag=rAgent(m,"pricing");
+    var cards='<div class="mgrid">'+metricCard(t("uvL"),rFind(ag,"border_unit_value_usd_kg"))+metricCard(t("suvL"),rFind(ag,"saudi_border_unit_value_usd_kg"))+metricCard(t("marginBL"),rFind(ag,"margin_at_border_pct"),fmtPct)+'</div>';
+    var rpF=rFind(ag,"retail_prices"),listings=(rpF&&rpF.value)||[];
+    if(!listings.length)listings=m.prices||[];
+    var retail;
+    if(listings.length){retail='<div style="overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colBrand"))+'</th><th>'+esc(t("colPrice"))+'</th><th>'+esc(t("storeL"))+'</th></tr></thead><tbody>'+
+      listings.slice(0,10).map(function(p){p=p||{};return '<tr><td>'+esc(String(p.title||"—").slice(0,60))+'</td><td class="num">'+(p.price!=null?esc(String(p.price))+(p.currency?' '+esc(p.currency):''):gapT())+'</td><td>'+esc(p.store||"—")+'</td></tr>';}).join("")+'</tbody></table></div>'+(rpF&&srcLine(rpF)?'<div class="prov">'+esc(srcLine(rpF))+'</div>':'');}
+    else retail='<div class="callout warn">'+esc(t("needDeepen"))+'</div>';
+    var rfF=rFind(ag,"retail_references"),refs=(rfF&&rfF.value)||[];
+    var refsHtml=refs.length?'<ul class="list">'+refs.slice(0,8).map(function(x){x=x||{};var ttl=esc(String(x.title||x.url||""));return '<li>'+(x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+ttl+'</a>':ttl)+(x.retrieved_at?' <span class="prov" style="display:inline">'+esc(x.retrieved_at)+'</span>':'')+'</li>';}).join("")+'</ul>'+
+      (rfF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(rfF.note)+'</div>':''):'<div class="callout">'+esc(t("notObserved"))+'</div>';
+    return scrShell("nav5",researchBanner(m)+
+      '<section class="card panel"><div class="pipe-head"><h3>'+esc(t("borderLayer"))+'</h3>'+agentChip(ag)+'</div>'+cards+gapsBlock(ag)+'</section>'+
+      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("retailLayer"))+'</h3>'+retail+'</section>'+
+      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("retailRefs"))+'</h3>'+refsHtml+'</section>');
+  }
+  // ٦) الاشتراطات — القائمة + بوابة الأهلية + التعريفة
+  function screen6(){
+    var m=curM();if(!m)return noAnalysisCard();
+    var ag=rAgent(m,"regulatory");
+    var gateF=rFind(ag,"eligibility_gate");
+    var gate=(gateF&&gateF.value===true)?'<div class="callout warn" style="font-weight:600">'+esc(t("eligGateL"))+(srcLine(gateF)?'<div class="prov">'+esc(srcLine(gateF))+'</div>':'')+'</div>':'';
+    var cards='<div class="mgrid">'+metricCard(t("tariffL"),rFind(ag,"tariff_applied_pct"),fmtPct)+metricCard(t("reqCount"),rFind(ag,"entry_requirements_count"),fmtNum)+'</div>';
+    var rcF=rFind(ag,"requirements_checklist"),items=(rcF&&rcF.value)||[],list;
+    if(items.length)list='<ul class="list">'+items.map(function(v){v=v||{};return '<li>'+esc(String(v.item||v.requirement||v.name||""))+(v.authority?' <span class="pill">'+esc(v.authority)+'</span>':'')+(v.direction?' <span class="pill">'+esc(v.direction)+'</span>':'')+(v.source_url?' <a href="'+esc(v.source_url)+'" target="_blank" rel="noopener">'+esc(t("officialSrc"))+'</a>':'')+'</li>';}).join("")+'</ul>'+
+      (rcF&&srcLine(rcF)?'<div class="prov">'+esc(srcLine(rcF))+'</div>':'')+(rcF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(rcF.note)+'</div>':'');
+    else list='<div class="callout warn">'+esc(t("notObserved"))+'</div>';
+    return scrShell("nav6",researchBanner(m)+
+      '<section class="card panel"><div class="pipe-head"><h3>'+esc(t("nav6"))+'</h3>'+agentChip(ag)+'</div>'+gate+cards+'<div class="subhead">'+esc(t("reqList"))+'</div>'+list+gapsBlock(ag)+'</section>');
+  }
+  // ٧) الطلب والمخاطر — consumer_demand + risk + SWOT 2×2 + شرائح
+  function screen7(){
+    var m=curM();if(!m)return noAnalysisCard();
+    var cd=rAgent(m,"consumer_demand"),rk=rAgent(m,"risk");
+    var demand='<div class="mgrid">'+metricCard(t("gdpL"),rFind(cd,"gdp_per_capita_usd"),fmtUSD)+metricCard(t("popL"),rFind(cd,"population"),fmtNum)+metricCard(t("supplyL"),rFind(cd,"percapita_supply_kg"))+
+      metricCard(t("searchL"),rFind(cd,"search_interest"))+metricCard(t("muslimL"),rFind(cd,"muslim_share_pct"),fmtPct)+metricCard(t("ramadanL"),rFind(cd,"ramadan_seasonality"))+'</div>';
+    var risk='<div class="mgrid">'+metricCard(t("wgiPolL"),rFind(rk,"political_stability_wgi"))+metricCard(t("wgiRegL"),rFind(rk,"regulatory_quality_wgi"))+metricCard(t("lpiL"),rFind(rk,"logistics_lpi"))+
+      metricCard(t("fxL"),rFind(rk,"fx_volatility_pct"),fmtPct)+metricCard(t("hhiRiskL"),rFind(rk,"supplier_concentration_hhi"))+metricCard(t("critL"),rFind(rk,"critical_risk"),fmtBool)+'</div>';
+    var sw=m.swot||{};
+    function swotCell(k,items,color){
+      var body=(items&&items.length)?items.map(function(it){it=it||{};return '<div style="margin-bottom:10px"><div style="font-size:14px;line-height:1.6">'+esc(it.text||"")+'</div>'+(it.evidence?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(it.evidence)+'</div>':'')+'</div>';}).join(""):'<span class="gap-txt">'+esc(t("noItem"))+'</span>';
+      return '<div class="swotcell" style="border-top:3px solid '+color+'"><h4>'+esc(t(k))+'</h4>'+body+'</div>';
+    }
+    var swot='<div class="swotgrid">'+swotCell("swotS",sw.S,"var(--success)")+swotCell("swotW",sw.W,"var(--danger)")+swotCell("swotO",sw.O,"var(--primary)")+swotCell("swotT",sw.T,"var(--warning)")+'</div>'+
+      (sw.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(sw.note)+'</div>':'');
+    var segs=(m.segments||[]).length?'<ul class="list">'+m.segments.map(function(s){s=s||{};return '<li>'+esc(s.segment||"")+(s.basis?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(s.basis)+'</div>':'')+'</li>';}).join("")+'</ul>':'<div class="callout">'+esc(t("notObserved"))+'</div>';
+    return scrShell("nav7",researchBanner(m)+
+      '<section class="card panel"><div class="pipe-head"><h3>'+esc(t("demandHdr"))+'</h3>'+agentChip(cd)+'</div>'+demand+gapsBlock(cd)+'</section>'+
+      '<section class="card panel" style="margin-top:var(--s4)"><div class="pipe-head"><h3>'+esc(t("riskHdr"))+'</h3>'+agentChip(rk)+'</div>'+risk+gapsBlock(rk)+'</section>'+
+      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("swotHdr"))+'</h3>'+swot+'</section>'+
+      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("segmentsHdr"))+'</h3>'+segs+'</section>');
+  }
+  // ٨) لوحات البيانات في شاشة المصادر — التغطية + الأثر + دليل المورّدين
+  function renderDataPanels(){
+    var el=$("#dataPanels");if(!el)return;
+    var v=vw(),m=curM(),h="";
+    if(!v){el.innerHTML='<div class="sec-ttl">'+esc(t("covSec"))+'</div><div class="callout">'+esc(t("runFirst"))+'</div>';return;}
+    var cov=(m&&m.section_coverage)||{},st=(m&&m.section_status)||{};
+    var covRows=Object.keys(cov).map(function(k){var c=cov[k]||{},s=st[k]||{};
+      return '<tr><td>'+esc(k)+'</td><td class="num">'+esc(String(c.contributed))+'/'+esc(String(c.attempted))+'</td><td class="num">'+esc(String(c.score))+'</td><td>'+(s.status==="ok"?'<span class="stbadge st-on">ok</span>':'<span class="stbadge st-off">'+esc(t("declaredGap"))+'</span>')+'</td><td>'+(c.single_source?'<span class="pill">'+esc(t("singleSrc"))+'</span>':'')+'</td></tr>';}).join("");
+    h+='<div class="sec-ttl">'+esc(t("covSec"))+(m&&m.country?' — '+esc(m.country):'')+'</div>';
+    h+=covRows?'<div class="card" style="padding:var(--s4);overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("sectionL"))+'</th><th>'+esc(t("colContrib"))+'</th><th>score</th><th>'+esc(t("statusL"))+'</th><th></th></tr></thead><tbody>'+covRows+'</tbody></table></div>':'<div class="callout">'+esc(t("notObserved"))+'</div>';
+    var prv=v.provenance||[];
+    h+='<div class="sec-ttl">'+esc(t("provHdr"))+'</div>';
+    h+=prv.length?'<div class="card" style="padding:var(--s4);overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colSource"))+'</th><th>'+esc(t("colContrib"))+'</th><th>'+esc(t("colFail"))+'</th></tr></thead><tbody>'+
+      prv.map(function(b){b=b||{};return '<tr><td>'+esc(b.source||"")+'</td><td class="num">'+esc(String(b.contributed))+'/'+esc(String(b.attempted))+'</td><td style="font-size:12px;color:var(--text-3)">'+esc((b.failures||[]).join(" | "))+'</td></tr>';}).join("")+'</tbody></table></div>':'<div class="callout">'+esc(t("notObserved"))+'</div>';
+    var dir=(m&&m.supplier_directory)||{};
+    function dirList(arr){arr=arr||[];if(!arr.length)return '<div class="callout warn">'+esc(t("notObserved"))+'</div>';
+      return arr.slice(0,10).map(function(c){c=c||{};var nm=esc(c.name||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
+        return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(t("unverified"))+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+(c.address?' · '+esc(c.address):'')+'</span></div>';}).join("");}
+    h+='<div class="sec-ttl">'+esc(t("dirHdr"))+'</div><div class="duo"><section class="card panel"><h3>'+esc(t("dirSaudi"))+'</h3>'+dirList(dir.saudi)+'</section><section class="card panel"><h3>'+esc(t("dirTarget"))+'</h3>'+dirList(dir.target)+'</section></div>'+
+      (dir.note?'<div class="callout warn" style="margin-top:var(--s3)">'+esc(dir.note)+'</div>':'');
+    el.innerHTML=h;
+  }
+  var SCREENS={2:screen2,3:screen3,4:screen4,5:screen5,6:screen6,7:screen7};
+  function renderScreen(){
+    var fn=SCREENS[S.screen];if(!fn)return;
+    $("#screenBody").innerHTML=fn();
+    var sel=$("#mktSel");if(sel)sel.addEventListener("change",function(){S.mktIdx=+this.value;renderScreen();});
+    var g=$("#goRunBtn");if(g)g.addEventListener("click",function(){setScreen(1);});
+  }
+  function setScreen(n){S.screen=n;applyView();}
+
   var FREE=[{k:null,nm:{ar:"UN Comtrade",en:"UN Comtrade"},ds:{ar:"الاستيراد/التصدير بالـ HS — العمود الفقري.",en:"HS imports/exports — the backbone."}},
     {k:null,nm:{ar:"World Bank",en:"World Bank"},ds:{ar:"الدخل، القوة الشرائية، السكان.",en:"Income, PPP, population."}},
     {k:null,nm:{ar:"مرجع الاشتراطات L1",en:"Requirements L1 reference"},ds:{ar:"اشتراطات دخول/خروج بمصادرها الرسمية.",en:"Entry/exit requirements with official sources."}},
@@ -629,13 +895,22 @@
     $$("#settingsBody .switch").forEach(function(b){b.addEventListener("click",function(){var g=this.getAttribute("data-tg");S.toggles[g]=!S.toggles[g];localStorage.setItem("silk_toggles",JSON.stringify(S.toggles));renderSettings();});});
   }
 
-  function applyView(){var dash=S.view==="dashboard";$("#dashboard").classList.toggle("hidden",!dash);$("#settings").classList.toggle("hidden",dash);$("#runBtn").classList.toggle("hidden",!dash);if(!dash)renderSettings();}
-  $("#settingsBtn").addEventListener("click",function(){S.view=S.view==="dashboard"?"settings":"dashboard";applyView();});
+  function applyView(){
+    $$("#scrnav button").forEach(function(b){b.classList.toggle("on",+b.getAttribute("data-scr")===S.screen);});
+    $("#dashboard").classList.toggle("hidden",S.screen!==1);
+    $("#screens").classList.toggle("hidden",!(S.screen>=2&&S.screen<=7));
+    $("#settings").classList.toggle("hidden",S.screen!==8);
+    $("#runBtn").classList.toggle("hidden",S.screen!==1);
+    if(S.screen>=2&&S.screen<=7)renderScreen();
+    if(S.screen===8){renderSettings();renderDataPanels();}
+  }
+  $$("#scrnav button").forEach(function(b){b.addEventListener("click",function(){setScreen(+this.getAttribute("data-scr"));});});
+  $("#settingsBtn").addEventListener("click",function(){setScreen(S.screen===8?1:8);});
   $("#themeBtn").addEventListener("click",function(){var cur=document.documentElement.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");var nx=cur==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",nx);localStorage.setItem("silk_theme",nx);});
-  $$("#langSeg button").forEach(function(b){b.addEventListener("click",function(){S.lang=this.getAttribute("data-lang");localStorage.setItem("silk_lang",S.lang);applyLang();if(S.result)render();else renderReady();if(S.view==="settings")renderSettings();toast(t("langSwitched"));});});
+  $$("#langSeg button").forEach(function(b){b.addEventListener("click",function(){S.lang=this.getAttribute("data-lang");localStorage.setItem("silk_lang",S.lang);applyLang();if(S.result)render();else renderReady();applyView();toast(t("langSwitched"));});});
   function toast(m){var el=document.createElement("div");el.className="toast";el.textContent=m;document.body.appendChild(el);setTimeout(function(){el.style.transition="opacity .3s";el.style.opacity="0";setTimeout(function(){el.remove();},300);},1600);}
 
-  (function init(){var th=localStorage.getItem("silk_theme");if(th)document.documentElement.setAttribute("data-theme",th);applyLang();renderReady();})();
+  (function init(){var th=localStorage.getItem("silk_theme");if(th)document.documentElement.setAttribute("data-theme",th);applyLang();renderReady();applyView();})();
 })();
 </script>
 </body>

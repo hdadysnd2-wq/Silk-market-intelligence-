@@ -1,0 +1,211 @@
+# سِلك — تقرير سوق: تمور
+
+| البند | القيمة |
+| --- | --- |
+| المنتج | تمور |
+| رمز HS | 080410 (ثقة التصنيف 1.0) |
+| المنشأ | السعودية (SAU) |
+| السوق المستهدف | China |
+| التاريخ | 2026-07-06 |
+| سنة البيانات | 2023 |
+| تغطية البيانات الإجمالية | 80.0% |
+
+## الخلاصة التنفيذية
+
+- القرار (هيئة المحلفين): **NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات** (ثقة 0.0) — السوق الأول: China
+- لماذا: تغطية الوكلاء 0/3 وفجوات: TradeFlowAgent, EconomicAgent, CompetitionAgent
+- النتيجة أوّلية لا نهائية.
+
+## قرار الدخول (المحرك الموزون §8)
+
+- الحكم: **CONDITIONAL-GO** | النقاط: 0.554 | الثقة: 0.91
+- أساس الثقة: التغطية 0.91 × الأعمدة المحسوبة 4/4
+- خيار الأوزان المعتمد: A — النقاط بالخيارين: A = 0.554 | B = 0.531
+- ملاحظة الأوزان: خيار الأوزان قيد بوابة GATE 3 — كلا المجموعين محسوبان؛ الافتراضي A حتى قرار المالك
+
+| العمود | القيمة | الأساس | مكوّنات غائبة |
+| --- | --- | --- | --- |
+| جاذبية السوق | 0.703 | متوسط المتاح من: log10(TAM)/9 (سقف 10^9$)، (CAGR+10)/40 (−10%→0، +30%→1)، دخل الفرد/50k$، الحصة السعودية/20% | — |
+| المنافسة | 0.496 | متوسط المتاح من: HHI/0.5، حصة الأكبر/100، عدد المرشّحين بالاسم/10 — الدرجة المستهلكة في المجموع هي (1 − الشدة) | — |
+| التنظيم | 0.375 | متوسط المتاح من: (1 − تعريفة/30%)، وضوح القائمة (بنود/8) | tariff |
+| الربحية | 0.568 | متوسط المتاح من: الهامش/40%، الموقع السعري (1.5 − سعرك/متوسط السوق) | — |
+
+
+**الشروط:**
+- عمود الملاءمة التنظيمية ضعيف (0.375) — متوسط المتاح من: (1 − تعريفة/30%)، وضوح القائمة (بنود/8)
+
+**الخطوات الأولى:**
+1. أغلق بنود قائمة الاشتراطات (وكيل regulatory) بنداً بنداً بمرجعها الرسمي
+
+لماذا: score 0.554 في النطاق الشرطي أو الثقة 0.91 دون 0.6 أو شروط مفتوحة (1)
+قرار حتمي قابل للتفسير من حزمة §4b المتحقَّق منها — الأعمدة الغائبة شروط معلنة، لا تخمين
+
+## موقعك التنافسي
+
+- التغطية: 0 من 3 منافساً لهم أسعار مرصودة — لرفع التغطية فعّل طبقة التعميق
+- top تمور brands manufacturers competitor — تقرير سوق 2024: سعر غير مرصود — price not observed (اكتمال الخيط 2/4)
+- دليل قنوات top تمور brands manufacturers : سعر غير مرصود — price not observed (اكتمال الخيط 2/4)
+- مستوردون: top تمور brands manufacturers : سعر غير مرصود — price not observed (اكتمال الخيط 2/4)
+
+## حجم السوق — TAM/SAM/SOM
+
+- tam_usd: 61,000,000 USD (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+- import_growth_pct: 38.6 % (المصدر: UN Comtrade (مخزن الحقائق) | سُحب: 2026-07-06 | ثقة: 0.9)
+- import_cagr_pct: 17.7 % (المصدر: UN Comtrade (مخزن الحقائق) | سُحب: 2026-07-06 | ثقة: 0.9)
+- sam_usd: 12,200,000 USD [مُقدَّر — نموذج بافتراضات معلنة] — المعادلة: SAM = TAM × 0.2 (عامل شريحة 'premium' — افتراض معلن قابل للتعديل) (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+- som_usd: 174,286 USD [مُقدَّر — نموذج بافتراضات معلنة] — المعادلة: SOM = min(SAM أو TAM، الطاقة الشهرية × 12 × قيمة الوحدة الحدودية 2.90$/kg) (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+
+## المنافسة بطبقتيها
+
+**الطبقة الدولية (تركّز الموردين — UN Comtrade):**
+- hhi: 0.294 (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+- top_supplier_share_pct: 40.0 % (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+- saudi_share_pct: 40.0 % (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+- Saudi Arabia: 40.0% (19,000,000$) (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+- Iran: 29.47% (14,000,000$) (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+- Tunisia: 16.84% (8,000,000$) (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+- United Arab Emirates: 13.68% (6,500,000$) (المصدر: UN Comtrade | سُحب: 2026-07-06 | ثقة: 0.9)
+
+**شركات بالاسم (مرشّحون غير موثَّقين):**
+- top تمور brands importers distributors c — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
+- دليل قنوات top تمور brands importers dist — https://example.org/b — عبر Serper — سُحب: 2026-07-06
+- مستوردون: top تمور brands importers dist — https://example.org/c — عبر Serper — سُحب: 2026-07-06
+- موزّع تمور distributor i — نموذج A — العنوان: Trade District 12 — عبر Google Maps — سُحب: 2026-07-06
+- مستورد تمور distributor i — نموذج B — العنوان: Market St 7 — عبر Google Maps — سُحب: 2026-07-06
+- ملاحظة: مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل أي تعاقد.
+
+- Saudi Arabia: 40.0% (19,000,000$) (المصدر: UN Comtrade)
+- Iran: 29.47% (14,000,000$) (المصدر: UN Comtrade)
+- Tunisia: 16.84% (8,000,000$) (المصدر: UN Comtrade)
+- United Arab Emirates: 13.68% (6,500,000$) (المصدر: UN Comtrade)
+- منافس بالاسم: top تمور brands manufacturers competitor — تقرير سوق 2024
+- منافس بالاسم: دليل قنوات top تمور brands manufacturers 
+- منافس بالاسم: مستوردون: top تمور brands manufacturers 
+
+## التسعير بطبقتيه
+
+**الطبقة الحدودية (قيم وحدة كومتريد):**
+- border_unit_value_usd_kg: 2.9 USD/kg [مُقدَّر — نموذج بافتراضات معلنة] — المعادلة: قيمة الوحدة = قيمة الواردات ÷ الوزن الصافي (كلاهما مرصود من كومتريد) (المصدر: UN Comtrade (مخزن الحقائق) | سُحب: 2026-07-06 | ثقة: 0.9)
+- saudi_border_unit_value_usd_kg: 2.32 USD/kg [مُقدَّر — نموذج بافتراضات معلنة] — المعادلة: قيمة وحدة الصادر السعودي = قيمة ÷ وزن صافٍ (صف الشريك SAU) (المصدر: UN Comtrade (مخزن الحقائق) | سُحب: 2026-07-06 | ثقة: 0.9)
+- margin_at_border_pct: 17.4 % [مُقدَّر — نموذج بافتراضات معلنة] — المعادلة: الهامش = (قيمة الوحدة الحدودية 2.90 − تكلفتك 2.0 − شحن 0.4) ÷ قيمة الوحدة (المصدر: UN Comtrade (مخزن الحقائق) | سُحب: 2026-07-06 | ثقة: 0.9)
+
+**طبقة التجزئة:**
+بيانات غير كافية لقسم «الأسعار» (0/1 حقائق سوقية) — المصادر المُحاوَلة: لا مصادر مُحاوَلة
+- فجوة معلنة: retail_prices: LocalPriceAgent: paid agent outside /deepen — skipped (structural guard, no call attempted)
+
+**مراجع الأسعار (للمراجعة اليدوية — لا استخراج أرقام آلي):**
+- تمور retail price in China — تقرير سوق 2024 — https://example.org/a — سُحب: 2026-07-06
+- دليل قنوات تمور retail price in China — https://example.org/b — سُحب: 2026-07-06
+- مستوردون: تمور retail price in China — https://example.org/c — سُحب: 2026-07-06
+
+## تحليل SWOT (قاعدي من حقائق مرصودة)
+
+### القوة Strengths
+- حضور سعودي قائم بحصة 40.0% من واردات السوق — الدليل: UN Comtrade — saudi_share_pct
+- سعر حدودي سعودي منافس (2.32$ مقابل متوسط 2.9$/kg) — الدليل: UN Comtrade — قيم الوحدة
+
+### الضعف Weaknesses
+- لا بند مرصوداً
+
+### الفرص Opportunities
+- واردات السوق تنمو 17.7% سنوياً مركّباً — الدليل: UN Comtrade — import_cagr_pct
+
+### التهديدات Threats
+- لا بند مرصوداً
+
+> خلايا قاعدية من حقائق مرصودة حصراً — الخلية الفارغة تعني لا بند مرصوداً، لا أنها سليمة
+
+## شرائح العملاء
+
+- شريحة الدخل: متوسط — الأساس: نصيب الفرد 12,630$ (World Bank) — عتبات معلنة 8k/25k
+- شريحة الحلال/رمضان: 2.0% من السكان — الأساس: مرجع Pew الساكن — muslim_share_pct
+- اهتمام البحث بالمنتج: 72.0/100 — الأساس: Google Trends — search_interest
+
+## دليل المورّدين والمصنّعين
+
+**مورّدون ومصنّعون سعوديون:**
+- تمور manufacturers suppliers Saudi Arabi — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
+- دليل قنوات تمور manufacturers suppliers S — https://example.org/b — عبر Serper — سُحب: 2026-07-06
+- مستوردون: تمور manufacturers suppliers S — https://example.org/c — عبر Serper — سُحب: 2026-07-06
+- مصانع موردي تمور السعودية — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
+- دليل قنوات مصانع موردي تمور السعودية — https://example.org/b — عبر Serper — سُحب: 2026-07-06
+- مستوردون: مصانع موردي تمور السعودية — https://example.org/c — عبر Serper — سُحب: 2026-07-06
+- موزّع تمور مصنع مورد الس — نموذج A — العنوان: Trade District 12 — عبر Google Maps — سُحب: 2026-07-06
+- مستورد تمور مصنع مورد الس — نموذج B — العنوان: Market St 7 — عبر Google Maps — سُحب: 2026-07-06
+
+**موزّعون ومستوردون في السوق المستهدف:**
+- تمور importers wholesale distributors in — تقرير سوق 2024 — https://example.org/a — عبر Serper — سُحب: 2026-07-06
+- دليل قنوات تمور importers wholesale distr — https://example.org/b — عبر Serper — سُحب: 2026-07-06
+- مستوردون: تمور importers wholesale distr — https://example.org/c — عبر Serper — سُحب: 2026-07-06
+- موزّع تمور wholesale dis — نموذج A — العنوان: Trade District 12 — عبر Google Maps — سُحب: 2026-07-06
+- مستورد تمور wholesale dis — نموذج B — العنوان: Market St 7 — عبر Google Maps — سُحب: 2026-07-06
+
+> مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل التعاقد؛ الترقية الموثّقة عبر /deepen
+
+## الاشتراطات التنظيمية
+
+- شهادة المنشأ السعودية للصادرات (وزارة التجارة / الغرف التجارية) — الجهة: وزارة التجارة — الاتجاه: exit — https://mc.gov.sa
+- متطلبات SFDA لتصدير الفئات الخاضعة (منشآت مرخّصة وشهادات صحية عند طلب سوق الوجهة) — الجهة: الهيئة العامة للغذاء والدواء SFDA — الاتجاه: exit — https://www.sfda.gov.sa
+- التسجيل في بوابة هيئة تنمية الصادرات السعودية (خدمات وبرامج دعم المصدرين) — الجهة: هيئة تنمية الصادرات السعودية — الاتجاه: exit — https://saudiexports.sa
+- (المصدر: Silk L1 requirements reference (official portals / EUR-Lex) | سُحب: 2026-07-06 | ثقة: 0.8)
+- فجوة معلنة: tariff_applied_pct: WITS unavailable: TypeError for HS080410 SAU->CHN 2023: a bytes-like object is required, not 'MagicMock'
+
+## سجل المخاطر
+
+- تركّز مصادر التوريد (الشدة: متوسطة) — الدليل: HHI=0.294 > 0.25 (كومتريد)
+- الاستقرار السياسي (WGI) — PV.EST سنة 2023 (مخزن الحقائق): -0.5 (المصدر: World Bank | سُحب: 2026-07-06)
+- جودة التنظيم (WGI) — RQ.EST سنة 2023 (مخزن الحقائق): 0.6 (المصدر: World Bank | سُحب: 2026-07-06)
+- الأداء اللوجستي (LPI) — LP.LPI.OVRL.XQ سنة 2023 (مخزن الحقائق): 3.7 (المصدر: World Bank | سُحب: 2026-07-06)
+- تقلب سعر الصرف (معامل اختلاف % على 4 سنوات، PA.NUS.FCRF) — مخزن الحقائق: 0.8 (المصدر: World Bank | سُحب: 2026-07-06)
+
+## تغطية الأقسام
+
+- حجم السوق والمنافسة: 3/3 (درجة 1.0) ⚠ مصدر واحد — ثقة منخفضة
+- الاشتراطات والتعريفة: 3/5 (درجة 0.6) ⚠ مصدر واحد — ثقة منخفضة
+- المنافسون بالاسم: 5/5 (درجة 1.0)
+- الأسعار: 0/0 (درجة 0.0) ⚠ مصدر واحد — ثقة منخفضة
+  - بيانات غير كافية لقسم «الأسعار» (0/1 حقائق سوقية) — المصادر المُحاوَلة: لا مصادر مُحاوَلة
+- الطلب والقدرة: 1/3 (درجة 0.33) ⚠ مصدر واحد — ثقة منخفضة
+- المخاطر: 4/4 (درجة 1.0) ⚠ مصدر واحد — ثقة منخفضة
+- الاتجاه: 0/0 (درجة 0.0) ⚠ مصدر واحد — ثقة منخفضة
+  - بيانات غير كافية لقسم «الاتجاه» (0/2 حقائق سوقية) — المصادر المُحاوَلة: لا مصادر مُحاوَلة
+
+## ملحق: أثر المصادر (المحاولات والإسهام)
+
+- Web Search (Serper): أسهم 39 من 39 محاولة
+- Silk L1 requirements reference (official portals / EUR-Lex): أسهم 16 من 17 محاولة
+  - فشل مُسجَّل: سوق CHN (موثّق جزئياً) غير مغطى بالمرجع الثابت بعد — تحقق محلياً (verify locally)
+- Google Maps: أسهم 6 من 6 محاولة
+- World Bank: أسهم 4 من 50 محاولة
+  - فشل مُسجَّل: no income data for CHN 2023
+  - فشل مُسجَّل: no income data for ARE 2023
+  - فشل مُسجَّل: الاستقرار السياسي (WGI) — PV.EST fetch failed for ARE: hermetic: live comtrade off
+- UN Comtrade: أسهم 3 من 114 محاولة
+  - فشل مُسجَّل: no import total HS080410 -> 784 2023
+  - فشل مُسجَّل: no competitor data
+  - فشل مُسجَّل: no competitor data
+- Google Trends: أسهم 3 من 3 محاولة
+- World Bank WITS: أسهم 0 من 3 محاولة
+  - فشل مُسجَّل: WITS unavailable: TypeError for HS080410 SAU->CHN 2023: a bytes-like object is required, not 'MagicMock'
+  - فشل مُسجَّل: WITS unavailable: TypeError for HS080410 SAU->ARE 2023: a bytes-like object is required, not 'MagicMock'
+  - فشل مُسجَّل: WITS unavailable: TypeError for HS080410 SAU->QAT 2023: a bytes-like object is required, not 'MagicMock'
+- FAOSTAT: أسهم 0 من 3 محاولة
+  - فشل مُسجَّل: FAOSTAT unavailable: fetch failed for CHN/تمور: hermetic: host not doubled (may require auth)
+  - فشل مُسجَّل: FAOSTAT unavailable: fetch failed for ARE/تمور: hermetic: host not doubled (may require auth)
+  - فشل مُسجَّل: FAOSTAT unavailable: fetch failed for QAT/تمور: hermetic: host not doubled (may require auth)
+
+## حدود هذا التقرير
+
+- China: demand_capacity missing (no income/population signal)
+- United Arab Emirates: all components missing — no usable data for this market
+- Qatar: all components missing — no usable data for this market
+- Kuwait: all components missing — no usable data for this market
+- Oman: all components missing — no usable data for this market
+
+## التوصية / المختصر
+
+- القرار: NO-GO (insufficient data) — قرار مؤجّل لانعدام البيانات (ثقة 0.0) — China
+- لا منافس بسعر مرصود بعد — فعّل with_localprice/deepen
+- أفضل باب دخول مرصود: online marketplaces e-commerce sites sel — تقرير سوق 2024 (واقعية — قناة إلكترونية مفتوحة)
+
+نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. Preliminary, real public data only; gaps flagged, not estimated.

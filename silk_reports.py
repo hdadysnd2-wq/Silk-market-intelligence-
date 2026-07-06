@@ -26,9 +26,127 @@ def _fmt(v: object) -> str:
     """تنسيق قيمة للعرض — display formatting (None = فجوة معلنة)."""
     if v is None:
         return "— (لا بيانات)"
-    if isinstance(v, float) and v >= 1000:
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) >= 1000:
         return f"{v:,.0f}"
     return str(v)
+
+
+# ── مساعدو حزمة البحث وقرار الدخول (§7) — research/decision display helpers ──
+# عرض صرف فوق view.markets[i]: لا شبكة، لا تعديل أرقام، الفجوات تُعلن بنصّها.
+# Pure display over the canonical view; gaps are declared verbatim, never filled.
+
+_MODELED_TAG = "مُقدَّر — نموذج بافتراضات معلنة"
+
+_PILLAR_AR = {"market": "جاذبية السوق", "competition": "المنافسة",
+              "regulatory": "التنظيم", "profit": "الربحية"}
+
+_SEC_AR = {"market_size": "حجم السوق والمنافسة", "demand": "الطلب والقدرة",
+           "regulatory": "الاشتراطات والتعريفة", "competitors": "المنافسون بالاسم",
+           "pricing": "الأسعار", "risk": "المخاطر", "trend": "الاتجاه"}
+
+
+def _research_bundle(m: dict) -> tuple[dict | None, str]:
+    """حزمة البحث أو غيابها المعلّل — the research bundle, or a declared absence."""
+    r = (m or {}).get("research")
+    if isinstance(r, dict) and r.get("error"):
+        return None, f"حزمة البحث فشلت — research bundle error: {r['error']}"
+    if not isinstance(r, dict) or not r.get("agents"):
+        return None, ("حزمة وكلاء البحث غير مفعّلة (with_research) — "
+                      "لا اكتشافات مرصودة لهذا القسم")
+    return r, ""
+
+
+def _ragent(m: dict, name: str) -> dict:
+    """وكيل بحث بالاسم من الحزمة — one research agent's block ({} if absent)."""
+    r, _ = _research_bundle(m)
+    return ((r or {}).get("agents") or {}).get(name) or {}
+
+
+def _rfind(agent: dict, metric: str) -> dict | None:
+    """اكتشاف بالاسم — the finding dict for a metric, or None."""
+    for f in agent.get("findings") or []:
+        if f.get("metric") == metric:
+            return f
+    return None
+
+
+def _f_text(f: dict) -> str:
+    """سطر الاكتشاف — metric: value unit [+ وسم «مُقدَّر» ونص المعادلة إن نموذجاً]."""
+    unit = f" {f.get('unit')}" if f.get("unit") else ""
+    txt = f"{f.get('metric')}: {_fmt(f.get('value'))}{unit}"
+    if f.get("modeled"):
+        txt += f" [{_MODELED_TAG}]"
+        if f.get("formula"):
+            txt += f" — المعادلة: {f['formula']}"
+    return txt
+
+
+def _f_srcline(f: dict | None) -> str:
+    """سطر المصدر لاكتشاف — source line (source | retrieved_at | confidence | url)."""
+    parts = []
+    for s in (f or {}).get("sources") or []:
+        seg = str(s.get("source") or "غير مرصود")
+        if s.get("retrieved_at"):
+            seg += f" | سُحب: {s['retrieved_at']}"
+        if s.get("confidence") is not None:
+            seg += f" | ثقة: {s['confidence']}"
+        if s.get("url"):
+            seg += f" | {s['url']}"
+        parts.append(seg)
+    return "المصدر: " + ("؛ ".join(parts) if parts else "غير مرصود")
+
+
+def _entry_text(e: object) -> str:
+    """سطر مرشّح (شركة/مورّد) — one candidate line: name/url/address/via/date."""
+    if not isinstance(e, dict):
+        return str(e)
+    bits = [str(e.get("name") or e.get("title") or "؟")]
+    if e.get("url"):
+        bits.append(str(e["url"]))
+    if e.get("address"):
+        bits.append(f"العنوان: {e['address']}")
+    if e.get("via"):
+        bits.append(f"عبر {e['via']}")
+    if e.get("retrieved_at"):
+        bits.append(f"سُحب: {e['retrieved_at']}")
+    return " — ".join(bits)
+
+
+def _listing_text(v: object) -> str:
+    """سطر قائمة سعر تجزئة — one retail listing line (title/price/currency/store)."""
+    if not isinstance(v, dict):
+        return str(v)
+    t = str(v.get("title") or v.get("name") or "قائمة")
+    if v.get("price") is not None:
+        t += f": {_fmt(v['price'])}" + (f" {v['currency']}" if v.get("currency") else "")
+    if v.get("store"):
+        t += f" — {v['store']}"
+    return t
+
+
+def _req_text(it: object) -> str:
+    """سطر بند اشتراطات — one requirements-checklist item (بنده وجهته ورابطه)."""
+    if not isinstance(it, dict):
+        return str(it)
+    bits = [str(it.get("item") or it.get("requirement") or "؟")]
+    if it.get("authority"):
+        bits.append(f"الجهة: {it['authority']}")
+    if it.get("direction"):
+        bits.append(f"الاتجاه: {it['direction']}")
+    if it.get("source_url"):
+        bits.append(str(it["source_url"]))
+    return " — ".join(bits)
+
+
+def _entry_decision_of(m: dict) -> tuple[dict | None, str]:
+    """قرار الدخول §8 أو غيابه المعلّل — the §8 decision, or a declared absence."""
+    ed = (m or {}).get("entry_decision")
+    if isinstance(ed, dict) and ed.get("error"):
+        return None, f"محرك القرار (§8) أبلغ خطأً — decision error: {ed['error']}"
+    if not isinstance(ed, dict) or not ed.get("schema"):
+        return None, ("قرار الدخول غير متاح — المحرك الموزون (§8) لم يعمل لهذا "
+                      "التحليل (يتطلب with_research)")
+    return ed, ""
 
 
 def render_brief(view: dict, dashboard_url: str = "/") -> str:
@@ -58,6 +176,214 @@ def render_brief(view: dict, dashboard_url: str = "/") -> str:
     L += ["", f"التفاصيل الكاملة باللوحة: {dashboard_url}",
           "كل رقم بمصدره؛ النواقص معلنة لا مخمّنة — قرار أوّلي لا نهائي."]
     return "\n".join(L)
+
+
+# ── بناة أقسام Word الجديدة (§7) — new docx section builders (pure display) ──
+
+def _docx_entry_decision(doc, m: dict) -> None:
+    """قرار الدخول (المحرك الموزون §8) — verdict/score/pillars/conditions/risks."""
+    doc.add_heading("قرار الدخول (المحرك الموزون §8)", level=1)
+    ed, absent = _entry_decision_of(m)
+    if ed is None:
+        doc.add_paragraph(absent)
+        return
+    doc.add_paragraph(f"الحكم: {ed.get('verdict')} | النقاط: {_fmt(ed.get('score'))}"
+                      f" | الثقة: {ed.get('confidence')}")
+    doc.add_paragraph(f"أساس الثقة: {ed.get('confidence_basis')}")
+    sbo = ed.get("scores_by_option") or {}
+    doc.add_paragraph(f"خيار الأوزان المعتمد: {ed.get('weights_option')} — "
+                      f"النقاط بالخيارين: A = {_fmt(sbo.get('A'))} | "
+                      f"B = {_fmt(sbo.get('B'))}")
+    if ed.get("weights_note"):
+        doc.add_paragraph(f"ملاحظة الأوزان: {ed['weights_note']}")
+    # الأعمدة الأربعة: قيمة + سطر أساس + المكوّنات الغائبة (فجوة معلنة).
+    for key, p in (ed.get("pillars") or {}).items():
+        doc.add_paragraph(f"عمود {_PILLAR_AR.get(key, key)}: {_fmt(p.get('value'))}")
+        doc.add_paragraph(f"الأساس: {p.get('basis')}", style="Intense Quote")
+        if p.get("missing"):
+            doc.add_paragraph("مكوّنات غائبة (فجوة معلنة): "
+                              + "، ".join(map(str, p["missing"])),
+                              style="Intense Quote")
+    if ed.get("missing_pillars"):
+        doc.add_paragraph("أعمدة غائبة كلياً: " + "، ".join(
+            _PILLAR_AR.get(k, k) for k in ed["missing_pillars"]))
+    if ed.get("critical_risk"):
+        doc.add_paragraph("تحذير: خطر حرج مرصود — راجع سجل المخاطر أدناه.")
+    doc.add_paragraph("الشروط:")
+    for c in ed.get("conditions") or ["لا شروط مفتوحة"]:
+        doc.add_paragraph(str(c), style="List Bullet")
+    doc.add_paragraph("سجل المخاطر:")
+    for r in ed.get("risks") or []:
+        doc.add_paragraph(f"{r.get('risk')} (الشدة: {r.get('severity')}) — "
+                          f"الدليل: {r.get('evidence')}", style="List Bullet")
+    if not ed.get("risks"):
+        doc.add_paragraph("لا مخاطر مسجّلة في محرك القرار", style="List Bullet")
+    doc.add_paragraph("الخطوات الأولى:")
+    for s in ed.get("first_steps") or ["لا خطوات مقترحة"]:
+        doc.add_paragraph(str(s), style="List Bullet")
+    doc.add_paragraph(f"لماذا: {ed.get('why')}")
+    if ed.get("note"):
+        doc.add_paragraph(str(ed["note"]))
+
+
+def _docx_market_size(doc, m: dict) -> None:
+    """حجم السوق TAM/SAM/SOM — كل اكتشاف بمصدره؛ المنمذج موسوم بمعادلته."""
+    doc.add_heading("حجم السوق — TAM/SAM/SOM", level=1)
+    r, absent = _research_bundle(m)
+    if r is None:
+        doc.add_paragraph(absent)
+        return
+    ag = _ragent(m, "market_size")
+    shown = False
+    for f in ag.get("findings") or []:
+        if f.get("value") is None:
+            continue
+        doc.add_paragraph(_f_text(f))
+        doc.add_paragraph(_f_srcline(f), style="Intense Quote")
+        shown = True
+    if not shown:
+        doc.add_paragraph("لا اكتشافات مرصودة لحجم السوق")
+    for g in ag.get("gaps") or []:
+        doc.add_paragraph(f"فجوة معلنة: {g}", style="List Bullet")
+
+
+def _docx_competition_research(doc, m: dict) -> None:
+    """طبقتا المنافسة من حزمة البحث — شركات بالاسم + أرقام الطبقة الدولية."""
+    ag = _ragent(m, "competitor")
+    if not ag:
+        return
+    doc.add_heading("شركات بالاسم (مرشّحون غير موثَّقين)", level=2)
+    named = (_rfind(ag, "named_companies") or {}).get("value") or []
+    if named:
+        for n in named[:10]:
+            doc.add_paragraph(_entry_text(n), style="List Bullet")
+        doc.add_paragraph("مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل أي تعاقد.")
+    else:
+        doc.add_paragraph("لا شركات مرشّحة بالاسم مرصودة — فجوة معلنة")
+    doc.add_paragraph("الطبقة الدولية (تركّز الموردين — UN Comtrade):")
+    for metric in ("hhi", "top_supplier_share_pct", "saudi_share_pct"):
+        f = _rfind(ag, metric)
+        if f and f.get("value") is not None:
+            doc.add_paragraph(_f_text(f), style="List Bullet")
+            doc.add_paragraph(_f_srcline(f), style="Intense Quote")
+        else:
+            doc.add_paragraph(f"{metric}: غير مرصود", style="List Bullet")
+
+
+def _docx_pricing_layers(doc, m: dict) -> None:
+    """التسعير بطبقتيه — الحدودية (نماذج موسومة بمعادلاتها) ثم التجزئة ومراجعها."""
+    doc.add_heading("التسعير بطبقتيه", level=1)
+    r, absent = _research_bundle(m)
+    if r is None:
+        doc.add_paragraph(absent)
+        return
+    ag = _ragent(m, "pricing")
+    doc.add_paragraph("الطبقة الحدودية (قيم وحدة كومتريد):")
+    for metric in ("border_unit_value_usd_kg", "saudi_border_unit_value_usd_kg",
+                   "margin_at_border_pct"):
+        f = _rfind(ag, metric)
+        if f and f.get("value") is not None:
+            doc.add_paragraph(_f_text(f), style="List Bullet")
+            doc.add_paragraph(_f_srcline(f), style="Intense Quote")
+        else:
+            doc.add_paragraph(f"{metric}: غير مرصود", style="List Bullet")
+    doc.add_paragraph("طبقة التجزئة:")
+    rp = _rfind(ag, "retail_prices")
+    vals = (rp or {}).get("value") or []
+    if vals:
+        for v in vals[:8]:
+            doc.add_paragraph(_listing_text(v), style="List Bullet")
+        doc.add_paragraph(_f_srcline(rp), style="Intense Quote")
+    else:
+        # فجوة القسم المعلنة تُطبع بنصّها — the section's declared gap, verbatim.
+        gap = next((g for g in (ag.get("gaps") or []) if "retail_prices" in g),
+                   "retail_prices: غير مرصود — فجوة معلنة")
+        doc.add_paragraph(gap, style="List Bullet")
+    refs = (_rfind(ag, "retail_references") or {}).get("value") or []
+    if refs:
+        doc.add_paragraph("مراجع الأسعار (للمراجعة اليدوية — لا استخراج أرقام آلي):")
+        for ref in refs[:6]:
+            doc.add_paragraph(f"{(ref or {}).get('title')} — {(ref or {}).get('url')}"
+                              f" — سُحب: {(ref or {}).get('retrieved_at')}",
+                              style="List Bullet")
+    else:
+        doc.add_paragraph("مراجع الأسعار: غير مرصودة")
+
+
+def _docx_swot(doc, m: dict) -> None:
+    """SWOT قاعدي — كل خلية بنصها ودليلها؛ الربع الفارغ «لا بند مرصوداً»."""
+    doc.add_heading("تحليل SWOT (قاعدي من حقائق مرصودة)", level=1)
+    sw = m.get("swot") or {}
+    for key, title in (("S", "القوة"), ("W", "الضعف"),
+                       ("O", "الفرص"), ("T", "التهديدات")):
+        doc.add_heading(title, level=2)
+        items = sw.get(key) or []
+        if not items:
+            doc.add_paragraph("لا بند مرصوداً")
+        for it in items:
+            doc.add_paragraph(f"{it.get('text')} — الدليل: {it.get('evidence')}",
+                              style="List Bullet")
+    if sw.get("note"):
+        doc.add_paragraph(str(sw["note"]))
+
+
+def _docx_segments(doc, m: dict) -> None:
+    """شرائح العملاء — segment + basis؛ الفارغ يُعلن لا يُخترع."""
+    doc.add_heading("شرائح العملاء", level=1)
+    segs = m.get("segments") or []
+    if not segs:
+        doc.add_paragraph("بيانات غير كافية للشرائح — يتطلب وكيل المستهلك")
+        return
+    for s in segs:
+        doc.add_paragraph(f"{s.get('segment')} — الأساس: {s.get('basis')}",
+                          style="List Bullet")
+
+
+def _docx_supplier_directory(doc, m: dict) -> None:
+    """دليل المورّدين والمصنّعين — قائمتا السعودية والسوق المستهدف + الملاحظة."""
+    doc.add_heading("دليل المورّدين والمصنّعين", level=1)
+    sd = m.get("supplier_directory") or {}
+    for key, title in (("saudi", "مورّدون ومصنّعون سعوديون:"),
+                       ("target", "موزّعون ومستوردون في السوق المستهدف:")):
+        doc.add_paragraph(title)
+        items = sd.get(key) or []
+        if not items:
+            doc.add_paragraph("لا مرشّحين مرصودين — فجوة معلنة",
+                              style="List Bullet")
+        for e in items[:10]:
+            doc.add_paragraph(_entry_text(e), style="List Bullet")
+    if sd.get("note"):
+        doc.add_paragraph(str(sd["note"]))
+
+
+def _docx_regulatory(doc, m: dict) -> None:
+    """الاشتراطات التنظيمية — بوابة الأهلية أولاً ثم بنود L1 بجهاتها وروابطها."""
+    doc.add_heading("الاشتراطات التنظيمية", level=1)
+    r, absent = _research_bundle(m)
+    ag = _ragent(m, "regulatory")
+    if r is None or not ag:
+        doc.add_paragraph(absent or "وكيل الاشتراطات لم يعمل في هذا التحليل")
+        return
+    gate_f = _rfind(ag, "eligibility_gate")
+    if gate_f and gate_f.get("value"):
+        doc.add_paragraph("تحذير — بوابة أهلية أمامية: هذا السوق يتطلب منشأة "
+                          "معتمدة (EU 2017/625) قبل أي بند لاحق؛ لا بند أدناه "
+                          "يُعتبر سالكاً قبل اجتيازها.")
+    checklist_f = _rfind(ag, "requirements_checklist")
+    checklist = (checklist_f or {}).get("value") or []
+    if checklist:
+        for it in checklist:
+            doc.add_paragraph(_req_text(it), style="List Bullet")
+        doc.add_paragraph(_f_srcline(checklist_f), style="Intense Quote")
+    else:
+        doc.add_paragraph("لا بنود اشتراطات مرصودة في مرجع L1 لهذا السوق "
+                          "— فجوة معلنة")
+    tf = _rfind(ag, "tariff_applied_pct")
+    if tf and tf.get("value") is not None:
+        doc.add_paragraph(_f_text(tf))
+        doc.add_paragraph(_f_srcline(tf), style="Intense Quote")
+    for g in ag.get("gaps") or []:
+        doc.add_paragraph(f"فجوة معلنة: {g}", style="List Bullet")
 
 
 def render_docx(view: dict, path: str) -> str:
@@ -117,6 +443,11 @@ def render_docx(view: dict, path: str) -> str:
     #     اختلاق، وتقرير لا يعود «ناقصاً» بل صريحاً بما لديه وما ينقصه.
     top_m = (view.get("markets") or [{}])[0]
 
+    # §7-1/§7-2: قرار الدخول (§8) ثم TAM/SAM/SOM — بعد الموقع التنافسي مباشرة
+    # وقبل مشهد السوق؛ الغائب يُعلن بفقرة صريحة لا يُخترع.
+    _docx_entry_decision(doc, top_m)
+    _docx_market_size(doc, top_m)
+
     st_all = top_m.get("section_status") or {}
 
     def _gate(sec_key: str, title: str) -> bool:
@@ -158,10 +489,20 @@ def render_docx(view: dict, path: str) -> str:
         for n in named[:8]:
             doc.add_paragraph(str(n), style="List Bullet")
 
+    # §7-3: طبقتا المنافسة من حزمة البحث — بعد قسم «المنافسون» القائم مباشرة.
+    _docx_competition_research(doc, top_m)
+    # §7-4: التسعير بطبقتيه (الحدودية المنمذجة الموسومة + التجزئة ومراجعها).
+    _docx_pricing_layers(doc, top_m)
 
     if top_m.get("suppliers"):
         _sec("الموردون والأعمال بالاسم", top_m.get("suppliers"), "competitors",
              lambda s: f"{s.get('name')} — {s.get('source')}")
+
+    # §7-5..8: SWOT، الشرائح، دليل المورّدين، الاشتراطات — كلها من view.markets[0].
+    _docx_swot(doc, top_m)
+    _docx_segments(doc, top_m)
+    _docx_supplier_directory(doc, top_m)
+    _docx_regulatory(doc, top_m)
 
     tr = top_m.get("trend") or {}
     if _gate("trend", "اتجاه الاستيراد متعدد السنوات"):
@@ -232,3 +573,335 @@ def render_docx(view: dict, path: str) -> str:
 
     doc.save(path)
     return path
+
+
+def _md_cell(x: object) -> str:
+    """خلية جدول Markdown آمنة — escape pipes/newlines for a table cell."""
+    return str(x if x is not None else "—").replace("|", "/").replace("\n", " ")
+
+
+def render_markdown(view: dict) -> str:
+    """التقرير الكامل Markdown (§7) — نفس أقسام Word وترتيبها، من القالب حصراً.
+
+    كل رقم يليه سطر مصدره بين قوسين؛ المنمذج موسوم «مُقدَّر — نموذج بافتراضات
+    معلنة» بمعادلته؛ بوابة 2B نفسها: قسم دون العتبة يطبع سطر النقص الصريح فقط.
+    Full Markdown report derived from the ONE canonical view — pure display.
+    """
+    from silk_render import insufficient_line
+
+    h = view.get("header") or {}
+    top_m = (view.get("markets") or [{}])[0]
+    st_all = top_m.get("section_status") or {}
+    L: list[str] = []
+
+    # ── الترويسة كجدول — header table ────────────────────────────────────────
+    L += [f"# سِلك — تقرير سوق: {view.get('product')}", "",
+          "| البند | القيمة |", "| --- | --- |",
+          f"| المنتج | {_md_cell(h.get('product'))} |",
+          f"| رمز HS | {_md_cell(h.get('hs_code'))} "
+          f"(ثقة التصنيف {view.get('hs_confidence')}) |",
+          "| المنشأ | السعودية (SAU) |",
+          f"| السوق المستهدف | {_md_cell(h.get('target_market'))} |",
+          f"| التاريخ | {_md_cell(h.get('date'))} |",
+          f"| سنة البيانات | {_md_cell(view.get('year'))} |",
+          f"| تغطية البيانات الإجمالية | {h.get('coverage_pct')}% |", ""]
+
+    # ── الخلاصة التنفيذية — executive summary ───────────────────────────────
+    d = view.get("decision") or {}
+    L += ["## الخلاصة التنفيذية", "",
+          f"- القرار (هيئة المحلفين): **{d.get('verdict') or 'تعذّر الحكم'}** "
+          f"(ثقة {d.get('confidence')}) — السوق الأول: {d.get('market') or '؟'}",
+          f"- لماذا: {d.get('why') or ''}",
+          "- النتيجة أوّلية لا نهائية.", ""]
+
+    # ── قرار الدخول §8 — weighted entry decision ────────────────────────────
+    L += ["## قرار الدخول (المحرك الموزون §8)", ""]
+    ed, ed_absent = _entry_decision_of(top_m)
+    if ed is None:
+        L += [ed_absent, ""]
+    else:
+        sbo = ed.get("scores_by_option") or {}
+        L += [f"- الحكم: **{ed.get('verdict')}** | النقاط: {_fmt(ed.get('score'))}"
+              f" | الثقة: {ed.get('confidence')}",
+              f"- أساس الثقة: {ed.get('confidence_basis')}",
+              f"- خيار الأوزان المعتمد: {ed.get('weights_option')} — النقاط "
+              f"بالخيارين: A = {_fmt(sbo.get('A'))} | B = {_fmt(sbo.get('B'))}"]
+        if ed.get("weights_note"):
+            L.append(f"- ملاحظة الأوزان: {ed['weights_note']}")
+        L += ["", "| العمود | القيمة | الأساس | مكوّنات غائبة |",
+              "| --- | --- | --- | --- |"]
+        for key, p in (ed.get("pillars") or {}).items():
+            missing = "، ".join(map(str, p.get("missing") or [])) or "—"
+            L.append(f"| {_PILLAR_AR.get(key, key)} | {_fmt(p.get('value'))} | "
+                     f"{_md_cell(p.get('basis'))} | {_md_cell(missing)} |")
+        L.append("")
+        if ed.get("missing_pillars"):
+            L.append("- أعمدة غائبة كلياً: " + "، ".join(
+                _PILLAR_AR.get(k, k) for k in ed["missing_pillars"]))
+        if ed.get("critical_risk"):
+            L.append("- **خطر حرج مرصود** — راجع سجل المخاطر أدناه.")
+        if ed.get("conditions"):
+            L += ["", "**الشروط:**",
+                  *[f"- {c}" for c in ed["conditions"]]]
+        if ed.get("first_steps"):
+            L += ["", "**الخطوات الأولى:**",
+                  *[f"{i}. {s}" for i, s in enumerate(ed["first_steps"], 1)]]
+        L += ["", f"لماذا: {ed.get('why')}"]
+        if ed.get("note"):
+            L.append(str(ed["note"]))
+        L.append("")
+
+    # ── موقعك التنافسي — competitive position (correlation) ─────────────────
+    cp = view.get("competitive_position") or {}
+    L += ["## موقعك التنافسي", ""]
+    if cp.get("available"):
+        L.append(f"- التغطية: {cp.get('coverage')}")
+        for f in cp.get("feasibility_threads") or []:
+            L.append(f"- ضد {f['competitor']}: سعر مرصود "
+                     f"{_fmt(f['observed_price'])} — هامشك عند المضاهاة "
+                     f"{f['margin_at_match_pct']}% وعند البيع أقل 10% "
+                     f"{f['margin_at_10pct_below']}%")
+            for gap in f.get("assumptions_and_gaps") or []:
+                L.append(f"  - {gap}")
+        for t in cp.get("competitor_threads") or []:
+            if not t.get("observed_price"):
+                L.append(f"- {t['name']}: {t['price_flag']} "
+                         f"(اكتمال الخيط {t['thread_completeness']})")
+    else:
+        L.append(str(cp.get("note") or ""))
+    L.append("")
+
+    # ── حجم السوق TAM/SAM/SOM — من حزمة البحث ───────────────────────────────
+    L += ["## حجم السوق — TAM/SAM/SOM", ""]
+    r_bundle, r_absent = _research_bundle(top_m)
+    if r_bundle is None:
+        L += [r_absent, ""]
+    else:
+        ms = _ragent(top_m, "market_size")
+        shown = False
+        for f in ms.get("findings") or []:
+            if f.get("value") is None:
+                continue
+            L.append(f"- {_f_text(f)} ({_f_srcline(f)})")
+            shown = True
+        if not shown:
+            L.append("- لا اكتشافات مرصودة لحجم السوق")
+        for g in ms.get("gaps") or []:
+            L.append(f"- فجوة معلنة: {g}")
+        L.append("")
+
+    # ── المنافسة بطبقتيها — دولية (كومتريد) + شركات بالاسم + طبقة الإثراء ────
+    L += ["## المنافسة بطبقتيها", ""]
+    comp = _ragent(top_m, "competitor")
+    if comp:
+        L.append("**الطبقة الدولية (تركّز الموردين — UN Comtrade):**")
+        for metric in ("hhi", "top_supplier_share_pct", "saudi_share_pct"):
+            f = _rfind(comp, metric)
+            if f and f.get("value") is not None:
+                L.append(f"- {_f_text(f)} ({_f_srcline(f)})")
+            else:
+                L.append(f"- {metric}: غير مرصود")
+        sc_f = _rfind(comp, "supplier_countries")
+        for c in ((sc_f or {}).get("value") or [])[:6]:
+            if isinstance(c, dict):
+                L.append(f"- {c.get('partner')}: {c.get('share')}% "
+                         f"({_fmt(c.get('value_usd'))}$) ({_f_srcline(sc_f)})")
+        L += ["", "**شركات بالاسم (مرشّحون غير موثَّقين):**"]
+        named_rc = (_rfind(comp, "named_companies") or {}).get("value") or []
+        if named_rc:
+            for n in named_rc[:10]:
+                L.append(f"- {_entry_text(n)}")
+            L.append("- ملاحظة: مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل "
+                     "أي تعاقد.")
+        else:
+            L.append("- لا شركات مرشّحة بالاسم مرصودة — فجوة معلنة")
+        L.append("")
+    else:
+        L += [r_absent or "وكيل المنافسة بلا اكتشافات — فجوة معلنة", ""]
+    # طبقة الإثراء المحلية خلف بوابة 2B — سطر النقص الصريح فقط دون العتبة.
+    st_c = st_all.get("competitors")
+    if st_c and st_c.get("status") == "insufficient":
+        L += [insufficient_line("المنافسون", st_c), ""]
+    else:
+        for c in (top_m.get("supplier_countries") or [])[:6]:
+            L.append(f"- {c.get('partner')}: {c.get('share')}% "
+                     f"({_fmt(c.get('value_usd'))}$) (المصدر: UN Comtrade)")
+        for n in (top_m.get("named_competitors") or [])[:8]:
+            L.append(f"- منافس بالاسم: {n}")
+        L.append("")
+
+    # ── التسعير بطبقتيه — border models + gated retail layer ────────────────
+    L += ["## التسعير بطبقتيه", ""]
+    if r_bundle is None:
+        L += [r_absent, ""]
+    else:
+        pr = _ragent(top_m, "pricing")
+        L.append("**الطبقة الحدودية (قيم وحدة كومتريد):**")
+        for metric in ("border_unit_value_usd_kg",
+                       "saudi_border_unit_value_usd_kg", "margin_at_border_pct"):
+            f = _rfind(pr, metric)
+            if f and f.get("value") is not None:
+                L.append(f"- {_f_text(f)} ({_f_srcline(f)})")
+            else:
+                L.append(f"- {metric}: غير مرصود")
+        L += ["", "**طبقة التجزئة:**"]
+        rp = _rfind(pr, "retail_prices")
+        vals = (rp or {}).get("value") or []
+        st_p = st_all.get("pricing")
+        if vals:
+            for v in vals[:8]:
+                L.append(f"- {_listing_text(v)} ({_f_srcline(rp)})")
+        elif st_p and st_p.get("status") == "insufficient":
+            # بوابة 2B: سطر النقص الصريح فقط + فجوة القسم المعلنة بنصّها.
+            L.append(insufficient_line("الأسعار", st_p))
+            gap = next((g for g in (pr.get("gaps") or [])
+                        if "retail_prices" in g), None)
+            if gap:
+                L.append(f"- فجوة معلنة: {gap}")
+        else:
+            for p in top_m.get("prices") or []:
+                L.append(f"- {_listing_text(p)}")
+            if not top_m.get("prices"):
+                gap = next((g for g in (pr.get("gaps") or [])
+                            if "retail_prices" in g),
+                           "retail_prices: غير مرصود — فجوة معلنة")
+                L.append(f"- {gap}")
+        refs = (_rfind(pr, "retail_references") or {}).get("value") or []
+        if refs:
+            L += ["", "**مراجع الأسعار (للمراجعة اليدوية — لا استخراج أرقام "
+                      "آلي):**"]
+            for ref in refs[:6]:
+                L.append(f"- {(ref or {}).get('title')} — {(ref or {}).get('url')}"
+                         f" — سُحب: {(ref or {}).get('retrieved_at')}")
+        else:
+            L.append("- مراجع الأسعار: غير مرصودة")
+        L.append("")
+
+    # ── SWOT — أربع قوائم بدليل كل بند؛ الربع الفارغ معلن ────────────────────
+    sw = top_m.get("swot") or {}
+    L += ["## تحليل SWOT (قاعدي من حقائق مرصودة)", ""]
+    for key, title in (("S", "القوة Strengths"), ("W", "الضعف Weaknesses"),
+                       ("O", "الفرص Opportunities"), ("T", "التهديدات Threats")):
+        L.append(f"### {title}")
+        items = sw.get(key) or []
+        if not items:
+            L.append("- لا بند مرصوداً")
+        for it in items:
+            L.append(f"- {it.get('text')} — الدليل: {it.get('evidence')}")
+        L.append("")
+    if sw.get("note"):
+        L += [f"> {sw['note']}", ""]
+
+    # ── شرائح العملاء — segments with declared basis ─────────────────────────
+    L += ["## شرائح العملاء", ""]
+    segs = top_m.get("segments") or []
+    if segs:
+        for s in segs:
+            L.append(f"- {s.get('segment')} — الأساس: {s.get('basis')}")
+    else:
+        L.append("بيانات غير كافية للشرائح — يتطلب وكيل المستهلك")
+    L.append("")
+
+    # ── دليل المورّدين والمصنّعين — supplier directory ───────────────────────
+    L += ["## دليل المورّدين والمصنّعين", ""]
+    sd = top_m.get("supplier_directory") or {}
+    for key, title in (("saudi", "**مورّدون ومصنّعون سعوديون:**"),
+                       ("target", "**موزّعون ومستوردون في السوق المستهدف:**")):
+        L.append(title)
+        items = sd.get(key) or []
+        if not items:
+            L.append("- لا مرشّحين مرصودين — فجوة معلنة")
+        for e in items[:10]:
+            L.append(f"- {_entry_text(e)}")
+        L.append("")
+    if sd.get("note"):
+        L += [f"> {sd['note']}", ""]
+
+    # ── الاشتراطات التنظيمية — بوابة الأهلية أولاً ثم بنود L1 ────────────────
+    L += ["## الاشتراطات التنظيمية", ""]
+    reg = _ragent(top_m, "regulatory")
+    if r_bundle is None or not reg:
+        L += [r_absent or "وكيل الاشتراطات لم يعمل في هذا التحليل", ""]
+    else:
+        gate_f = _rfind(reg, "eligibility_gate")
+        if gate_f and gate_f.get("value"):
+            L += ["**تحذير — بوابة أهلية أمامية:** هذا السوق يتطلب منشأة معتمدة "
+                  "(EU 2017/625) قبل أي بند لاحق؛ لا بند أدناه يُعتبر سالكاً "
+                  "قبل اجتيازها.", ""]
+        checklist_f = _rfind(reg, "requirements_checklist")
+        checklist = (checklist_f or {}).get("value") or []
+        if checklist:
+            for it in checklist:
+                L.append(f"- {_req_text(it)}")
+            L.append(f"- ({_f_srcline(checklist_f)})")
+        else:
+            L.append("- لا بنود اشتراطات مرصودة في مرجع L1 لهذا السوق "
+                     "— فجوة معلنة")
+        tf = _rfind(reg, "tariff_applied_pct")
+        if tf and tf.get("value") is not None:
+            L.append(f"- {_f_text(tf)} ({_f_srcline(tf)})")
+        for g in reg.get("gaps") or []:
+            L.append(f"- فجوة معلنة: {g}")
+        L.append("")
+
+    # ── سجل المخاطر — decision risks + raw WGI/LPI datapoints ───────────────
+    L += ["## سجل المخاطر", ""]
+    ed_risks = (ed or {}).get("risks") or []
+    if ed_risks:
+        for rk in ed_risks:
+            L.append(f"- {rk.get('risk')} (الشدة: {rk.get('severity')}) — "
+                     f"الدليل: {rk.get('evidence')}")
+    else:
+        L.append("- لا مخاطر مسجّلة في محرك القرار (§8)" if ed else
+                 f"- {ed_absent}")
+    for dp in top_m.get("risk") or []:
+        if dp.get("value") is not None:
+            src = str(dp.get("source") or "غير مرصود")
+            if dp.get("retrieved_at"):
+                src += f" | سُحب: {dp['retrieved_at']}"
+            L.append(f"- {dp.get('note') or 'مؤشر خطر'}: {_fmt(dp['value'])} "
+                     f"(المصدر: {src})")
+    L.append("")
+
+    # ── تغطية الأقسام — لكل قسم دون العتبة سطر النقص الصريح ─────────────────
+    L += ["## تغطية الأقسام", ""]
+    cov = top_m.get("section_coverage") or {}
+    if cov:
+        for sec, c in cov.items():
+            flag = " ⚠ مصدر واحد — ثقة منخفضة" if c.get("low_confidence") else ""
+            L.append(f"- {_SEC_AR.get(sec, sec)}: {c['contributed']}/"
+                     f"{c['attempted']} (درجة {c['score']}){flag}")
+            st = st_all.get(sec)
+            if st and st.get("status") == "insufficient":
+                L.append(f"  - {insufficient_line(_SEC_AR.get(sec, sec), st)}")
+    else:
+        L.append("- لا تغطية أقسام محسوبة")
+    L.append("")
+
+    # ── ملحق أثر المصادر — provenance appendix (لا فشل صامتاً) ──────────────
+    L += ["## ملحق: أثر المصادر (المحاولات والإسهام)", ""]
+    prov = view.get("provenance") or []
+    if prov:
+        for b in prov:
+            L.append(f"- {b['source']}: أسهم {b['contributed']} من "
+                     f"{b['attempted']} محاولة")
+            for fl in b.get("failures") or []:
+                L.append(f"  - فشل مُسجَّل: {fl}")
+    else:
+        L.append("- لا أثر مصادر مسجّلاً")
+    L.append("")
+
+    # ── حدود هذا التقرير — declared limits before the recommendation ────────
+    L += ["## حدود هذا التقرير", ""]
+    for x in (view.get("limits") or ["لا فجوات مرصودة في الأسواق العليا"])[:12]:
+        L.append(f"- {x}")
+    L.append("")
+
+    # ── التوصية / المختصر — نفس سطور القالب، لا صياغة موازية ────────────────
+    L += ["## التوصية / المختصر", ""]
+    for line in view.get("brief") or []:
+        L.append(f"- {line}")
+    if view.get("note"):
+        L += ["", str(view["note"])]
+    L.append("")
+    return "\n".join(L)
