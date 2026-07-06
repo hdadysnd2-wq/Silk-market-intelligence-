@@ -70,3 +70,29 @@ Same two cases re-run behind realistic HTTP doubles (production payload schemas;
 | WGI/LPI/FX readers | لا قارئ | **row['risk'] فعلي** (بما فيه تقلب FX من السلسلة) |
 
 Every criterion driver from §4's fix list is verified by `tests/test_stage2a.py` + `tests/test_stage2b.py` (142-suite green). Live confirmation: run `python3 tools/stage2c_proof.py --live` on the deployment (needs `SEARCH_API_KEY`, `GOOGLE_MAPS_API_KEY`, `pytrends`, and ideally `COMTRADE_API_KEY`).
+
+---
+
+## 6. Stage 3 توسعة — التثليث (إحصاءات المرآة) لحقائق الجانب السعودي
+
+مراجعة تقرير Stage 5 طلبت التثليث قبل التشغيل الحي — نُفِّذ فوق `saudi_share_pct`
+(وكيل `competitor`) و`saudi_border_unit_value_usd_kg` (وكيل `pricing`)، أعمق
+حقيقتين تتعلقان بالجانب السعودي مباشرة والأكثر عرضة لفجوة الإبلاغ الرسمية:
+
+- **الأساسي**: تقرير الجهة المستوردة عن السعودية (partner=SAU ضمن صفوف كومتريد
+  الحالية — لا نداء جديد).
+- **المرآة**: صادرات السعودية المُعلنة مباشرة (`comtrade_trade` بـ
+  `reporter=SAU, flow=X` — نداء كومتريد جديد، نفس المصدر، منظور إبلاغ مختلف).
+- **القاعدة** (`silk_research._triangulate`، دالة نقية): القيمة المعروضة =
+  الأساسية دوماً (لا دمج/متوسط مخترع)؛ عند التوفّر المزدوج يُحسب التباين
+  (عتبة 20% كسابقة Stage 2A `xval_note`) — اتفاق يُعلَن دون مساس بالثقة،
+  وتباعد يُخفِّض ثقة الأساسية (0.9→0.6) ويُعلَن نصاً؛ توفّر أحدهما فقط = مصدر
+  واحد موسوم «غير مثلَّث»؛ غيابهما معاً = فجوة معلنة كسابق عهدها — لا صفر مختلق.
+- **السيناريو المُثبَت** (`tests/test_stage3_triangulation.py`، 12 اختباراً):
+  غياب السعودية عن تقرير الجهة المستوردة (فجوة بيانات رسمية حقيقية شائعة) —
+  التقرير المباشر (مرآة) يستدرك القيمة بمصدر واحد موسوم بدل إسقاط الحقيقة.
+- **الظهور في المخرَج**: كلا المصدرين في `sources[]` (يستحيل بنيوياً إخفاء
+  التباين)، وسطر الإفصاح (اتفاق/تباين/عدم تثليث) مطبوع في Word وMarkdown
+  والواجهة — تحقّق مباشرةً بـ `test_triangulation_disclosure_visible_in_rendered_report`.
+
+المجموعة الكاملة: **182 ناجحاً**.

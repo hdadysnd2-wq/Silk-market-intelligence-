@@ -436,8 +436,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "competitor": {
             "agent": "competitor",
@@ -491,7 +491,7 @@
                     "url": null
                   }
                 ],
-                "note": "حصة السعودية بين المورّدين المبلَّغ عنهم"
+                "note": "غير مثلَّث — تقرير سعودي مباشر (مرآة) غير متاح: لا تقرير سعودي مباشر (reporter=SAU) لـ HS080410→CHN 2023 — مرآة غير متاحة"
               },
               {
                 "metric": "supplier_countries",
@@ -619,8 +619,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "regulatory": {
             "agent": "regulatory",
@@ -704,8 +704,8 @@
             ],
             "rejected": [],
             "coverage": 0.75,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "pricing": {
             "agent": "pricing",
@@ -734,16 +734,16 @@
                 "value": 2.32,
                 "unit": "USD/kg",
                 "modeled": true,
-                "formula": "قيمة وحدة الصادر السعودي = قيمة ÷ وزن صافٍ (صف الشريك SAU)",
+                "formula": "قيمة وحدة الصادر السعودي = قيمة ÷ وزن صافٍ (تقرير الجهة المستوردة أو التقرير السعودي المباشر — مرآة)",
                 "sources": [
                   {
                     "source": "UN Comtrade (مخزن الحقائق)",
                     "retrieved_at": "2026-07-06",
-                    "confidence": 0.9,
+                    "confidence": 0.85,
                     "url": null
                   }
                 ],
-                "note": "موقعك السعري عند الحدود مقابل متوسط السوق"
+                "note": "غير مثلَّث — تقرير سعودي مباشر (مرآة) غير متاح: لا تقرير سعودي مباشر (reporter=SAU) لـ HS080410→CHN 2023 — مرآة غير متاحة"
               },
               {
                 "metric": "retail_references",
@@ -811,8 +811,8 @@
             ],
             "rejected": [],
             "coverage": 0.8,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "risk": {
             "agent": "risk",
@@ -920,8 +920,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "consumer_demand": {
             "agent": "consumer_demand",
@@ -1015,8 +1015,8 @@
             ],
             "rejected": [],
             "coverage": 0.83,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "supplier": {
             "agent": "supplier",
@@ -1232,8 +1232,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           }
         },
         "coverage": 0.91,
@@ -1913,8 +1913,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "competitor": {
             "agent": "competitor",
@@ -2009,8 +2009,8 @@
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "regulatory": {
             "agent": "regulatory",
@@ -2122,8 +2122,8 @@
             ],
             "rejected": [],
             "coverage": 0.75,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "pricing": {
             "agent": "pricing",
@@ -2178,14 +2178,14 @@
             ],
             "gaps": [
               "border_unit_value_usd_kg: يتطلب قيمة ووزناً صافياً معاً من كومتريد — غير متوافرَين لهذه السنة/السوق",
-              "saudi_border_unit_value_usd_kg: لا صف سعودي بوزن صافٍ في المخزن لهذه السنة",
+              "saudi_border_unit_value_usd_kg: لا صف سعودي بوزن صافٍ في المخزن ولا في التقرير السعودي المباشر (رصد غياب مزدوج، ليس تقديراً)",
               "retail_prices: LocalPriceAgent: paid agent outside /deepen — skipped (structural guard, no call attempted)",
               "margin_at_border_pct: يتطلب بطاقة منتج بوحدة kg (cost_per_unit) + قيمة وحدة حدودية مرصودة"
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "risk": {
             "agent": "risk",
@@ -2202,8 +2202,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "consumer_demand": {
             "agent": "consumer_demand",
@@ -2267,8 +2267,8 @@
             ],
             "rejected": [],
             "coverage": 0.5,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           },
           "supplier": {
             "agent": "supplier",
@@ -2484,8 +2484,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:41+00:00",
+            "finished_at": "2026-07-06T13:09:41+00:00"
           }
         },
         "coverage": 0.38,
@@ -3167,8 +3167,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:42+00:00",
+            "finished_at": "2026-07-06T13:09:42+00:00"
           },
           "competitor": {
             "agent": "competitor",
@@ -3263,8 +3263,8 @@
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:42+00:00",
+            "finished_at": "2026-07-06T13:09:42+00:00"
           },
           "regulatory": {
             "agent": "regulatory",
@@ -3369,8 +3369,8 @@
             ],
             "rejected": [],
             "coverage": 0.75,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:42+00:00",
+            "finished_at": "2026-07-06T13:09:42+00:00"
           },
           "pricing": {
             "agent": "pricing",
@@ -3425,14 +3425,14 @@
             ],
             "gaps": [
               "border_unit_value_usd_kg: يتطلب قيمة ووزناً صافياً معاً من كومتريد — غير متوافرَين لهذه السنة/السوق",
-              "saudi_border_unit_value_usd_kg: لا صف سعودي بوزن صافٍ في المخزن لهذه السنة",
+              "saudi_border_unit_value_usd_kg: لا صف سعودي بوزن صافٍ في المخزن ولا في التقرير السعودي المباشر (رصد غياب مزدوج، ليس تقديراً)",
               "retail_prices: LocalPriceAgent: paid agent outside /deepen — skipped (structural guard, no call attempted)",
               "margin_at_border_pct: يتطلب بطاقة منتج بوحدة kg (cost_per_unit) + قيمة وحدة حدودية مرصودة"
             ],
             "rejected": [],
             "coverage": 0.2,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:42+00:00",
+            "finished_at": "2026-07-06T13:09:42+00:00"
           },
           "risk": {
             "agent": "risk",
@@ -3449,8 +3449,8 @@
             ],
             "rejected": [],
             "coverage": 0.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:42+00:00",
+            "finished_at": "2026-07-06T13:09:42+00:00"
           },
           "consumer_demand": {
             "agent": "consumer_demand",
@@ -3514,8 +3514,8 @@
             ],
             "rejected": [],
             "coverage": 0.5,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:42+00:00",
+            "finished_at": "2026-07-06T13:09:42+00:00"
           },
           "supplier": {
             "agent": "supplier",
@@ -3731,8 +3731,8 @@
             "gaps": [],
             "rejected": [],
             "coverage": 1.0,
-            "started_at": "2026-07-06T12:47:45+00:00",
-            "finished_at": "2026-07-06T12:47:45+00:00"
+            "started_at": "2026-07-06T13:09:42+00:00",
+            "finished_at": "2026-07-06T13:09:42+00:00"
           }
         },
         "coverage": 0.38,
@@ -5671,7 +5671,7 @@
     "total_flags": 38,
     "note": "تنبيهات جودة فقط؛ الأرقام لم تُغيّر — quality flags only; underlying numbers unchanged."
   },
-  "analysis_id": 3,
+  "analysis_id": 6,
   "view": {
     "test_run": true,
     "header": {
@@ -6217,8 +6217,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "competitor": {
               "agent": "competitor",
@@ -6272,7 +6272,7 @@
                       "url": null
                     }
                   ],
-                  "note": "حصة السعودية بين المورّدين المبلَّغ عنهم"
+                  "note": "غير مثلَّث — تقرير سعودي مباشر (مرآة) غير متاح: لا تقرير سعودي مباشر (reporter=SAU) لـ HS080410→CHN 2023 — مرآة غير متاحة"
                 },
                 {
                   "metric": "supplier_countries",
@@ -6400,8 +6400,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "regulatory": {
               "agent": "regulatory",
@@ -6485,8 +6485,8 @@
               ],
               "rejected": [],
               "coverage": 0.75,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "pricing": {
               "agent": "pricing",
@@ -6515,16 +6515,16 @@
                   "value": 2.32,
                   "unit": "USD/kg",
                   "modeled": true,
-                  "formula": "قيمة وحدة الصادر السعودي = قيمة ÷ وزن صافٍ (صف الشريك SAU)",
+                  "formula": "قيمة وحدة الصادر السعودي = قيمة ÷ وزن صافٍ (تقرير الجهة المستوردة أو التقرير السعودي المباشر — مرآة)",
                   "sources": [
                     {
                       "source": "UN Comtrade (مخزن الحقائق)",
                       "retrieved_at": "2026-07-06",
-                      "confidence": 0.9,
+                      "confidence": 0.85,
                       "url": null
                     }
                   ],
-                  "note": "موقعك السعري عند الحدود مقابل متوسط السوق"
+                  "note": "غير مثلَّث — تقرير سعودي مباشر (مرآة) غير متاح: لا تقرير سعودي مباشر (reporter=SAU) لـ HS080410→CHN 2023 — مرآة غير متاحة"
                 },
                 {
                   "metric": "retail_references",
@@ -6592,8 +6592,8 @@
               ],
               "rejected": [],
               "coverage": 0.8,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "risk": {
               "agent": "risk",
@@ -6701,8 +6701,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "consumer_demand": {
               "agent": "consumer_demand",
@@ -6796,8 +6796,8 @@
               ],
               "rejected": [],
               "coverage": 0.83,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "supplier": {
               "agent": "supplier",
@@ -7013,8 +7013,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             }
           },
           "coverage": 0.91,
@@ -7548,8 +7548,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "competitor": {
               "agent": "competitor",
@@ -7644,8 +7644,8 @@
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "regulatory": {
               "agent": "regulatory",
@@ -7757,8 +7757,8 @@
               ],
               "rejected": [],
               "coverage": 0.75,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "pricing": {
               "agent": "pricing",
@@ -7813,14 +7813,14 @@
               ],
               "gaps": [
                 "border_unit_value_usd_kg: يتطلب قيمة ووزناً صافياً معاً من كومتريد — غير متوافرَين لهذه السنة/السوق",
-                "saudi_border_unit_value_usd_kg: لا صف سعودي بوزن صافٍ في المخزن لهذه السنة",
+                "saudi_border_unit_value_usd_kg: لا صف سعودي بوزن صافٍ في المخزن ولا في التقرير السعودي المباشر (رصد غياب مزدوج، ليس تقديراً)",
                 "retail_prices: LocalPriceAgent: paid agent outside /deepen — skipped (structural guard, no call attempted)",
                 "margin_at_border_pct: يتطلب بطاقة منتج بوحدة kg (cost_per_unit) + قيمة وحدة حدودية مرصودة"
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "risk": {
               "agent": "risk",
@@ -7837,8 +7837,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "consumer_demand": {
               "agent": "consumer_demand",
@@ -7902,8 +7902,8 @@
               ],
               "rejected": [],
               "coverage": 0.5,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             },
             "supplier": {
               "agent": "supplier",
@@ -8119,8 +8119,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:41+00:00",
+              "finished_at": "2026-07-06T13:09:41+00:00"
             }
           },
           "coverage": 0.38,
@@ -8661,8 +8661,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:42+00:00",
+              "finished_at": "2026-07-06T13:09:42+00:00"
             },
             "competitor": {
               "agent": "competitor",
@@ -8757,8 +8757,8 @@
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:42+00:00",
+              "finished_at": "2026-07-06T13:09:42+00:00"
             },
             "regulatory": {
               "agent": "regulatory",
@@ -8863,8 +8863,8 @@
               ],
               "rejected": [],
               "coverage": 0.75,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:42+00:00",
+              "finished_at": "2026-07-06T13:09:42+00:00"
             },
             "pricing": {
               "agent": "pricing",
@@ -8919,14 +8919,14 @@
               ],
               "gaps": [
                 "border_unit_value_usd_kg: يتطلب قيمة ووزناً صافياً معاً من كومتريد — غير متوافرَين لهذه السنة/السوق",
-                "saudi_border_unit_value_usd_kg: لا صف سعودي بوزن صافٍ في المخزن لهذه السنة",
+                "saudi_border_unit_value_usd_kg: لا صف سعودي بوزن صافٍ في المخزن ولا في التقرير السعودي المباشر (رصد غياب مزدوج، ليس تقديراً)",
                 "retail_prices: LocalPriceAgent: paid agent outside /deepen — skipped (structural guard, no call attempted)",
                 "margin_at_border_pct: يتطلب بطاقة منتج بوحدة kg (cost_per_unit) + قيمة وحدة حدودية مرصودة"
               ],
               "rejected": [],
               "coverage": 0.2,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:42+00:00",
+              "finished_at": "2026-07-06T13:09:42+00:00"
             },
             "risk": {
               "agent": "risk",
@@ -8943,8 +8943,8 @@
               ],
               "rejected": [],
               "coverage": 0.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:42+00:00",
+              "finished_at": "2026-07-06T13:09:42+00:00"
             },
             "consumer_demand": {
               "agent": "consumer_demand",
@@ -9008,8 +9008,8 @@
               ],
               "rejected": [],
               "coverage": 0.5,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:42+00:00",
+              "finished_at": "2026-07-06T13:09:42+00:00"
             },
             "supplier": {
               "agent": "supplier",
@@ -9225,8 +9225,8 @@
               "gaps": [],
               "rejected": [],
               "coverage": 1.0,
-              "started_at": "2026-07-06T12:47:45+00:00",
-              "finished_at": "2026-07-06T12:47:45+00:00"
+              "started_at": "2026-07-06T13:09:42+00:00",
+              "finished_at": "2026-07-06T13:09:42+00:00"
             }
           },
           "coverage": 0.38,

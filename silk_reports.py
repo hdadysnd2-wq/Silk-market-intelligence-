@@ -323,6 +323,8 @@ def _docx_competition_research(doc, m: dict) -> None:
         if f and f.get("value") is not None:
             doc.add_paragraph(_f_text(f), style="List Bullet")
             doc.add_paragraph(_f_srcline(f), style="Intense Quote")
+            if f.get("note"):
+                doc.add_paragraph(str(f["note"]))
         else:
             doc.add_paragraph(f"{metric}: غير مرصود", style="List Bullet")
 
@@ -342,6 +344,8 @@ def _docx_pricing_layers(doc, m: dict) -> None:
         if f and f.get("value") is not None:
             doc.add_paragraph(_f_text(f), style="List Bullet")
             doc.add_paragraph(_f_srcline(f), style="Intense Quote")
+            if f.get("note"):
+                doc.add_paragraph(str(f["note"]))
         else:
             doc.add_paragraph(f"{metric}: غير مرصود", style="List Bullet")
     doc.add_paragraph("طبقة التجزئة:")
@@ -774,6 +778,8 @@ def render_markdown(view: dict) -> str:
             f = _rfind(comp, metric)
             if f and f.get("value") is not None:
                 L.append(f"- {_f_text(f)} ({_f_srcline(f)})")
+                if f.get("note"):
+                    L.append(f"  - {f['note']}")
             else:
                 L.append(f"- {metric}: غير مرصود")
         sc_f = _rfind(comp, "supplier_countries")
@@ -823,6 +829,8 @@ def render_markdown(view: dict) -> str:
             f = _rfind(pr, metric)
             if f and f.get("value") is not None:
                 L.append(f"- {_f_text(f)} ({_f_srcline(f)})")
+                if f.get("note"):
+                    L.append(f"  - {f['note']}")
             else:
                 L.append(f"- {metric}: غير مرصود")
         L += ["", "**طبقة التجزئة:**"]

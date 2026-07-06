@@ -118,6 +118,68 @@ def _f(metric: str, value, sources: list[dict], unit: str | None = None,
             "formula": formula, "sources": sources, "note": note}
 
 
+_TRIANGULATION_THRESHOLD_PCT = 20.0   # نفس عتبة تباين المصادر القائمة (Stage 2A xval)
+
+
+def _triangulate(primary: DataPoint | None, mirror: DataPoint | None,
+                 threshold_pct: float = _TRIANGULATION_THRESHOLD_PCT) -> dict:
+    """ثلّث حقيقة بين مصدرين مستقلَّين — reconcile two independently-sourced
+    observations of the same fact (mirror-statistics technique, §4b توسعة).
+
+    لا يخترع قيمة موحّدة أبداً: القيمة المعروضة هي الأساسية (primary) دوماً؛
+    الاتفاق/التباين يُعلَن في الملاحظة والمصدرين معاً يظهران في sources[]
+    (فيستحيل بنيوياً إخفاء التباين). عند التباعد >العتبة تُخفَّض ثقة الأساسية
+    (لا تُحذف) — إشارة جودة صادقة لا حكماً صامتاً. غياب أحدهما = مصدر واحد
+    موسوم «غير مثلَّث»؛ غيابهما معاً = None (فجوة معلنة كالمعتاد).
+    """
+    have_p = primary is not None and primary.value is not None
+    have_m = mirror is not None and mirror.value is not None
+    if not have_p and not have_m:
+        return {"value": None, "sources": [], "note": "", "divergence_pct": None}
+    if have_p and not have_m:
+        return {"value": primary.value,
+                "sources": [_src(primary.source, primary.confidence,
+                                 retrieved_at=primary.retrieved_at)],
+                "note": "غير مثلَّث — تقرير سعودي مباشر (مرآة) غير متاح"
+                        + (f": {mirror.note}" if mirror and mirror.note else ""),
+                "divergence_pct": None}
+    if have_m and not have_p:
+        return {"value": mirror.value,
+                "sources": [_src(mirror.source, mirror.confidence,
+                                 retrieved_at=mirror.retrieved_at)],
+                "note": "غير مثلَّث — تقرير الجهة المستوردة غير متاح؛ القيمة من "
+                        "التقرير السعودي المباشر (مرآة)", "divergence_pct": None}
+    p, m = float(primary.value), float(mirror.value)
+    div = round(100 * abs(p - m) / max(abs(p), abs(m), 1e-9), 1)
+    agree = div <= threshold_pct
+    conf_p = primary.confidence if agree else min(primary.confidence, 0.6)
+    note = (f"مثلَّث: يتفق تقرير الجهة المستوردة مع التقرير السعودي المباشر "
+            f"(مرآة) — تباين {div}%"
+            if agree else
+            f"تباين تثليث {div}%: تقرير الجهة المستوردة مقابل التقرير السعودي "
+            "المباشر (مرآة) — القيمة المعروضة من تقرير الجهة المستوردة، "
+            "التباين معلن ولم يُسوَّ")
+    return {"value": primary.value,
+            "sources": [_src(primary.source, conf_p,
+                             retrieved_at=primary.retrieved_at),
+                       _src(mirror.source, mirror.confidence,
+                            retrieved_at=mirror.retrieved_at)],
+            "note": note, "divergence_pct": div, "agree": agree}
+
+
+def _mirror_dp_for(mirror_raw: DataPoint, value, note: str | None = None) -> DataPoint:
+    """ابنِ DataPoint المرآة المشتقّ — يحافظ على ملاحظة فشل النداء الأصلية
+    بدل فقدانها متى تعذّر اشتقاق المقياس (حصة/قيمة وحدة) من قيمتها الخام."""
+    if value is not None:
+        return DataPoint(value, mirror_raw.source, mirror_raw.confidence,
+                         mirror_raw.note, mirror_raw.retrieved_at)
+    if mirror_raw.value is None:
+        return mirror_raw   # فشل النداء نفسه — ملاحظته الأصلية كافية ومفسِّرة
+    return DataPoint(None, mirror_raw.source, 0.0,
+                     note or "تعذّر اشتقاق القيمة من بيانات المرآة الخام",
+                     mirror_raw.retrieved_at)
+
+
 def _failed_output(agent: str, task: dict, reason: str) -> dict:
     """مغلّف فشل صريح — a failed envelope whose reason is visible, never silent."""
     now = _now_iso()
@@ -304,12 +366,31 @@ class CompetitorAgent(ResearchAgent):
                              ">0.25 سوق مركّز"))
             F.append(_f("top_supplier_share_pct", shares[0], [ct], unit="%",
                         note=f"حصة المورّد الأكبر: {rows[0]['partner']}"))
+            # حصة السعودية مثلَّثة (تقنية إحصاءات المرآة، §4b توسعة): تقرير
+            # الجهة المستوردة (partner=SAU ضمن صفوف التنافس) مقابل التقرير
+            # السعودي المباشر (reporter=SAU، مرآة) — لا اختلاق، القيمة
+            # المعروضة أساسية دوماً والاتفاق/التباين معلن بمصدرين معاً.
             sau = next((r for r in rows if str(r.get("code")) == "682"), None)
-            F.append(_f("saudi_share_pct", (sau or {}).get("share", 0.0), [ct],
-                        unit="%",
-                        note="حصة السعودية بين المورّدين المبلَّغ عنهم"
-                             + ("" if sau else " — غير ظاهرة بينهم (رصد غياب، "
-                                                "ليس تقديراً)")))
+            grand = sum(r["value_usd"] for r in rows)
+            target_dp = (DataPoint(sau["share"], "UN Comtrade", 0.9,
+                                   "حصة السعودية بين المورّدين المبلَّغ عنهم",
+                                   _today())
+                        if sau else None)
+            from silk_data_layer_v2 import mirror_saudi_export
+            mirror_raw = mirror_saudi_export(hs, task.get("m49"), iso3, year)
+            mval = ((mirror_raw.value or {}).get("value_usd")
+                   if mirror_raw.value else None)
+            mirror_share = (round(100 * mval / grand, 2)
+                           if (mval is not None and grand) else None)
+            mirror_dp = _mirror_dp_for(mirror_raw, mirror_share)
+            tri = _triangulate(target_dp, mirror_dp)
+            if tri["value"] is not None:
+                F.append(_f("saudi_share_pct", tri["value"], tri["sources"],
+                            unit="%", note=tri["note"]))
+            else:
+                gaps.append("saudi_share_pct: غير ظاهرة بين المورّدين المبلَّغ "
+                           "عنهم ولا في التقرير السعودي المباشر (رصد غياب "
+                           "مزدوج، ليس تقديراً)")
             F.append(_f("supplier_countries", rows[:8], [ct],
                         note=f"أكبر {min(8, len(rows))} دول مورّدة بالقيمة والحصة"))
         else:
@@ -445,6 +526,10 @@ class PricingAgent(ResearchAgent):
         else:
             gaps.append("border_unit_value_usd_kg: يتطلب قيمة ووزناً صافياً معاً "
                         "من كومتريد — غير متوافرَين لهذه السنة/السوق")
+        # قيمة الوحدة السعودية مثلَّثة (إحصاءات المرآة): تقرير الجهة المستوردة
+        # (المخزن، صف الشريك SAU) مقابل التقرير السعودي المباشر (reporter=SAU،
+        # مرآة) — لا اختلاق، القيمة المعروضة أساسية دوماً والاتفاق/التباين
+        # معلن بمصدرين معاً (§4b توسعة).
         sau_uv = None
         try:
             import silk_store
@@ -453,16 +538,27 @@ class PricingAgent(ResearchAgent):
                 sau_uv = row["value_usd"] / row["qty_kg"]
         except Exception:  # noqa: BLE001
             pass
-        if sau_uv is not None:
-            F.append(_f("saudi_border_unit_value_usd_kg", round(sau_uv, 2),
-                        [_src("UN Comtrade (مخزن الحقائق)")], unit="USD/kg",
-                        modeled=True,
+        target_dp = (DataPoint(round(sau_uv, 2), "UN Comtrade (مخزن الحقائق)",
+                               0.85, "قيمة وحدة الصادر السعودي (تقرير الجهة "
+                               "المستوردة، صف الشريك SAU)", _today())
+                    if sau_uv is not None else None)
+        from silk_data_layer_v2 import mirror_saudi_export
+        mirror_raw = mirror_saudi_export(hs, task.get("m49"), iso3, year)
+        mv, mq = ((mirror_raw.value or {}).get("value_usd"),
+                 (mirror_raw.value or {}).get("qty_kg"))
+        mirror_uv = round(mv / mq, 2) if (mv and mq) else None
+        mirror_dp = _mirror_dp_for(mirror_raw, mirror_uv)
+        tri = _triangulate(target_dp, mirror_dp)
+        if tri["value"] is not None:
+            F.append(_f("saudi_border_unit_value_usd_kg", tri["value"],
+                        tri["sources"], unit="USD/kg", modeled=True,
                         formula="قيمة وحدة الصادر السعودي = قيمة ÷ وزن صافٍ "
-                                "(صف الشريك SAU)",
-                        note="موقعك السعري عند الحدود مقابل متوسط السوق"))
+                                "(تقرير الجهة المستوردة أو التقرير السعودي "
+                                "المباشر — مرآة)", note=tri["note"]))
         else:
-            gaps.append("saudi_border_unit_value_usd_kg: لا صف سعودي بوزن صافٍ "
-                        "في المخزن لهذه السنة")
+            gaps.append("saudi_border_unit_value_usd_kg: لا صف سعودي بوزن "
+                        "صافٍ في المخزن ولا في التقرير السعودي المباشر (رصد "
+                        "غياب مزدوج، ليس تقديراً)")
 
         # الطبقة ٢ — تجزئة مهيكلة: مدفوعة، /deepen حصراً (الحارس البنيوي يقرر).
         from silk_localprice_agent import LocalPriceAgent

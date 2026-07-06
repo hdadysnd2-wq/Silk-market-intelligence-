@@ -18,6 +18,37 @@ from silk_data_layer import (
 
 log = logging.getLogger(__name__)
 
+_SAUDI_M49 = "682"
+
+
+def mirror_saudi_export(hs_code: str, target_m49: object, target_iso3: str,
+                        year: int) -> DataPoint:
+    """صادرات سعودية مباشرة (مرآة) — Saudi Arabia's OWN reported exports to a
+    target market (Comtrade reporter=SAU, flow=X).
+
+    تقنية «إحصاءات المرآة» في اقتصاد التجارة: يقارَن هذا بتقرير السوق الهدف
+    عن وارداته من السعودية (reporter=target, partner=SAU) — تقريران مستقلان
+    لنفس التدفق التجاري من جهتين جمركيتين مختلفتين، يُستخدمان للتثليث
+    (`silk_research._triangulate`) حين يغيب أحدهما أو يتباعدان. لا مصدر
+    جديد — Comtrade نفسه، منظور إبلاغ مختلف فقط؛ فشل/غياب => DataPoint(None)
+    موسوم (المبدأ التأسيسي: لا اختلاق).
+    """
+    recs = comtrade_trade(hs_code, _SAUDI_M49, year, flow="X", partner=target_m49)
+    pairs = [(primary_value(r), r.get("netWgt")) for r in recs]
+    pairs = [(v, q) for v, q in pairs if v is not None]
+    src = "UN Comtrade (تقرير سعودي مباشر — مرآة)"
+    if not pairs:
+        return DataPoint(
+            None, src, 0.0,
+            f"لا تقرير سعودي مباشر (reporter=SAU) لـ HS{hs_code}→{target_iso3} "
+            f"{year} — مرآة غير متاحة", _today())
+    total_usd = sum(v for v, _ in pairs)
+    qtys = [float(q) for _, q in pairs if q]
+    return DataPoint(
+        {"value_usd": total_usd, "qty_kg": sum(qtys) if qtys else None}, src, 0.9,
+        f"صادرات سعودية مُعلنة مباشرة (reporter=SAU) HS{hs_code}→{target_iso3} "
+        f"{year}", _today())
+
 
 def ppp_per_capita(iso3: str, year: int | None = None) -> DataPoint:
     """نصيب الفرد (تعادل القوة الشرائية) — GDP per capita, PPP (current int'l $)."""
