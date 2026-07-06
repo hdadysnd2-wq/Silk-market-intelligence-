@@ -97,7 +97,15 @@ def test_m1_rate_limit_returns_429_on_excess():
     with _env(SILK_API_KEY=None, SILK_DB=db,
               SILK_RATE_LIMIT="3", SILK_RATE_WINDOW="60"):
         client = _client()
-        codes = [client.get("/analyses").status_code for _ in range(5)]
+        # ثبّت ساعة api أثناء الطلبات: النافذة الثابتة (now//60) قد تنقلب لو صادف
+        # الاختبار حدود الدقيقة فيتصفّر العدّاد ويرجع 200 بدل 429 (flake حقيقي وقع
+        # في CI). Freeze api's clock so the fixed window cannot roll mid-test.
+        import types
+        from unittest import mock
+        import api as api_mod
+        with mock.patch.object(api_mod, "time",
+                               types.SimpleNamespace(time=lambda: 1_000_000.0)):
+            codes = [client.get("/analyses").status_code for _ in range(5)]
         assert codes[:3] == [200, 200, 200]     # ضمن الحدّ
         assert codes[3] == 429 and codes[4] == 429   # التجاوز يُرفض
 
