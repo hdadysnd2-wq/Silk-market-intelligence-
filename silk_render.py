@@ -238,10 +238,24 @@ def _section_dps(row: dict, sec: str) -> list[dict]:
 
 
 def _walk_dps(obj, out):
-    """اجمع كل نقاط البيانات (dict أو DataPoint) — collect every datapoint-shaped node."""
+    """اجمع كل نقاط البيانات (dict أو DataPoint) — collect every datapoint-shaped node.
+
+    إصلاح مراجعة التشغيل الحي: اكتشافات حزمة البحث (Stage 3، §4b) تحمل
+    `sources[]` جمعاً لا `source` مفرداً فتغيب عن ملحق الأثر الإجمالي —
+    Serper/Maps/مرآة السعودية كانت تُسهم فعلياً دون أن يظهر ذلك في الملحق.
+    كل مصدر في sources[] يُسجَّل هنا مساهماً بقيمة الاكتشاف نفسها (المخطط
+    يفرض sources غير فارغة فقط عند نجاح القيمة). محاولات §4b الفاشلة تبقى
+    نصاً حراً في gaps[] لا نقاط بيانات مفردة — تُقرأ من قسم الفجوات مباشرة
+    لا من هذا الملحق (قيد معروف، لا فشل صامتاً داخل قسمها الخاص).
+    """
     if isinstance(obj, dict):
         if "source" in obj and "value" in obj:
             out.append(obj)
+        elif "metric" in obj and isinstance(obj.get("sources"), list):
+            for s in obj["sources"]:
+                if isinstance(s, dict) and s.get("source"):
+                    out.append({"source": s["source"], "value": obj.get("value"),
+                               "note": obj.get("note", "")})
         for v in obj.values():
             _walk_dps(v, out)
     elif isinstance(obj, (list, tuple)):
