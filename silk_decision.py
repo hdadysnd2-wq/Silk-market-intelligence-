@@ -55,20 +55,31 @@ def _mean_available(parts: dict[str, float | None]) -> tuple[float | None, list]
 # ── الأعمدة الأربعة · the four pillars (كلٌّ يطبع أساسه) ─────────────────────
 
 def _pillar_market(pi: dict) -> dict:
-    """جاذبية السوق — حجم (لوغاريتمي) + نمو + دخل + زخم الحصة السعودية."""
+    """جاذبية السوق — حجم (لوغاريتمي) + نمو + دخل + زخم الحصة السعودية.
+
+    مؤشر النشاط المثلَّث (§7 المرحلة ٢) يُستهلَك **فقط** عند غياب tam_log —
+    بديل جزئي 0..1 غير دولاري عند فجوة TAM الرسمية، لا يُضاف فوق tam_log
+    (لا ازدواج قياس السوق مرتين بمصدرين مختلفي الطبيعة).
+    """
     tam, cagr = pi.get("tam_usd"), pi.get("import_cagr_pct")
     gdp, sau = pi.get("gdp_per_capita_usd"), pi.get("saudi_share_pct")
+    tam_log = _clip(math.log10(tam) / 9) if tam and tam > 0 else None
+    activity_idx = pi.get("market_activity_index")
     parts = {
-        "tam_log": _clip(math.log10(tam) / 9) if tam and tam > 0 else None,
+        "tam_log": tam_log if tam_log is not None else (
+            _clip(activity_idx) if activity_idx is not None else None),
         "cagr": _clip((cagr + 10) / 40) if cagr is not None else None,
         "income": _clip(gdp / 50_000) if gdp else None,
         "saudi_momentum": _clip(sau / 20) if sau is not None else None,
     }
     v, missing = _mean_available(parts)
-    return {"value": v, "components": parts, "missing": missing,
-            "basis": "متوسط المتاح من: log10(TAM)/9 (سقف 10^9$)، "
-                     "(CAGR+10)/40 (−10%→0، +30%→1)، دخل الفرد/50k$، "
-                     "الحصة السعودية/20%"}
+    basis = ("متوسط المتاح من: log10(TAM)/9 (سقف 10^9$)، "
+            "(CAGR+10)/40 (−10%→0، +30%→1)، دخل الفرد/50k$، "
+            "الحصة السعودية/20%")
+    if tam_log is None and activity_idx is not None:
+        basis += ("؛ TAM الرسمي غائب — استُبدل بمؤشر النشاط المثلَّث "
+                  "(Maps/Trends، مُقدَّر بثقة مسقوفة 0.5)")
+    return {"value": v, "components": parts, "missing": missing, "basis": basis}
 
 
 def _pillar_competition(pi: dict) -> dict:

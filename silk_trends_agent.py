@@ -57,6 +57,54 @@ def trends_interest(
                          f"pytrends unavailable / no network: {e}", _today())
 
 
+def trends_series(keyword: str, geo: str | None = None,
+                  timeframe: str = "today 12-m") -> dict:
+    """سلسلة اهتمام + نمو من نداء pytrends واحد — Stage 3 المرحلة ٢ (§7).
+
+    نداء واحد فقط (حارس ميزانية: لا يُضاعف استهلاك pytrends المحدود أصلاً —
+    لاحظنا 429 حياً)؛ يُستخرَج منه المتوسط (كما `trends_interest`) **و**نسبة
+    نمو الاتجاه (الربع الأول مقابل الربع الأخير من السلسلة نفسها، بنفس منطق
+    `silk_trend.growth_pct` لكن على إشارة بحث لا تجارة). أقل من 4 نقاط
+    مرصودة => `growth_pct=None` بصدق، لا تخمين. فشل/غياب pytrends =>
+    القيم كلها None بملاحظة السبب — لا اختلاق.
+    """
+    try:
+        from pytrends.request import TrendReq  # lazy: optional dep
+    except ImportError:
+        return {"mean": None, "growth_pct": None, "n": 0, "confidence": 0.0,
+                "note": "pytrends unavailable / no network"}
+    kw = (keyword or "").strip()
+    if not kw:
+        return {"mean": None, "growth_pct": None, "n": 0, "confidence": 0.0,
+                "note": "empty keyword — no query"}
+    try:
+        py = TrendReq(timeout=(10, 30))
+        py.build_payload([kw], timeframe=timeframe, geo=(geo or ""))
+        df = py.interest_over_time()
+        if df is None or df.empty or kw not in df.columns:
+            return {"mean": None, "growth_pct": None, "n": 0, "confidence": 0.0,
+                    "note": f"no interest data for '{kw}' (geo={geo or 'WW'})"}
+        series = df[kw]
+        n = len(series)
+        mean = round(float(series.mean()), 1)
+        growth = None
+        if n >= 4:
+            q = max(1, n // 4)
+            first_q, last_q = float(series.iloc[:q].mean()), float(series.iloc[-q:].mean())
+            if first_q > 0:
+                growth = round(100.0 * (last_q - first_q) / first_q, 1)
+        return {"mean": mean, "growth_pct": growth, "n": n, "confidence": 0.7,
+                "note": f"متوسط اهتمام 0-100 لـ'{kw}' geo={geo or 'WW'} "
+                        f"tf='{timeframe}' n={n}"
+                        + (f"؛ نمو الربع الأول↔الأخير {growth}%" if growth is not None
+                           else "؛ سلسلة أقصر من 4 نقاط — لا نمو محسوب")}
+    except Exception as e:  # noqa: BLE001 — never raise to caller
+        log.warning("Google Trends series fetch failed ('%s', geo=%s): %s",
+                    keyword, geo, e)
+        return {"mean": None, "growth_pct": None, "n": 0, "confidence": 0.0,
+                "note": f"pytrends unavailable / no network: {e}"}
+
+
 def _seasonality(keyword: str, geo: str | None, timeframe: str) -> DataPoint:
     """موسمية بسيطة — peak month of search interest over the timeframe."""
     try:

@@ -167,6 +167,63 @@ def _triangulate(primary: DataPoint | None, mirror: DataPoint | None,
             "note": note, "divergence_pct": div, "agree": agree}
 
 
+_PHASE2_CONF_CAP = 0.5              # سقف ثقة أي تقدير مثلَّث متعدد الإشارات
+_PHASE2_CONFLICT_THRESHOLD_PCT = 30.0  # عتبة تعارض «الرقم الرسمي يفوز» (§7)
+
+
+def _trends_series(product: str | None, geo: str | None) -> dict | None:
+    """غلاف نداء تريندز واحد — حارس ميزانية المرحلة ٢: لا يُستدعى إلا عند
+    فجوة مصدر رسمي، ونتيجته الواحدة تُشارَك بين أكثر من مقياس بديل بلا
+    تكرار (النمو ومؤشر النشاط كلاهما يقرآن من نفس هذا النداء)."""
+    if not (product or "").strip():
+        return None
+    from silk_trends_agent import trends_series
+    return trends_series(product, geo)
+
+
+def _triangulate_estimate(metric: str, official: DataPoint | None,
+                          estimate_value, estimate_sources: list[dict],
+                          estimate_formula: str, estimate_note: str,
+                          *, threshold_pct: float = _PHASE2_CONFLICT_THRESHOLD_PCT,
+                          cap: float = _PHASE2_CONF_CAP,
+                          unit: str | None = None) -> dict | None:
+    """رسمي أولاً، تقدير مثلَّث احتياطي معلن (Stage 3 المرحلة ٢، §7).
+
+    مصادر تعدد الإشارات (Serper/Maps/Trends) عند فجوة مصدر رسمي (كومتريد/
+    WITS/FAOSTAT). يعيد اكتشافاً جاهزاً لـ `_f()` أو None (فجوة تُترَك
+    للمستدعي). **لا دمج قيمتين أبداً**: المعروض رسمي عند توفّره حصراً
+    (وثقته الأصلية)، أو تقدير مُعلَن `modeled=True` بثقة مسقوفة عند 0.5
+    (`cap`) عند غياب الرسمي فقط، أو لا شيء عند غياب الاثنين. تعارض >30%
+    بينهما لا يُخفي أياً منهما — الرسمي يعرض قيمته وملاحظة التعارض معاً.
+    """
+    have_o = official is not None and official.value is not None
+    have_e = estimate_value is not None and bool(estimate_sources)
+    if not have_o and not have_e:
+        return None
+    if have_o and not have_e:
+        return _f(metric, official.value,
+                  [_src(official.source, official.confidence,
+                       retrieved_at=official.retrieved_at)],
+                  unit=unit, note=official.note)
+    capped = [dict(s, confidence=min(s.get("confidence", cap), cap))
+             for s in estimate_sources]
+    if have_e and not have_o:
+        return _f(metric, estimate_value, capped, unit=unit, modeled=True,
+                  formula=estimate_formula,
+                  note=f"تقدير مثلَّث (لا رقم رسمي متاح) — سقف ثقة {cap} — "
+                       f"{estimate_note}")
+    o, ev = float(official.value), float(estimate_value)
+    div = round(100 * abs(o - ev) / max(abs(o), abs(ev), 1e-9), 1)
+    conflict = (f" — تعارض {div}% مع تقدير مثلَّث ({ev}) عبر إشارات مستقلة؛ "
+               f"الرقم الرسمي معروض وله الأولوية (قاعدة المرحلة ٢، §7)"
+               if div > threshold_pct else
+               f" — يتفق مع تقدير مثلَّث مستقل (تباين {div}%)")
+    return _f(metric, official.value,
+              [_src(official.source, official.confidence,
+                   retrieved_at=official.retrieved_at)],
+              unit=unit, note=official.note + conflict)
+
+
 def _mirror_dp_for(mirror_raw: DataPoint, value, note: str | None = None) -> DataPoint:
     """ابنِ DataPoint المرآة المشتقّ — يحافظ على ملاحظة فشل النداء الأصلية
     بدل فقدانها متى تعذّر اشتقاق المقياس (حصة/قيمة وحدة) من قيمتها الخام."""
@@ -283,19 +340,77 @@ class MarketSizeAgent(ResearchAgent):
                 pairs.append((y, None))
         g, c = growth_pct(pairs), cagr_pct(pairs)
         obs_years = [y for y, v in pairs if v is not None]
-        store_src = _src("UN Comtrade (مخزن الحقائق)")
-        if g is not None:
-            F.append(_f("import_growth_pct", g, [store_src], unit="%",
-                        note=f"نمو الواردات {obs_years[0]}→{obs_years[-1]} — "
-                             f"{len(obs_years)}/5 سنوات مرصودة، الفجوات معلنة"))
+        g_official = (DataPoint(g, "UN Comtrade (مخزن الحقائق)", 0.9,
+                                f"نمو الواردات {obs_years[0]}→{obs_years[-1]} — "
+                                f"{len(obs_years)}/5 سنوات مرصودة، الفجوات معلنة")
+                     if g is not None else None)
+        c_official = (DataPoint(c, "UN Comtrade (مخزن الحقائق)", 0.9,
+                                f"CAGR عبر السنوات المرصودة "
+                                f"{obs_years[0]}–{obs_years[-1]}")
+                     if c is not None else None)
+
+        # المرحلة ٢ (§7): فجوة النمو الرسمي (كومتريد بارد/محجوب) => تقدير
+        # مثلَّث احتياطي من مسار Google Trends (ربع أول↔أخير من السلسلة
+        # نفسها) — حارس ميزانية: نداء واحد فقط، ولا يُحاوَل إلا عند الفجوة.
+        trend_sig = (_trends_series(task.get("product"), task.get("iso2"))
+                    if (g is None or c is None) else None)
+        tf_growth, tf_conf, tf_note = (
+            (trend_sig or {}).get("growth_pct"), (trend_sig or {}).get("confidence", 0.0),
+            (trend_sig or {}).get("note", ""))
+        gf = _triangulate_estimate(
+            "import_growth_pct", g_official, tf_growth,
+            [_src("Google Trends", tf_conf)] if tf_growth is not None else [],
+            "تقدير نمو مثلَّث = نسبة تغيّر متوسط اهتمام Google Trends بين الربع "
+            "الأول والأخير من فترة الدراسة (بديل عن نمو الاستيراد الرسمي الغائب)",
+            tf_note, unit="%")
+        if gf:
+            F.append(gf)
         else:
-            gaps.append("import_growth_pct: يتطلب سنتين مرصودتين على الأقل في "
-                        "مخزن الحقائق — شغّل جامع كومتريد (tools/refresh.py)")
-        if c is not None:
-            F.append(_f("import_cagr_pct", c, [store_src], unit="%",
-                        note=f"CAGR عبر السنوات المرصودة {obs_years[0]}–{obs_years[-1]}"))
+            gaps.append("import_growth_pct: يتطلب سنتين مرصودتين في مخزن "
+                        "الحقائق أو إشارة Google Trends بديلة — كلاهما غائب "
+                        f"({tf_note or 'تريندز لم يُحاوَل'})")
+        if c_official is not None:
+            F.append(_f("import_cagr_pct", c_official.value,
+                        [_src(c_official.source, c_official.confidence)],
+                        unit="%", note=c_official.note))
         else:
-            gaps.append("import_cagr_pct: يتطلب سلسلة سنوات في مخزن الحقائق")
+            gaps.append("import_cagr_pct: يتطلب سلسلة سنوات في مخزن الحقائق "
+                        "— لا بديل مثلَّث مباشر لـCAGR")
+
+        # market_activity_index (جديد، المرحلة ٢، §7): فجوة TAM الرسمية =>
+        # مؤشر نشاط مثلَّث (كثافة تجزئة Google Maps + اهتمام Google Trends)،
+        # 0..1، مُعلَن modeled بثقة مسقوفة 0.5 — لا يُقارَن بدولار TAM (وحدتان
+        # مختلفتان تماماً)، بل يغذّي عمود جاذبية السوق كإشارة إضافية عند غياب
+        # TAM (§8). حارس ميزانية: نداءا Maps/Trends يُحاولان فقط عند الفجوة،
+        # ويُعاد استخدام نداء Trends السابق (trend_sig) دون تكراره.
+        if tam is None:
+            product, market_name = task.get("product", ""), task.get(
+                "market_name", iso3)
+            from silk_maps_agent import find_places
+            places = ([p for p in find_places(
+                f"{product} retailer store supermarket {market_name}")
+                if p.value is not None] if product else [])
+            trend_level = (trend_sig or {}).get("mean")
+            idx_sources, idx_parts = [], []
+            if places:
+                idx_sources.append(_src("Google Maps", 0.5))
+                idx_parts.append(min(len(places) / 10.0, 1.0))
+            if trend_level is not None:
+                idx_sources.append(_src("Google Trends", 0.5))
+                idx_parts.append(trend_level / 100.0)
+            idx_val = round(sum(idx_parts) / len(idx_parts), 2) if idx_parts else None
+            mf = _triangulate_estimate(
+                "market_activity_index", None, idx_val, idx_sources,
+                "مؤشر نشاط مثلَّث = متوسط(كثافة تجزئة Google Maps المُطبَّعة "
+                "(عدد الأماكن/10، سقف 1.0)، اهتمام Google Trends/100) — "
+                "بديل جزئي غير دولاري عند غياب TAM الرسمي، لا يُقارَن به مباشرة",
+                f"أماكن Google Maps={len(places)}؛ اهتمام Google Trends="
+                f"{trend_level}", unit=None)
+            if mf:
+                F.append(mf)
+            else:
+                gaps.append("market_activity_index: Google Maps وGoogle "
+                            "Trends كلاهما غير متاحين — لا بديل عن TAM الرسمي")
 
         # SAM/SOM — نموذجان بافتراضات معلنة (§7-2): لا يُحسبان بلا مدخلاتهما.
         card = task.get("product_card") or {}
@@ -919,7 +1034,10 @@ def _pillar_inputs(outputs: dict) -> dict:
             "tam_usd": mv("market_size", "tam_usd"),
             "import_cagr_pct": mv("market_size", "import_cagr_pct"),
             "gdp_per_capita_usd": mv("consumer_demand", "gdp_per_capita_usd"),
-            "saudi_share_pct": mv("competitor", "saudi_share_pct")},
+            "saudi_share_pct": mv("competitor", "saudi_share_pct"),
+            # المرحلة ٢ (§7): بديل جزئي غير دولاري عند غياب TAM الرسمي —
+            # يُستهلَك في _pillar_market فقط عندما يكون tam_log نفسه غائباً.
+            "market_activity_index": mv("market_size", "market_activity_index")},
         "competition_intensity": {
             "hhi": mv("competitor", "hhi"),
             "top_supplier_share_pct": mv("competitor", "top_supplier_share_pct"),
