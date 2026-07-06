@@ -73,6 +73,13 @@ def render_docx(view: dict, path: str) -> str:
     doc = Document()
     # ١) الخلاصة التنفيذية أولاً (نجحت باختبار الخمس ثوانٍ — تُثبَّت).
     doc.add_heading(f"سِلك — تقرير سوق: {view.get('product')}", 0)
+    # ترويسة 2B-د: منتج/HS/سوق مستهدف/تاريخ/تغطية إجمالية % — في الصدارة دائماً.
+    h = view.get("header") or {}
+    doc.add_paragraph(
+        f"المنتج: {h.get('product')} | HS: {h.get('hs_code')} | "
+        f"المنشأ: السعودية | السوق المستهدف: {h.get('target_market')} | "
+        f"التاريخ: {h.get('date')} | تغطية البيانات الإجمالية: "
+        f"{h.get('coverage_pct')}%")
     d = view.get("decision") or {}
     doc.add_heading("الخلاصة التنفيذية", level=1)
     doc.add_paragraph(f"القرار: {d.get('verdict') or 'تعذّر الحكم'} "
@@ -110,23 +117,37 @@ def render_docx(view: dict, path: str) -> str:
     #     اختلاق، وتقرير لا يعود «ناقصاً» بل صريحاً بما لديه وما ينقصه.
     top_m = (view.get("markets") or [{}])[0]
 
-    def _sec(title: str, items: list, empty_hint: str, fmt) -> None:
-        doc.add_heading(title, level=1)
-        if items:
-            for it in items:
-                doc.add_paragraph(fmt(it), style="List Bullet")
-        else:
-            doc.add_paragraph(f"غير مرصود — {empty_hint}")
+    st_all = top_m.get("section_status") or {}
 
-    _sec("أسعار المنتجات في السوق", top_m.get("prices"),
-         "يتطلب طبقة أسعار السوق (LOCALPRICE_API_KEY) عبر «الدراسة العميقة»",
+    def _gate(sec_key: str, title: str) -> bool:
+        """بوابة 2B: دون العتبة يُطبع سطر النقص الصريح فقط — لا نثر عام أبداً."""
+        st = st_all.get(sec_key)
+        if st and st.get("status") == "insufficient":
+            doc.add_heading(title, level=1)
+            doc.add_paragraph("بيانات غير كافية — INSUFFICIENT DATA")
+            from silk_render import insufficient_line
+            doc.add_paragraph(insufficient_line(title, st))
+            return False
+        return True
+
+    def _sec(title: str, items: list, sec_key: str, fmt) -> None:
+        if not _gate(sec_key, title):
+            return
+        doc.add_heading(title, level=1)
+        for it in items or []:
+            doc.add_paragraph(fmt(it), style="List Bullet")
+
+    _sec("أسعار المنتجات في السوق", top_m.get("prices"), "pricing",
          lambda p: f"{p.get('title') or 'قائمة'}: {_fmt(p.get('price'))}"
                    + (f" {p['currency']}" if p.get("currency") else "")
                    + (f" — {p['store']}" if p.get("store") else ""))
 
-    doc.add_heading("المنافسون", level=1)
     countries = top_m.get("supplier_countries") or []
     named = top_m.get("named_competitors") or []
+    if not _gate("competitors", "المنافسون"):
+        countries, named = [], None
+    else:
+        doc.add_heading("المنافسون", level=1)
     if countries:
         doc.add_paragraph("الدول المورّدة وحصصها:")
         for c in countries[:6]:
@@ -136,29 +157,28 @@ def render_docx(view: dict, path: str) -> str:
         doc.add_paragraph("شركات منافسة بالاسم:")
         for n in named[:8]:
             doc.add_paragraph(str(n), style="List Bullet")
-    if not countries and not named:
-        doc.add_paragraph("غير مرصود — الدول المورّدة تتطلب Comtrade (شبكة)؛ "
-                          "والشركات بالاسم تتطلب مفتاح بحث (SEARCH_API_KEY).")
 
-    _sec("الموردون والأعمال بالاسم", top_m.get("suppliers"),
-         "يتطلب Google Maps / Volza / explee (مفاتيح)",
-         lambda s: f"{s.get('name')} — {s.get('source')}")
+
+    if top_m.get("suppliers"):
+        _sec("الموردون والأعمال بالاسم", top_m.get("suppliers"), "competitors",
+             lambda s: f"{s.get('name')} — {s.get('source')}")
 
     tr = top_m.get("trend") or {}
-    doc.add_heading("اتجاه الاستيراد متعدد السنوات", level=1)
-    if tr.get("series") and (tr.get("observed_years") or []):
+    if _gate("trend", "اتجاه الاستيراد متعدد السنوات"):
+        doc.add_heading("اتجاه الاستيراد متعدد السنوات", level=1)
         doc.add_paragraph(f"النمو {tr.get('growth_pct')}% "
                           f"(CAGR {tr.get('cagr_pct')}%) — {tr.get('note')}")
-    else:
-        doc.add_paragraph("غير مرصود — فعّل «مدى السنوات» (with_trend) وتحقّق من الشبكة.")
 
-    doc.add_heading("ثقافة المستهلك ونبض السوق", level=1)
     culture = view.get("culture") or []
     if culture:
+        doc.add_heading("ثقافة المستهلك ونبض السوق", level=1)
         for c in culture[:6]:
             doc.add_paragraph(str(c.get("title"))[:200], style="List Bullet")
     else:
-        doc.add_paragraph("غير مرصود — يتطلب مفتاح بحث الويب (SEARCH_API_KEY).")
+        doc.add_heading("ثقافة المستهلك ونبض السوق", level=1)
+        doc.add_paragraph("بيانات غير كافية — INSUFFICIENT DATA")
+        doc.add_paragraph("بيانات غير كافية لقسم «الثقافة» (0/1) — المصادر "
+                          "المُحاوَلة: Web Search (Serper)")
 
     # ٣) الأسواق — سطر مصدر تحت كل رقم (§10.3، من components_detail).
     doc.add_heading("الأسواق المرشّحة (الأفضل أولاً)", level=1)

@@ -189,6 +189,11 @@ def _culture(result: dict) -> list:
     return out
 
 
+def _t_today() -> str:
+    import datetime
+    return datetime.date.today().isoformat()
+
+
 # ── Stage 2A: تغطية المصادر لكل قسم + ملحق الأثر — coverage & provenance ──────
 
 _SECTION_FIELDS = {
@@ -267,6 +272,60 @@ def _section_coverage(row: dict) -> dict:
     return out
 
 
+# ── Stage 2B: بوابة الخصوصية — per-section specificity gate ──────────────────
+# العتبات المقترحة (قابلة للضبط): أدنى عدد حقائق سوقية حقيقية ليُعرض القسم كنثر؛
+# دونها يُعرض «بيانات غير كافية» + قائمة المصادر المُحاوَلة — لا نثر عام أبداً.
+SECTION_THRESHOLDS = {
+    "market_size": 2,   # الحجم + (حصة أو تركّز) — رقم واحد لا يصنع قسم سوق
+    "demand": 1,
+    "regulatory": 2,    # بند اشتراطات + التعريفة (بند خروج عام وحده لا يكفي)
+    "competitors": 2,
+    "pricing": 1,
+    "risk": 2,
+    "trend": 2,         # سنتان على الأقل لخط اتجاه
+}
+
+
+def _section_status(row: dict) -> dict:
+    """حالة كل قسم بعد بوابة العتبة — {section: {status, contributed, threshold,
+    sources_attempted}}. status: ok | insufficient."""
+    cov = _section_coverage(row)
+    dps_by_sec: dict[str, list] = {}
+    out: dict[str, dict] = {}
+    for sec, c in cov.items():
+        thr = SECTION_THRESHOLDS.get(sec, 1)
+        # المصادر المُحاوَلة لهذا القسم (للجملة الصريحة عند النقص)
+        dps: list[dict] = []
+        if sec == "market_size":
+            comps = row.get("components") or {}
+            for k in ("market_size", "saudi_position", "competition"):
+                _walk_dps(comps.get(k), dps)
+        elif sec == "demand":
+            comps = row.get("components") or {}
+            _walk_dps(comps.get("demand_capacity"), dps)
+            _walk_dps(row.get("faostat"), dps)
+            _walk_dps(row.get("trends"), dps)
+        else:
+            for f in _SECTION_FIELDS.get(sec, ()):  # nosec — قاموس داخلي
+                _walk_dps(row.get(f), dps)
+        attempted_sources = sorted({str(d.get("source")) for d in dps
+                                    if d.get("source")})
+        out[sec] = {
+            "status": "ok" if c["contributed"] >= thr else "insufficient",
+            "contributed": c["contributed"], "threshold": thr,
+            "sources_attempted": attempted_sources,
+        }
+    return out
+
+
+def insufficient_line(sec_ar: str, st: dict) -> str:
+    """جملة النقص الوحيدة المسموح بها (2B-ب) — the only allowed insufficiency text."""
+    srcs = "، ".join(st.get("sources_attempted") or []) or "لا مصادر مُحاوَلة"
+    return (f"بيانات غير كافية لقسم «{sec_ar}» "
+            f"({st['contributed']}/{st['threshold']} حقائق سوقية) — "
+            f"المصادر المُحاوَلة: {srcs}")
+
+
 def build_view(result: dict) -> dict:
     """ابنِ نموذج العرض القانوني — the ONE canonical view-model (vision §10.1).
 
@@ -308,12 +367,26 @@ def build_view(result: dict) -> dict:
             # Stage 2A: مخاطر (WGI/LPI/FX) + درجة تغطية المصادر لكل قسم
             "risk": [_dp(f) for f in (row.get("risk") or [])],
             "section_coverage": _section_coverage(row),
+            "section_status": _section_status(row),   # بوابة 2B
         })
     limits = [f"{m['country']}: {f}" for m in markets[:5]
               for f in (m.get("quality_flags") or [])]
     if not result.get("classified"):
         limits.insert(0, result.get("hs_note") or "تعذّر التصنيف")
+    # ترويسة 2B: التغطية الإجمالية % = مُسهم/مُحاوَل عبر أقسام السوق الأعلى.
+    top_cov = _section_coverage(markets[0]) if markets else {}
+    att = sum(c["attempted"] for c in top_cov.values())
+    con = sum(c["contributed"] for c in top_cov.values())
+    header = {
+        "product": result.get("product"), "hs_code": result.get("hs_code"),
+        "origin": "SAU",
+        "target_market": (markets[0].get("country") or markets[0].get("iso3"))
+                         if markets else None,
+        "date": _t_today(),
+        "coverage_pct": round(100 * con / att, 1) if att else 0.0,
+    }
     view = {
+        "header": header,
         "product": result.get("product"), "hs_code": result.get("hs_code"),
         "hs_confidence": result.get("hs_confidence"),
         "year": result.get("year"), "preliminary": True,
@@ -339,6 +412,14 @@ def render_text(view: dict) -> str:
               *(f"  حد: {x}" for x in view.get("limits", [])[:3]), "═" * 60]
         return "\n".join(L)
     d = view["decision"]
+    h = view.get("header") or {}
+    L.append(f"المنتج: {h.get('product')} | HS: {h.get('hs_code')} | "
+             f"السوق: {h.get('target_market')} | {h.get('date')} | "
+             f"تغطية: {h.get('coverage_pct')}%")
+    st0 = (view.get("markets") or [{}])[0].get("section_status") or {}
+    for sec, st in st0.items():
+        if st.get("status") == "insufficient":
+            L.append("  " + insufficient_line(sec, st))
     cov0 = (view.get("markets") or [{}])[0].get("section_coverage") or {}
     if cov0:
         L.append("تغطية الأقسام: " + " | ".join(

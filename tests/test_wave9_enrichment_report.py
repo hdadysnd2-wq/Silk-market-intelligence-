@@ -93,4 +93,7 @@ def test_render_docx_declares_gaps_when_enrichment_missing():
     path = render_docx(view, os.path.join(tempfile.mkdtemp(), "r2.docx"))
     joined = "\n".join(p.text for p in Document(path).paragraphs)
     assert "أسعار المنتجات في السوق" in joined      # القسم موجود
-    assert "غير مرصود" in joined and "LOCALPRICE_API_KEY" in joined  # يعلن الفجوة بمفتاحها
+    # عقد 2B الجديد: دون العتبة يُعلن «بيانات غير كافية» + المصادر المُحاوَلة —
+    # جملة النقص الوحيدة المسموح بها، لا نثر حشو (بديل «غير مرصود» القديم).
+    assert "بيانات غير كافية" in joined
+    assert "المصادر المُحاوَلة" in joined
