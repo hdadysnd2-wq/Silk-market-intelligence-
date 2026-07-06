@@ -326,6 +326,108 @@ def insufficient_line(sec_ar: str, st: dict) -> str:
             f"المصادر المُحاوَلة: {srcs}")
 
 
+# ── Stage 5: مشتقات حزمة البحث (§7) — SWOT قاعدي، شرائح، دليل مورّدين ─────────
+
+def _rmetric(research: dict | None, agent: str, metric: str):
+    """قيمة مقياس من حزمة §4b — value of a metric from the research bundle."""
+    for f in ((research or {}).get("agents", {}).get(agent, {})
+              .get("findings") or []):
+        if f.get("metric") == metric and f.get("value") is not None:
+            return f.get("value")
+    return None
+
+
+def _swot(research: dict | None) -> dict:
+    """SWOT قاعدي (§7-5) — كل خلية من حقيقة مرصودة بدليلها؛ الفارغ يُعلَن.
+
+    اشتقاق عرض صرف: قواعد معلنة فوق حقائق حزمة البحث — لا نثر حر ولا تخمين.
+    """
+    S, W, O, T = [], [], [], []
+    if not research or not research.get("agents"):
+        return {"S": S, "W": W, "O": O, "T": T,
+                "note": "يتطلب حزمة وكلاء البحث (with_research)"}
+    sau = _rmetric(research, "competitor", "saudi_share_pct")
+    if sau:
+        S.append({"text": f"حضور سعودي قائم بحصة {sau}% من واردات السوق",
+                  "evidence": "UN Comtrade — saudi_share_pct"})
+    uv = _rmetric(research, "pricing", "border_unit_value_usd_kg")
+    suv = _rmetric(research, "pricing", "saudi_border_unit_value_usd_kg")
+    if uv and suv and suv <= uv:
+        S.append({"text": f"سعر حدودي سعودي منافس ({suv}$ مقابل متوسط {uv}$/kg)",
+                  "evidence": "UN Comtrade — قيم الوحدة"})
+    for g in (research.get("agents", {}).get("pricing", {}).get("gaps") or []):
+        if "بطاقة" in g or "margin" in g:
+            W.append({"text": "الهامش غير محسوب — بطاقة المنتج غير مكتملة",
+                      "evidence": g[:120]})
+            break
+    gate = _rmetric(research, "regulatory", "eligibility_gate")
+    if gate:
+        W.append({"text": "بوابة أهلية أوروبية مفتوحة (منشأة معتمدة EU 2017/625)",
+                  "evidence": "مرجع L1 — eligibility_gate"})
+    cagr = _rmetric(research, "market_size", "import_cagr_pct")
+    if cagr is not None and cagr > 5:
+        O.append({"text": f"واردات السوق تنمو {cagr}% سنوياً مركّباً",
+                  "evidence": "UN Comtrade — import_cagr_pct"})
+    hhi = _rmetric(research, "competitor", "hhi")
+    if hhi is not None and hhi < 0.15:
+        O.append({"text": f"سوق مفتّت (HHI {hhi}) — لا مورّد مهيمناً",
+                  "evidence": "UN Comtrade — hhi"})
+    rr = _rmetric(research, "consumer_demand", "ramadan_seasonality")
+    if rr and "مرجّحة" in str(rr):
+        O.append({"text": "موسمية رمضان/العيدين فرصة ذروة طلب",
+                  "evidence": "قاعدة معلنة فوق مرجع Pew"})
+    top = _rmetric(research, "competitor", "top_supplier_share_pct")
+    if top is not None and top > 50:
+        T.append({"text": f"مورّد مهيمن بحصة {top}% — حرب أسعار محتملة",
+                  "evidence": "UN Comtrade — top_supplier_share_pct"})
+    tariff = _rmetric(research, "regulatory", "tariff_applied_pct")
+    if tariff is not None and tariff > 10:
+        T.append({"text": f"تعريفة مطبّقة مرتفعة {tariff}%",
+                  "evidence": "WITS — tariff_applied_pct"})
+    fx = _rmetric(research, "risk", "fx_volatility_pct")
+    if fx is not None and fx > 5:
+        T.append({"text": f"تقلب عملة {fx}% (معامل اختلاف)",
+                  "evidence": "World Bank — PA.NUS.FCRF"})
+    if _rmetric(research, "risk", "critical_risk"):
+        T.append({"text": "خطر سياسي حرج (WGI دون −1.5)",
+                  "evidence": "World Bank — PV.EST"})
+    return {"S": S, "W": W, "O": O, "T": T,
+            "note": "خلايا قاعدية من حقائق مرصودة حصراً — الخلية الفارغة تعني "
+                    "لا بند مرصوداً، لا أنها سليمة"}
+
+
+def _segments(research: dict | None) -> list[dict]:
+    """شرائح العملاء (§7-8) — دخل × ثقافة استهلاك، بقواعد معلنة وفجوات مصرّحة."""
+    if not research or not research.get("agents"):
+        return []
+    out = []
+    gdp = _rmetric(research, "consumer_demand", "gdp_per_capita_usd")
+    if gdp is not None:
+        tier = ("مرتفع" if gdp > 25_000 else
+                "متوسط" if gdp > 8_000 else "منخفض")
+        out.append({"segment": f"شريحة الدخل: {tier}",
+                    "basis": f"نصيب الفرد {round(gdp):,}$ (World Bank) — "
+                             "عتبات معلنة 8k/25k"})
+    ms = _rmetric(research, "consumer_demand", "muslim_share_pct")
+    if ms is not None:
+        out.append({"segment": f"شريحة الحلال/رمضان: {ms}% من السكان",
+                    "basis": "مرجع Pew الساكن — muslim_share_pct"})
+    si = _rmetric(research, "consumer_demand", "search_interest")
+    if si is not None:
+        out.append({"segment": f"اهتمام البحث بالمنتج: {si}/100",
+                    "basis": "Google Trends — search_interest"})
+    return out
+
+
+def _supplier_directory(research: dict | None) -> dict:
+    """دليل المورّدين (§7 بتوجيه المالك) — مرشّحون موسومون غير موثَّقين."""
+    return {"saudi": _rmetric(research, "supplier", "saudi_suppliers") or [],
+            "target": _rmetric(research, "supplier", "target_distributors")
+                      or [],
+            "note": "مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل التعاقد؛ "
+                    "الترقية الموثّقة عبر /deepen"}
+
+
 def build_view(result: dict) -> dict:
     """ابنِ نموذج العرض القانوني — the ONE canonical view-model (vision §10.1).
 
@@ -368,6 +470,13 @@ def build_view(result: dict) -> dict:
             "risk": [_dp(f) for f in (row.get("risk") or [])],
             "section_coverage": _section_coverage(row),
             "section_status": _section_status(row),   # بوابة 2B
+            # Stage 5: حزمة §4b كما تحقق منها المنسّق + قرار §8 + مشتقاتها
+            # القاعدية (SWOT/شرائح/دليل مورّدين) — اشتقاق عرض صرف.
+            "research": row.get("research"),
+            "entry_decision": row.get("decision"),
+            "swot": _swot(row.get("research")),
+            "segments": _segments(row.get("research")),
+            "supplier_directory": _supplier_directory(row.get("research")),
         })
     limits = [f"{m['country']}: {f}" for m in markets[:5]
               for f in (m.get("quality_flags") or [])]
@@ -434,6 +543,13 @@ def render_text(view: dict) -> str:
           f"القرار: {d.get('verdict') or 'تعذّر الحكم'} "
           f"(ثقة {d.get('confidence')}) — {d.get('market')}",
           f"لماذا: {d.get('why')}", "─" * 60]
+    ed = (view.get("markets") or [{}])[0].get("entry_decision") or {}
+    if ed.get("schema"):
+        L.append(f"قرار الدخول (§8): {ed.get('verdict')} score={ed.get('score')} "
+                 f"ثقة={ed.get('confidence')} [أوزان {ed.get('weights_option')}]"
+                 f" — {ed.get('why')}")
+        for c in (ed.get("conditions") or [])[:3]:
+            L.append(f"  شرط: {c}")
     cp = view["competitive_position"]
     L.append("موقعك التنافسي:")
     if cp.get("available"):

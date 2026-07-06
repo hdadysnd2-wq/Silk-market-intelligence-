@@ -585,6 +585,25 @@ def create_app():
             media_type="application/vnd.openxmlformats-officedocument"
                        ".wordprocessingml.document")
 
+    @app.get("/analyses/{analysis_id}/report.md")
+    def report_md(analysis_id: int, request: Request):
+        """التقرير الكامل Markdown (Stage 5، §7) — من القالب الموحّد نفسه.
+
+        نفس عقد report.docx (محروسة، 404 للمفقود) لكن نصّ خالص بلا تبعيات —
+        يعمل حيث لا python-docx، وهو مصدر اشتقاق PDF على النشر.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        found = silk_storage.get_analysis(analysis_id)
+        if found is None:
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        from silk_render import build_view
+        from silk_reports import render_markdown
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(render_markdown(build_view(found)),
+                                 media_type="text/markdown; charset=utf-8")
+
     class OutcomeRequest(BaseModel):
         """جسم تسجيل النتيجة الفعلية — actual-outcome body (wave 1)."""
         outcome: str

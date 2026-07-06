@@ -224,6 +224,12 @@ Every number keeps its source line; every modeled figure shows formula + inputs;
 
 ### 8a. Weight justification & the alternative (owner decision required before M3b)
 
+> **قرار البوابة GATE 3 (2026-07-06):** اعتمد المالك التوصية — **الخيار A هو المعتمد**
+> (تابع التنفيذ بعد عرض الخيارين والتوصية). كلا المجموعين يُحسبان ويظهران في كل
+> قرار (`scores_by_option`)، و`SILK_DECISION_WEIGHTS=B` يبدّل المعتمد دون كود.
+> القرار قابل للمراجعة بعد الاختبار الرجعي الحي على النشر
+> (`tools/refresh.py` ثم `tools/backtest.py`).
+
 **Option A — approved baseline 30/25/20/25:** mirrors standard market-entry frameworks: demand-side pull (attractiveness + profitability = 55%) leads, rivalry (25%) second, regulation (20%) third — because regulation in this engine is **not only a weight, it is also a hard gate**: critical ineligibility (e.g. animal-origin chain ineligible, embargo) forces NO-GO regardless of score, and unmet checklist items become CONDITIONAL-GO conditions. The gate carries the compliance risk, so the scalar weight can stay moderate without underweighting compliance. Best when the goal is **opportunity scanning**: find the biggest winnable markets.
 
 **Option B — regulatory-heavy 25/20/30/25** (market 25 / competition 20 / **regulatory 30** / profitability 25): for Saudi food/agri exports (dates, honey, …) the most common *practical* failure point is certification/halal/labeling/import procedure, not demand. Raising regulatory to the top weight systematically favors markets with trade agreements (GCC/GAFTA zero-tariff, known chains) and makes the score itself — not just the conditions list — sensitive to compliance readiness. Trade-off: mid-size easy-regulation markets can outrank larger, tougher ones — a **conservative, execution-first** ranking.
