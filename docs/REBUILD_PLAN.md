@@ -222,6 +222,14 @@ Every number keeps its source line; every modeled figure shows formula + inputs;
 | Regulatory fit (.20) | requirements-checklist coverage (met/known/unknown), tariff level normalized, eligibility flags (halal/animal-origin chain) |
 | Profitability margin (.25) | margin at price-match percentile (needs product_card + observed prices); landed-cost vs. market median |
 
+### 8a. Weight justification & the alternative (owner decision required before M3b)
+
+**Option A — approved baseline 30/25/20/25:** mirrors standard market-entry frameworks: demand-side pull (attractiveness + profitability = 55%) leads, rivalry (25%) second, regulation (20%) third — because regulation in this engine is **not only a weight, it is also a hard gate**: critical ineligibility (e.g. animal-origin chain ineligible, embargo) forces NO-GO regardless of score, and unmet checklist items become CONDITIONAL-GO conditions. The gate carries the compliance risk, so the scalar weight can stay moderate without underweighting compliance. Best when the goal is **opportunity scanning**: find the biggest winnable markets.
+
+**Option B — regulatory-heavy 25/20/30/25** (market 25 / competition 20 / **regulatory 30** / profitability 25): for Saudi food/agri exports (dates, honey, …) the most common *practical* failure point is certification/halal/labeling/import procedure, not demand. Raising regulatory to the top weight systematically favors markets with trade agreements (GCC/GAFTA zero-tariff, known chains) and makes the score itself — not just the conditions list — sensitive to compliance readiness. Trade-off: mid-size easy-regulation markets can outrank larger, tougher ones — a **conservative, execution-first** ranking.
+
+**Guidance:** SME users new to exporting (execution risk dominates) → B. Portfolio/strategic scanning (size of prize dominates) → A. Both keep the critical-regulatory gate and identical pillar definitions; weights live in one config constant. **M3b will ship a sensitivity test running both weight sets on the golden cases and reporting any verdict flips**, so the choice is evidence-backed at go-live.
+
 **Missing-pillar policy (no fabrication):** absent pillar ⇒ weights renormalized over present pillars **and** confidence capped; the missing pillar is emitted as a *condition*. **Confidence** = data-coverage × mean effective source confidence (staleness-decayed) — a principled aggregate, printed with its formula.
 
 **Verdict mapping:**
