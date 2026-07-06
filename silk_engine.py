@@ -34,6 +34,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_competitors: bool = False, with_channels: bool = False,
             with_importers: bool = False, with_requirements: bool = False,
             with_trend: bool = False, trend_span: int = 5,
+            with_risk: bool = False,
             product_card: dict | None = None,
             hs_code: str | None = None,
             persist: bool = False, db_path: str = "data/silk.db",
@@ -144,6 +145,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                       "importers", "silk_importers_agent", "ImportersAgent")
     if with_requirements:
         _enrich_requirements(ranked[:_ENRICH_TOP], hs.value)
+    if with_risk:
+        _enrich_risk(ranked[:_ENRICH_TOP])
     if with_trend:
         _enrich_trend(ranked[:_ENRICH_TOP], hs.value, year, trend_span)
 
@@ -217,6 +220,64 @@ def _enrich_error_dp(source: str, e: Exception) -> "DataPoint":
     """
     return DataPoint(None, source, 0.0,
                      f"enrichment error: {type(e).__name__}: {e}", _today())
+
+def _enrich_risk(rows: list[dict]) -> None:
+    """وكيل المخاطر المصغّر (Stage 2A) — يقرأ أخيراً مؤشرات WGI/LPI/FX التي يجمعها
+    M2 في مخزن الحقائق (كانت تُجمَع ولا تُقرأ — SOURCE_AUDIT §3-4): الاستقرار
+    السياسي، جودة التنظيم، الأداء اللوجستي، وتقلب سعر الصرف من سلسلة السنوات.
+    مخزن فارغ => محاولة حية من World Bank (مجاني)؛ فشل الكل => فجوات موسومة.
+    """
+    _RISK_INDICATORS = (
+        ("PV.EST", "الاستقرار السياسي (WGI)"),
+        ("RQ.EST", "جودة التنظيم (WGI)"),
+        ("LP.LPI.OVRL.XQ", "الأداء اللوجستي (LPI)"),
+    )
+    for row in rows:
+        iso3 = row.get("iso3") or ""
+        findings: list[DataPoint] = []
+        try:
+            import silk_store
+            for ind, label in _RISK_INDICATORS:
+                got = None
+                try:
+                    got = silk_store.get_indicator(iso3, ind)
+                except Exception:  # noqa: BLE001 — المخزن تحسين لا شرط
+                    got = None
+                if got and got.get("value") is not None:
+                    findings.append(DataPoint(
+                        round(float(got["value"]), 3), got.get("source", "World Bank"),
+                        float(got.get("confidence") or 0.9),
+                        f"{label} — {ind} سنة {got.get('year')} (مخزن الحقائق)",
+                        _today()))
+                else:  # محاولة حية — live World Bank attempt (free) before declaring a gap
+                    from silk_data_layer import world_bank
+                    dp = world_bank(iso3, ind)
+                    dp.note = f"{label} — {dp.note}"
+                    findings.append(dp)
+            # تقلب العملة من سلسلة الصرف — FX volatility from the stored series.
+            try:
+                series = silk_store.get_indicator_series(iso3, "PA.NUS.FCRF")
+            except Exception:  # noqa: BLE001
+                series = []
+            vals = [r["value"] for r in series if r.get("value")]
+            if len(vals) >= 3:
+                mean = sum(vals) / len(vals)
+                var = sum((v - mean) ** 2 for v in vals) / len(vals)
+                cov = round(100 * (var ** 0.5) / mean, 2) if mean else None
+                findings.append(DataPoint(
+                    cov, series[-1].get("source", "World Bank"), 0.85,
+                    f"تقلب سعر الصرف (معامل اختلاف % على {len(vals)} سنوات، "
+                    f"PA.NUS.FCRF) — مخزن الحقائق", _today()))
+            else:
+                findings.append(DataPoint(
+                    None, "World Bank", 0.0,
+                    "تقلب العملة يتطلب سلسلة PA.NUS.FCRF (٣+ سنوات) — شغّل جامع "
+                    "worldbank (tools/refresh.py)", _today()))
+        except Exception as e:  # noqa: BLE001 — طبقة سياق لا تُسقط التحليل
+            log.warning("risk enrichment failed for %s: %s", iso3, e)
+            findings = [_enrich_error_dp("World Bank", "risk", e)]
+        row["risk"] = findings
+
 
 def _enrich_trends(rows: list[dict], product_name: str) -> None:
     """أضف إشارة جوجل تريندز لكل سوق — attach Trends findings (graceful None offline)."""

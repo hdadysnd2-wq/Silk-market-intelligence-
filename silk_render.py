@@ -189,6 +189,84 @@ def _culture(result: dict) -> list:
     return out
 
 
+# ── Stage 2A: تغطية المصادر لكل قسم + ملحق الأثر — coverage & provenance ──────
+
+_SECTION_FIELDS = {
+    "market_size": ("components",),                # سيُفصَّل داخلياً
+    "regulatory": ("requirements", "tariff"),
+    "competitors": ("competitors", "competitors_named", "maps"),
+    "pricing": ("prices", "localprice"),
+    "demand": ("faostat", "trends"),
+    "risk": ("risk",),
+    "trend": ("trend",),
+}
+
+
+def _walk_dps(obj, out):
+    """اجمع كل نقاط البيانات (dict أو DataPoint) — collect every datapoint-shaped node."""
+    if isinstance(obj, dict):
+        if "source" in obj and "value" in obj:
+            out.append(obj)
+        for v in obj.values():
+            _walk_dps(v, out)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            _walk_dps(v, out)
+    elif hasattr(obj, "source") and hasattr(obj, "value"):
+        out.append({"source": obj.source, "value": obj.value,
+                    "note": getattr(obj, "note", "")})
+
+
+def _provenance(result: dict) -> list[dict]:
+    """ملحق الأثر (Stage 2A) — لكل مصدر: المحاولات، المُسهم، وأمثلة أسباب الفشل.
+    لا فشل صامتاً: كل نداء فاشل يظهر هنا بملاحظته الموسومة."""
+    dps: list[dict] = []
+    _walk_dps(result, dps)
+    by: dict[str, dict] = {}
+    for d in dps:
+        src = str(d.get("source") or "?")
+        b = by.setdefault(src, {"source": src, "attempted": 0,
+                                "contributed": 0, "failures": []})
+        b["attempted"] += 1
+        if d.get("value") is not None:
+            b["contributed"] += 1
+        elif len(b["failures"]) < 3 and d.get("note"):
+            b["failures"].append(str(d.get("note"))[:140])
+    return sorted(by.values(), key=lambda b: -b["contributed"])
+
+
+def _section_coverage(row: dict) -> dict:
+    """درجة تغطية لكل قسم — {section: {attempted, contributed, score, single_source,
+    low_confidence}}. قسم بمصدر واحد فقط يُعلَّم منخفض الثقة (قاعدة 2A)."""
+    out: dict[str, dict] = {}
+    for section, fields in _SECTION_FIELDS.items():
+        dps: list[dict] = []
+        if section == "market_size":
+            comps = row.get("components") or {}
+            for k in ("market_size", "saudi_position", "competition"):
+                if k in comps:
+                    _walk_dps(comps[k], dps)
+        elif section == "demand":
+            comps = row.get("components") or {}
+            if "demand_capacity" in comps:
+                _walk_dps(comps["demand_capacity"], dps)
+            for f in fields:
+                _walk_dps(row.get(f), dps)
+        else:
+            for f in fields:
+                _walk_dps(row.get(f), dps)
+        att = len(dps)
+        con = sum(1 for d in dps if d.get("value") is not None)
+        srcs = {str(d.get("source")) for d in dps if d.get("value") is not None}
+        out[section] = {
+            "attempted": att, "contributed": con,
+            "score": round(con / att, 2) if att else 0.0,
+            "single_source": len(srcs) == 1 and con > 0,
+            "low_confidence": (len(srcs) <= 1),
+        }
+    return out
+
+
 def build_view(result: dict) -> dict:
     """ابنِ نموذج العرض القانوني — the ONE canonical view-model (vision §10.1).
 
@@ -227,6 +305,9 @@ def build_view(result: dict) -> dict:
             "named_competitors": _named_competitors(row),
             "supplier_countries": row.get("competitors") or [],
             "suppliers": _suppliers(row),
+            # Stage 2A: مخاطر (WGI/LPI/FX) + درجة تغطية المصادر لكل قسم
+            "risk": [_dp(f) for f in (row.get("risk") or [])],
+            "section_coverage": _section_coverage(row),
         })
     limits = [f"{m['country']}: {f}" for m in markets[:5]
               for f in (m.get("quality_flags") or [])]
@@ -244,6 +325,7 @@ def build_view(result: dict) -> dict:
         "culture": _culture(result),          # ثقافة المستهلك (بحث الويب)
         "brief": _brief(decision, cp),
         "limits": limits,
+        "provenance": _provenance(result),   # Stage 2A: لا فشل صامتاً
         "note": result.get("note"),
     }
     return view
@@ -257,6 +339,15 @@ def render_text(view: dict) -> str:
               *(f"  حد: {x}" for x in view.get("limits", [])[:3]), "═" * 60]
         return "\n".join(L)
     d = view["decision"]
+    cov0 = (view.get("markets") or [{}])[0].get("section_coverage") or {}
+    if cov0:
+        L.append("تغطية الأقسام: " + " | ".join(
+            f"{k}:{c['contributed']}/{c['attempted']}" for k, c in cov0.items()))
+    prov = view.get("provenance") or []
+    if prov:
+        L.append("أثر المصادر: " + " ، ".join(
+            f"{b['source']}={b['contributed']}/{b['attempted']}"
+            for b in prov[:6]))
     L += [f"رمز HS: {view['hs_code']} (ثقة {view['hs_confidence']}) | "
           f"سنة {view['year']} | مبدئي",
           f"القرار: {d.get('verdict') or 'تعذّر الحكم'} "

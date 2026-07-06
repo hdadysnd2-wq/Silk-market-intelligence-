@@ -63,15 +63,16 @@ WEIGHTS: dict[str, float] = {
 
 
 def _market_size_component(total_usd: object, hs_code: str, m49: str,
-                           year: int) -> DataPoint:
+                           year: int, xval: str = "") -> DataPoint:
     """حجم السوق — total imports of this HS by the market, derived from the SAME
     Comtrade call as the competitors (no extra request). None => no data."""
     if total_usd is None:
         return DataPoint(None, "UN Comtrade", 0.0,
                          note=f"no import total HS{hs_code} -> {m49} {year}",
                          retrieved_at=_today())
-    return DataPoint(float(total_usd), "UN Comtrade", 0.9,
-                     note=f"total imports HS{hs_code} {year} (USD)",
+    conf = 0.7 if xval else 0.9      # تباين مصادر >20% => ثقة أدنى (Stage 2A)
+    return DataPoint(float(total_usd), "UN Comtrade", conf,
+                     note=f"total imports HS{hs_code} {year} (USD){xval}",
                      retrieved_at=_today())
 
 
@@ -143,7 +144,8 @@ def _gather_row(hs_code: str, c: dict, year: int) -> dict:
     inc = _income_dp(iso3, year)                 # الدخل مرّة واحدة (Q4)
     pop = population(iso3, year)
     comp_dps = {
-        "market_size": _market_size_component(mi["total_usd"], hs_code, m49, year),
+        "market_size": _market_size_component(mi["total_usd"], hs_code, m49, year,
+                                              xval=mi.get("xval_note", "")),
         "saudi_position": _saudi_position_component(comps),
         "demand_capacity": _demand_capacity_component(inc, iso3, year),
         "competition": _competition_component(comps),

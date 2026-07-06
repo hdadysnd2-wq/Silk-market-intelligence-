@@ -55,6 +55,14 @@ def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
     grand = sum(totals.values())
     # حجم السوق: صفّ العالم إن وُجد، وإلا مجموع الشركاء (لا اختلاق) — market size.
     total_usd = world if (world and world > 0) else (grand if grand > 0 else None)
+    # تحقق تقاطعي (Stage 2A): مشتقّتان لنفس الحقيقة — صف العالم ومجموع الشركاء.
+    # تباين >20% يُعلَّم (سوء تبويب/نقص شركاء محتمل) ولا يُخفى ولا يُسوّى.
+    xval_note = ""
+    if world and world > 0 and grand > 0:
+        div = abs(world - grand) / world
+        if div > 0.20:
+            xval_note = (f" | تباين مصادر {round(100 * div)}%: صف العالم "
+                         f"{round(world):,}$ مقابل مجموع الشركاء {round(grand):,}$")
     competitors: list[DataPoint] = []
     if grand > 0:
         for code, val in sorted(totals.items(), key=lambda kv: kv[1], reverse=True):
@@ -66,7 +74,8 @@ def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
                 note=f"HS{hs_code} imports to {market_m49} {year}; share {share}%",
                 retrieved_at=_today(),
             ))
-    return {"total_usd": total_usd, "competitors": competitors}
+    return {"total_usd": total_usd, "competitors": competitors,
+            "xval_note": xval_note}
 
 
 def market_competitors(hs_code: str, market_m49: object, year: int) -> list[DataPoint]:
@@ -123,7 +132,8 @@ def market_imports_cached(hs_code: str, market_m49: object, market_iso3: str,
                         note=f"HS{hs_code} imports to {market_iso3} {year} "
                              f"(fact store); share {share}%",
                         retrieved_at=_today()))
-            return {"total_usd": got["total_usd"], "competitors": competitors}
+            return {"total_usd": got["total_usd"], "competitors": competitors,
+                    "xval_note": ""}
     except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط (هدوء: debug)
         log.debug("fact-store read unavailable (%s %s %s): %s",
                   hs_code, market_iso3, year, e)

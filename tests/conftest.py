@@ -25,3 +25,17 @@ def block_network():
         yield
     finally:
         socket.socket = real
+
+
+import tempfile
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolated_fact_store(monkeypatch):
+    """عزل مخزن الحقائق لكل اختبار — كتابة M2 العابرة دفّأت المخزن الافتراضي
+    فتسرّبت حقائق حقيقية بين الاختبارات (اكتُشف عبر test_engine_localprice_layer_offline
+    بعد تشغيلات تدقيق Stage 1). Every test gets its own store unless it overrides."""
+    monkeypatch.setenv("SILK_STORE_DB",
+                       os.path.join(tempfile.mkdtemp(), "store.db"))

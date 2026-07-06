@@ -174,6 +174,30 @@ def render_docx(view: dict, path: str) -> str:
                         + f" | ثقة: {c.get('confidence')}")
             doc.add_paragraph(src_line, style="Intense Quote")
 
+    # Stage 2A-١) تغطية المصادر لكل قسم (السوق الأعلى) — coverage per section.
+    top_m = (view.get("markets") or [{}])[0]
+    cov = top_m.get("section_coverage") or {}
+    if cov:
+        doc.add_heading("تغطية المصادر حسب القسم", level=1)
+        _AR = {"market_size": "حجم السوق والمنافسة", "demand": "الطلب والقدرة",
+               "regulatory": "الاشتراطات والتعريفة", "competitors": "المنافسون بالاسم",
+               "pricing": "الأسعار", "risk": "المخاطر", "trend": "الاتجاه"}
+        for sec, c in cov.items():
+            flag = " ⚠ مصدر واحد — ثقة منخفضة" if c.get("low_confidence") else ""
+            doc.add_paragraph(
+                f"{_AR.get(sec, sec)}: {c['contributed']}/{c['attempted']} "
+                f"(درجة {c['score']}){flag}")
+
+    # Stage 2A-٢) ملحق الأثر — provenance appendix: لا فشل صامتاً.
+    prov = view.get("provenance") or []
+    if prov:
+        doc.add_heading("ملحق: أثر المصادر (المحاولات والإسهام)", level=1)
+        for b in prov:
+            doc.add_paragraph(f"{b['source']}: أسهم {b['contributed']} من "
+                              f"{b['attempted']} محاولة")
+            for f in b.get("failures") or []:
+                doc.add_paragraph(f"    فشل مُسجَّل: {f}", style="Intense Quote")
+
     # ٤) حدود هذا التقرير — قبل التوصيات (§10.3).
     doc.add_heading("حدود هذا التقرير", level=1)
     limits = view.get("limits") or ["لا فجوات مرصودة في الأسواق العليا"]

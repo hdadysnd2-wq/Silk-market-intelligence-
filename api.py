@@ -122,6 +122,15 @@ def create_app():
                   description="Real public-data export-market analysis "
                               "(UN Comtrade + World Bank). Preliminary, never fabricated.")
 
+    # Stage 2A: حمّل مفاتيح المصادر المحفوظة إلى بيئة العملية عند الإقلاع —
+    # متغير بيئة النشر يفوز (overwrite=False). Best-effort: فشلها لا يمنع الإقلاع.
+    try:
+        import silk_store as _store
+        _store.migrate()
+        _store.load_settings_into_env()
+    except Exception as _e:  # noqa: BLE001
+        log.debug("settings bootstrap skipped: %s", _e)
+
     # CORS (الموجة ٠): الافتراضي صار **نفس الأصل فقط** (الواجهة تُقدَّم من نفس
     # الخدمة فلا تحتاج CORS). للواجهات المنفصلة (Netlify) اضبط CORS_ORIGINS
     # بقائمة أصول مفصولة بفواصل؛ "*" لم يعد افتراضياً ويتطلب ضبطاً صريحاً.
@@ -328,31 +337,68 @@ def create_app():
                 detail="daily paid-layer cap reached (SILK_PAID_DAILY_CAP) — "
                        "retry tomorrow or raise the cap")
 
+    def _source_policy() -> dict:
+        """سياسة المصادر الخادمية (Stage 2A) — server decides, never UI flags.
+
+        القاعدة الصلبة: كل مصدر مجاني بلا مفتاح يُحاول دائماً؛ والمفتاحيّ المجاني
+        يُحاول متى وُجد مفتاحه في بيئة الخادم. أعلام العميل لا تُعطّل مصدراً —
+        كانت البوابة المشتقة من لوحة مفاتيح المتصفح سببَ إظلام 8/12 مصدراً
+        (docs/SOURCE_AUDIT.md). المدفوع يبقى بنيوياً في /deepen فقط.
+        """
+        return {
+            "with_trends": True, "with_tariffs": True, "with_faostat": True,
+            "with_requirements": True, "with_trend": True,
+            "with_competitors": True, "with_channels": True,
+            "with_importers": True, "with_risk": True,
+            "with_websearch": bool(os.environ.get("SEARCH_API_KEY", "").strip()),
+            "with_maps": bool(os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()),
+        }
+
     @app.post("/analyze")
     def analyze(req: AnalyzeRequest, request: Request):
         """حلّل منتجًا عبر الأسواق (المسار العادي، مجاني حصراً) — free-only path.
 
-        الموجة ٢: لا حقول مدفوعة في النموذج أصلاً، فلا يصل المحرّكَ أي علم
-        مدفوع من هنا — الحصر بنيوي لا افتراضي. التعميق عبر POST /deepen.
-        حارس الموجة ٠ (المصادقة) يعمل قبل أي وكيل.
+        الموجة ٢: لا حقول مدفوعة في النموذج أصلاً — الحصر بنيوي. التعميق عبر
+        POST /deepen. Stage 2A: طبقات المصادر تُقرَّر بسياسة الخادم حصراً
+        (_source_policy) — علم العميل لا يستطيع إطفاء مصدر مجاني.
         """
         _require_key(request)
         _rate_limit(request)
+        policy = _source_policy()
         result = silk_engine.analyze(
-            req.product, year=req.year, with_trends=req.with_trends,
-            with_tariffs=req.with_tariffs, with_faostat=req.with_faostat,
-            with_maps=req.with_maps, with_websearch=req.with_websearch,
-            with_competitors=req.with_competitors,
-            with_channels=req.with_channels,
-            with_importers=req.with_importers,
-            with_requirements=req.with_requirements,
-            with_trend=req.with_trend, trend_span=req.trend_span,
+            req.product, year=req.year,
+            trend_span=req.trend_span,
             product_card=(req.product_card.model_dump()
                           if req.product_card else None),
             hs_code=req.hs_code,
-            persist=req.persist)
+            persist=req.persist, **policy)
         result["view"] = _view(result)
         return _json(result)
+
+    class KeysBody(BaseModel):
+        """جسم حفظ مفاتيح المصادر — allow-listed server-side key settings."""
+        keys: dict[str, str]
+
+    @app.post("/settings/keys")
+    def set_keys(body: KeysBody, request: Request):
+        """احفظ مفاتيح المصادر في الخادم (Stage 2A) — the settings panel finally
+        persists somewhere real: allow-listed keys go to the unified store AND the
+        process env (agents pick them up immediately). القيم لا تُعاد أبداً —
+        الاستجابة وجود/رفض فقط. متغير بيئة النشر يبقى الأعلى سلطة عند الإقلاع.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        import silk_store
+        silk_store.migrate()
+        saved, rejected = [], []
+        for k, v in (body.keys or {}).items():
+            v = (v or "").strip()
+            if v and silk_store.set_setting(k, v):
+                os.environ[k] = v
+                saved.append(k)
+            elif v:
+                rejected.append(k)
+        return {"saved": saved, "rejected": rejected}
 
     @app.post("/deepen")
     def deepen(req: DeepenRequest, request: Request):

@@ -282,3 +282,52 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print("silk_store — unified store; applied migrations:", migrate())
     print("db:", _db_path(), "| postgres:", _is_postgres())
+
+
+# ── الإعدادات الخادمية · server-side settings (Stage 2A) ─────────────────────
+
+_ALLOWED_KEY_SETTINGS = (
+    "COMTRADE_API_KEY", "GOOGLE_MAPS_API_KEY", "SEARCH_API_KEY",
+    "LOCALPRICE_API_KEY", "VOLZA_API_KEY", "EXPLEE_API_KEY", "ANTHROPIC_API_KEY",
+)
+
+
+def set_setting(key: str, value: str) -> bool:
+    """احفظ إعداداً مسموحاً — persist an allow-listed source key server-side."""
+    if key not in _ALLOWED_KEY_SETTINGS:
+        return False
+    with connect() as conn:
+        conn.execute(_q(
+            "INSERT INTO settings (key, value, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT (key) DO UPDATE SET value=excluded.value, "
+            "updated_at=excluded.updated_at"), (key, value, _now()))
+        conn.commit()
+    return True
+
+
+def load_settings_into_env(overwrite: bool = False) -> int:
+    """حمّل الإعدادات المحفوظة إلى بيئة العملية — متغير البيئة يفوز افتراضياً
+    (النشر الصريح أعلى سلطة من اللوحة). Returns count loaded."""
+    n = 0
+    try:
+        with connect() as conn:
+            rows = conn.execute("SELECT key, value FROM settings").fetchall()
+    except Exception as e:  # noqa: BLE001 — الإعدادات تحسين لا شرط
+        log.debug("settings load skipped: %s", e)
+        return 0
+    for r in rows:
+        k, v = r[0], r[1]
+        if k in _ALLOWED_KEY_SETTINGS and v and (overwrite or not os.environ.get(k)):
+            os.environ[k] = v
+            n += 1
+    return n
+
+
+def get_indicator_series(iso3: str, indicator: str, years: int = 6) -> list[dict]:
+    """سلسلة سنوات لمؤشر — last N years (asc) for volatility computations."""
+    with connect() as conn:
+        rows = conn.execute(_q(
+            "SELECT year, value, source, retrieved_at FROM indicators "
+            "WHERE iso3=? AND indicator=? AND value IS NOT NULL "
+            "ORDER BY year DESC LIMIT ?"), (iso3, indicator, int(years))).fetchall()
+    return [dict(r) for r in reversed(rows)]

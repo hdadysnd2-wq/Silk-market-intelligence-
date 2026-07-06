@@ -292,12 +292,12 @@
     cultureTitle:{ar:"ثقافة المستهلك ونبض السوق",en:"Consumer culture & market pulse"},cultureSub:{ar:"عناوين ومقالات مرصودة من بحث الويب — ما يهتم به المستهلك فعلياً.",en:"Observed headlines & articles from web search — what the consumer actually cares about."},cultureNeed:{ar:"غير مرصود — يتطلب مفتاح بحث الويب (SEARCH_API_KEY). فعّله في الإعدادات؛ لا نختلق اهتماماً.",en:"Not observed — requires a web-search key (SEARCH_API_KEY). Enable it in Settings; we never invent interest."},
     readyTitle:{ar:"ابدأ بالبحث عن منتج",en:"Start by searching a product"},readyP:{ar:"اكتب اسم منتج سعودي لتصفية أسواق تصديره وترتيبها عبر سنوات الدراسة.",en:"Type a Saudi product to shortlist and rank its export markets across the study years."},readyFoot:{ar:"النظام لا يُنشئ بيانات — كل رقم يحمل مصدره وثقته وتاريخه، وكل فجوة تُعلن بسببها.",en:"The system never creates data — every number carries its source, confidence and date, and every gap is declared with its reason."},
     readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"النظام لا يخمّن رمز HS — التصنيف الضعيف يُعلن بدل أن يُخترع.",en:"The system never guesses an HS code — a weak classification is declared, not invented."},
-    settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"المفاتيح تُحفظ محلياً في متصفحك. لتفعيلها فعلياً اضبطها في متغيّرات البيئة على الخادم بنفس الأسماء.",en:"Keys are stored locally in your browser. To activate them, set them as server environment variables with the same names."},
+    settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"أدخل المفاتيح ثم «حفظ في الخادم» — تُخزَّن في خادمك وتُفعَّل فوراً (متغيرات بيئة النشر تبقى الأعلى سلطة).",en:"Enter keys then “Save to server” — stored on your server and active immediately (deploy env vars still win)."},saveServer:{ar:"حفظ في الخادم",en:"Save to server"},saved:{ar:"حُفظت المفاتيح في الخادم",en:"Keys saved to server"},adminKey:{ar:"مفتاح الخدمة (X-API-Key) إن كانت المصادقة مفعّلة",en:"Service key (X-API-Key) if auth is enabled"},
     secAI:{ar:"الذكاء الاصطناعي",en:"AI"},secFree:{ar:"مصادر مجانية",en:"Free sources"},secPaid:{ar:"مصادر مدفوعة",en:"Paid sources"},connected:{ar:"متصل",en:"Connected"},needsKey:{ar:"يحتاج مفتاح",en:"Needs key"},keyless:{ar:"متصل · بلا مفتاح",en:"Connected · keyless"},
     footer:{ar:"سِلك · واجهة مؤسسية ثنائية اللغة (Carbon × Redwood) · بيانات عامة حقيقية فقط · فاتح/داكن · RTL/LTR",en:"Silk · Bilingual enterprise UI (Carbon × Redwood) · Real public data only · Light/Dark · RTL/LTR"},
     reqFail:{ar:"فشل الطلب",en:"Request failed"},langSwitched:{ar:"تم التبديل إلى العربية",en:"Switched to English"}
   };
-  var S={lang:localStorage.getItem("silk_lang")||"ar",product:"",hs:"",selId:null,running:false,raw:null,result:null,sentFlags:{},tab:"position",query:"",
+  var S={lang:localStorage.getItem("silk_lang")||"ar",adminKey:localStorage.getItem("silk_admin_key")||"",product:"",hs:"",selId:null,running:false,raw:null,result:null,sentFlags:{},tab:"position",query:"",
     yearFrom:2019,yearTo:2023,card:JSON.parse(localStorage.getItem("silk_card")||"{}"),
     keys:JSON.parse(localStorage.getItem("silk_keys")||"{}"),toggles:JSON.parse(localStorage.getItem("silk_toggles")||"{}"),view:"dashboard"};
   function t(k){var e=I18N[k];return e?e[S.lang]:k;}
@@ -367,9 +367,8 @@
   $("#runBtn").addEventListener("click",runAnalysis);
   function buildBody(deepen){
     var span=Math.max(2,Math.min(10,S.yearTo-S.yearFrom+1));
-    var b={product:S.product,year:S.yearTo,persist:true,with_trend:true,trend_span:span,with_requirements:true,with_competitors:true,
-      with_websearch:!!S.keys.SEARCH,
-      with_trends:!!S.toggles.trends,with_tariffs:!!S.keys.WITS,with_faostat:!!S.keys.FAOSTAT,with_maps:!!S.keys.MAPS};
+    // Stage 2A: لا أعلام مصادر من المتصفح — سياسة الخادم تقرر المصادر كلها.
+    var b={product:S.product,year:S.yearTo,persist:true,trend_span:span};
     if(S.card.cost_per_unit!=null){b.product_card={cost_per_unit:S.card.cost_per_unit,tier:S.card.tier||null,monthly_capacity:S.card.monthly_capacity!=null?S.card.monthly_capacity:null,shipping_per_unit:S.card.shipping_per_unit!=null?S.card.shipping_per_unit:null};}
     if(S.card.own_price!=null)b.own_price=S.card.own_price;
     if(deepen){b.with_localprice=!!S.keys.LOCALPRICE;b.with_volza=!!S.keys.VOLZA;b.with_explee=!!S.keys.EXPLEE;b.with_ai=!!S.keys.CLAUDE;}
@@ -594,9 +593,9 @@
   var FREE=[{k:null,nm:{ar:"UN Comtrade",en:"UN Comtrade"},ds:{ar:"الاستيراد/التصدير بالـ HS — العمود الفقري.",en:"HS imports/exports — the backbone."}},
     {k:null,nm:{ar:"World Bank",en:"World Bank"},ds:{ar:"الدخل، القوة الشرائية، السكان.",en:"Income, PPP, population."}},
     {k:null,nm:{ar:"مرجع الاشتراطات L1",en:"Requirements L1 reference"},ds:{ar:"اشتراطات دخول/خروج بمصادرها الرسمية.",en:"Entry/exit requirements with official sources."}},
-    {tg:"trends",nm:{ar:"Google Trends",en:"Google Trends"},ds:{ar:"الطلب والموسمية.",en:"Demand & seasonality."}},
-    {k:"WITS",nm:{ar:"WITS / WTO",en:"WITS / WTO"},ds:{ar:"الرسوم الجمركية المطبّقة.",en:"Applied tariffs."}},
-    {k:"FAOSTAT",nm:{ar:"FAOSTAT",en:"FAOSTAT"},ds:{ar:"الاستهلاك للفرد (غذائي).",en:"Per-capita food supply."}},
+    {k:null,nm:{ar:"Google Trends",en:"Google Trends"},ds:{ar:"الطلب والموسمية — مفعّل دائماً من الخادم.",en:"Demand & seasonality — always on (server)."}},
+    {k:null,nm:{ar:"WITS / WTO",en:"WITS / WTO"},ds:{ar:"الرسوم المطبّقة — بلا مفتاح، مفعّل دائماً.",en:"Applied tariffs — keyless, always on."}},
+    {k:null,nm:{ar:"FAOSTAT",en:"FAOSTAT"},ds:{ar:"الاستهلاك للفرد — بلا مفتاح، مفعّل دائماً.",en:"Per-capita supply — keyless, always on."}},
     {k:"MAPS",nm:{ar:"Google Maps",en:"Google Maps"},ds:{ar:"المصانع والموزّعون بأسمائهم.",en:"Named factories & distributors."}},
     {k:"SEARCH",nm:{ar:"بحث الويب (Serper)",en:"Web Search (Serper)"},ds:{ar:"ثقافة المستهلك ونبض السوق — عناوين ومقالات مرصودة.",en:"Consumer culture & market pulse — observed headlines & articles."}}];
   var PAID=[{k:"LOCALPRICE",nm:{ar:"أسعار السوق المحلي",en:"Local market prices"},ds:{ar:"أسعار الرفّ الفعلية (أمازون/نون/جوميا) + مقارنة سعرك.",en:"Real shelf prices (Amazon/Noon/Jumia) + your price comparison."}},
@@ -610,8 +609,22 @@
     else{badge=t("keyless");cls="st-on";}
     return '<div class="srccard"><div class="body"><div class="nm">'+esc(s.nm[S.lang])+'</div><div class="ds">'+esc(s.ds[S.lang])+'</div></div><span class="stbadge '+cls+'">'+esc(badge)+'</span>'+ctrl+'</div>';
   }
+  var KEY_ENV={SEARCH:"SEARCH_API_KEY",MAPS:"GOOGLE_MAPS_API_KEY",LOCALPRICE:"LOCALPRICE_API_KEY",VOLZA:"VOLZA_API_KEY",EXPLEE:"EXPLEE_API_KEY",CLAUDE:"ANTHROPIC_API_KEY",COMTRADE:"COMTRADE_API_KEY"};
+  function saveKeysToServer(){
+    var payload={};Object.keys(S.keys).forEach(function(k){if(S.keys[k]&&KEY_ENV[k])payload[KEY_ENV[k]]=S.keys[k];});
+    var hdrs={"Content-Type":"application/json"};if(S.adminKey)hdrs["X-API-Key"]=S.adminKey;
+    fetch(base()+"/settings/keys",{method:"POST",headers:hdrs,body:JSON.stringify({keys:payload})})
+      .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
+      .then(function(){toast(t("saved"));})
+      .catch(function(e){toast(t("reqFail")+": "+e.message);});
+  }
   function renderSettings(){
-    $("#settingsBody").innerHTML='<div class="sec-ttl">'+esc(t("secAI"))+'</div>'+AI.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secFree"))+'</div>'+FREE.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secPaid"))+'</div>'+PAID.map(srcCard).join("");
+    $("#settingsBody").innerHTML='<div class="sec-ttl">'+esc(t("secAI"))+'</div>'+AI.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secFree"))+'</div>'+FREE.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secPaid"))+'</div>'+PAID.map(srcCard).join("")+
+      '<div class="sec-ttl">·</div>'+
+      '<input class="keyin" id="adminKey" type="password" placeholder="'+esc(t("adminKey"))+'" value="'+esc(S.adminKey||"")+'" style="width:100%"/>'+
+      '<button class="btn primary" id="saveKeysBtn" style="margin-top:8px">'+esc(t("saveServer"))+'</button>';
+    var ak=$("#adminKey");if(ak)ak.addEventListener("input",function(){S.adminKey=this.value;localStorage.setItem("silk_admin_key",this.value);});
+    var sb=$("#saveKeysBtn");if(sb)sb.addEventListener("click",saveKeysToServer);
     $$("#settingsBody .keyin").forEach(function(i){i.addEventListener("input",function(){S.keys[this.getAttribute("data-key")]=this.value;localStorage.setItem("silk_keys",JSON.stringify(S.keys));renderSettings();});});
     $$("#settingsBody .switch").forEach(function(b){b.addEventListener("click",function(){var g=this.getAttribute("data-tg");S.toggles[g]=!S.toggles[g];localStorage.setItem("silk_toggles",JSON.stringify(S.toggles));renderSettings();});});
   }
