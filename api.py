@@ -188,6 +188,7 @@ def create_app():
         trend_span: int = 5
         product_card: ProductCard | None = None
         hs_code: str | None = None
+        markets: list[str] | None = None  # ISO3s لتضييق المرشّحين؛ فارغ = كل الأسواق
         persist: bool = False
 
     class DeepenRequest(BaseModel):
@@ -266,6 +267,17 @@ def create_app():
         limit مُقيَّد إلى [1..100] (M0): قيمة ضخمة/سالبة لا تُمرَّر للبحث كما هي.
         """
         return _json(_index_search(q, max(1, min(int(limit), 100))))
+
+    @app.get("/markets")
+    def markets_reference():
+        """مرجع الأسواق المرشَّحة — the candidate-market list for the target
+        picker: {iso3, m49, name}. Same reference `rank_markets()` scores
+        against — يُبنى مرة واحدة، لا نداء شبكة، ثابت لكل التشغيلات.
+        """
+        from silk_market_ranker import COUNTRIES
+        from silk_data_layer import partner_name
+        return _json([{"iso3": c["iso3"], "m49": c["m49"],
+                      "name": partner_name(c["m49"])} for c in COUNTRIES])
 
     def _require_key(request: Request) -> None:
         """حارس المصادقة — 401 when the key mismatches, constant-time (L-1).
@@ -367,6 +379,7 @@ def create_app():
         policy = _source_policy()
         result = silk_engine.analyze(
             req.product, year=req.year,
+            countries=_target_countries(req.markets),
             trend_span=req.trend_span,
             product_card=(req.product_card.model_dump()
                           if req.product_card else None),
@@ -374,6 +387,20 @@ def create_app():
             persist=req.persist, **policy)
         result["view"] = _view(result)
         return _json(result)
+
+    def _target_countries(iso3s: list[str] | None):
+        """ضيّق قائمة الأسواق المرشّحة — an explicit ISO3 subset of COUNTRIES,
+        أو None (الافتراضي: كل الأسواق ‎— سلوك الاكتشاف القائم بلا تغيير).
+
+        رموز غير معروفة تُتجاهَل بصمت (لا اختلاق سوق غير موجود في المرجع)؛
+        قائمة فارغة بعد الترشيح => None (لا نُسقط التحليل إلى صفر أسواق).
+        """
+        if not iso3s:
+            return None
+        from silk_market_ranker import COUNTRIES
+        wanted = {s.strip().upper() for s in iso3s if s and s.strip()}
+        filtered = [c for c in COUNTRIES if c["iso3"] in wanted]
+        return filtered or None
 
     class KeysBody(BaseModel):
         """جسم حفظ مفاتيح المصادر — allow-listed server-side key settings."""
