@@ -92,3 +92,65 @@ if __name__ == "__main__":
     else:
         print(f"  Top supplier: {comps[0].value['partner']} "
               f"({comps[0].value['share']}%)")
+
+
+# ── M2: قراءة من مخزن الحقائق أولاً + كتابة عابرة — store-first + write-through ──
+
+def market_imports_cached(hs_code: str, market_m49: object, market_iso3: str,
+                          year: int, live=None) -> dict:
+    """واردات سوق عبر مخزن الحقائق أولاً — fact-store first, live+write-through miss.
+
+    نفس عقد market_imports تماماً. وجود صفوف للسنة/الرمز في المخزن = إصابة (صفر
+    نداء خارجي)؛ الغياب = المسار الحي القائم، وعند نجاحه تُكتب الصفوف للمخزن
+    فيستفيد كل تحليل لاحق. أي فشل في طبقة المخزن يسقط بأمان للمسار الحي — المخزن
+    تحسين، ليس شرطاً. لا اختلاق: مخزن فارغ لا يُنتج صفوفاً.
+    """
+    from silk_data_layer import M49_TO_ISO3, ISO3_TO_M49, partner_name, _today
+    try:  # 1) المخزن أولاً — the warm store
+        import silk_store
+        got = silk_store.market_imports_from_store(hs_code, market_iso3, int(year))
+        if got["total_usd"] is not None or got["partners"]:
+            grand = sum(p["value_usd"] for p in got["partners"]) or None
+            competitors = []
+            if grand:
+                for p in got["partners"]:
+                    m49 = ISO3_TO_M49.get(p["iso3"], p["iso3"])
+                    share = round(100 * p["value_usd"] / grand, 2)
+                    competitors.append(DataPoint(
+                        value={"partner": partner_name(m49), "code": str(m49),
+                               "value_usd": p["value_usd"], "share": share},
+                        source="UN Comtrade (مخزن الحقائق)", confidence=0.9,
+                        note=f"HS{hs_code} imports to {market_iso3} {year} "
+                             f"(fact store); share {share}%",
+                        retrieved_at=_today()))
+            return {"total_usd": got["total_usd"], "competitors": competitors}
+    except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط (هدوء: debug)
+        log.debug("fact-store read unavailable (%s %s %s): %s",
+                  hs_code, market_iso3, year, e)
+
+    # 2) المسار الحي القائم — the existing live path. `live` يُمرَّر من المُرتِّب
+    # ليبقى قابلاً للترقيع في اختباراته (wave8 seam) — default: هذا الملف.
+    mi = (live or market_imports)(hs_code, market_m49, year)
+
+    # 3) كتابة عابرة عند النجاح — write-through so the NEXT run is store-warm.
+    try:
+        if mi["total_usd"] is not None or mi["competitors"]:
+            import silk_store
+            rows = []
+            if mi["total_usd"] is not None:
+                rows.append({"hs6": hs_code, "reporter_iso3": market_iso3,
+                             "partner_iso3": "WLD", "year": int(year), "flow": "M",
+                             "value_usd": mi["total_usd"]})
+            for c in mi["competitors"]:
+                v = c.value or {}
+                piso = M49_TO_ISO3.get(str(v.get("code")), str(v.get("code")))
+                rows.append({"hs6": hs_code, "reporter_iso3": market_iso3,
+                             "partner_iso3": piso, "year": int(year), "flow": "M",
+                             "value_usd": v.get("value_usd")})
+            if rows:
+                silk_store.migrate()
+                silk_store.upsert_trade_flows(rows)
+    except Exception as e:  # noqa: BLE001 — never break the live path
+        log.warning("fact-store write-through failed (%s %s %s): %s",
+                    hs_code, market_iso3, year, e)
+    return mi

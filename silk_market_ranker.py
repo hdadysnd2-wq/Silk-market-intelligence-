@@ -16,7 +16,7 @@ from silk_data_layer import (
     population,
     _today,
 )
-from silk_data_layer_v2 import ppp_per_capita, market_imports
+from silk_data_layer_v2 import market_imports_cached, ppp_per_capita, market_imports
 
 log = logging.getLogger(__name__)
 
@@ -136,8 +136,9 @@ def _gather_row(hs_code: str, c: dict, year: int) -> dict:
     الخيوط بأمان. الدخل يُجلب مرّة واحدة (Q4) ويُعاد استعماله.
     """
     iso3, m49 = c["iso3"], c["m49"]
-    # نداء Comtrade واحد لكل سوق يعطي الحجم والمنافسين معًا — ONE call: size + rivals.
-    mi = market_imports(hs_code, m49, year)
+    # نداء واحد لكل سوق عبر مخزن الحقائق أولاً (M2) — store-first, ONE call on miss.
+    mi = market_imports_cached(hs_code, m49, iso3, year,
+                           live=market_imports)  # قابل للترقيع (wave8)
     comps = mi["competitors"]
     inc = _income_dp(iso3, year)                 # الدخل مرّة واحدة (Q4)
     pop = population(iso3, year)

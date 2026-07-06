@@ -86,7 +86,7 @@ def _today() -> str:
     return datetime.date.today().isoformat()
 
 
-def _cached_get(url: str, params: dict) -> object:
+def _cached_get(url: str, params: dict, ttl_seconds: int = 86400) -> object:
     """جلب مع تخزين مؤقت اختياري — try the on-disk cache, else None (caller falls back).
 
     Transparent: returns parsed JSON when cache/fetch succeeds, None otherwise so
@@ -95,7 +95,8 @@ def _cached_get(url: str, params: dict) -> object:
     """
     try:
         from silk_cache import cached_get
-        return cached_get(url, params, fetcher=_http_get)  # pooled fetch (P2)
+        return cached_get(url, params, ttl_seconds=ttl_seconds,
+                          fetcher=_http_get)  # pooled fetch (P2)
     except Exception as e:  # noqa: BLE001 — cache is best-effort, never break the layer
         log.warning("cache layer unavailable (%s); using direct fetch", e)
         return None
@@ -191,8 +192,11 @@ def comtrade_trade(
     if COMTRADE_KEY:
         params["subscription-key"] = COMTRADE_KEY  # full /data endpoint + higher cap
     url = _comtrade_url()
+    # سياسة TTL لكل مصدر (M2): سنة تجارية مقفلة تتغيّر نادراً — 30 يوماً؛
+    # السنة الجارية 24 ساعة. Per-source TTL: closed years 30d, current 24h.
+    ttl = 30 * 86400 if int(year) < datetime.date.today().year else 86400
     try:
-        payload = _cached_get(url, params)
+        payload = _cached_get(url, params, ttl_seconds=ttl)
         if payload is None:  # cache miss + fetch failed -> same graceful [] as before
             r = _http_get(url, params)
             r.raise_for_status()
@@ -216,7 +220,7 @@ def world_bank(iso3: str, indicator: str, year: int | None = None) -> DataPoint:
     if year is not None:
         params["date"] = str(year)
     try:
-        payload = _cached_get(url, params)
+        payload = _cached_get(url, params, ttl_seconds=7 * 86400)  # M2: WB 7d
         if payload is None:  # cache miss + fetch failed -> fall back to direct GET
             r = _http_get(url, params)
             r.raise_for_status()
