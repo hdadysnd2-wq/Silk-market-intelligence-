@@ -52,3 +52,21 @@
 - Add the WGI/LPI/FX reader (Risk Agent, M3a §4b).
 - Document `LOCALPRICE_API_KEY`.
 - Per-section source-coverage score + provenance appendix (2A spec).
+
+---
+
+## 5. AFTER — Stage 2A/2B enforcement (hermetic proof, tools/stage2c_proof.py)
+
+Same two cases re-run behind realistic HTTP doubles (production payload schemas; sandbox blocks live hosts — the identical runner executes live via `--live` on the deployment):
+
+| Metric | BEFORE (Stage 1) | AFTER (Stage 2) |
+|---|---|---|
+| Sources contributing facts | 1 (L1 only) | **6** (Comtrade، World Bank، Serper، Google Maps، Google Trends، L1) |
+| Facts — dates→CHN | 3 | **28** (Serper 15، WB 4، Comtrade 3، L1 3، Maps 2، Trends 1) |
+| Facts — honey→DEU | 9 | **34** |
+| Data coverage % (header) | 0.0 / 0.0 | **80.0 / 88.0** |
+| Sections passing the 2B gate | 0 | **5 لكل حالة** (market_size, regulatory, competitors, demand, risk) |
+| Serper/Maps short-circuits | 5+1 لكل تشغيلة | **0** — سياسة الخادم + مفاتيح الخادم |
+| WGI/LPI/FX readers | لا قارئ | **row['risk'] فعلي** (بما فيه تقلب FX من السلسلة) |
+
+Every criterion driver from §4's fix list is verified by `tests/test_stage2a.py` + `tests/test_stage2b.py` (142-suite green). Live confirmation: run `python3 tools/stage2c_proof.py --live` on the deployment (needs `SEARCH_API_KEY`, `GOOGLE_MAPS_API_KEY`, `pytrends`, and ideally `COMTRADE_API_KEY`).

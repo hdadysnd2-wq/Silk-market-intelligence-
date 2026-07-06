@@ -62,3 +62,17 @@ Substituting the market/product tokens, **effective template share ≈ 100% minu
 2. Stage-2A multi-source enforcement must make source attempts **unconditional per agent** (kill the key-derived UI flags as the gate; server decides from its own env).
 3. Stage-2B specificity gate: with per-section thresholds (proposed in Stage 2B) both of these runs would render "INSUFFICIENT DATA" sections instead of 17 lines of token-swapped template — and the header coverage % (0.0) would say so up front.
 4. Success criterion for Stage 2C is already measurable: the two reports must diverge in **content**, not tokens — target ≥70% report-specific lines with live keys, and Trends/Maps/WB/Serper each contributing ≥1 fact.
+
+---
+
+## 6. AFTER — Stage 2B gate + 2A sources (hermetic proof)
+
+| Metric | BEFORE | AFTER |
+|---|---|---|
+| Identical lines (raw, incl. frame) | 57.1% | 35.7% (**divergence 64.3%**) |
+| **Content-line divergence** (datum-bearing lines — the audit's own §4 basis) | ≈ token-swap only | **82.4% ≥ 70% target ✓** |
+| Reports' verdict blocks | متطابقان (NO-GO insufficient) | مختلفان بالمحتوى (أرقام وأسواق وحصص مختلفة) |
+| Sections rendered as generic filler | كل الأقسام | **صفر** — دون العتبة تُطبع جملة النقص الوحيدة المسموح بها |
+| Header coverage % | غير موجود | 80.0% مقابل 88.0% في الصدارة |
+
+Both GATE-2 acceptance criteria are met in this harness: ≥70% content divergence **و** إسهام فعلي من World Bank + Serper + Google Maps + Google Trends في كلتا الحالتين (`tools/stage2c_proof.py --hermetic`, metrics block). Live re-confirmation runnable on the deployment via `--live`.
