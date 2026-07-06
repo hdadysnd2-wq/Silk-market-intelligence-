@@ -304,6 +304,15 @@ def _enrich_research(rows: list[dict], product_name: str, hs_code: str,
                         row.get("iso3"), e)
             row["research"] = {"error": f"research error: {type(e).__name__}: {e}",
                                "agents": {}, "coverage": 0.0}
+            continue
+        # محرك القرار (Stage 4، §8) — حتمي، يقرأ الحزمة بالذاكرة حصراً.
+        try:
+            import silk_decision
+            row["decision"] = silk_decision.decide(row["research"])
+        except Exception as e:  # noqa: BLE001 — القرار طبقة سياق لا تُسقط التحليل
+            log.warning("decision failed for %s: %s", row.get("iso3"), e)
+            row["decision"] = {"error":
+                               f"decision error: {type(e).__name__}: {e}"}
 
 
 def _enrich_trends(rows: list[dict], product_name: str) -> None:

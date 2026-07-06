@@ -1,0 +1,302 @@
+"""محرك قرار دخول السوق — Silk market-entry decision engine (Stage 4, §8).
+
+يستهلك حصراً حزمة وكلاء البحث المتحقَّق منها (silk_research §4b) عبر
+`bundle["pillar_inputs"]` — لا نداء خارجياً واحداً هنا؛ محرك حسابي نقي قابل
+للاختبار، كل عمود يطبع أساسه (المعادلة + المدخلات المستخدمة).
+
+Score = w1·جاذبية السوق + w2·(1 − شدة المنافسة) + w3·الملاءمة التنظيمية
+        + w4·هامش الربحية — كل عمود ∈ [0,1].
+
+خيارا الأوزان (بوابة GATE 3 — قرار المالك يحدد الافتراضي النهائي):
+  A (خطة §8):        سوق 0.30 · منافسة 0.25 · تنظيمي 0.20 · ربحية 0.25
+  B (تنظيمي مثقّل):   سوق 0.25 · منافسة 0.20 · تنظيمي 0.30 · ربحية 0.25
+كلا المجموعين يُحسبان دائماً ويظهران في المخرجات؛ SILK_DECISION_WEIGHTS يختار
+المعتمد (الافتراضي A إلى حين قرار البوابة).
+
+القواعد (§8): GO عند score ≥ 0.65 وثقة ≥ 0.6؛ NO-GO تحت 0.45 أو عند بوابة خطر
+حرجة؛ وإلا CONDITIONAL-GO وشروطه = الأعمدة الضعيفة/الغائبة. عمود غائب لا
+يُخمَّن: الأوزان تُعاد تسويتها والفجوة تصير شرطاً — لا اختلاق (المبدأ التأسيسي).
+"""
+from __future__ import annotations
+
+import logging
+import math
+import os
+
+log = logging.getLogger(__name__)
+
+SCHEMA = "silk.decision/v1"
+
+WEIGHT_OPTIONS: dict[str, dict[str, float]] = {
+    "A": {"market": 0.30, "competition": 0.25, "regulatory": 0.20,
+          "profit": 0.25},
+    "B": {"market": 0.25, "competition": 0.20, "regulatory": 0.30,
+          "profit": 0.25},
+}
+
+_GO, _NOGO = 0.65, 0.45          # عتبات §8
+_MIN_CONF_GO = 0.60
+
+_AR = {"market": "جاذبية السوق", "competition": "شدة المنافسة",
+       "regulatory": "الملاءمة التنظيمية", "profit": "هامش الربحية"}
+
+
+def _clip(x: float) -> float:
+    return max(0.0, min(1.0, x))
+
+
+def _mean_available(parts: dict[str, float | None]) -> tuple[float | None, list]:
+    """متوسط المكوّنات المتاحة + قائمة الغائبة — never a guessed component."""
+    have = {k: v for k, v in parts.items() if v is not None}
+    missing = [k for k, v in parts.items() if v is None]
+    return (round(sum(have.values()) / len(have), 3) if have else None, missing)
+
+
+# ── الأعمدة الأربعة · the four pillars (كلٌّ يطبع أساسه) ─────────────────────
+
+def _pillar_market(pi: dict) -> dict:
+    """جاذبية السوق — حجم (لوغاريتمي) + نمو + دخل + زخم الحصة السعودية."""
+    tam, cagr = pi.get("tam_usd"), pi.get("import_cagr_pct")
+    gdp, sau = pi.get("gdp_per_capita_usd"), pi.get("saudi_share_pct")
+    parts = {
+        "tam_log": _clip(math.log10(tam) / 9) if tam and tam > 0 else None,
+        "cagr": _clip((cagr + 10) / 40) if cagr is not None else None,
+        "income": _clip(gdp / 50_000) if gdp else None,
+        "saudi_momentum": _clip(sau / 20) if sau is not None else None,
+    }
+    v, missing = _mean_available(parts)
+    return {"value": v, "components": parts, "missing": missing,
+            "basis": "متوسط المتاح من: log10(TAM)/9 (سقف 10^9$)، "
+                     "(CAGR+10)/40 (−10%→0، +30%→1)، دخل الفرد/50k$، "
+                     "الحصة السعودية/20%"}
+
+
+def _pillar_competition(pi: dict) -> dict:
+    """شدة المنافسة — HHI + حصة المورّد الأكبر + كثافة الشركات المرشّحة."""
+    hhi, top = pi.get("hhi"), pi.get("top_supplier_share_pct")
+    n = pi.get("named_company_count")
+    parts = {
+        "hhi": _clip(hhi / 0.5) if hhi is not None else None,
+        "top_share": _clip(top / 100) if top is not None else None,
+        "named_density": _clip(n / 10) if n is not None else None,
+    }
+    v, missing = _mean_available(parts)
+    return {"value": v, "components": parts, "missing": missing,
+            "basis": "متوسط المتاح من: HHI/0.5، حصة الأكبر/100، "
+                     "عدد المرشّحين بالاسم/10 — الدرجة المستهلكة في المجموع "
+                     "هي (1 − الشدة)"}
+
+
+def _pillar_regulatory(pi: dict) -> dict:
+    """الملاءمة التنظيمية — تعريفة منخفضة + وضوح الاشتراطات؛ بوابة الأهلية تُخفّض."""
+    tariff, req = pi.get("tariff_applied_pct"), pi.get("entry_requirements_count")
+    gate = pi.get("eligibility_gate")
+    parts = {
+        "tariff": _clip(1 - tariff / 30) if tariff is not None else None,
+        "legibility": _clip(req / 8) if req is not None else None,
+    }
+    v, missing = _mean_available(parts)
+    gated = bool(gate) and v is not None
+    if gated:  # بوابة أهلية أمامية (EU 2017/625): سقف 0.3 حتى تُعبَر — قاعدة معلنة
+        v = round(min(v, 0.3), 3)
+    return {"value": v, "components": parts, "missing": missing,
+            "eligibility_gate": bool(gate) if gate is not None else None,
+            "basis": "متوسط المتاح من: (1 − تعريفة/30%)، وضوح القائمة (بنود/8)"
+                     + ("؛ بوابة أهلية مفتوحة ⇒ سقف 0.3 حتى اعتماد المنشأة"
+                        if gated else "")}
+
+
+def _pillar_profit(pi: dict) -> dict:
+    """هامش الربحية — هامش عند الحدود + موقع سعر الصادر السعودي مقابل السوق."""
+    margin = pi.get("margin_at_border_pct")
+    uv, sau_uv = pi.get("border_unit_value_usd_kg"), \
+        pi.get("saudi_border_unit_value_usd_kg")
+    ratio = (sau_uv / uv) if (uv and sau_uv) else None
+    parts = {
+        "margin": _clip(margin / 40) if margin is not None else None,
+        # نسبة سعرك الحدودي لمتوسط السوق: 0.5→1.0 (منافس جداً)، 1.5→0.
+        "price_position": _clip(1.5 - ratio) if ratio is not None else None,
+    }
+    v, missing = _mean_available(parts)
+    return {"value": v, "components": parts, "missing": missing,
+            "basis": "متوسط المتاح من: الهامش/40%، الموقع السعري "
+                     "(1.5 − سعرك/متوسط السوق)"}
+
+
+# ── سجل المخاطر · rule-derived risk register (كل بند بدليله) ─────────────────
+
+def _risk_register(pi_risk: dict, coverage: float) -> list[dict]:
+    R: list[dict] = []
+    hhi = pi_risk.get("supplier_concentration_hhi")
+    if hhi is not None and hhi > 0.25:
+        R.append({"risk": "تركّز مصادر التوريد", "severity": "متوسطة",
+                  "evidence": f"HHI={hhi} > 0.25 (كومتريد)"})
+    fx = pi_risk.get("fx_volatility_pct")
+    if fx is not None and fx > 5:
+        R.append({"risk": "تقلب العملة", "severity": "متوسطة",
+                  "evidence": f"معامل اختلاف الصرف {fx}% > 5% (World Bank)"})
+    pv = pi_risk.get("political_stability_wgi")
+    if pv is not None and pv < -0.5:
+        R.append({"risk": "استقرار سياسي منخفض", "severity":
+                  "عالية" if pv < -1.5 else "متوسطة",
+                  "evidence": f"WGI PV.EST={pv} (World Bank)"})
+    if coverage < 0.6:
+        R.append({"risk": "تغطية بيانات منخفضة", "severity": "متوسطة",
+                  "evidence": f"تغطية الوكلاء {round(100 * coverage)}% < 60% — "
+                              "القرار مشروط باكتمالها"})
+    return R
+
+
+# ── القرار · decide() ────────────────────────────────────────────────────────
+
+def decide(bundle: dict, weights_option: str | None = None) -> dict:
+    """قرار موزون من حزمة البحث — deterministic, explainable, never fabricates.
+
+    bundle: مخرجات ResearchOrchestrator.run_market (§4b). يعيد قاموس قرار كامل:
+    verdict/score/confidence + الأعمدة بأساسها + كلا خياري الأوزان + الشروط
+    والمخاطر والخطوات الأولى. عمود غائب => إعادة تسوية + شرط، لا تخمين.
+    """
+    opt = (weights_option or os.environ.get("SILK_DECISION_WEIGHTS", "A")
+           ).strip().upper()
+    if opt not in WEIGHT_OPTIONS:
+        opt = "A"
+    pi = bundle.get("pillar_inputs") or {}
+    coverage = float(bundle.get("coverage") or 0.0)
+
+    pillars = {"market": _pillar_market(pi.get("market_attractiveness") or {}),
+               "competition": _pillar_competition(
+                   pi.get("competition_intensity") or {}),
+               "regulatory": _pillar_regulatory(pi.get("regulatory_fit") or {}),
+               "profit": _pillar_profit(pi.get("profitability") or {})}
+
+    def _score(weights: dict[str, float]) -> tuple[float | None, list[str]]:
+        """المجموع الموزون على الأعمدة المتاحة — إعادة تسوية معلنة للأوزان."""
+        contrib, wsum, missing = 0.0, 0.0, []
+        for name, w in weights.items():
+            v = pillars[name]["value"]
+            if v is None:
+                missing.append(name)
+                continue
+            if name == "competition":
+                v = 1.0 - v  # الدرجة = عكس الشدة (§8)
+            contrib += w * v
+            wsum += w
+        if wsum == 0:
+            return None, missing
+        return round(contrib / wsum, 3), missing
+
+    scores = {name: _score(w)[0] for name, w in WEIGHT_OPTIONS.items()}
+    score, missing_pillars = _score(WEIGHT_OPTIONS[opt])
+
+    # الثقة = تغطية الوكلاء × نسبة الأعمدة المحسوبة (معلنة الأساس، لا رقم حدسي).
+    pillar_frac = (4 - len(missing_pillars)) / 4
+    confidence = round(coverage * pillar_frac, 2)
+
+    risk_pi = pi.get("risk") or {}
+    critical = bool(risk_pi.get("critical_risk"))
+    risks = _risk_register(risk_pi, coverage)
+
+    conditions: list[str] = []
+    for name in missing_pillars:
+        conditions.append(f"عمود {_AR[name]} غائب ({', '.join(pillars[name]['missing'])}) "
+                          "— أكمل مصادره قبل قرار نهائي")
+    for name, p in pillars.items():
+        v = p["value"]
+        if v is None:
+            continue
+        eff = 1.0 - v if name == "competition" else v
+        if eff < 0.5:
+            conditions.append(f"عمود {_AR[name]} ضعيف ({eff}) — {p['basis']}")
+    if pillars["regulatory"].get("eligibility_gate"):
+        conditions.insert(0, "بوابة أهلية أمامية مفتوحة (منشأة معتمدة EU 2017/625) "
+                             "— لا تقدّم قبل عبورها")
+
+    if score is None:
+        verdict = "NO-GO"
+        why = "لا عمود واحداً قابلاً للحساب — بيانات غير كافية للقرار"
+    elif critical:
+        verdict = "NO-GO"
+        why = "بوابة خطر حرجة: PV.EST < −1.5 (قاعدة §8 المعلنة)"
+    elif score >= _GO and confidence >= _MIN_CONF_GO and not conditions:
+        verdict = "GO"
+        why = f"score {score} ≥ {_GO} وثقة {confidence} ≥ {_MIN_CONF_GO}"
+    elif score < _NOGO:
+        verdict = "NO-GO"
+        why = f"score {score} < {_NOGO}"
+    else:
+        verdict = "CONDITIONAL-GO"
+        why = (f"score {score} في النطاق الشرطي أو الثقة {confidence} دون "
+               f"{_MIN_CONF_GO} أو شروط مفتوحة ({len(conditions)})")
+
+    first_steps = _first_steps(verdict, pillars, conditions, risks)
+    return {
+        "schema": SCHEMA, "verdict": verdict, "score": score,
+        "confidence": confidence,
+        "confidence_basis": f"التغطية {coverage} × الأعمدة المحسوبة "
+                            f"{4 - len(missing_pillars)}/4",
+        "weights_option": opt, "weights": WEIGHT_OPTIONS[opt],
+        "scores_by_option": scores,
+        "weights_note": "خيار الأوزان قيد بوابة GATE 3 — كلا المجموعين محسوبان؛ "
+                        "الافتراضي A حتى قرار المالك",
+        "pillars": pillars, "missing_pillars": missing_pillars,
+        "critical_risk": critical, "risks": risks, "conditions": conditions,
+        "first_steps": first_steps, "why": why,
+        "note": "قرار حتمي قابل للتفسير من حزمة §4b المتحقَّق منها — "
+                "الأعمدة الغائبة شروط معلنة، لا تخمين",
+    }
+
+
+def _first_steps(verdict: str, pillars: dict, conditions: list[str],
+                 risks: list[dict]) -> list[str]:
+    """خطوات أولى قاعدية — مشتقة من أضعف الأعمدة والمخاطر، لا نصائح عامة."""
+    steps: list[str] = []
+    if verdict == "NO-GO":
+        return ["عالج سبب NO-GO المذكور أولاً ثم أعد التحليل — لا خطوات دخول "
+                "قبل ذلك"]
+    if pillars["regulatory"].get("eligibility_gate"):
+        steps.append("ابدأ بمسار اعتماد المنشأة (القائمة الأوروبية EU 2017/625) "
+                     "— كل ما بعده محجوب عليه")
+    if pillars["regulatory"]["value"] is not None and \
+            pillars["regulatory"]["value"] < 0.5:
+        steps.append("أغلق بنود قائمة الاشتراطات (وكيل regulatory) بنداً بنداً "
+                     "بمرجعها الرسمي")
+    comp = pillars["competition"]["value"]
+    if comp is not None and comp > 0.5:
+        steps.append("سوق مركّز: ادخل عبر موزّع قائم من مرشّحي وكيل supplier "
+                     "بدل البناء المباشر")
+    prof = pillars["profit"]["value"]
+    if prof is None:
+        steps.append("أكمل بطاقة المنتج (تكلفة/كجم وطاقة شهرية) ليُحسب الهامش "
+                     "وSOM قبل الالتزام")
+    for r in risks:
+        if r["risk"] == "تقلب العملة":
+            steps.append("سعّر بعقود قصيرة أو تحوّط عملة — " + r["evidence"])
+    if not steps:
+        steps.append("تحقّق من مرشّحي التوزيع بالاسم (وكيلا competitor/supplier) "
+                     "— المرشّحون غير موثَّقين حتى تأكيدهم")
+    return steps[:5]
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    demo = {"coverage": 0.8, "pillar_inputs": {
+        "market_attractiveness": {"tam_usd": 2.9e8, "import_cagr_pct": 6.0,
+                                  "gdp_per_capita_usd": 48_000,
+                                  "saudi_share_pct": 2.0},
+        "competition_intensity": {"hhi": 0.12, "top_supplier_share_pct": 21.0,
+                                  "named_company_count": 7},
+        "regulatory_fit": {"tariff_applied_pct": 0.0,
+                           "entry_requirements_count": 9,
+                           "eligibility_gate": True},
+        "profitability": {"border_unit_value_usd_kg": 3.4,
+                          "saudi_border_unit_value_usd_kg": 3.1,
+                          "margin_at_border_pct": 18.0},
+        "risk": {"political_stability_wgi": 0.8, "fx_volatility_pct": 0.9,
+                 "supplier_concentration_hhi": 0.12, "critical_risk": False}}}
+    d = decide(demo)
+    print(f"verdict={d['verdict']} score={d['score']} (A/B: "
+          f"{d['scores_by_option']}) conf={d['confidence']}")
+    for c in d["conditions"]:
+        print("  شرط:", c)
+    for s in d["first_steps"]:
+        print("  خطوة:", s)
