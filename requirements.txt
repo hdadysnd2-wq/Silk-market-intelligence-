@@ -1,13 +1,7 @@
-requests>=2.31
-# واجهة REST عبر FastAPI (api.py / النشر على Render):  uvicorn api:app
-fastapi>=0.110
-uvicorn>=0.29
-# تقرير Word الكامل (silk_reports.py):
-python-docx>=1.1
-# وكيل Google Trends — «اهتمام المستهلك» والموسمية (silk_trends_agent).
-# مثبّت الآن ليعمل في النشر؛ الاستيراد كسول فالنواة تعمل بدونه، ويتدهور بأمان
-# عند فشل الشبكة (لا اختلاق). Enabled so consumer-interest/seasonality works.
-pytrends>=4.9
-# --- اختياري · OPTIONAL (core library imports & runs without these) ---
-# واجهة Streamlit (for app.py):  streamlit run app.py
-# streamlit>=1.30
+# مثبَّتة بإصدارات محدّدة (M0) — pinned for reproducible builds; bump deliberately.
+# Versions = the exact set proven green in CI on 2026-07-06.
+requests==2.34.2
+fastapi==0.139.0
+uvicorn==0.50.0
+python-docx==1.2.0
+pytrends==4.9.2

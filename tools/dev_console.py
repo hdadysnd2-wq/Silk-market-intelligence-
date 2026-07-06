@@ -1,4 +1,6 @@
-"""واجهة سِلك — Streamlit UI over silk_engine.
+"""أداة مطوّر (M0): نُقلت من app.py — ليست واجهة المنتج (الواجهة web/index.html).
+
+واجهة سِلك — Streamlit UI over silk_engine.
 
 How to run / طريقة التشغيل:
     streamlit run app.py

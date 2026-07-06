@@ -252,8 +252,11 @@ def create_app():
 
     @app.get("/index")
     def index(q: str = "", limit: int = 20):
-        """فهرس المنتجات للبحث — product search index for the dashboard combobox."""
-        return _json(_index_search(q, limit))
+        """فهرس المنتجات للبحث — product search index for the dashboard combobox.
+
+        limit مُقيَّد إلى [1..100] (M0): قيمة ضخمة/سالبة لا تُمرَّر للبحث كما هي.
+        """
+        return _json(_index_search(q, max(1, min(int(limit), 100))))
 
     def _require_key(request: Request) -> None:
         """حارس المصادقة — 401 when the key mismatches, constant-time (L-1).
@@ -434,11 +437,13 @@ def create_app():
         return _json(silk_trend.import_trend(req.hs_code, m49, end_year, req.span))
 
     @app.get("/sources")
-    def sources():
-        """خريطة حالة المصادر التسع — 9-layer data-source status map.
+    def sources(request: Request):
+        """خريطة حالة طبقات المصادر الاثنتي عشرة — 12-layer data-source status map.
 
-        For each layer: {name, type (free/paid), wired, key_env, key_present}.
-        key_present reflects whether the key env var is actually set right now.
+        For each layer: {name, type (free/paid), wired, key_env[, key_present]}.
+        M0: عندما تكون المصادقة مفعّلة، أعلام key_present تُعرض لحامل المفتاح فقط
+        — مجهول يرى قائمة الطبقات بلا كشف إعدادات الخادم (ANALYSIS.md §7-5).
+        وضع التطوير (بلا SILK_API_KEY) يبقى كما كان: الأعلام ظاهرة.
         """
         layers = [
             ("UN Comtrade", "free", None),
@@ -454,11 +459,17 @@ def create_app():
             ("Claude (AI judge)", "ai", "ANTHROPIC_API_KEY"),
             ("Requirements L1 reference (GCC + Saudi exit)", "free", None),
         ]
-        return _json([
-            {"name": name, "type": kind, "wired": True, "key_env": key_env,
-             "key_present": bool(os.environ.get(key_env)) if key_env else False}
-            for name, kind, key_env in layers
-        ])
+        expected = _api_key_expected()
+        show_flags = (not expected) or hmac.compare_digest(
+            request.headers.get("x-api-key", ""), expected)
+        out = []
+        for name, kind, key_env in layers:
+            row = {"name": name, "type": kind, "wired": True, "key_env": key_env}
+            if show_flags:  # أعلام المفاتيح للمصرَّح له (أو وضع التطوير) فقط
+                row["key_present"] = (bool(os.environ.get(key_env))
+                                      if key_env else False)
+            out.append(row)
+        return _json(out)
 
     @app.get("/analyses")
     def analyses(request: Request):
@@ -533,12 +544,16 @@ def create_app():
         outcome: str
 
     @app.patch("/analyses/{analysis_id}/outcome")
-    def set_outcome(analysis_id: int, req: OutcomeRequest):
+    def set_outcome(analysis_id: int, req: OutcomeRequest, request: Request):
         """سجّل ما حدث فعلاً لتحليل — record the real-world outcome (wave 1).
 
         يبني سجل المصداقية التراكمي (عمودا outcome/outcome_date). 404 إن لم
         يوجد التحليل؛ لا يغيّر بيانات التحليل نفسها إطلاقاً.
+        M0: خلف المصادقة وتحديد المعدّل — كانت الوحيدة المكشوفة، فكان بوسع أي
+        مجهول الكتابة فوق سجل النتائج بالتعداد (ANALYSIS.md §7-1).
         """
+        _require_key(request)
+        _rate_limit(request)
         outcome = (req.outcome or "").strip()
         if not outcome:
             raise HTTPException(status_code=422, detail="outcome must be non-empty")

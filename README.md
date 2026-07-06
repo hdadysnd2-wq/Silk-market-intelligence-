@@ -52,7 +52,7 @@ The system never fabricates data. On a source failure it returns a provenance-ta
 | `silk_reports.py` | مشتقا التقارير (الموجة ٥ج): **التقرير الكامل Word** (§10.3 — خلاصة أولاً، سطر مصدر تحت كل رقم، «حدود هذا التقرير» قبل التوصيات) و**المختصر** (§10.4 — صفحة «رسالة جوال») — كلاهما من القالب الموحّد حصراً. |
 | `silk_render.py` | **القالب الموحّد** (§10.1): `build_view` نموذج العرض القانوني الوحيد — اللوحة والطرفية وStreamlit والمختصر كلها مشتقات منه. |
 | `api.py` | واجهة REST عبر FastAPI فوق المحرّك (تُستورد FastAPI بكسل؛ `app=None` بدونها). |
-| `app.py` | واجهة Streamlit اختيارية فوق المحرّك (تُستورد Streamlit بكسل داخليًا). |
+| `tools/dev_console.py` | أداة مطوّر (Streamlit) فوق المحرّك — ليست واجهة المنتج؛ يُعاد تقييم حذفها في M9. |
 | `tools/fetch_hs_codes.py` | أداة تشغيل: تجلب مرجع HS من Comtrade وتوسّع `data/hs_codes.csv` برموز حقيقية. |
 | `Dockerfile` · `.github/workflows/ci.yml` | تعبئة الخدمة (Docker) + تكامل مستمر (CI) يشغّل اختبارات الدخان. |
 | `data/hs_codes.csv` | جدول التصنيف للمُصنّف: **5,627 صفاً** = بذرة منسّقة (عربي/إنجليزي + كلمات مفتاحية) + كامل رموز HS6 المدموجة. |
@@ -128,7 +128,7 @@ analyze("تمور",
 
 ```bash
 pip install streamlit            # حزمة اختيارية
-streamlit run app.py
+streamlit run tools/dev_console.py   # أداة مطوّر اختيارية
 ```
 
 الحزم الاختيارية: `streamlit` (للواجهة) و `pytrends` (لوكيل الاتجاهات). النواة تعمل وتُستورد بدونهما.
