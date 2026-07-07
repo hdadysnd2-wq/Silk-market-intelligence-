@@ -695,7 +695,9 @@ class PricingAgent(ResearchAgent):
                         "صافٍ في المخزن ولا في التقرير السعودي المباشر (رصد "
                         "غياب مزدوج، ليس تقديراً)")
 
-        # الطبقة ٢ — تجزئة مهيكلة: مدفوعة، /deepen حصراً (الحارس البنيوي يقرر).
+        # الطبقة ٢ — تجزئة: مهيكلة مدفوعة (/deepen) أولاً، وإلا Google Shopping
+        # المجاني عبر Serper (أي منصة تفهرسها Google لكل دولة `gl` — طلب مالك
+        # مباشر: "اي سعر في اي منصة حسب كل دولة") قبل إعلان الفجوة نهائياً.
         from silk_localprice_agent import LocalPriceAgent
         lrep = LocalPriceAgent().run({"query": f"{product} {market}".strip(),
                                       "market": task.get("iso2")})
@@ -706,8 +708,23 @@ class PricingAgent(ResearchAgent):
                         [_dp_src(f) for f in listings],
                         note=f"{len(listings)} سعر تجزئة مهيكل مؤرّخ (طبقة /deepen)"))
         else:
-            why = lrep.findings[0].note if lrep.findings else lrep.summary
-            gaps.append(f"retail_prices: {why}")
+            paid_why = lrep.findings[0].note if lrep.findings else lrep.summary
+            from silk_websearch_agent import web_search_shopping
+            shop_raw = web_search_shopping(f"{product} price",
+                                           gl=task.get("iso2"))
+            shop = [d for d in shop_raw if d.value is not None]
+            if shop:
+                F.append(_f("retail_prices",
+                            [d.value for d in shop],
+                            [_src(d.source, d.confidence, url=d.value.get("link"),
+                                 retrieved_at=d.retrieved_at) for d in shop],
+                            note=f"{len(shop)} سعر تجزئة مرصود من فهرس Google "
+                                 "Shopping (أي منصة، عبر Serper) — لا استخراج "
+                                 "نصي حر، السعر من حقل منظَّم"))
+            else:
+                shop_why = shop_raw[0].note if shop_raw else "no shopping results"
+                gaps.append(f"retail_prices: {paid_why}؛ ولا نتائج Google "
+                            f"Shopping مرصودة ({shop_why})")
 
         # مراجع أسعار حرة — روابط مؤرّخة فقط؛ الأرقام لا تُستخرج آلياً من مقتطفات.
         from silk_websearch_agent import web_search

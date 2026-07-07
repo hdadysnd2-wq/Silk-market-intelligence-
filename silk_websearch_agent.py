@@ -81,6 +81,93 @@ def web_search(query: str, num: int = 5) -> list[DataPoint]:
     return findings
 
 
+_CURRENCY_SYMBOLS = {
+    "$": "USD", "€": "EUR", "£": "GBP", "﷼": "SAR", "USD": "USD",
+    "SAR": "SAR", "AED": "AED", "EUR": "EUR", "GBP": "GBP", "KWD": "KWD",
+    "QAR": "QAR", "OMR": "OMR", "BHD": "BHD", "JOD": "JOD", "EGP": "EGP",
+    "YER": "YER", "درهم": "AED", "ريال": "SAR", "جنيه": "EGP",
+}
+
+
+def _parse_price(raw: str) -> tuple[float | None, str | None]:
+    """حلّل نص سعر Serper Shopping المنظَّم — رقم واضح + عملة إن ظهرت.
+
+    لا تخمين: سلسلة بلا رقم واضح => (None, None) فيُسقِطها المستدعي؛ الخام
+    (raw) يبقى محفوظاً دوماً بجانب أي قيمة مُحلَّلة للتحقق اليدوي.
+    """
+    import re
+    if not raw:
+        return None, None
+    m = re.search(r"[\d,]+\.?\d*", raw)
+    if not m:
+        return None, None
+    try:
+        amount = float(m.group(0).replace(",", ""))
+    except ValueError:
+        return None, None
+    currency = next((code for sym, code in _CURRENCY_SYMBOLS.items()
+                     if sym in raw), None)
+    return amount, currency
+
+
+def web_search_shopping(query: str, gl: str | None = None,
+                        num: int = 5) -> list[DataPoint]:
+    """أسعار تجزئة منظّمة من فهرس Google Shopping (عبر Serper) — أي منصة
+    تفهرسها Google لكل دولة (`gl`، رمز ISO 3166-1 alpha-2)، لا منصة مفروضة
+    واحدة (طلب مالك: "اي سعر في اي منصة حسب كل دولة").
+
+    السعر يأتي من حقل `price` المنظَّم في نتيجة التسوق نفسها — لا استخراج
+    آلي من عنوان صفحة حرّ (الفرق عن `web_search`/`retail_references`). سلسلة
+    بلا رقم واضح تُسقَط لا تُخمَّن؛ الخام (`price_raw`) يبقى محفوظاً دوماً.
+    نفس مفتاح SEARCH_API_KEY ونفس نداء `/search` — صفر تكامل جديد.
+    """
+    q = (query or "").strip()
+    if not q:
+        return [DataPoint(None, "Web Search (Serper Shopping)", 0.0,
+                          "empty query — no search", _today())]
+    key = os.environ.get("SEARCH_API_KEY", "").strip()
+    if not key:
+        return [DataPoint(None, "Web Search (Serper Shopping)", 0.0,
+                          "requires SEARCH_API_KEY", _today())]
+    try:
+        import requests  # lazy: import works offline/keyless
+        body = {"q": q, "num": int(num)}
+        if gl:
+            body["gl"] = str(gl).lower()
+        resp = requests.post(
+            _SERPER_URL,
+            headers={"X-API-KEY": key, "Content-Type": "application/json"},
+            json=body, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        shopping = (resp.json() or {}).get("shopping") or []
+    except Exception as e:  # noqa: BLE001 — never raise to caller
+        log.warning("Serper shopping fetch failed ('%s'): %s", q, e)
+        return [DataPoint(None, "Web Search (Serper Shopping)", 0.0,
+                          f"serper shopping unavailable / no network: {e}",
+                          _today())]
+    if not shopping:
+        return [DataPoint(None, "Web Search (Serper Shopping)", 0.0,
+                          f"no shopping results for '{q}'"
+                          + (f" gl={gl}" if gl else ""), _today())]
+    findings: list[DataPoint] = []
+    for item in shopping[: int(num)]:
+        raw_price = item.get("price", "")
+        amount, currency = _parse_price(raw_price)
+        if amount is None:
+            continue  # لا رقم رسمي واضح في هذه القائمة — تُسقَط لا تُخمَّن
+        findings.append(DataPoint(
+            {"title": item.get("title", ""), "price": amount,
+             "currency": currency, "price_raw": raw_price,
+             "store": item.get("source", ""), "link": item.get("link", "")},
+            "Web Search (Serper Shopping)", 0.6,
+            f"listing for '{q}'" + (f" gl={gl}" if gl else ""), _today()))
+    if not findings:
+        return [DataPoint(None, "Web Search (Serper Shopping)", 0.0,
+                          f"shopping results found but no parseable price "
+                          f"for '{q}'" + (f" gl={gl}" if gl else ""), _today())]
+    return findings
+
+
 class WebSearchAgent(BaseAgent):
     """وكيل البحث على الويب — consumer-behaviour / reports / news signals.
 
