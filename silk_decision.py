@@ -5,11 +5,15 @@
 للاختبار، كل عمود يطبع أساسه (المعادلة + المدخلات المستخدمة).
 
 Score = w1·جاذبية السوق + w2·(1 − شدة المنافسة) + w3·الملاءمة التنظيمية
-        + w4·هامش الربحية — كل عمود ∈ [0,1].
+        + w4·هامش الربحية + w5·أمان السوق (المخاطر) — كل عمود ∈ [0,1].
+
+توجيه المالك: تُرقّى المخاطر من بوابةٍ فقط إلى **عمودٍ خامسٍ موزون** — الاستقرار
+السياسي/جودة التنظيم/الأداء اللوجستي/تقلّب الصرف ترفع أو تخفض الدرجة تناسبيًّا،
+مع إبقاء بوابة الخطر الحرج (PV<−1.5) تقلب القرار NO-GO فوق العمود.
 
 خيارا الأوزان (بوابة GATE 3 — قرار المالك يحدد الافتراضي النهائي):
-  A (خطة §8):        سوق 0.30 · منافسة 0.25 · تنظيمي 0.20 · ربحية 0.25
-  B (تنظيمي مثقّل):   سوق 0.25 · منافسة 0.20 · تنظيمي 0.30 · ربحية 0.25
+  A (خطة §8):        سوق 0.25 · منافسة 0.20 · تنظيمي 0.15 · ربحية 0.25 · مخاطر 0.15
+  B (تنظيمي مثقّل):   سوق 0.20 · منافسة 0.15 · تنظيمي 0.30 · ربحية 0.20 · مخاطر 0.15
 كلا المجموعين يُحسبان دائماً ويظهران في المخرجات؛ SILK_DECISION_WEIGHTS يختار
 المعتمد (الافتراضي A إلى حين قرار البوابة).
 
@@ -28,17 +32,19 @@ log = logging.getLogger(__name__)
 SCHEMA = "silk.decision/v1"
 
 WEIGHT_OPTIONS: dict[str, dict[str, float]] = {
-    "A": {"market": 0.30, "competition": 0.25, "regulatory": 0.20,
-          "profit": 0.25},
-    "B": {"market": 0.25, "competition": 0.20, "regulatory": 0.30,
-          "profit": 0.25},
+    "A": {"market": 0.25, "competition": 0.20, "regulatory": 0.15,
+          "profit": 0.25, "risk": 0.15},
+    "B": {"market": 0.20, "competition": 0.15, "regulatory": 0.30,
+          "profit": 0.20, "risk": 0.15},
 }
+_N_PILLARS = len(next(iter(WEIGHT_OPTIONS.values())))   # عدد الأعمدة (٥ الآن)
 
 _GO, _NOGO = 0.65, 0.45          # عتبات §8
 _MIN_CONF_GO = 0.60
 
 _AR = {"market": "جاذبية السوق", "competition": "شدة المنافسة",
-       "regulatory": "الملاءمة التنظيمية", "profit": "هامش الربحية"}
+       "regulatory": "الملاءمة التنظيمية", "profit": "هامش الربحية",
+       "risk": "أمان السوق (المخاطر)"}
 
 
 def _clip(x: float) -> float:
@@ -134,6 +140,28 @@ def _pillar_profit(pi: dict) -> dict:
                      "(1.5 − سعرك/متوسط السوق)"}
 
 
+def _pillar_risk(pi: dict) -> dict:
+    """أمان السوق — استقرار سياسي + جودة تنظيم + أداء لوجستي − تقلّب صرف.
+
+    توجيه المالك: المخاطر عمودٌ موزون لا بوابةٌ فقط. أعلى = أأمن، ويُستهلَك مباشرةً
+    في المجموع (لا معكوساً كالمنافسة). بوابة الخطر الحرج (PV<−1.5 في decide) تبقى
+    منفصلةً وتقلب القرار NO-GO فوق هذا العمود — بوابةٌ وعمودٌ معًا لا أحدهما.
+    مقاييس WGI في [−2.5, +2.5] ⇒ (x+2.5)/5؛ LPI في [1,5] ⇒ (LPI−1)/4.
+    """
+    pv, rq = pi.get("political_stability_wgi"), pi.get("regulatory_quality_wgi")
+    lpi, fx = pi.get("logistics_lpi"), pi.get("fx_volatility_pct")
+    parts = {
+        "political_stability": _clip((pv + 2.5) / 5) if pv is not None else None,
+        "regulatory_quality": _clip((rq + 2.5) / 5) if rq is not None else None,
+        "logistics": _clip((lpi - 1) / 4) if lpi is not None else None,
+        "fx_stability": _clip(1 - fx / 20) if fx is not None else None,
+    }
+    v, missing = _mean_available(parts)
+    return {"value": v, "components": parts, "missing": missing,
+            "basis": "متوسط المتاح من: (استقرار سياسي WGI+2.5)/5، (جودة تنظيم "
+                     "WGI+2.5)/5، (LPI−1)/4، (1 − تقلّب الصرف/20%) — أعلى=أأمن"}
+
+
 # ── سجل المخاطر · rule-derived risk register (كل بند بدليله) ─────────────────
 
 def _risk_register(pi_risk: dict, coverage: float) -> list[dict]:
@@ -178,7 +206,8 @@ def decide(bundle: dict, weights_option: str | None = None) -> dict:
                "competition": _pillar_competition(
                    pi.get("competition_intensity") or {}),
                "regulatory": _pillar_regulatory(pi.get("regulatory_fit") or {}),
-               "profit": _pillar_profit(pi.get("profitability") or {})}
+               "profit": _pillar_profit(pi.get("profitability") or {}),
+               "risk": _pillar_risk(pi.get("risk") or {})}
 
     def _score(weights: dict[str, float]) -> tuple[float | None, list[str]]:
         """المجموع الموزون على الأعمدة المتاحة — إعادة تسوية معلنة للأوزان."""
@@ -200,7 +229,7 @@ def decide(bundle: dict, weights_option: str | None = None) -> dict:
     score, missing_pillars = _score(WEIGHT_OPTIONS[opt])
 
     # الثقة = تغطية الوكلاء × نسبة الأعمدة المحسوبة (معلنة الأساس، لا رقم حدسي).
-    pillar_frac = (4 - len(missing_pillars)) / 4
+    pillar_frac = (_N_PILLARS - len(missing_pillars)) / _N_PILLARS
     confidence = round(coverage * pillar_frac, 2)
 
     risk_pi = pi.get("risk") or {}
@@ -244,7 +273,7 @@ def decide(bundle: dict, weights_option: str | None = None) -> dict:
         "schema": SCHEMA, "verdict": verdict, "score": score,
         "confidence": confidence,
         "confidence_basis": f"التغطية {coverage} × الأعمدة المحسوبة "
-                            f"{4 - len(missing_pillars)}/4",
+                            f"{_N_PILLARS - len(missing_pillars)}/{_N_PILLARS}",
         "weights_option": opt, "weights": WEIGHT_OPTIONS[opt],
         "scores_by_option": scores,
         "weights_note": "خيار الأوزان قيد بوابة GATE 3 — كلا المجموعين محسوبان؛ "

@@ -1234,15 +1234,34 @@
             "coverage": 1.0,
             "started_at": "2026-07-06T13:09:41+00:00",
             "finished_at": "2026-07-06T13:09:41+00:00"
+          },
+          "logistics": {
+            "agent": "logistics",
+            "hs6": "080410",
+            "iso3": "CHN",
+            "status": "failed",
+            "findings": [],
+            "gaps": [
+              "lpi_timeliness: توقيت وصول الشحنات (LPI) غير متاح (مخزن بارد + LP.LPI.TIME.XQ fetch failed for CHN: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/CHN/indicator/LP.LPI.TIME.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+              "lpi_intl_shipments: سهولة ترتيب شحنات دولية تنافسية (LPI) غير متاح (مخزن بارد + LP.LPI.ITRN.XQ fetch failed for CHN: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/CHN/indicator/LP.LPI.ITRN.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+              "lead_time_days: زمن امتثال الحدود (IC.IMP.TMBC) غير متاح — شغّل جامع worldbank (tools/refresh.py)",
+              "freight_cost_usd_kg: سعر الشحن الفعلي $/كغ يتطلب سجلاتِ شحنٍ حقيقية (Volza/Explee عبر /deepen) — لا يُقدَّر بلا مصدر",
+              "landed_cost_usd_kg: التكلفة حتى الوصول = سعر الحدود + الشحن؛ تُحسب بعد رصد الشحن (الطبقة المدفوعة) وبطاقة المنتج"
+            ],
+            "rejected": [],
+            "coverage": 0.0,
+            "started_at": "2026-07-07T14:01:24+00:00",
+            "finished_at": "2026-07-07T14:01:26+00:00"
           }
         },
-        "coverage": 0.91,
+        "coverage": 0.8,
         "pillar_inputs": {
           "market_attractiveness": {
             "tam_usd": 61000000.0,
             "import_cagr_pct": 17.7,
             "gdp_per_capita_usd": 12629.59,
-            "saudi_share_pct": 40.0
+            "saudi_share_pct": 40.0,
+            "market_activity_index": null
           },
           "competition_intensity": {
             "hhi": 0.294,
@@ -1261,9 +1280,18 @@
           },
           "risk": {
             "political_stability_wgi": -0.5,
+            "regulatory_quality_wgi": 0.6,
+            "logistics_lpi": 3.7,
             "fx_volatility_pct": 0.8,
             "supplier_concentration_hhi": 0.294,
             "critical_risk": false
+          },
+          "logistics": {
+            "lead_time_days": null,
+            "lpi_timeliness": null,
+            "lpi_intl_shipments": null,
+            "freight_cost_usd_kg": null,
+            "landed_cost_usd_kg": null
           }
         },
         "note": "حزمة وكلاء البحث السبعة — كل رقم بمصدره؛ فشل وكيل يظهر بسببه ولا يحجب البقية"
@@ -2486,15 +2514,34 @@
             "coverage": 1.0,
             "started_at": "2026-07-06T13:09:41+00:00",
             "finished_at": "2026-07-06T13:09:41+00:00"
+          },
+          "logistics": {
+            "agent": "logistics",
+            "hs6": "080410",
+            "iso3": "ARE",
+            "status": "failed",
+            "findings": [],
+            "gaps": [
+              "lpi_timeliness: توقيت وصول الشحنات (LPI) غير متاح (مخزن بارد + LP.LPI.TIME.XQ fetch failed for ARE: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/ARE/indicator/LP.LPI.TIME.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+              "lpi_intl_shipments: سهولة ترتيب شحنات دولية تنافسية (LPI) غير متاح (مخزن بارد + LP.LPI.ITRN.XQ fetch failed for ARE: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/ARE/indicator/LP.LPI.ITRN.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+              "lead_time_days: زمن امتثال الحدود (IC.IMP.TMBC) غير متاح — شغّل جامع worldbank (tools/refresh.py)",
+              "freight_cost_usd_kg: سعر الشحن الفعلي $/كغ يتطلب سجلاتِ شحنٍ حقيقية (Volza/Explee عبر /deepen) — لا يُقدَّر بلا مصدر",
+              "landed_cost_usd_kg: التكلفة حتى الوصول = سعر الحدود + الشحن؛ تُحسب بعد رصد الشحن (الطبقة المدفوعة) وبطاقة المنتج"
+            ],
+            "rejected": [],
+            "coverage": 0.0,
+            "started_at": "2026-07-07T14:01:26+00:00",
+            "finished_at": "2026-07-07T14:01:29+00:00"
           }
         },
-        "coverage": 0.38,
+        "coverage": 0.33,
         "pillar_inputs": {
           "market_attractiveness": {
             "tam_usd": null,
             "import_cagr_pct": null,
             "gdp_per_capita_usd": null,
-            "saudi_share_pct": null
+            "saudi_share_pct": null,
+            "market_activity_index": null
           },
           "competition_intensity": {
             "hhi": null,
@@ -2513,9 +2560,18 @@
           },
           "risk": {
             "political_stability_wgi": null,
+            "regulatory_quality_wgi": null,
+            "logistics_lpi": null,
             "fx_volatility_pct": null,
             "supplier_concentration_hhi": null,
             "critical_risk": null
+          },
+          "logistics": {
+            "lead_time_days": null,
+            "lpi_timeliness": null,
+            "lpi_intl_shipments": null,
+            "freight_cost_usd_kg": null,
+            "landed_cost_usd_kg": null
           }
         },
         "note": "حزمة وكلاء البحث السبعة — كل رقم بمصدره؛ فشل وكيل يظهر بسببه ولا يحجب البقية"
@@ -3733,15 +3789,34 @@
             "coverage": 1.0,
             "started_at": "2026-07-06T13:09:42+00:00",
             "finished_at": "2026-07-06T13:09:42+00:00"
+          },
+          "logistics": {
+            "agent": "logistics",
+            "hs6": "080410",
+            "iso3": "QAT",
+            "status": "failed",
+            "findings": [],
+            "gaps": [
+              "lpi_timeliness: توقيت وصول الشحنات (LPI) غير متاح (مخزن بارد + LP.LPI.TIME.XQ fetch failed for QAT: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/QAT/indicator/LP.LPI.TIME.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+              "lpi_intl_shipments: سهولة ترتيب شحنات دولية تنافسية (LPI) غير متاح (مخزن بارد + LP.LPI.ITRN.XQ fetch failed for QAT: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/QAT/indicator/LP.LPI.ITRN.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+              "lead_time_days: زمن امتثال الحدود (IC.IMP.TMBC) غير متاح — شغّل جامع worldbank (tools/refresh.py)",
+              "freight_cost_usd_kg: سعر الشحن الفعلي $/كغ يتطلب سجلاتِ شحنٍ حقيقية (Volza/Explee عبر /deepen) — لا يُقدَّر بلا مصدر",
+              "landed_cost_usd_kg: التكلفة حتى الوصول = سعر الحدود + الشحن؛ تُحسب بعد رصد الشحن (الطبقة المدفوعة) وبطاقة المنتج"
+            ],
+            "rejected": [],
+            "coverage": 0.0,
+            "started_at": "2026-07-07T14:01:29+00:00",
+            "finished_at": "2026-07-07T14:01:31+00:00"
           }
         },
-        "coverage": 0.38,
+        "coverage": 0.33,
         "pillar_inputs": {
           "market_attractiveness": {
             "tam_usd": null,
             "import_cagr_pct": null,
             "gdp_per_capita_usd": null,
-            "saudi_share_pct": null
+            "saudi_share_pct": null,
+            "market_activity_index": null
           },
           "competition_intensity": {
             "hhi": null,
@@ -3760,9 +3835,18 @@
           },
           "risk": {
             "political_stability_wgi": null,
+            "regulatory_quality_wgi": null,
+            "logistics_lpi": null,
             "fx_volatility_pct": null,
             "supplier_concentration_hhi": null,
             "critical_risk": null
+          },
+          "logistics": {
+            "lead_time_days": null,
+            "lpi_timeliness": null,
+            "lpi_intl_shipments": null,
+            "freight_cost_usd_kg": null,
+            "landed_cost_usd_kg": null
           }
         },
         "note": "حزمة وكلاء البحث السبعة — كل رقم بمصدره؛ فشل وكيل يظهر بسببه ولا يحجب البقية"
@@ -7015,15 +7099,34 @@
               "coverage": 1.0,
               "started_at": "2026-07-06T13:09:41+00:00",
               "finished_at": "2026-07-06T13:09:41+00:00"
+            },
+            "logistics": {
+              "agent": "logistics",
+              "hs6": "080410",
+              "iso3": "CHN",
+              "status": "failed",
+              "findings": [],
+              "gaps": [
+                "lpi_timeliness: توقيت وصول الشحنات (LPI) غير متاح (مخزن بارد + LP.LPI.TIME.XQ fetch failed for CHN: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/CHN/indicator/LP.LPI.TIME.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+                "lpi_intl_shipments: سهولة ترتيب شحنات دولية تنافسية (LPI) غير متاح (مخزن بارد + LP.LPI.ITRN.XQ fetch failed for CHN: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/CHN/indicator/LP.LPI.ITRN.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+                "lead_time_days: زمن امتثال الحدود (IC.IMP.TMBC) غير متاح — شغّل جامع worldbank (tools/refresh.py)",
+                "freight_cost_usd_kg: سعر الشحن الفعلي $/كغ يتطلب سجلاتِ شحنٍ حقيقية (Volza/Explee عبر /deepen) — لا يُقدَّر بلا مصدر",
+                "landed_cost_usd_kg: التكلفة حتى الوصول = سعر الحدود + الشحن؛ تُحسب بعد رصد الشحن (الطبقة المدفوعة) وبطاقة المنتج"
+              ],
+              "rejected": [],
+              "coverage": 0.0,
+              "started_at": "2026-07-07T14:01:24+00:00",
+              "finished_at": "2026-07-07T14:01:26+00:00"
             }
           },
-          "coverage": 0.91,
+          "coverage": 0.8,
           "pillar_inputs": {
             "market_attractiveness": {
               "tam_usd": 61000000.0,
               "import_cagr_pct": 17.7,
               "gdp_per_capita_usd": 12629.59,
-              "saudi_share_pct": 40.0
+              "saudi_share_pct": 40.0,
+              "market_activity_index": null
             },
             "competition_intensity": {
               "hhi": 0.294,
@@ -7042,9 +7145,18 @@
             },
             "risk": {
               "political_stability_wgi": -0.5,
+              "regulatory_quality_wgi": 0.6,
+              "logistics_lpi": 3.7,
               "fx_volatility_pct": 0.8,
               "supplier_concentration_hhi": 0.294,
               "critical_risk": false
+            },
+            "logistics": {
+              "lead_time_days": null,
+              "lpi_timeliness": null,
+              "lpi_intl_shipments": null,
+              "freight_cost_usd_kg": null,
+              "landed_cost_usd_kg": null
             }
           },
           "note": "حزمة وكلاء البحث السبعة — كل رقم بمصدره؛ فشل وكيل يظهر بسببه ولا يحجب البقية"
@@ -8121,15 +8233,34 @@
               "coverage": 1.0,
               "started_at": "2026-07-06T13:09:41+00:00",
               "finished_at": "2026-07-06T13:09:41+00:00"
+            },
+            "logistics": {
+              "agent": "logistics",
+              "hs6": "080410",
+              "iso3": "ARE",
+              "status": "failed",
+              "findings": [],
+              "gaps": [
+                "lpi_timeliness: توقيت وصول الشحنات (LPI) غير متاح (مخزن بارد + LP.LPI.TIME.XQ fetch failed for ARE: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/ARE/indicator/LP.LPI.TIME.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+                "lpi_intl_shipments: سهولة ترتيب شحنات دولية تنافسية (LPI) غير متاح (مخزن بارد + LP.LPI.ITRN.XQ fetch failed for ARE: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/ARE/indicator/LP.LPI.ITRN.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+                "lead_time_days: زمن امتثال الحدود (IC.IMP.TMBC) غير متاح — شغّل جامع worldbank (tools/refresh.py)",
+                "freight_cost_usd_kg: سعر الشحن الفعلي $/كغ يتطلب سجلاتِ شحنٍ حقيقية (Volza/Explee عبر /deepen) — لا يُقدَّر بلا مصدر",
+                "landed_cost_usd_kg: التكلفة حتى الوصول = سعر الحدود + الشحن؛ تُحسب بعد رصد الشحن (الطبقة المدفوعة) وبطاقة المنتج"
+              ],
+              "rejected": [],
+              "coverage": 0.0,
+              "started_at": "2026-07-07T14:01:26+00:00",
+              "finished_at": "2026-07-07T14:01:29+00:00"
             }
           },
-          "coverage": 0.38,
+          "coverage": 0.33,
           "pillar_inputs": {
             "market_attractiveness": {
               "tam_usd": null,
               "import_cagr_pct": null,
               "gdp_per_capita_usd": null,
-              "saudi_share_pct": null
+              "saudi_share_pct": null,
+              "market_activity_index": null
             },
             "competition_intensity": {
               "hhi": null,
@@ -8148,9 +8279,18 @@
             },
             "risk": {
               "political_stability_wgi": null,
+              "regulatory_quality_wgi": null,
+              "logistics_lpi": null,
               "fx_volatility_pct": null,
               "supplier_concentration_hhi": null,
               "critical_risk": null
+            },
+            "logistics": {
+              "lead_time_days": null,
+              "lpi_timeliness": null,
+              "lpi_intl_shipments": null,
+              "freight_cost_usd_kg": null,
+              "landed_cost_usd_kg": null
             }
           },
           "note": "حزمة وكلاء البحث السبعة — كل رقم بمصدره؛ فشل وكيل يظهر بسببه ولا يحجب البقية"
@@ -9227,15 +9367,34 @@
               "coverage": 1.0,
               "started_at": "2026-07-06T13:09:42+00:00",
               "finished_at": "2026-07-06T13:09:42+00:00"
+            },
+            "logistics": {
+              "agent": "logistics",
+              "hs6": "080410",
+              "iso3": "QAT",
+              "status": "failed",
+              "findings": [],
+              "gaps": [
+                "lpi_timeliness: توقيت وصول الشحنات (LPI) غير متاح (مخزن بارد + LP.LPI.TIME.XQ fetch failed for QAT: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/QAT/indicator/LP.LPI.TIME.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+                "lpi_intl_shipments: سهولة ترتيب شحنات دولية تنافسية (LPI) غير متاح (مخزن بارد + LP.LPI.ITRN.XQ fetch failed for QAT: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v2/country/QAT/indicator/LP.LPI.ITRN.XQ?format=json&per_page=100 (Caused by ProxyError('Unable to connect to proxy', OSError('Tunnel connection failed: 403 Forbidden'))))",
+                "lead_time_days: زمن امتثال الحدود (IC.IMP.TMBC) غير متاح — شغّل جامع worldbank (tools/refresh.py)",
+                "freight_cost_usd_kg: سعر الشحن الفعلي $/كغ يتطلب سجلاتِ شحنٍ حقيقية (Volza/Explee عبر /deepen) — لا يُقدَّر بلا مصدر",
+                "landed_cost_usd_kg: التكلفة حتى الوصول = سعر الحدود + الشحن؛ تُحسب بعد رصد الشحن (الطبقة المدفوعة) وبطاقة المنتج"
+              ],
+              "rejected": [],
+              "coverage": 0.0,
+              "started_at": "2026-07-07T14:01:29+00:00",
+              "finished_at": "2026-07-07T14:01:31+00:00"
             }
           },
-          "coverage": 0.38,
+          "coverage": 0.33,
           "pillar_inputs": {
             "market_attractiveness": {
               "tam_usd": null,
               "import_cagr_pct": null,
               "gdp_per_capita_usd": null,
-              "saudi_share_pct": null
+              "saudi_share_pct": null,
+              "market_activity_index": null
             },
             "competition_intensity": {
               "hhi": null,
@@ -9254,9 +9413,18 @@
             },
             "risk": {
               "political_stability_wgi": null,
+              "regulatory_quality_wgi": null,
+              "logistics_lpi": null,
               "fx_volatility_pct": null,
               "supplier_concentration_hhi": null,
               "critical_risk": null
+            },
+            "logistics": {
+              "lead_time_days": null,
+              "lpi_timeliness": null,
+              "lpi_intl_shipments": null,
+              "freight_cost_usd_kg": null,
+              "landed_cost_usd_kg": null
             }
           },
           "note": "حزمة وكلاء البحث السبعة — كل رقم بمصدره؛ فشل وكيل يظهر بسببه ولا يحجب البقية"

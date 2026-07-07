@@ -1,13 +1,14 @@
-"""وكلاء البحث السبعة والمنسّق — Silk research agents & orchestrator (Stage 3, §4b).
+"""وكلاء البحث الثمانية والمنسّق — Silk research agents & orchestrator (Stage 3, §4b).
 
 الطبقة بين خط البيانات (§4) ومحرك القرار (§8): الجامعون يملؤون مخزن الحقائق →
 الوكلاء يقرؤون الحقائق (+ نداءات حية مستهدفة ضمن الميزانية) → المنسّق يتحقق من
 المخطط ويجمّع → محرك القرار (Stage 4) يستهلك مدخلات الأعمدة → التقرير يستهلك
 مخرجات الأقسام.
 
-السبعة (خطة §4b الخمسة + وكيلا توجيه المالك):
+الثمانية (خطة §4b الخمسة + ثلاثة من توجيه المالك — آخرها اللوجستيات):
   market_size · competitor (طبقتان: دول + شركات) · regulatory ·
-  pricing (طبقتان: حدودية + تجزئة) · risk · consumer_demand · supplier
+  pricing (طبقتان: حدودية + تجزئة) · risk · consumer_demand · supplier ·
+  logistics (زمن التوريد + جسر التكلفة حتى الوصول للطبقة المدفوعة)
 
 عقيدة المخطط تُفرَض بالتحقق (pydantic) لا بالمراجعة:
   * كل اكتشاف بقيمة يتطلب sources[] غير فارغة — لا رقم بلا مصدر.
@@ -16,7 +17,7 @@
   * اكتشاف يخالف المخطط يُرفض عند التحقق ويُخفَّض إلى فجوة مسجَّلة — لا يصل
     التقرير ولا محرك القرار غير موثَّق.
 
-كل الوكلاء السبعة PAID=False (بروتوكول النقاط الأربع): المسار المدفوع الوحيد
+كل الوكلاء الثمانية PAID=False (بروتوكول النقاط الأربع): المسار المدفوع الوحيد
 هو طبقة التجزئة المهيكلة في pricing، وهي تفوّض LocalPriceAgent القائم الذي
 يستحيل تنفيذه خارج /deepen بحارس BaseAgent البنيوي — خارج السياق تظهر فجوة
 معلنة تشرح ذلك، بلا أي نداء.
@@ -260,7 +261,7 @@ class ResearchAgent(BaseAgent):
     معلنة»، حساب التغطية من EXPECTED، وتعليب المغلف الموحّد.
     """
 
-    PAID = False               # السبعة مجانية — المدفوع محصور في /deepen بنيوياً
+    PAID = False               # الثمانية مجانية — المدفوع محصور في /deepen بنيوياً
     AGENT = ""                 # الاسم المخططي (market_size, competitor, …)
     EXPECTED: tuple[str, ...] = ()
 
@@ -1100,15 +1101,93 @@ class SupplierAgent(ResearchAgent):
         return F, gaps
 
 
+# ── ٨) وكيل اللوجستيات · logistics (زمن التوريد + جسر التكلفة حتى الوصول) ─────
+
+class LogisticsAgent(ResearchAgent):
+    """زمن التوريد والأداء اللوجستي من البنك الدولي (LPI + زمن عبور الحدود) —
+    والتكلفة حتى الوصول (الشحن) جسرٌ صريحٌ للطبقة المدفوعة، لا رقمٌ مخترَع.
+
+    توجيه المالك: وكيلٌ ثامنٌ يسدّ فجوة اللوجستيات (زمن التوريد + التكلفة حتى
+    الوصول). المجاني الصادق يرصد: توقيت التسليم وسهولة ترتيب الشحن (LPI) وزمن
+    امتثال الحدود؛ أمّا سعر الشحن الفعلي $/كغ فيتطلب سجلاتِ شحنٍ حقيقية (Volza)
+    — فيُعلَن فجوةً موجَّهةً للتعميق المدفوع لا يُقدَّر بلا مصدر (المبدأ التأسيسي).
+    """
+
+    AGENT = "logistics"
+    EXPECTED = ("lead_time_days", "lpi_timeliness", "lpi_intl_shipments",
+                "freight_cost_usd_kg", "landed_cost_usd_kg")
+
+    _INDICATORS = (("LP.LPI.TIME.XQ", "lpi_timeliness",
+                    "توقيت وصول الشحنات (LPI)"),
+                   ("LP.LPI.ITRN.XQ", "lpi_intl_shipments",
+                    "سهولة ترتيب شحنات دولية تنافسية (LPI)"))
+
+    def _research(self, task):
+        F: list[dict] = []
+        gaps: list[str] = []
+        iso3 = task["iso3"]
+        import silk_store
+        from silk_data_layer import world_bank
+        for ind, metric, label in self._INDICATORS:
+            got = None
+            try:
+                got = silk_store.get_indicator(iso3, ind)
+            except Exception:  # noqa: BLE001 — المخزن تحسين لا شرط
+                got = None
+            if got and got.get("value") is not None:
+                F.append(_f(metric, round(float(got["value"]), 3),
+                            [_src(got.get("source", "World Bank"),
+                                  float(got.get("confidence") or 0.9))],
+                            note=f"{label} — {ind} سنة {got.get('year')} "
+                                 "(مخزن الحقائق)"))
+            else:
+                dp = world_bank(iso3, ind)
+                if dp.value is not None:
+                    F.append(_f(metric, dp.value, [_dp_src(dp)],
+                                note=f"{label} — {dp.note}"))
+                else:
+                    gaps.append(f"{metric}: {label} غير متاح (مخزن بارد + "
+                                f"{dp.note})")
+        # زمن التوريد — زمن امتثال الحدود للاستيراد (ساعات → أيام)، من قاعدة
+        # مؤشرات ممارسة الأعمال؛ غيابه فجوةٌ معلنة لا تقدير.
+        hours = None
+        try:
+            got = silk_store.get_indicator(iso3, "IC.IMP.TMBC")
+            hours = got.get("value") if got else None
+        except Exception:  # noqa: BLE001
+            hours = None
+        if hours is None:
+            dp = world_bank(iso3, "IC.IMP.TMBC")
+            hours = dp.value
+            src = _dp_src(dp) if dp.value is not None else None
+        else:
+            src = _src("World Bank", 0.85)
+        if hours is not None:
+            F.append(_f("lead_time_days", round(float(hours) / 24, 1), [src],
+                        unit="يوم", modeled=True,
+                        formula="زمن امتثال الحدود للاستيراد (IC.IMP.TMBC، ساعات) ÷ 24",
+                        note="زمن التخليص الحدودي فقط — لا يشمل زمن الشحن البحري/"
+                             "الجوي (ذاك في الطبقة المدفوعة مع مسار الشحن)"))
+        else:
+            gaps.append("lead_time_days: زمن امتثال الحدود (IC.IMP.TMBC) غير "
+                        "متاح — شغّل جامع worldbank (tools/refresh.py)")
+        # سعر الشحن الفعلي والتكلفة حتى الوصول — جسرٌ صريحٌ للطبقة المدفوعة.
+        gaps.append("freight_cost_usd_kg: سعر الشحن الفعلي $/كغ يتطلب سجلاتِ "
+                    "شحنٍ حقيقية (Volza/Explee عبر /deepen) — لا يُقدَّر بلا مصدر")
+        gaps.append("landed_cost_usd_kg: التكلفة حتى الوصول = سعر الحدود + الشحن؛ "
+                    "تُحسب بعد رصد الشحن (الطبقة المدفوعة) وبطاقة المنتج")
+        return F, gaps
+
+
 # ── المنسّق · orchestrator ───────────────────────────────────────────────────
 
 ALL_AGENTS: tuple[type[ResearchAgent], ...] = (
     MarketSizeAgent, CompetitorAgent, RegulatoryAgent, PricingAgent,
-    RiskAgent, ConsumerDemandAgent, SupplierAgent)
+    RiskAgent, ConsumerDemandAgent, SupplierAgent, LogisticsAgent)
 
 
 class ResearchOrchestrator:
-    """يوزّع الوكلاء السبعة بالتوازي بمهلة، يتحقق، يجمّع، ويسجّل التشغيلات.
+    """يوزّع الوكلاء الثمانية بالتوازي بمهلة، يتحقق، يجمّع، ويسجّل التشغيلات.
 
     فشل وكيل (خطأ/مهلة/مخطط) = مغلف failed بسببه الظاهر — لا يحجب البقية ولا
     التقرير (§4b «فشل غير محاجز وصادق»). التغطية الكلية = متوسط تغطيات الوكلاء
@@ -1144,7 +1223,7 @@ class ResearchOrchestrator:
         self._record_runs(outputs)
         return {"schema": SCHEMA, "agents": outputs, "coverage": coverage,
                 "pillar_inputs": _pillar_inputs(outputs),
-                "note": "حزمة وكلاء البحث السبعة — كل رقم بمصدره؛ فشل وكيل "
+                "note": "حزمة وكلاء البحث الثمانية — كل رقم بمصدره؛ فشل وكيل "
                         "يظهر بسببه ولا يحجب البقية"}
 
     @staticmethod
@@ -1208,16 +1287,27 @@ def _pillar_inputs(outputs: dict) -> dict:
             "margin_at_border_pct": mv("pricing", "margin_at_border_pct")},
         "risk": {
             "political_stability_wgi": mv("risk", "political_stability_wgi"),
+            # توجيه المالك: المخاطر عمودٌ موزون — يحتاج جودةَ التنظيم والأداءَ
+            # اللوجستي (ينتجهما وكيل risk) لا الاستقرارَ والصرفَ فقط.
+            "regulatory_quality_wgi": mv("risk", "regulatory_quality_wgi"),
+            "logistics_lpi": mv("risk", "logistics_lpi"),
             "fx_volatility_pct": mv("risk", "fx_volatility_pct"),
             "supplier_concentration_hhi": mv("risk",
                                              "supplier_concentration_hhi"),
             "critical_risk": mv("risk", "critical_risk")},
+        # وكيل اللوجستيات (الثامن): زمن التوريد + جسر التكلفة حتى الوصول (مدفوع)
+        "logistics": {
+            "lead_time_days": mv("logistics", "lead_time_days"),
+            "lpi_timeliness": mv("logistics", "lpi_timeliness"),
+            "lpi_intl_shipments": mv("logistics", "lpi_intl_shipments"),
+            "freight_cost_usd_kg": mv("logistics", "freight_cost_usd_kg"),
+            "landed_cost_usd_kg": mv("logistics", "landed_cost_usd_kg")},
     }
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    print("Silk research orchestrator — سبعة وكلاء، فشل معلن لا صامت "
+    print("Silk research orchestrator — ثمانية وكلاء، فشل معلن لا صامت "
           "(offline => فجوات موسومة، لا اختلاق)\n")
     bundle = ResearchOrchestrator(timeout=30).run_market(
         {"product": "تمور", "hs6": "080410", "iso3": "CHN", "m49": "156",

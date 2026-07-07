@@ -46,7 +46,8 @@ def _b(**overrides):
 def test_go_when_score_and_confidence_clear_thresholds():
     d = D.decide(BUNDLE)
     assert d["verdict"] == "GO" and d["score"] >= 0.65
-    assert d["confidence"] == 0.85          # تغطية × 4/4 أعمدة
+    assert d["confidence"] == 0.85          # تغطية × 5/5 أعمدة (المخاطر عمود موزون)
+    assert d["pillars"]["risk"]["value"] is not None   # المخاطر تُحسب عموداً
     assert "×" in d["confidence_basis"]     # الأساس معلن لا رقم حدسي
     for p in d["pillars"].values():
         assert p["basis"]                   # كل عمود يطبع معادلته
@@ -77,7 +78,7 @@ def test_missing_pillar_renormalizes_and_becomes_condition():
     d = D.decide(b)
     assert d["missing_pillars"] == ["profit"]
     assert d["pillars"]["profit"]["value"] is None    # لا تخمين
-    assert d["confidence"] == round(0.85 * 0.75, 2)   # 3/4 أعمدة
+    assert d["confidence"] == round(0.85 * 0.8, 2)    # 4/5 أعمدة (المخاطر عمود الآن)
     assert any("هامش الربحية" in c for c in d["conditions"])
     assert d["verdict"] == "CONDITIONAL-GO"           # الفجوة شرط لا مانع
     # الدرجة أعيدت تسويتها على 0.75 من الأوزان — لا صفر مختلق عن العمود الغائب.

@@ -74,11 +74,11 @@ def _out(agent_cls, task=None):
 
 # ── (١) التصنيف — البند الأول من البروتوكول ─────────────────────────────────
 
-def test_all_seven_research_agents_are_free():
-    assert len(R.ALL_AGENTS) == 7
+def test_all_eight_research_agents_are_free():
+    assert len(R.ALL_AGENTS) == 8
     names = {c.AGENT for c in R.ALL_AGENTS}
     assert names == {"market_size", "competitor", "regulatory", "pricing",
-                     "risk", "consumer_demand", "supplier"}
+                     "risk", "consumer_demand", "supplier", "logistics"}
     for cls in R.ALL_AGENTS:
         assert cls.PAID is False, cls.__name__
 
@@ -272,7 +272,7 @@ def test_engine_attaches_full_bundle_and_server_policy_enables_research():
     assert set(bundle["agents"]) == {c.AGENT for c in R.ALL_AGENTS}
     assert set(bundle["pillar_inputs"]) == {
         "market_attractiveness", "competition_intensity", "regulatory_fit",
-        "profitability", "risk"}
+        "profitability", "risk", "logistics"}
     # سياسة الخادم تفعّل الطبقة دون علم من العميل — نفس قفل Stage 2A.
     pytest.importorskip("fastapi"); pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
