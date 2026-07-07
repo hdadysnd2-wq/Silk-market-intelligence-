@@ -73,6 +73,26 @@ def test_entities_and_references_excludes_retail_food_service():
     assert out[0]["business_hint"] is None
 
 
+def test_agent_qualifies_entities_with_claude_when_available():
+    """بلاغ المالك «ليش أضفنا وكلاء عشان يفلترون النتائج»: عند توفّر مفتاح كلود
+    يفلتر **الوكيل** بذكاءٍ (لا قائمة كلمات) — يصنّف المرشّحين ويُبقي الموزّع/
+    المستورد الحقيقي فقط، مستنداً للمعطى لا مخترعاً."""
+    import silk_research as R
+    raw = [{"name": "متجر الحيّ للعصائر", "address": "صنعاء", "types": ["store"]},
+           {"name": "شركة اليمن للاستيراد والتوزيع", "address": "عدن", "types": []}]
+    calls = {}
+
+    def fake_call(system, user, max_tokens=400):
+        calls["user"] = user
+        return '{"keep":[1]}'   # الوكيل أبقى الكيان التجاري الحقيقي فقط
+    with mock.patch("silk_ai_judge.available", return_value=True), \
+         mock.patch("silk_ai_judge._call", side_effect=fake_call):
+        kept, dropped = R._qualify_entities(raw, "عصير", "اليمن", "موزّع أو مستورد بالجملة")
+    assert [e["name"] for e in kept] == ["شركة اليمن للاستيراد والتوزيع"]
+    assert dropped == 1
+    assert "[RAW_FINDINGS_START]" in calls["user"]   # المدخل معزول (ضد الحقن)
+
+
 def test_report_text_warns_on_retail_hint_never_asserts_wholesale_silently():
     from silk_reports import _entry_text
     shop = {"kind": "entity", "name": "City Juice Restaurant",

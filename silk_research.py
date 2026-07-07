@@ -26,6 +26,7 @@ from __future__ import annotations
 import concurrent.futures as _cf
 import csv
 import datetime
+import json
 import logging
 import os
 import time as _time
@@ -520,7 +521,9 @@ class CompetitorAgent(ResearchAgent):
         named, refs, dropped = _entities_and_references(
             web_queries=[f"top {product} brands importers distributors "
                          f"companies in {market}"],
-            maps_query=f"{product} distributor importer {market}")
+            maps_query=f"{product} distributor importer {market}",
+            product=product, market=market,
+            role="موزّع أو مستورد أو شركة تجارية")
         drop_note = (f" · استُبعد {dropped} محل تجزئة/مطعم غير ذي صلة"
                      if dropped else "")
         if named:
@@ -559,34 +562,94 @@ def _business_hint(types: object) -> str | None:
     return None
 
 
+def _qualify_entities(raw: list[dict], product: str, market: str,
+                      role: str) -> tuple[list[dict], int]:
+    """يفلتر الوكيلُ المرشّحين بذكاء — the agent (Claude) judges each candidate:
+    genuine wholesale `role` (keep) vs retail/food-service/irrelevant (drop).
+
+    بلاغ المالك: «ليش أضفنا وكلاء عشان يفلترون النتائج» — الفلترة صارت **حُكم
+    وكيلٍ ذكي** لا قائمةَ كلماتٍ ثابتة: كلود يصنّف كلَّ كيانٍ من اسمه/عنوانه/
+    تصنيف جوجل، ويُبقي الموزّعين/المستوردين بالجملة الحقيقيين فقط. مبدأ لا-اختلاق
+    محفوظ: يصنّف المعطى فقط، لا يخترع اسماً. بلا مفتاح كلود يتراجع للفلتر النوعي
+    الثابت (تجزئة/مطعم) كأمانٍ كيليس. يعيد (المُبقَى، عدد المُستبعَد).
+    """
+    if not raw:
+        return [], 0
+    import silk_ai_judge as aij
+    if not aij.available():
+        # تراجع كيليس: فلتر النوع الثابت فقط.
+        kept = [e for e in raw
+                if _business_hint(e.get("types")) != "retail_or_food_service"]
+        return kept, len(raw) - len(kept)
+    lines = []
+    for i, e in enumerate(raw):
+        lines.append(f"{i}. {e.get('name', '')} | العنوان: {e.get('address') or '؟'} "
+                     f"| تصنيف Google: {', '.join(e.get('types') or []) or '؟'}")
+    user = (
+        f"المنتج: {aij._isolate(product or '؟')} — السوق: {aij._isolate(market or '؟')}.\n"
+        f"المرشّحون (كيانات من خرائط Google):\n" + aij._isolate("\n".join(lines)) + "\n\n"
+        f"أبقِ فقط مَن هو **{role} بالجملة حقيقي** لهذا المنتج (استبعِد محلات "
+        "التجزئة والمطاعم والمقاهي وأي كيان غير ذي صلة). استند إلى المعطى فقط؛ عند "
+        'الشكّ استبعِد. أعد **JSON فقط**: {"keep":[أرقام المرشّحين المُبقَين]}.')
+    raw_out = aij._call(
+        "أنت مصنّف كيانات تجارية في منصة سِلك لتصدير المنتجات السعودية. لا تخترع "
+        "أي اسم؛ صنّف المعطى فقط وأعد أرقام مَن يصلح موزّعاً/مستورداً بالجملة.",
+        user, max_tokens=400)
+    if not raw_out:
+        return raw, 0
+    try:
+        s, e = raw_out.find("{"), raw_out.rfind("}")
+        keep = set(int(x) for x in (json.loads(raw_out[s:e + 1]).get("keep") or [])
+                   if isinstance(x, (int, float)))
+        kept = [raw[i] for i in range(len(raw)) if i in keep]
+        return kept, len(raw) - len(kept)
+    except Exception as ex:  # noqa: BLE001 — bad JSON => keep all (no silent loss)
+        log.warning("entity qualification parse failed: %s", ex)
+        return raw, 0
+
+
 def _entities_and_references(web_queries: list[str], maps_query: str,
-                             region: str | None = None,
-                             num: int = 4) -> tuple[list[dict], list[dict], int]:
+                             region: str | None = None, num: int = 4,
+                             product: str = "", market: str = "",
+                             role: str = "موزّع أو مستورد"
+                             ) -> tuple[list[dict], list[dict], int]:
     """مرشّحون مفصولون بالنوع — entities (Google Places names) vs references
     (web-result titles for manual review). عنوان بحث ليس اسم كيان (ثغرة ٢).
 
-    بلاغ المالك: «كل البيانات محلات تجزئة». Google Places يرجّع لاستعلام
-    «موزّع/مستورد» محلاتِ تجزئة ومطاعمَ تطابق الكلمات لا موزّعين بالجملة. لم يعد
-    يكفي وسمها بتحذير — **تُستبعد كلياً** من قائمة المرشّحين (لا تُعرض كموزّع/
-    مستورد)، ويُعاد عددُ المُستبعَد ليُعلَن؛ فإن فرَغت القائمة أُعلنت الفجوة
-    وأُحيل المستخدم إلى المستوردين الموثّقين عبر Volza/Explee (سجلّات جمركية).
-    Retail/food-service places are EXCLUDED (not shown), the count returned.
+    الكياناتُ يفلترها **الوكيلُ الذكي** (`_qualify_entities`): يحكم كلود أيُّها
+    موزّع/مستورد بالجملة حقيقي ويستبعد محلات التجزئة/المطاعم؛ بلا مفتاح يتراجع
+    للفلتر النوعي الثابت. يُعاد عددُ المُستبعَد ليُعلَن؛ فإن فرَغت القائمة تُعلَن
+    الفجوة وتُحال إلى المستوردين الموثّقين عبر Volza/Explee (سجلّات جمركية).
     """
     out, refs = [], []
-    dropped_retail = 0
     from silk_maps_agent import find_places
     from silk_websearch_agent import web_search
+    raw = []
     for dp in find_places(maps_query, region=region):
         if dp.value:
-            if _business_hint(dp.value.get("types")) == "retail_or_food_service":
-                dropped_retail += 1  # محل تجزئة/مطعم ليس موزّعاً بالجملة — يُستبعَد
-                continue
-            out.append({"kind": "entity", "name": dp.value.get("name", ""),
+            raw.append({"name": dp.value.get("name", ""),
                         "address": dp.value.get("address"),
                         "rating": dp.value.get("rating"),
-                        "business_hint": None,
-                        "via": "Google Maps", "retrieved_at": dp.retrieved_at})
-            refs.append(_src("Google Maps", 0.4, retrieved_at=dp.retrieved_at))
+                        "types": dp.value.get("types") or [],
+                        "retrieved_at": dp.retrieved_at})
+    kept, dropped_retail = _qualify_entities(raw, product, market, role)
+    for e in kept:
+        out.append({"kind": "entity", "name": e.get("name", ""),
+                    "address": e.get("address"), "rating": e.get("rating"),
+                    "business_hint": None,
+                    "via": "Google Maps", "retrieved_at": e.get("retrieved_at")})
+        refs.append(_src("Google Maps", 0.4, retrieved_at=e.get("retrieved_at")))
+    for q in web_queries:
+        for dp in web_search(q, num):
+            if dp.value:
+                out.append({"kind": "reference",
+                            "title": dp.value.get("title", ""),
+                            "url": dp.value.get("link", ""),
+                            "via": "Serper", "retrieved_at": dp.retrieved_at,
+                            "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"})
+                refs.append(_src("Web Search (Serper)", 0.3,
+                                 url=dp.value.get("link"),
+                                 retrieved_at=dp.retrieved_at))
     for q in web_queries:
         for dp in web_search(q, num):
             if dp.value:
@@ -982,7 +1045,9 @@ class SupplierAgent(ResearchAgent):
         sa, sa_refs, sa_drop = _entities_and_references(
             [f"{product} manufacturers suppliers Saudi Arabia",
              f"مصانع موردي {product} السعودية"],
-            f"{product} مصنع مورد السعودية", region="sa")
+            f"{product} مصنع مورد السعودية", region="sa",
+            product=product, market="السعودية",
+            role="مصنّع أو مورّد بالجملة")
         if sa:
             F.append(_f("saudi_suppliers", sa, sa_refs,
                         note="مرشّحو توريد سعوديون (جانب المنشأ) — غير موثَّقين، "
@@ -995,7 +1060,9 @@ class SupplierAgent(ResearchAgent):
                         + "يتطلب SEARCH_API_KEY / GOOGLE_MAPS_API_KEY — لا أسماء مخترعة")
         tg, tg_refs, tg_drop = _entities_and_references(
             [f"{product} importers wholesale distributors in {market}"],
-            f"{product} wholesale distributor {market}")
+            f"{product} wholesale distributor {market}",
+            product=product, market=market,
+            role="موزّع أو مستورد بالجملة")
         if tg:
             F.append(_f("target_distributors", tg, tg_refs,
                         note=f"مرشّحو توزيع في {market} — غير موثَّقين؛ الترقية "
