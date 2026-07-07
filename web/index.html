@@ -18,6 +18,8 @@
     --danger:#DA1E28;--danger-soft:#FFF1F1;--info:#0043CE;--info-soft:#EDF5FF;--focus:#0F62FE;
     --shadow:0 1px 2px rgba(22,22,22,.06),0 8px 24px rgba(22,22,22,.08);
     --shadow-lg:0 2px 6px rgba(22,22,22,.10),0 16px 40px rgba(22,22,22,.14);
+    /* سلاسل الرسوم — لوحة فئوية مُتحقَّق منها (CVD ΔE 36.6 · فاتح) · validated categorical series */
+    --ch1:#2a78d6;--ch2:#1baf7a;--ch3:#eda100;--ch4:#4a3aa7;--ch5:#e34948;--ch6:#e87ba4;
     --ar:"IBM Plex Sans Arabic",system-ui,Tahoma,sans-serif;--en:"IBM Plex Sans",system-ui,sans-serif;
     --mono:"IBM Plex Mono",ui-monospace,monospace;--ease:cubic-bezier(.2,.6,.3,1);
     --r:6px;--r-lg:10px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
@@ -28,6 +30,7 @@
     --primary-soft:#1F2A44;--brand:#FF8A75;--brand-soft:#2E1F1B;--success:#42BE65;--success-soft:#1A2E20;
     --warning:#F1C21B;--warning-soft:#332C0E;--danger:#FA4D56;--danger-soft:#341A1C;--info:#4589FF;--info-soft:#1F2A44;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);--shadow-lg:0 2px 8px rgba(0,0,0,.5),0 20px 48px rgba(0,0,0,.6);
+    --ch1:#3987e5;--ch2:#199e70;--ch3:#c98500;--ch4:#9085e9;--ch5:#e66767;--ch6:#d55181;
   }}
   :root[data-theme="dark"]{
     --bg:#161616;--surface:#262626;--surface-2:#2C2C2C;--hover:#333333;--border:#393939;--border-strong:#525252;
@@ -35,6 +38,7 @@
     --primary-soft:#1F2A44;--brand:#FF8A75;--brand-soft:#2E1F1B;--success:#42BE65;--success-soft:#1A2E20;
     --warning:#F1C21B;--warning-soft:#332C0E;--danger:#FA4D56;--danger-soft:#341A1C;--info:#4589FF;--info-soft:#1F2A44;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.5);--shadow-lg:0 2px 8px rgba(0,0,0,.5),0 20px 48px rgba(0,0,0,.6);
+    --ch1:#3987e5;--ch2:#199e70;--ch3:#c98500;--ch4:#9085e9;--ch5:#e66767;--ch6:#d55181;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ar);font-size:16px;line-height:1.5;
@@ -95,7 +99,7 @@
   .mp-hint{font-size:13px;color:var(--text-3);line-height:1.5}
   .completeness{display:flex;align-items:center;gap:var(--s4);padding:var(--s4) var(--s5);margin-bottom:var(--s5);flex-wrap:wrap}
   .comp-meter{height:10px;background:var(--surface-2);border-radius:6px;overflow:hidden}
-  .comp-meter .fill{height:100%;border-radius:6px;transition:width .6s var(--ease)}
+  .comp-meter .fill{display:block;height:100%;border-radius:6px;transition:width .6s var(--ease)}
   .comp-label{font-size:14px;font-weight:600}.comp-pct{font-family:var(--mono);font-size:22px;font-weight:600}
   .section-gap{display:flex;flex-direction:column;gap:var(--s5);padding-bottom:var(--s7)}
   .decision{padding:var(--s6);position:relative;overflow:hidden}
@@ -148,7 +152,7 @@
   .flag{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);padding:3px 7px;border-radius:5px;color:var(--text-2);direction:ltr}
   .cname{font-weight:600}.gap-txt{color:var(--text-3);border-bottom:1px dotted var(--text-3);cursor:help;font-size:14px}
   .bar{display:flex;align-items:center;gap:10px}.bar .bv{font-family:var(--mono);font-weight:600;color:var(--primary);min-width:26px}
-  .bar .track{flex:1;min-width:50px;height:8px;background:var(--surface-2);border-radius:5px;overflow:hidden}.bar .fill{height:100%;background:var(--primary);border-radius:5px}
+  .bar .track{flex:1;min-width:50px;height:8px;background:var(--surface-2);border-radius:5px;overflow:hidden}.bar .fill{display:block;height:100%;background:var(--primary);border-radius:5px}
   .trend{display:flex;align-items:center;gap:8px}
   .growth{font-family:var(--mono);font-size:13px;font-weight:600}.growth.up{color:var(--success)}.growth.down{color:var(--danger)}
   .cov{font-size:13px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:4px 10px;border-radius:40px;white-space:nowrap}.cov.mid{color:var(--warning);background:var(--warning-soft);border-color:transparent}
@@ -181,6 +185,40 @@
   .callout{font-size:14px;color:var(--text-2);background:var(--info-soft);border-inline-start:3px solid var(--info);border-radius:var(--r);padding:12px 14px;line-height:1.6;margin-top:var(--s3)}
   .callout.warn{background:var(--warning-soft);border-color:var(--warning)}
   .duo{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}@media(max-width:960px){.duo{grid-template-columns:1fr}}
+  /* ——— طبقة التحليلات البصرية (الموجة ١٠) · analytics layer — data-only, gaps declared ——— */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s4)}
+  @media(max-width:1060px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.kpis{grid-template-columns:1fr}}
+  .kpis>*,.charts>*{min-width:0}
+  .kpi{padding:var(--s4) var(--s5);display:flex;flex-direction:column;gap:7px}
+  .kpi .kl{font-size:13px;font-weight:600;color:var(--text-2);line-height:1.4}
+  .kpi .kvv{font-family:var(--mono);font-size:30px;font-weight:600;line-height:1.1;direction:ltr;unicode-bidi:plaintext;text-align:start}
+  .kpi .kvv .u{font-size:15px;color:var(--text-3);font-weight:500}
+  .kpi .kvv.gap{font-family:inherit;font-size:15px;color:var(--warning);direction:inherit}
+  .kpi .kfoot{font-size:12px;color:var(--text-3);font-family:var(--mono);direction:ltr;text-align:start;min-height:15px;word-break:break-word}
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);align-items:start}
+  @media(max-width:960px){.charts{grid-template-columns:1fr}}
+  .hbar-row{display:grid;grid-template-columns:minmax(90px,130px) 1fr 46px;align-items:center;gap:10px;padding:6px 8px;cursor:pointer;border-radius:6px;transition:background .12s var(--ease)}
+  .hbar-row:hover{background:var(--hover)}
+  .hbar-row.sel{background:var(--primary-soft)}
+  .hbar-row .lbl{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hbar-row .track{height:18px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+  .hbar-row .hfill{display:block;height:100%;background:var(--ch1);border-start-end-radius:4px;border-end-end-radius:4px;transition:width .5s var(--ease)}
+  .hbar-row .val{font-family:var(--mono);font-size:13px;font-weight:600;text-align:end}
+  .chart-empty{border:1.5px dashed var(--border-strong);border-radius:var(--r-lg);padding:var(--s5);display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;color:var(--text-2);font-size:14px;line-height:1.6;background:var(--surface-2);margin-top:6px}
+  .chart-empty svg{color:var(--text-3)}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin:2px 0 10px}
+  .lg{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--text-2)}
+  .lg .sw{width:12px;height:12px;border-radius:3px;flex:none}
+  .linewrap{direction:ltr}
+  .linewrap svg{display:block;width:100%;height:auto}
+  .donutwrap{display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap;margin-top:8px}
+  .donutwrap svg{flex:none}
+  .dlegend{display:flex;flex-direction:column;gap:8px;min-width:150px;flex:1}
+  .dlegend .row{display:flex;align-items:center;gap:10px;font-size:13px;justify-content:space-between}
+  .dlegend .nm{display:inline-flex;align-items:center;gap:7px;font-weight:600;min-width:0}
+  .dlegend .nm span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dlegend .pv{font-family:var(--mono);color:var(--text-2);white-space:nowrap}
   .panel{padding:var(--s5)}.panel h3{margin:0 0 6px;font-size:18px;font-weight:600}.panel .sub{font-size:14px;color:var(--text-2);margin-bottom:var(--s4);line-height:1.6}
   .limits{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}.limits li{font-size:15px;line-height:1.6;padding-inline-start:22px;position:relative}.limits li::before{content:"—";position:absolute;inset-inline-start:0;color:var(--warning);font-weight:700}
   .ready{padding:var(--s7) var(--s5);text-align:center;max-width:640px;margin:0 auto}
@@ -289,6 +327,15 @@
     complianceEntry:{ar:"اشتراطات الدخول والخروج",en:"Entry & exit requirements"},officialSrc:{ar:"المصدر الرسمي",en:"Official source"},
     juryTitle:{ar:"لجنة التحكيم",en:"Jury committee"},claudeJudge:{ar:"كلود · الحَكَم",en:"Claude · Judge"},coverageL:{ar:"تغطية",en:"Coverage"},gapsL:{ar:"فجوات",en:"Gaps"},
     reportLimits:{ar:"حدود هذا التقرير",en:"Limits of this report"},limitsSub:{ar:"ما لا يعرفه النظام يُقال صراحةً — الفجوات تُعلن ولا تُقدَّر.",en:"What the system doesn't know is stated plainly — gaps declared, not estimated."},noLimits:{ar:"لا حدود مسجّلة — كل مكوّنات الأسواق الأولى مرصودة.",en:"No limits recorded — all top-market components observed."},
+    kpiTopImports:{ar:"استيراد السوق الأول",en:"Top-market imports"},kpiShare:{ar:"حصة السعودية — السوق الأول",en:"Saudi share — top market"},
+    kpiGrowth:{ar:"نمو الاستيراد (مدى الدراسة)",en:"Import growth (study span)"},kpiObserved:{ar:"أسواق مرصودة النقاط",en:"Markets with observed score"},
+    chartScores:{ar:"مقارنة الأسواق — النقاط المركّبة",en:"Market comparison — composite score"},
+    chartScoresSub:{ar:"أفضل الأسواق على مقياس 0–100 (4 مكوّنات موزونة). انقر شريطاً لفتح تفاصيل سوقه.",en:"Top markets on a 0–100 scale (4 weighted components). Click a bar to open that market."},
+    chartLines:{ar:"الاستيراد عبر سنوات الدراسة",en:"Imports across the study years"},
+    chartLinesSub:{ar:"قيمة استيراد أفضل الأسواق سنةً بسنة — Comtrade.",en:"Top markets' import value year by year — Comtrade."},
+    chartNeedScores:{ar:"لا نقاط مرصودة بعد — يتطلب وصول Comtrade (شبكة/مفتاح). الفجوة معلنة لا مقدَّرة.",en:"No observed scores yet — requires Comtrade access (network/key). The gap is declared, not estimated."},
+    chartNeedTrend:{ar:"لا خط اتجاه مرصود — يتطلب «مدى السنوات» وشبكة تصل إلى Comtrade.",en:"No observed trend — requires the year-range layer and network access to Comtrade."},
+    sharesDonut:{ar:"حصص الدول المورّدة",en:"Supplier-country shares"},othersLbl:{ar:"أخرى",en:"Other"},
     cultureTitle:{ar:"ثقافة المستهلك ونبض السوق",en:"Consumer culture & market pulse"},cultureSub:{ar:"عناوين ومقالات مرصودة من بحث الويب — ما يهتم به المستهلك فعلياً.",en:"Observed headlines & articles from web search — what the consumer actually cares about."},cultureNeed:{ar:"غير مرصود — يتطلب مفتاح بحث الويب (SEARCH_API_KEY). فعّله في الإعدادات؛ لا نختلق اهتماماً.",en:"Not observed — requires a web-search key (SEARCH_API_KEY). Enable it in Settings; we never invent interest."},
     readyTitle:{ar:"ابدأ بالبحث عن منتج",en:"Start by searching a product"},readyP:{ar:"اكتب اسم منتج سعودي لتصفية أسواق تصديره وترتيبها عبر سنوات الدراسة.",en:"Type a Saudi product to shortlist and rank its export markets across the study years."},readyFoot:{ar:"النظام لا يُنشئ بيانات — كل رقم يحمل مصدره وثقته وتاريخه، وكل فجوة تُعلن بسببها.",en:"The system never creates data — every number carries its source, confidence and date, and every gap is declared with its reason."},
     readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"النظام لا يخمّن رمز HS — التصنيف الضعيف يُعلن بدل أن يُخترع.",en:"The system never guesses an HS code — a weak classification is declared, not invented."},
@@ -308,7 +355,7 @@
   function dpList(x){return x==null?[]:(Array.isArray(x)?x:[x]);}
   function realVals(l){return dpList(l).map(function(f){return f&&f.value;}).filter(function(v){return v!=null;});}
   function prov(dp){if(!dp||typeof dp!=="object")return "";var b=[];if(dp.source)b.push(dp.source);if(dp.confidence!=null)b.push((S.lang==="ar"?"ثقة ":"conf ")+dp.confidence);if(dp.retrieved_at)b.push(dp.retrieved_at);return b.join(" · ");}
-  function fmtUSD(v){if(v==null)return "—";var n=Number(v);if(n>=1e9)return "$"+(n/1e9).toFixed(1)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(1)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(0)+"K";return "$"+n.toLocaleString("en-US");}
+  function fmtUSD(v){if(v==null)return "—";var n=Number(v);var s=n>=1e9?(n/1e9).toFixed(1)+"B":n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(0)+"K":n.toLocaleString("en-US");return "$"+s.replace(/\.0([BMK])/,"$1");}
 
   function spark(series,w,h){
     var vals=(series||[]).map(function(p){return p.value;});
@@ -320,6 +367,90 @@
     return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block;overflow:visible"><polyline points="'+pts.join(" ")+'" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" r="3" fill="var(--primary)"/></svg>';
   }
   function growthTag(g){if(g==null)return '';var up=g>=0;return '<span class="growth '+(up?"up":"down")+'">'+(up?"▲":"▼")+' '+Math.abs(g)+'%</span>';}
+
+  /* ——— محرّك الرسوم (الموجة ١٠) — SVG صرف بلا مكتبات؛ يرسم المرصود فقط ——— */
+  var CH=["var(--ch1)","var(--ch2)","var(--ch3)","var(--ch4)","var(--ch5)","var(--ch6)"];
+  function niceStep(raw){var p=Math.pow(10,Math.floor(Math.log(raw)/Math.LN10));var n=raw/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p;}
+  function chartEmpty(msg){return '<div class="chart-empty"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7" opacity=".55"/></svg><span>'+esc(msg)+'</span></div>';}
+  function lineChartSVG(seriesArr,opts){
+    opts=opts||{};
+    var W=560,H=opts.h||220,PL=48,PR=16,PT=14,PB=28,iw=W-PL-PR,ih=H-PT-PB;
+    var ysSet={};seriesArr.forEach(function(s){s.pts.forEach(function(p){ysSet[p.year]=1;});});
+    var ys=Object.keys(ysSet).map(Number).sort(function(a,b){return a-b;});
+    var mx=0;seriesArr.forEach(function(s){s.pts.forEach(function(p){if(p.value>mx)mx=p.value;});});
+    if(ys.length<2||mx<=0)return null;
+    var step=niceStep(mx/4),top=Math.ceil(mx/step)*step;
+    function X(y){return PL+(ys.indexOf(y)/(ys.length-1))*iw;}
+    function Y(v){return PT+ih-(v/top)*ih;}
+    var grid="";
+    for(var tv=step;tv<=top;tv+=step){grid+='<line x1="'+PL+'" x2="'+(W-PR)+'" y1="'+Y(tv).toFixed(1)+'" y2="'+Y(tv).toFixed(1)+'" stroke="var(--border)" stroke-width="1"/><text x="'+(PL-7)+'" y="'+(Y(tv)+3.5).toFixed(1)+'" text-anchor="end" font-size="10" fill="var(--text-3)" font-family="IBM Plex Mono,monospace">'+esc(fmtUSD(tv).replace("$",""))+'</text>';}
+    var base='<line x1="'+PL+'" x2="'+(W-PR)+'" y1="'+(PT+ih)+'" y2="'+(PT+ih)+'" stroke="var(--border-strong)" stroke-width="1"/>';
+    var xl=ys.map(function(y){return '<text x="'+X(y).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="11" fill="var(--text-3)" font-family="IBM Plex Mono,monospace">'+y+'</text>';}).join("");
+    var marks=seriesArr.map(function(s,i){
+      var col=s.color||CH[i%CH.length];
+      var pts=s.pts.slice().sort(function(a,b){return a.year-b.year;});
+      var d=pts.map(function(p,j){return (j?"L":"M")+X(p.year).toFixed(1)+","+Y(p.value).toFixed(1);}).join(" ");
+      var area=opts.area?'<path d="'+d+' L'+X(pts[pts.length-1].year).toFixed(1)+','+(PT+ih)+' L'+X(pts[0].year).toFixed(1)+','+(PT+ih)+' Z" fill="'+col+'" opacity=".1"/>':"";
+      var dots=pts.map(function(p){return '<circle cx="'+X(p.year).toFixed(1)+'" cy="'+Y(p.value).toFixed(1)+'" r="4" fill="'+col+'" stroke="var(--surface)" stroke-width="2"><title>'+esc(s.name)+' '+p.year+': '+esc(fmtUSD(p.value))+'</title></circle>';}).join("");
+      return area+'<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'+dots;
+    }).join("");
+    return '<div class="linewrap"><svg viewBox="0 0 '+W+' '+H+'" role="img">'+grid+base+marks+xl+'</svg></div>';
+  }
+  function donutSVG(slices){
+    var R=50,CIRC=2*Math.PI*R,acc=0,segs="";
+    slices.forEach(function(s){
+      var len=Math.max(s.pct/100*CIRC-2,0.6);
+      segs+='<circle cx="65" cy="65" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="20" stroke-dasharray="'+len.toFixed(1)+' '+(CIRC-len).toFixed(1)+'" stroke-dashoffset="'+(-acc/100*CIRC).toFixed(1)+'"><title>'+esc(s.label)+': '+s.pct+'%</title></circle>';
+      acc+=s.pct;
+    });
+    return '<svg width="130" height="130" viewBox="0 0 130 130" role="img"><g transform="rotate(-90 65 65)">'+segs+'</g></svg>';
+  }
+  function trendSeries(m){
+    if(!m||!m.trend||!m.trend.series)return null;
+    var pts=m.trend.series.filter(function(p){return p&&p.value!=null;});
+    return pts.length>=2?pts:null;
+  }
+  function obsComps(m){var c=m.components||{};return ["market_size","saudi_position","demand_capacity","competition"].filter(function(k){return c[k]&&c[k].value!=null;}).length;}
+  function kpiBlock(ms){
+    var top=ms[0]||{},c=top.components||{},tr=top.trend||{};
+    // نقاط بلا أي مكوّن مرصود لا تُحسب «مرصودة» — الصفر غير المرصود ليس صفراً حقيقياً.
+    var obs=ms.filter(function(m){return m.score!=null&&obsComps(m)>0;}).length;
+    function tile(label,valHTML,foot){return '<section class="card kpi"><span class="kl">'+esc(label)+'</span>'+valHTML+'<span class="kfoot">'+esc(foot||"")+'</span></section>';}
+    function val(v,fmt){return v!=null?'<span class="kvv">'+fmt(v)+'</span>':'<span class="kvv gap">'+esc(t("notObserved"))+'</span>';}
+    var g=tr.growth_pct;
+    var gHtml=g!=null?'<span class="kvv" style="color:'+(g>=0?"var(--success)":"var(--danger)")+'">'+(g>=0?"▲":"▼")+" "+Math.abs(g)+'%</span>':'<span class="kvv gap">'+esc(t("notObserved"))+'</span>';
+    return '<div class="kpis">'+
+      tile(t("kpiTopImports")+(top.country?" · "+top.country:""),val(top.import_value,fmtUSD),prov(c.market_size))+
+      tile(t("kpiShare"),val(top.saudi_share,function(v){return v+'<span class="u">%</span>';}),prov(c.saudi_position))+
+      tile(t("kpiGrowth"),gHtml,tr.cagr_pct!=null?("CAGR "+tr.cagr_pct+"%"):"")+
+      tile(t("kpiObserved"),'<span class="kvv">'+obs+'<span class="u">/'+ms.length+'</span></span>',t("declaredGap")+": "+(ms.length-obs))+
+    '</div>';
+  }
+  function barChart(ms){
+    var rows=ms.filter(function(m){return m.score!=null&&obsComps(m)>0;}).slice(0,8);
+    if(!rows.length)return chartEmpty(t("chartNeedScores"));
+    return '<div style="margin-top:6px">'+rows.map(function(m){
+      return '<div class="hbar-row'+(m.id===S.selId?" sel":"")+'" data-goto="'+m.id+'" role="button" tabindex="0" aria-label="'+esc(m.country)+' '+m.score+'/100">'+
+        '<span class="lbl">'+esc(m.country)+'</span>'+
+        '<span class="track"><span class="hfill" style="width:'+m.score+'%"></span></span>'+
+        '<span class="val">'+m.score+'</span></div>';
+    }).join("")+'</div>';
+  }
+  function multiTrendChart(ms){
+    var series=[];
+    for(var i=0;i<ms.length&&series.length<3;i++){var pts=trendSeries(ms[i]);if(pts)series.push({name:ms[i].country,pts:pts,color:CH[series.length]});}
+    if(!series.length)return chartEmpty(t("chartNeedTrend"));
+    var svg=lineChartSVG(series,{h:220});
+    if(!svg)return chartEmpty(t("chartNeedTrend"));
+    var legend='<div class="legend">'+series.map(function(s){return '<span class="lg"><span class="sw" style="background:'+s.color+'"></span>'+esc(s.name)+'</span>';}).join("")+'</div>';
+    return legend+svg;
+  }
+  function chartsBlock(ms){
+    return '<div class="charts">'+
+      '<section class="card panel"><h3>'+esc(t("chartScores"))+'</h3><div class="sub">'+esc(t("chartScoresSub"))+'</div>'+barChart(ms)+'</section>'+
+      '<section class="card panel"><h3>'+esc(t("chartLines"))+'</h3><div class="sub">'+esc(t("chartLinesSub"))+'</div>'+multiTrendChart(ms)+'</section>'+
+    '</div>';
+  }
 
   function applyLang(){
     document.documentElement.lang=S.lang;document.documentElement.dir=S.lang==="ar"?"rtl":"ltr";
@@ -442,7 +573,7 @@
       $("#resultArea").innerHTML=pipeHTML()+'<section class="card ready" style="margin-top:var(--s5)"><h2>'+esc(t("noClass"))+'</h2><p>'+esc(S.result.note||"")+'</p><div class="foot">'+esc(t("noClassFoot"))+'</div></section>';return;}
     renderCompleteness();
     var ms=S.result.markets,sel=ms.filter(function(m){return m.id===S.selId;})[0]||ms[0];S.selId=sel&&sel.id;
-    $("#resultArea").innerHTML=pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+cultureBlock()+'</div>';
+    $("#resultArea").innerHTML=pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+kpiBlock(ms)+chartsBlock(ms)+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+cultureBlock()+'</div>';
     bindEvents();
   }
   function bindEvents(){
@@ -450,6 +581,11 @@
       function pick(){S.selId=tr.getAttribute("data-id");render();}
       tr.addEventListener("click",pick);
       tr.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();}});
+    });
+    $$("#resultArea .hbar-row").forEach(function(r){
+      function pick(){S.selId=r.getAttribute("data-goto");render();}
+      r.addEventListener("click",pick);
+      r.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();}});
     });
     $$("#resultArea .tab").forEach(function(b){b.addEventListener("click",function(){S.tab=this.getAttribute("data-tab");render();});});
     var d=$("#deepBtn");if(d)d.addEventListener("click",runDeepen);
@@ -530,16 +666,26 @@
     }else out+='<div class="callout warn">'+esc(t("needDeepen"))+'</div>';
     out+='<div class="subhead">'+esc(t("supplierCountries"))+'</div>';
     var sup=sel.competitors||[];
+    var shares=sup.filter(function(s){return s&&s.share!=null;});
+    if(shares.length){
+      var slices=shares.slice(0,5).map(function(s,i){return {label:s.partner||"—",pct:Math.round(s.share*10)/10,color:CH[i]};});
+      var rest=Math.round((100-slices.reduce(function(a,s){return a+s.pct;},0))*10)/10;
+      if(rest>0.5)slices.push({label:t("othersLbl"),pct:rest,color:"var(--border-strong)"});
+      out+='<div class="donutwrap">'+donutSVG(slices)+'<div class="dlegend">'+slices.map(function(s){
+        return '<div class="row"><span class="nm"><span class="sw" style="width:11px;height:11px;border-radius:3px;background:'+s.color+';flex:none"></span><span>'+esc(s.label)+'</span></span><span class="pv">'+s.pct+'%</span></div>';
+      }).join("")+'</div></div>';
+    }
     out+=sup.length?sup.slice(0,6).map(function(s){return '<div class="supplier"><span>'+esc(s.partner||"—")+'</span><span class="sh">'+(s.share!=null?s.share+"%":"—")+' · '+fmtUSD(s.value_usd)+'</span></div>';}).join(""):'<div class="callout warn">'+esc(t("notObserved"))+'</div>';
     return out;
   }
   function trendTab(sel){
-    var tr=sel.trend;
-    if(!tr||!tr.series||(tr.observed_years||[]).length<2)return '<div class="callout warn">'+esc((tr&&tr.note)||t("trendNeed"))+'</div>';
-    var years=tr.series.map(function(p){return p.year;});
+    var tr=sel.trend,pts=trendSeries(sel);
+    if(!pts)return '<div class="callout warn">'+esc((tr&&tr.note)||t("trendNeed"))+'</div>';
+    var svg=lineChartSVG([{name:sel.country,pts:pts,color:CH[0]}],{h:200,area:true});
+    if(!svg)return '<div class="callout warn">'+esc((tr&&tr.note)||t("trendNeed"))+'</div>';
     return '<div class="subhead">'+esc(t("trendTitle"))+'</div><div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px">'+
-      '<div style="display:flex;justify-content:space-between;margin-bottom:6px">'+growthTag(tr.growth_pct)+'<span class="tag num">'+esc(t("cagr"))+' '+(tr.cagr_pct==null?"—":tr.cagr_pct+"%")+'</span></div>'+
-      spark(tr.series,320,60)+'<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:6px" class="num">'+years.map(function(y){return '<span>'+y+'</span>';}).join("")+'</div></div>'+
+      '<div style="display:flex;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">'+growthTag(tr.growth_pct)+'<span class="tag num">'+esc(t("cagr"))+' '+(tr.cagr_pct==null?"—":tr.cagr_pct+"%")+'</span></div>'+
+      svg+'</div>'+
       '<div class="prov" style="margin-top:10px">'+esc(tr.note||"")+'</div>';
   }
   function componentsTab(sel){
