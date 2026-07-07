@@ -7,6 +7,7 @@ layer). Missing component => skipped + lowered row confidence; never fabricated.
 """
 from __future__ import annotations
 
+import datetime
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
@@ -130,30 +131,60 @@ def _demand_capacity_component(inc: DataPoint, iso3: str, year: int) -> DataPoin
                      note=inc.note, retrieved_at=_today())
 
 
+# تراجُع سنويّ معلن — بيانات التجارة السنوية تتأخّر سنة–سنتين، فالسنةُ المطلوبة قد
+# تكون غير منشورة بعد. نبدأ من min(المطلوبة، السنة الحالية−1) ونتراجع حتى نجد أحدث
+# سنةٍ فيها بيانات فعلية (بدل انهيار التحليل إلى 0% لسنةٍ لم تُنشر). لا اختلاق:
+# السنة الفعلية تُعلَن في ملاحظة كل مكوّن؛ الفشل الكامل يبقى فجوةً معلنة كالمعتاد.
+_MAX_YEAR_FALLBACK = 4
+
+
+def _imports_with_fallback(hs_code: str, m49: str, iso3: str,
+                           year: int) -> tuple[dict, int, bool]:
+    """استيراد السوق مع تراجعٍ سنويٍّ معلن — most-recent-year-with-data resolver.
+
+    يعيد (mi، السنة_الفعلية، هل_تراجَعنا). يبدأ من min(المطلوبة، الحالية−1) لتفادي
+    استعلام سنةٍ لم تُنشر بعد، ثم يتراجع حتى _MAX_YEAR_FALLBACK. آخرُ محاولةٍ فارغة
+    تُعاد بالسنة المطلوبة (فجوة معلنة). Never fabricates — just picks the newest
+    published year within the window.
+    """
+    start = min(year, datetime.date.today().year - 1)
+    mi = {"total_usd": None, "competitors": []}
+    for back in range(_MAX_YEAR_FALLBACK + 1):
+        y = start - back
+        mi = market_imports_cached(hs_code, m49, iso3, y, live=market_imports)
+        if mi.get("total_usd") is not None or mi.get("competitors"):
+            return mi, y, (y != year)
+    return mi, year, False
+
+
 def _gather_row(hs_code: str, c: dict, year: int) -> dict:
     """اجمع مكوّنات سوق واحد — all fetches for ONE market (runs in a worker thread).
 
     مستقل تماماً عن بقية الأسواق (لا حالة مشتركة قابلة للتحوّر)، فيُوزَّع على
-    الخيوط بأمان. الدخل يُجلب مرّة واحدة (Q4) ويُعاد استعماله.
+    الخيوط بأمان. الدخل يُجلب مرّة واحدة (Q4) ويُعاد استعماله. السنةُ الفعلية
+    تُحلّ بتراجعٍ معلن عند غياب بيانات السنة المطلوبة (التجارة تتأخّر سنة–سنتين).
     """
     iso3, m49 = c["iso3"], c["m49"]
-    # نداء واحد لكل سوق عبر مخزن الحقائق أولاً (M2) — store-first, ONE call on miss.
-    mi = market_imports_cached(hs_code, m49, iso3, year,
-                           live=market_imports)  # قابل للترقيع (wave8)
+    # نداء واحد لكل سوق عبر مخزن الحقائق أولاً (M2) + تراجُع سنويّ معلن عند الغياب.
+    mi, eff_year, fell_back = _imports_with_fallback(hs_code, m49, iso3, year)
     comps = mi["competitors"]
-    inc = _income_dp(iso3, year)                 # الدخل مرّة واحدة (Q4)
-    pop = population(iso3, year)
+    inc = _income_dp(iso3, eff_year)             # الدخل مرّة واحدة (Q4)
+    pop = population(iso3, eff_year)
+    fb = (f" | بيانات {eff_year} — أحدث سنة منشورة ({year} لم تُنشر بعد)"
+          if fell_back else "")
     comp_dps = {
-        "market_size": _market_size_component(mi["total_usd"], hs_code, m49, year,
-                                              xval=mi.get("xval_note", "")),
+        "market_size": _market_size_component(mi["total_usd"], hs_code, m49,
+                                              eff_year,
+                                              xval=mi.get("xval_note", "") + fb),
         "saudi_position": _saudi_position_component(comps),
-        "demand_capacity": _demand_capacity_component(inc, iso3, year),
+        "demand_capacity": _demand_capacity_component(inc, iso3, eff_year),
         "competition": _competition_component(comps),
     }
     return {
         "iso3": iso3, "m49": m49, "components": comp_dps,
         "income_ppp": inc.value,                 # يُعاد استعمال نفس الجلب
         "population": pop.value,
+        "year_used": eff_year, "year_fell_back": fell_back,
         "competitors": _competitor_list(comps),
         "top_competitor": _top_competitor(comps),
     }
@@ -249,6 +280,8 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
             "components": row["components"],
             "income_ppp": row["income_ppp"],
             "population": row["population"],
+            "year_used": row.get("year_used"),
+            "year_fell_back": row.get("year_fell_back", False),
             "competitors": row["competitors"],
             "top_competitor": row["top_competitor"],
         })

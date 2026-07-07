@@ -120,22 +120,30 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     # 2) رتّب الأسواق المرشّحة لهذا الرمز — rank candidate markets.
     ranked = rank_markets(hs.value, countries=countries, year=year)
 
+    # 2b) اعتمد أحدث سنةٍ فيها بيانات فعلية للمراحل التالية — resolve the effective
+    #     data year from the ranking's declared fallback, so downstream stages
+    #     (الوكلاء/التعريفة/فاوستات/البحث/الاتجاه) لا تستعلم سنةً لم تُنشر بعد فتنهار
+    #     كلُّها إلى فجوات (بلاغ المالك: تحليلٌ 0% لسوقٍ بياناته موجودة لسنةٍ أقدم).
+    _used = [r.get("year_used") for r in ranked[:_ENRICH_TOP] if r.get("year_used")]
+    data_year = max(_used) if _used else year
+    result_year_fell_back = data_year != year
+
     # 3) شغّل الوكلاء الأساسيين واحتفظ بتقاريرهم — run core agents, keep reports
     #    (الحكم يتأخر لما بعد الإثراء والتقاطع كي تصل الخيوط للمرحلة ٢ — الموجة ٤).
     manager = ResearchManager()
     reports_by_iso: dict[str, list] = {}
     for row in ranked[:_ENRICH_TOP]:
         task = {"hs_code": hs.value, "market_m49": row["m49"],
-                "iso3": row["iso3"], "year": year}
+                "iso3": row["iso3"], "year": data_year}
         reports_by_iso[row["iso3"]] = manager.distribute(task)
 
     # 3b) طبقات سياق إضافية (لا تغيّر النقاط) — additive context layers (no score change).
     if with_trends:
         _enrich_trends(ranked[:_ENRICH_TOP], product_name)
     if with_tariffs:
-        _enrich_tariffs(ranked[:_ENRICH_TOP], hs.value, year)
+        _enrich_tariffs(ranked[:_ENRICH_TOP], hs.value, data_year)
     if with_faostat:
-        _enrich_faostat(ranked[:_ENRICH_TOP], product_name, year)
+        _enrich_faostat(ranked[:_ENRICH_TOP], product_name, data_year)
     if with_maps:
         _enrich_maps(ranked[:_ENRICH_TOP], product_name)
     if with_localprice:
@@ -160,10 +168,10 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     if with_risk:
         _enrich_risk(ranked[:_ENRICH_TOP])
     if with_research:
-        _enrich_research(ranked[:_ENRICH_TOP], product_name, hs.value, year,
+        _enrich_research(ranked[:_ENRICH_TOP], product_name, hs.value, data_year,
                          product_card)
     if with_trend:
-        _enrich_trend(ranked[:_ENRICH_TOP], hs.value, year, trend_span)
+        _enrich_trend(ranked[:_ENRICH_TOP], hs.value, data_year, trend_span)
 
     # 3c) محرّك التقاطع (الموجة ٤) — يعمل فقط عند وجود بطاقة المنتج.
     if product_card:
@@ -192,10 +200,14 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     result = {
         "product": product_name, "hs_code": hs.value,
         "hs_confidence": hs.confidence, "hs_note": hs.note,
-        "year": year, "preliminary": True, "classified": True,
+        "year": year, "data_year": data_year,
+        "year_fell_back": result_year_fell_back,
+        "preliminary": True, "classified": True,
         "markets": ranked,
         "note": "نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. "
-                "Preliminary, real public data only; gaps flagged, not estimated.",
+                "Preliminary, real public data only; gaps flagged, not estimated."
+                + (f" · اعتُمدت بيانات {data_year} (أحدث سنة منشورة؛ {year} لم "
+                   "تُنشر بعد)" if result_year_fell_back else ""),
     }
     if not product_card:
         result["product_card_hint"] = ("أضف بطاقة منتجك (product_card) للحصول "

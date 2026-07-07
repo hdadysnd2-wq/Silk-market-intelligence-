@@ -459,6 +459,7 @@
     lyr4:{ar:"الطبقة المدفوعة",en:"Paid layer"},lyr4d:{ar:"Volza · Explee · LocalPrice (عبر التعميق)",en:"Volza · Explee · LocalPrice (via deep-dive)"},
     lyrLocked:{ar:"مقفلة — تُفعَّل بالتعميق",en:"Locked — unlocked by deep-dive"},lyrActive:{ar:"مُفعّلة",en:"Active"},agentsN:{ar:"وكلاء بنتائج",en:"agents with data"},pillarsN:{ar:"أعمدة محسوبة",en:"pillars computed"},
     obs:{ar:"مرصود",en:"observed"},declaredGap:{ar:"فجوة معلنة",en:"declared gap"},notObserved:{ar:"غير مرصود",en:"Not observed"},
+    dataYearL:{ar:"بيانات",en:"Data"},dataYearHint:{ar:"السنة المطلوبة لم تُنشر بعد في كومتريد — اعتُمدت أحدث سنة فيها بيانات فعلية (التجارة السنوية تتأخّر سنة–سنتين).",en:"Requested year not yet published in Comtrade — used the most recent year with real data (annual trade lags 1–2 years)."},
     decision:{ar:"القرار",en:"Decision"},prelim:{ar:"قرار مبدئي",en:"Preliminary"},noVerdict:{ar:"تعذّر الحكم — لا بيانات كافية",en:"No verdict — insufficient data"},whyLabel:{ar:"لماذا",en:"Why"},confLabel:{ar:"الثقة",en:"Confidence"},stageL:{ar:"مرحلة التوليف",en:"Synthesis stage"},
     rankedMarkets:{ar:"الأسواق المرشّحة",en:"Candidate markets"},
     colRank:{ar:"#",en:"#"},colMarket:{ar:"السوق",en:"Market"},colImports:{ar:"الاستيراد",en:"Imports"},colTrend:{ar:"الاتجاه",en:"Trend"},colShare:{ar:"حصة السعودية",en:"Saudi share"},colScore:{ar:"النقاط",en:"Score"},colCov:{ar:"التغطية",en:"Coverage"},
@@ -761,6 +762,7 @@
         competitive_position:m.competitive_position||null,quality_flags:m.quality_flags||[],recommendation:m.recommendation||""};
     });
     return {classified:true,product:res.product,hs:res.hs_code,hs_confidence:res.hs_confidence,year:res.year,
+      data_year:res.data_year!=null?res.data_year:res.year,year_fell_back:!!res.year_fell_back,
       analysis_id:res.analysis_id!=null?res.analysis_id:null,view:res.view&&!res.view.error?res.view:null,markets:markets};
   }
 
@@ -840,7 +842,9 @@
     var badge=tn==="go"?"b-go":tn==="no"?"b-no":"b-watch";
     var chips='<span class="badge '+badge+'">'+esc(t("prelim"))+'</span>'+(d.market?'<span class="tag">'+esc(d.market)+'</span>':'')+
       (S.result.hs?'<span class="tag num">HS '+esc(S.result.hs)+' · '+esc(S.result.hs_confidence)+'</span>':'')+
-      '<span class="tag num">'+S.yearFrom+'–'+S.yearTo+'</span>'+(d.stage!=null?'<span class="tag">'+esc(t("stageL"))+' '+esc(d.stage)+'</span>':'');
+      '<span class="tag num">'+S.yearFrom+'–'+S.yearTo+'</span>'+
+      (S.result.year_fell_back?'<span class="tag num" style="background:var(--warning-soft);color:var(--warning)" title="'+esc(t("dataYearHint"))+'">'+esc(t("dataYearL"))+' '+esc(S.result.data_year)+'</span>':'')+
+      (d.stage!=null?'<span class="tag">'+esc(t("stageL"))+' '+esc(d.stage)+'</span>':'');
     var brief=(v.brief||[]).map(function(l){return '<li>'+esc(l)+'</li>';}).join("");
     var conf=d.confidence!=null?d.confidence:0,p=Math.round((conf||0)*100);
     var acts='<div class="d-actions"><button class="btn btn-primary" id="deepBtn">'+esc(t("deepen"))+'</button>'+
