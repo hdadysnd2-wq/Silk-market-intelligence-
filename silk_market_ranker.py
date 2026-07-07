@@ -75,6 +75,52 @@ def _market_size_component(total_usd: object, hs_code: str, m49: str,
                      retrieved_at=_today())
 
 
+def _addressable_component(total_usd: object, saudi_share: object,
+                           hs_code: str, m49: str, year: int) -> DataPoint:
+    """الفرصة القابلة للاقتناص — winnable headroom (ITC-style, fully observed).
+
+    نموذج ITC: الإمكان غير المحقَّق = ما يستورده السوق ولا يأتي من السعودية بعد.
+    هنا نحسبه من رقمين مرصودين فقط (لا نمذجة، لا اختلاق):
+
+        addressable = market_imports × (1 − saudi_share/100)
+
+    فجوةٌ مرصودةٌ بالكامل (كلا الرقمين من Comtrade)؛ تُعلن None لو غاب أحدهما.
+    لا تدخل في `total_score` — سردُ فرصةٍ إضافي فوق الترتيب، لا وزنٌ فيه.
+    """
+    if total_usd is None or saudi_share is None:
+        return DataPoint(None, "UN Comtrade", 0.0,
+                         note=f"addressable needs imports+share HS{hs_code} {m49}",
+                         retrieved_at=_today())
+    share = max(0.0, min(100.0, float(saudi_share)))
+    addressable = float(total_usd) * (1.0 - share / 100.0)
+    return DataPoint(round(addressable, 2), "UN Comtrade", 0.9,
+                     note=(f"winnable headroom = imports × (1 − Saudi {share:.1f}%) "
+                           f"HS{hs_code} {year}"),
+                     retrieved_at=_today())
+
+
+def saudi_world_supply(hs_code: str, year: int) -> DataPoint:
+    """عرض السعودية — Saudi's world exports of this HS (ITC 'supply', shared once).
+
+    يُجلب مرّة واحدة لكل تحليل (نفس الرمز لكل الأسواق)، لا لكل سوق. من Comtrade
+    القائم (السعودية مُبلِّغ، العالم شريك) — نفس مصدر `silk_discovery`. None عند الفشل.
+    """
+    from silk_data_layer import comtrade_trade, primary_value
+    recs = comtrade_trade(hs_code, int(_SAUDI_M49), year, flow="X", partner=0)
+    if not recs:
+        return DataPoint(None, "UN Comtrade", 0.0,
+                         note=f"no Saudi world-export data HS{hs_code} {year}",
+                         retrieved_at=_today())
+    val = primary_value(recs[0])
+    if val is None:
+        return DataPoint(None, "UN Comtrade", 0.0,
+                         note=f"Saudi export value missing HS{hs_code} {year}",
+                         retrieved_at=_today())
+    return DataPoint(float(val), "UN Comtrade", 0.9,
+                     note=f"Saudi world exports HS{hs_code} {year} (USD)",
+                     retrieved_at=_today())
+
+
 def _competitor_list(comps: list[DataPoint], top: int = 5) -> list[dict]:
     """قائمة المنافسين للوحة — top suppliers (name + share + value) for the UI.
 
@@ -141,14 +187,19 @@ def _gather_row(hs_code: str, c: dict, year: int) -> dict:
     comps = mi["competitors"]
     inc = _income_dp(iso3, year)                 # الدخل مرّة واحدة (Q4)
     pop = population(iso3, year)
+    saudi_pos = _saudi_position_component(comps)
     comp_dps = {
         "market_size": _market_size_component(mi["total_usd"], hs_code, m49, year),
-        "saudi_position": _saudi_position_component(comps),
+        "saudi_position": saudi_pos,
         "demand_capacity": _demand_capacity_component(inc, iso3, year),
         "competition": _competition_component(comps),
     }
+    # فرصة ITC (مرصودة بالكامل، خارج النقاط) — winnable headroom, not in score.
+    addressable = _addressable_component(mi["total_usd"], saudi_pos.value,
+                                         hs_code, m49, year)
     return {
         "iso3": iso3, "m49": m49, "components": comp_dps,
+        "addressable": addressable,
         "income_ppp": inc.value,                 # يُعاد استعمال نفس الجلب
         "population": pop.value,
         "competitors": _competitor_list(comps),
@@ -244,6 +295,7 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
             "iso3": iso3, "m49": row["m49"],
             "total_score": total, "confidence": confidence,
             "components": row["components"],
+            "addressable": row["addressable"],
             "income_ppp": row["income_ppp"],
             "population": row["population"],
             "competitors": row["competitors"],

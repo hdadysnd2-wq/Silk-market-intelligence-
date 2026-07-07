@@ -107,6 +107,11 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     # 2) رتّب الأسواق المرشّحة لهذا الرمز — rank candidate markets.
     ranked = rank_markets(hs.value, countries=countries, year=year)
 
+    # 2b) عرض السعودية للعالم من هذا الرمز (ITC 'supply') — مرّة واحدة، يُشارك كل
+    #     الأسواق؛ يسند سرد «هل تقدر السعودية تخدم هذه الفرصة؟». None عند الفشل.
+    from silk_market_ranker import saudi_world_supply
+    supply = saudi_world_supply(hs.value, year)
+
     # 3) شغّل الوكلاء الأساسيين واحتفظ بتقاريرهم — run core agents, keep reports
     #    (الحكم يتأخر لما بعد الإثراء والتقاطع كي تصل الخيوط للمرحلة ٢ — الموجة ٤).
     manager = ResearchManager()
@@ -176,6 +181,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         "hs_confidence": hs.confidence, "hs_note": hs.note,
         "year": year, "preliminary": True, "classified": True,
         "markets": ranked,
+        "supply": supply,   # عرض السعودية العالمي (ITC) — DataPoint، None عند الغياب
+
         "note": "نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. "
                 "Preliminary, real public data only; gaps flagged, not estimated.",
     }

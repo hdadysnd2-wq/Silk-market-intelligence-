@@ -160,6 +160,25 @@ def render_docx(view: dict, path: str) -> str:
     else:
         doc.add_paragraph("غير مرصود — يتطلب مفتاح بحث الويب (SEARCH_API_KEY).")
 
+    # ٢ج) الفرصة القابلة للاقتناص (نموذج ITC، §1) — الإمكان غير المحقَّق مرصوباً
+    #     بالكامل: ما يستورده السوق ولا يأتي من السعودية بعد. لا نمذجة، لا اختلاق.
+    doc.add_heading("الفرصة القابلة للاقتناص (نموذج ITC)", level=1)
+    sup = view.get("supply") or {}
+    if sup.get("value") is not None:
+        doc.add_paragraph(f"عرض السعودية العالمي من هذا الرمز: {_fmt(sup['value'])}$ "
+                          f"[{sup.get('source') or '؟'}] — سقف قدرتك التصديرية الحالية.")
+    else:
+        doc.add_paragraph("عرض السعودية العالمي: غير مرصود — يتطلب Comtrade (شبكة).")
+    addr = top_m.get("addressable")
+    if addr is not None:
+        ad = top_m.get("addressable_detail") or {}
+        doc.add_paragraph(f"{top_m.get('country')}: فرصة قابلة للاقتناص "
+                          f"{_fmt(addr)}$ = استيراد السوق × (١ − حصة السعودية). "
+                          f"[{ad.get('source') or '؟'}]")
+    else:
+        doc.add_paragraph("الفرصة القابلة للاقتناص: غير مرصودة — تتطلب استيراد "
+                          "السوق وحصة السعودية معاً (Comtrade).")
+
     # ٣) الأسواق — سطر مصدر تحت كل رقم (§10.3، من components_detail).
     doc.add_heading("الأسواق المرشّحة (الأفضل أولاً)", level=1)
     for i, m in enumerate((view.get("markets") or [])[:8], 1):

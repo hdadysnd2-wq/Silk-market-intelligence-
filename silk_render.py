@@ -227,6 +227,14 @@ def build_view(result: dict) -> dict:
             "named_competitors": _named_competitors(row),
             "supplier_countries": row.get("competitors") or [],
             "suppliers": _suppliers(row),
+            # فرصة ITC القابلة للاقتناص (مرصودة بالكامل) — winnable headroom.
+            "addressable": _dp(row.get("addressable")).get("value"),
+            "addressable_detail": {
+                "value": _dp(row.get("addressable")).get("value"),
+                "source": _dp(row.get("addressable")).get("source"),
+                "confidence": _dp(row.get("addressable")).get("confidence"),
+                "note": _dp(row.get("addressable")).get("note", ""),
+            },
         })
     limits = [f"{m['country']}: {f}" for m in markets[:5]
               for f in (m.get("quality_flags") or [])]
@@ -241,6 +249,12 @@ def build_view(result: dict) -> dict:
         "competitive_position": cp,
         "completeness": _completeness(markets),
         "markets": view_markets,
+        "supply": {                           # عرض السعودية العالمي (ITC 'supply')
+            "value": _dp(result.get("supply")).get("value"),
+            "source": _dp(result.get("supply")).get("source"),
+            "confidence": _dp(result.get("supply")).get("confidence"),
+            "note": _dp(result.get("supply")).get("note", ""),
+        },
         "culture": _culture(result),          # ثقافة المستهلك (بحث الويب)
         "brief": _brief(decision, cp),
         "limits": limits,
