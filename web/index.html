@@ -284,6 +284,41 @@
   .toast{position:fixed;inset-block-end:24px;inset-inline-end:24px;background:var(--sidebar);color:#fff;padding:13px 20px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:var(--shadow-lg);z-index:100;animation:slideup .25s var(--ease);max-width:90vw}
   footer{border-top:1px solid var(--border);padding:var(--s4) var(--s6);color:var(--text-3);font-size:12.5px}
 
+  /* ─── مركز القيادة البصري: KPI + رسوم ─── */
+  .sb-foot{display:flex;align-items:center;gap:8px}.sb-dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px rgba(63,191,106,.18);flex:none}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s4)}
+  @media(max-width:1060px){.kpis{grid-template-columns:repeat(2,1fr)}}@media(max-width:560px){.kpis{grid-template-columns:1fr}}
+  .kpis>*,.charts>*{min-width:0}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--s5);display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+  .kpi .kl{font-size:12.5px;font-weight:600;color:var(--text-2);line-height:1.4}
+  .kpi .kvv{font-family:var(--mono);font-size:30px;font-weight:600;line-height:1.05;direction:ltr;unicode-bidi:plaintext;text-align:start;color:var(--text)}
+  .kpi .kvv .u{font-size:15px;color:var(--text-3);font-weight:500}
+  .kpi .kvv.gap{font-family:var(--ar);font-size:15px;color:var(--warning);direction:inherit}
+  .kpi .kfoot{font-size:11px;color:var(--text-3);font-family:var(--mono);direction:ltr;text-align:start;min-height:14px;word-break:break-word;line-height:1.5}
+  .kpi-accent{background:linear-gradient(160deg,var(--primary-soft),var(--surface) 60%);border-color:var(--primary-line)}
+  .kpi-accent::after{content:"";position:absolute;inset-block-start:0;inset-inline:0;height:3px;background:linear-gradient(90deg,var(--primary),var(--ch5))}
+  .kpi-accent .kvv{color:var(--primary)}
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);align-items:start}
+  @media(max-width:960px){.charts{grid-template-columns:1fr}}
+  .chart-empty{border:1.5px dashed var(--border-strong);border-radius:12px;padding:var(--s6);text-align:center;color:var(--text-3);font-size:13.5px;background:var(--surface-2);margin-top:8px}
+  .hbars{display:flex;flex-direction:column;gap:2px;margin-top:8px}
+  .hbar-row{display:grid;grid-template-columns:minmax(80px,120px) 1fr 40px;align-items:center;gap:12px;padding:8px;border-radius:8px;cursor:pointer;transition:background .12s var(--ease)}
+  .hbar-row:hover{background:var(--hover)}.hbar-row.sel{background:var(--primary-soft)}
+  .hbar-row .lbl{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hbar-row .track{height:20px;background:var(--surface-3);border-radius:6px;overflow:hidden}
+  .hbar-row .hfill{display:block;height:100%;background:linear-gradient(90deg,var(--primary),var(--ch5));border-radius:6px;transition:width .5s var(--ease)}
+  .hbar-row .val{font-size:13px;font-weight:700;text-align:end;color:var(--primary)}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:4px 0 10px}
+  .lg{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text-2)}
+  .lg .sw,.dlegend .sw{width:12px;height:12px;border-radius:4px;flex:none}
+  .linewrap{direction:ltr}.linewrap svg{display:block;width:100%;height:auto}
+  .donutwrap{display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap;margin-top:8px}
+  .donutwrap svg{flex:none}
+  .dlegend{display:flex;flex-direction:column;gap:9px;min-width:150px;flex:1}
+  .dlegend .drow2{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+  .dlegend .nm{display:inline-flex;align-items:center;gap:8px;font-weight:600;min-width:0}
+  .dlegend .nm span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
   /* ─── الاستجابة: طيّ الشريط الجانبي ─── */
   @media(max-width:900px){
     .layout{grid-template-columns:1fr}
@@ -312,7 +347,7 @@
       <button data-scr="7"><span class="sn-n">7</span><span data-t="nav7"></span></button>
       <button data-scr="8"><span class="sn-n">8</span><span data-t="nav8"></span></button>
     </nav>
-    <div class="sb-foot" data-t="footer"></div>
+    <div class="sb-foot"><span class="sb-dot"></span><span data-t="footBadge"></span></div>
   </aside>
 
   <div class="workspace">
@@ -364,8 +399,6 @@
     <main id="screens" class="content hidden"><div id="screenBody" style="padding-bottom:var(--s7)"></div></main>
 
     <main id="settings" class="content hidden"><div class="settings"><h1 class="scr-title" data-t="settingsTitle"></h1><div class="sub" data-t="settingsSub" style="color:var(--text-2);margin:8px 0 var(--s4)"></div><div id="settingsBody"></div><div id="dataPanels"></div></div></main>
-
-    <footer><span data-t="footer"></span></footer>
   </div>
 </div>
 
@@ -417,6 +450,10 @@
     needDeepen:{ar:"أسعار الرفّ الفعلية تتطلب تعميقاً مدفوعاً (localprice) — لم تُرصد بعد. المنصة لا تختلق سعراً.",en:"Actual shelf prices require a paid deep-dive (localprice) — not observed yet. The platform never invents a price."},
     yourPos:{ar:"موقعك التنافسي",en:"Your competitive position"},posNeed:{ar:"أضف بطاقة منتجك (التكلفة/السعر) لحساب موقعك مقابل المنافسين المرصودين.",en:"Add your product card (cost/price) to compute your position against observed rivals."},
     trendTitle:{ar:"استيراد السوق عبر السنوات",en:"Market imports over the years"},cagr:{ar:"نمو سنوي مركّب",en:"CAGR"},trendNeed:{ar:"لم يُرصد خط اتجاه كافٍ لهذه السنوات — الفجوات معلنة.",en:"No sufficient trend observed for these years — gaps declared."},
+    kTop:{ar:"استيراد السوق الأول",en:"Top-market imports"},kShare:{ar:"حصة السعودية — الأول",en:"Saudi share — top"},kGrowth:{ar:"نمو الاستيراد",en:"Import growth"},kObs:{ar:"أسواق مرصودة",en:"Observed markets"},
+    chScores:{ar:"مقارنة الأسواق — النقاط",en:"Market comparison — score"},chScoresSub:{ar:"أفضل الأسواق على 0–100. انقر شريطاً لفتح تفاصيله.",en:"Top markets on 0–100. Click a bar to open it."},
+    chTrend:{ar:"الاستيراد عبر سنوات الدراسة",en:"Imports across the study years"},chTrendSub:{ar:"قيمة استيراد أفضل الأسواق سنةً بسنة (Comtrade).",en:"Top markets' import value year by year (Comtrade)."},
+    sharesDonut:{ar:"حصص الدول المورّدة",en:"Supplier-country shares"},othersL:{ar:"أخرى",en:"Other"},
     complianceEntry:{ar:"اشتراطات الدخول والخروج",en:"Entry & exit requirements"},officialSrc:{ar:"المصدر الرسمي",en:"Official source"},
     juryTitle:{ar:"لجنة التحكيم",en:"Jury committee"},claudeJudge:{ar:"كلود · الحَكَم",en:"Claude · Judge"},coverageL:{ar:"تغطية",en:"Coverage"},gapsL:{ar:"فجوات",en:"Gaps"},
     reportLimits:{ar:"حدود هذا التقرير",en:"Limits of this report"},limitsSub:{ar:"ما لا يعرفه النظام يُقال صراحةً — الفجوات تُعلن ولا تُقدَّر.",en:"What the system doesn't know is stated plainly — gaps declared, not estimated."},noLimits:{ar:"لا حدود مسجّلة — كل مكوّنات الأسواق الأولى مرصودة.",en:"No limits recorded — all top-market components observed."},
@@ -425,7 +462,7 @@
     readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"النظام لا يخمّن رمز HS — التصنيف الضعيف يُعلن بدل أن يُخترع.",en:"The system never guesses an HS code — a weak classification is declared, not invented."},
     settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"أدخل المفاتيح ثم «حفظ في الخادم» — تُخزَّن في خادمك وتُفعَّل فوراً (متغيرات بيئة النشر تبقى الأعلى سلطة).",en:"Enter keys then “Save to server” — stored on your server and active immediately (deploy env vars still win)."},saveServer:{ar:"حفظ في الخادم",en:"Save to server"},saved:{ar:"حُفظت المفاتيح في الخادم",en:"Keys saved to server"},adminKey:{ar:"مفتاح الخدمة (X-API-Key) إن كانت المصادقة مفعّلة",en:"Service key (X-API-Key) if auth is enabled"},
     secAI:{ar:"الذكاء الاصطناعي",en:"AI"},secFree:{ar:"مصادر مجانية",en:"Free sources"},secPaid:{ar:"مصادر مدفوعة",en:"Paid sources"},connected:{ar:"متصل",en:"Connected"},needsKey:{ar:"يحتاج مفتاح",en:"Needs key"},keyless:{ar:"متصل · بلا مفتاح",en:"Connected · keyless"},
-    footer:{ar:"سِلك · واجهة مؤسسية ثنائية اللغة (Carbon × Redwood) · بيانات عامة حقيقية فقط · فاتح/داكن · RTL/LTR",en:"Silk · Bilingual enterprise UI (Carbon × Redwood) · Real public data only · Light/Dark · RTL/LTR"},
+    footer:{ar:"",en:""},footBadge:{ar:"بيانات حقيقية · لا اختلاق",en:"Real data · no fabrication"},
     reqFail:{ar:"فشل الطلب",en:"Request failed"},langSwitched:{ar:"تم التبديل إلى العربية",en:"Switched to English"},
     nav1:{ar:"تحليل جديد",en:"New analysis"},nav2:{ar:"القرار",en:"Decision"},nav3:{ar:"حجم السوق",en:"Market size"},nav4:{ar:"المنافسة",en:"Competition"},
     nav5:{ar:"التسعير",en:"Pricing"},nav6:{ar:"الاشتراطات",en:"Requirements"},nav7:{ar:"الطلب والمخاطر",en:"Demand & risk"},nav8:{ar:"المصادر والإعدادات",en:"Sources & settings"},
@@ -494,6 +531,72 @@
     return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block;overflow:visible"><polyline points="'+pts.join(" ")+'" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" r="3" fill="var(--primary)"/></svg>';
   }
   function growthTag(g){if(g==null)return '';var up=g>=0;return '<span class="growth '+(up?"up":"down")+'">'+(up?"▲":"▼")+' '+Math.abs(g)+'%</span>';}
+
+  /* ═══ محرّك الرسوم البيانية (SVG صرف) — مركز قيادة بصري، يرسم المرصود فقط ═══ */
+  var CHC=["var(--ch1)","var(--ch2)","var(--ch3)","var(--ch4)","var(--ch5)","var(--ch6)"];
+  function niceStep(raw){if(!(raw>0))return 1;var p=Math.pow(10,Math.floor(Math.log(raw)/Math.LN10)),n=raw/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p;}
+  function trendPts(m){var pts=((m&&m.trend&&m.trend.series)||[]).filter(function(p){return p&&p.value!=null;});return pts.length>=2?pts:null;}
+  function lineChartSVG(seriesArr,opts){
+    opts=opts||{};var W=560,H=opts.h||210,PL=52,PR=18,PT=16,PB=30,iw=W-PL-PR,ih=H-PT-PB;
+    var ys={};seriesArr.forEach(function(s){s.pts.forEach(function(p){ys[p.year]=1;});});
+    var yr=Object.keys(ys).map(Number).sort(function(a,b){return a-b;});
+    var mx=0;seriesArr.forEach(function(s){s.pts.forEach(function(p){if(p.value>mx)mx=p.value;});});
+    if(yr.length<2||mx<=0)return null;
+    var step=niceStep(mx/4),top=Math.ceil(mx/step)*step;
+    function X(y){return PL+(yr.indexOf(y)/(yr.length-1))*iw;}function Y(v){return PT+ih-(v/top)*ih;}
+    var grid="";for(var tv=0;tv<=top+1;tv+=step){grid+='<line x1="'+PL+'" x2="'+(W-PR)+'" y1="'+Y(tv).toFixed(1)+'" y2="'+Y(tv).toFixed(1)+'" stroke="var(--border)" stroke-width="1"/><text x="'+(PL-8)+'" y="'+(Y(tv)+3.5).toFixed(1)+'" text-anchor="end" font-size="10" fill="var(--text-3)" font-family="IBM Plex Mono,monospace">'+esc(fmtUSD(tv).replace("$",""))+'</text>';}
+    var xl=yr.map(function(y){return '<text x="'+X(y).toFixed(1)+'" y="'+(H-9)+'" text-anchor="middle" font-size="11" fill="var(--text-3)" font-family="IBM Plex Mono,monospace">'+y+'</text>';}).join("");
+    var marks=seriesArr.map(function(s,i){var col=s.color||CHC[i%6],pts=s.pts.slice().sort(function(a,b){return a.year-b.year;});
+      var d=pts.map(function(p,j){return (j?"L":"M")+X(p.year).toFixed(1)+","+Y(p.value).toFixed(1);}).join(" ");
+      var area=opts.area?'<path d="'+d+' L'+X(pts[pts.length-1].year).toFixed(1)+','+(PT+ih)+' L'+X(pts[0].year).toFixed(1)+','+(PT+ih)+' Z" fill="'+col+'" opacity=".08"/>':"";
+      var dots=pts.map(function(p){return '<circle cx="'+X(p.year).toFixed(1)+'" cy="'+Y(p.value).toFixed(1)+'" r="4" fill="'+col+'" stroke="var(--surface)" stroke-width="2"><title>'+esc(s.name)+' '+p.year+': '+esc(fmtUSD(p.value))+'</title></circle>';}).join("");
+      return area+'<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'+dots;}).join("");
+    return '<div class="linewrap"><svg viewBox="0 0 '+W+' '+H+'" role="img">'+grid+'<line x1="'+PL+'" x2="'+(W-PR)+'" y1="'+(PT+ih)+'" y2="'+(PT+ih)+'" stroke="var(--border-strong)"/>'+marks+xl+'</svg></div>';
+  }
+  function donutSVG(slices){var R=52,C=2*Math.PI*R,acc=0,seg="";
+    slices.forEach(function(s){var len=Math.max(s.pct/100*C-2.5,0.5);seg+='<circle cx="66" cy="66" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="22" stroke-dasharray="'+len.toFixed(1)+' '+(C-len).toFixed(1)+'" stroke-dashoffset="'+(-acc/100*C).toFixed(1)+'"><title>'+esc(s.label)+': '+s.pct+'%</title></circle>';acc+=s.pct;});
+    return '<svg width="132" height="132" viewBox="0 0 132 132" role="img"><g transform="rotate(-90 66 66)">'+seg+'</g></svg>';}
+  function kpiRow(ms){
+    var top=ms[0]||{},c=top.components||{},tr=top.trend||{},g=tr.growth_pct;
+    var obs=ms.filter(function(m){var cc=m.components||{};return ["market_size","saudi_position","demand_capacity","competition"].some(function(k){return cc[k]&&cc[k].value!=null;});}).length;
+    function tile(l,v,foot,accent){return '<div class="kpi'+(accent?" kpi-accent":"")+'"><span class="kl">'+esc(l)+'</span>'+v+'<span class="kfoot">'+esc(foot||"")+'</span></div>';}
+    function val(x,f){return x!=null?'<span class="kvv">'+f(x)+'</span>':'<span class="kvv gap">'+esc(t("notObserved"))+'</span>';}
+    var gH=g!=null?'<span class="kvv" style="color:'+(g>=0?"var(--success)":"var(--danger)")+'">'+(g>=0?"▲":"▼")+" "+Math.abs(g)+'%</span>':'<span class="kvv gap">'+esc(t("notObserved"))+'</span>';
+    return '<div class="kpis">'+
+      tile(t("kTop")+(top.country?" · "+top.country:""),val(top.import_value,fmtUSD),prov(c.market_size),true)+
+      tile(t("kShare"),val(top.saudi_share,function(v){return v+'<span class="u">%</span>';}),prov(c.saudi_position))+
+      tile(t("kGrowth"),gH,tr.cagr_pct!=null?("CAGR "+tr.cagr_pct+"%"):"")+
+      tile(t("kObs"),'<span class="kvv">'+obs+'<span class="u">/'+ms.length+'</span></span>',t("declaredGap")+": "+(ms.length-obs))+'</div>';
+  }
+  function scoreBars(ms){
+    var rows=ms.filter(function(m){return m.score!=null;}).slice(0,8);
+    if(!rows.length)return '<div class="chart-empty">'+esc(t("notObserved"))+'</div>';
+    return '<div class="hbars">'+rows.map(function(m){
+      return '<div class="hbar-row'+(m.id===S.selId?" sel":"")+'" data-goto="'+esc(m.id)+'" role="button" tabindex="0"><span class="lbl">'+esc(m.country)+'</span><span class="track"><span class="hfill" style="width:'+m.score+'%"></span></span><span class="val num">'+m.score+'</span></div>';
+    }).join("")+'</div>';
+  }
+  function multiTrend(ms){
+    var ser=[];for(var i=0;i<ms.length&&ser.length<3;i++){var p=trendPts(ms[i]);if(p)ser.push({name:ms[i].country,pts:p,color:CHC[ser.length]});}
+    if(!ser.length)return '<div class="chart-empty">'+esc(t("trendNeed"))+'</div>';
+    var svg=lineChartSVG(ser,{h:210});if(!svg)return '<div class="chart-empty">'+esc(t("trendNeed"))+'</div>';
+    return '<div class="legend">'+ser.map(function(s){return '<span class="lg"><span class="sw" style="background:'+s.color+'"></span>'+esc(s.name)+'</span>';}).join("")+'</div>'+svg;
+  }
+  function supplierDonut(sel){
+    var sup=((sel&&sel.competitors)||[]).filter(function(s){return s&&s.share!=null;});
+    if(!sup.length)return '';
+    var sl=sup.slice(0,5).map(function(s,i){return {label:s.partner||"—",pct:Math.round(s.share*10)/10,color:CHC[i]};});
+    var rest=Math.round((100-sl.reduce(function(a,s){return a+s.pct;},0))*10)/10;
+    if(rest>0.5)sl.push({label:t("othersL"),pct:rest,color:"var(--border-strong)"});
+    return '<section class="card panel"><h3>'+esc(t("sharesDonut"))+(sel&&sel.country?" · "+esc(sel.country):"")+'</h3><div class="donutwrap">'+donutSVG(sl)+'<div class="dlegend">'+
+      sl.map(function(s){return '<div class="drow2"><span class="nm"><span class="sw" style="background:'+s.color+'"></span>'+esc(s.label)+'</span><span class="num">'+s.pct+'%</span></div>';}).join("")+'</div></div></section>';
+  }
+  function commandCenter(ms,sel){
+    return kpiRow(ms)+
+      '<div class="charts">'+
+        '<section class="card panel"><h3>'+esc(t("chScores"))+'</h3><div class="sub">'+esc(t("chScoresSub"))+'</div>'+scoreBars(ms)+'</section>'+
+        '<section class="card panel"><h3>'+esc(t("chTrend"))+'</h3><div class="sub">'+esc(t("chTrendSub"))+'</div>'+multiTrend(ms)+'</section>'+
+      '</div>'+supplierDonut(sel);
+  }
 
   function applyLang(){
     document.documentElement.lang=S.lang;document.documentElement.dir=S.lang==="ar"?"rtl":"ltr";
@@ -658,7 +761,7 @@
       $("#resultArea").innerHTML=pipeHTML()+'<section class="card ready" style="margin-top:var(--s5)"><h2>'+esc(t("noClass"))+'</h2><p>'+esc(S.result.note||"")+'</p><div class="foot">'+esc(t("noClassFoot"))+'</div></section>';return;}
     renderCompleteness();
     var ms=S.result.markets,sel=ms.filter(function(m){return m.id===S.selId;})[0]||ms[0];S.selId=sel&&sel.id;
-    $("#resultArea").innerHTML=testRunBanner()+pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+cultureBlock()+'</div>';
+    $("#resultArea").innerHTML=testRunBanner()+pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+commandCenter(ms,sel)+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+cultureBlock()+'</div>';
     bindEvents();
   }
   function bindEvents(){
@@ -667,6 +770,7 @@
       tr.addEventListener("click",pick);
       tr.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();}});
     });
+    $$("#resultArea .hbar-row").forEach(function(r){function go(){S.selId=r.getAttribute("data-goto");render();}r.addEventListener("click",go);r.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});});
     $$("#resultArea .tab").forEach(function(b){b.addEventListener("click",function(){S.tab=this.getAttribute("data-tab");render();});});
     var d=$("#deepBtn");if(d)d.addEventListener("click",runDeepen);
     var j=$("#jsonBtn");if(j)j.addEventListener("click",exportJson);
