@@ -178,7 +178,7 @@ def _suppliers(row: dict) -> list:
 
 
 def _culture(result: dict) -> list:
-    """ثقافة المستهلك — consumer-culture web findings (websearch layer)."""
+    """روابطُ بحثِ الويب الخام — raw web headlines (fallback only, links kept as citations)."""
     out = []
     for v in _real_list(result.get("websearch")):
         if isinstance(v, dict):
@@ -188,6 +188,21 @@ def _culture(result: dict) -> list:
         elif v:
             out.append({"title": str(v), "link": None})
     return out
+
+
+def _consumer_culture(result: dict) -> dict:
+    """ثقافةُ المستهلك المستخلَصة — Layer-3 extracted insights over the raw headlines.
+
+    بلاغ المالك «ترسل روابط = أنت قوقل»: القسم يعرض رؤًى مبنيّة (كلود) لا روابطَ خام.
+    يعيد {"insights":[{point, evidence}], "note", "raw": [عناوين للاستشهاد]}. إن غاب
+    الاستخلاص (بلا مفتاح كلود) يبقى raw فقط ويُعلَن أنه لم يُحلَّل بعد — لا يُدَّعى تحليلٌ.
+    """
+    cc = result.get("consumer_culture")
+    raw = _culture(result)
+    if isinstance(cc, dict) and cc.get("insights"):
+        return {"insights": cc.get("insights"), "note": cc.get("note", ""),
+                "grounded": True, "raw": raw}
+    return {"insights": [], "note": "", "grounded": False, "raw": raw}
 
 
 def _t_today() -> str:
@@ -542,7 +557,8 @@ def build_view(result: dict) -> dict:
         "competitive_position": cp,
         "completeness": _completeness(markets),
         "markets": view_markets,
-        "culture": _culture(result),          # ثقافة المستهلك (بحث الويب)
+        "culture": _culture(result),          # روابط خام (تراجُع/استشهاد)
+        "consumer_culture": _consumer_culture(result),  # ثقافة المستهلك المستخلَصة (كلود)
         "brief": _brief(decision, cp),
         "limits": limits,
         "provenance": _provenance(result),   # Stage 2A: لا فشل صامتاً

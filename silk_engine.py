@@ -202,7 +202,12 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                                        "على تحليل تنافسي مخصص — موقعك ضد "
                                        "منافسين مرصودين بالاسم")
     if with_websearch:
-        result["websearch"] = _websearch(product_name)
+        top_country = (result.get("markets") or [{}])[0].get("country") or ""
+        result["websearch"] = _websearch(product_name, top_country)
+        # الطبقة ٣: كلود يستخلص ثقافةَ المستهلك من العناوين بدل عرض روابطَ خام
+        # (بلاغ المالك المتكرّر «ترسل روابط = أنت قوقل»). غيابٌ ظاهرٌ بلا مفتاح.
+        result["consumer_culture"] = _consumer_culture(
+            product_name, top_country, result["websearch"])
     if with_ai:  # الطبقة 3: كلود يكتب التقرير المبدئي — Claude writes the report
         rep = _ai_report(result)
         result["report"] = rep  # None = فشل/غياب المفتاح، ظاهرٌ لا محذوف (الموجة ١)
@@ -488,15 +493,31 @@ def _enrich_requirements(rows: list[dict], hs_code: str) -> None:
             row["requirements"] = [_enrich_error_dp("Silk L1 reference", e)]
 
 
-def _websearch(product_name: str) -> list:
-    """نتائج بحث الويب للمنتج — top-level web-search findings (graceful None offline)."""
+def _websearch(product_name: str, market: str = "") -> list:
+    """نتائج بحث الويب للمنتج في السوق المدروس — market-aware web findings.
+
+    الاستعلامُ موجَّهٌ لثقافة المستهلك في السوق المدروس تحديدًا (لا المنتجَ عالميًا)
+    كي تكون العناوينُ ذاتَ صلةٍ بالسوق. Graceful None offline / keyless.
+    """
     from silk_websearch_agent import WebSearchAgent  # lazy: optional layer
+    query = (f"{product_name} المستهلك تفضيلات السوق {market}".strip()
+             if market else product_name)
     try:
-        rep = WebSearchAgent().run({"query": product_name, "num": 5})
+        rep = WebSearchAgent().run({"query": query, "num": 6})
         return rep.findings
     except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
         log.warning("websearch enrichment failed: %s", e)
         return [_enrich_error_dp("Web Search", e)]
+
+
+def _consumer_culture(product_name: str, market: str, headlines: list):
+    """استخلاصُ كلود لثقافة المستهلك من العناوين — Layer-3 extraction (None if no key)."""
+    try:
+        import silk_ai_judge
+        return silk_ai_judge.consumer_culture(product_name, market, headlines)
+    except Exception as e:  # noqa: BLE001 — طبقة سياقٍ اختيارية لا تُعطِّل التحليل
+        log.warning("consumer-culture extraction skipped: %s", e)
+        return None
 
 
 def _annotate_quality(result: dict) -> None:

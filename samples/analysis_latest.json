@@ -5673,13 +5673,13 @@
   },
   "analysis_id": 6,
   "view": {
-    "test_run": true,
+    "test_run": false,
     "header": {
       "product": "تمور",
       "hs_code": "080410",
       "origin": "SAU",
       "target_market": "China",
-      "date": "2026-07-06",
+      "date": "2026-07-07",
       "coverage_pct": 64.0
     },
     "product": "تمور",
@@ -15320,6 +15320,25 @@
         "link": "https://example.org/c"
       }
     ],
+    "consumer_culture": {
+      "insights": [],
+      "note": "",
+      "grounded": false,
+      "raw": [
+        {
+          "title": "تمور — تقرير سوق 2024",
+          "link": "https://example.org/a"
+        },
+        {
+          "title": "دليل قنوات تمور",
+          "link": "https://example.org/b"
+        },
+        {
+          "title": "مستوردون: تمور",
+          "link": "https://example.org/c"
+        }
+      ]
+    },
     "brief": [
       "القرار: CONDITIONAL-GO (ثقة 0.91) — China",
       "لا منافس بسعر مرصود بعد — فعّل with_localprice/deepen",
@@ -15335,38 +15354,28 @@
     "provenance": [
       {
         "source": "Web Search (Serper)",
-        "attempted": 39,
-        "contributed": 39,
+        "attempted": 84,
+        "contributed": 84,
         "failures": []
       },
       {
         "source": "Silk L1 requirements reference (official portals / EUR-Lex)",
-        "attempted": 17,
-        "contributed": 16,
+        "attempted": 26,
+        "contributed": 25,
         "failures": [
           "سوق CHN (موثّق جزئياً) غير مغطى بالمرجع الثابت بعد — تحقق محلياً (verify locally)"
         ]
       },
       {
         "source": "Google Maps",
-        "attempted": 6,
-        "contributed": 6,
+        "attempted": 24,
+        "contributed": 24,
         "failures": []
       },
       {
-        "source": "World Bank",
-        "attempted": 50,
-        "contributed": 4,
-        "failures": [
-          "no income data for CHN 2023",
-          "no income data for ARE 2023",
-          "الاستقرار السياسي (WGI) — PV.EST fetch failed for ARE: hermetic: live comtrade off"
-        ]
-      },
-      {
         "source": "UN Comtrade",
-        "attempted": 114,
-        "contributed": 3,
+        "attempted": 122,
+        "contributed": 11,
         "failures": [
           "no import total HS080410 -> 784 2023",
           "no competitor data",
@@ -15374,9 +15383,37 @@
         ]
       },
       {
+        "source": "World Bank",
+        "attempted": 55,
+        "contributed": 9,
+        "failures": [
+          "no income data for CHN 2023",
+          "no income data for ARE 2023",
+          "الاستقرار السياسي (WGI) — PV.EST fetch failed for ARE: hermetic: live comtrade off"
+        ]
+      },
+      {
         "source": "Google Trends",
-        "attempted": 3,
-        "contributed": 3,
+        "attempted": 6,
+        "contributed": 6,
+        "failures": []
+      },
+      {
+        "source": "Pew Research Center (لقطة ساكنة مقرّبة)",
+        "attempted": 6,
+        "contributed": 6,
+        "failures": []
+      },
+      {
+        "source": "UN Comtrade (مخزن الحقائق)",
+        "attempted": 5,
+        "contributed": 5,
+        "failures": []
+      },
+      {
+        "source": "World Bank (لقطة مضمّنة)",
+        "attempted": 2,
+        "contributed": 2,
         "failures": []
       },
       {
