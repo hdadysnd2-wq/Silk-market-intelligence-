@@ -225,6 +225,11 @@
   .oppline{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--primary-soft);border-radius:var(--r);padding:10px 14px;margin:2px 0 4px}
   .oppline .oppk{font-size:13px;font-weight:600;color:var(--primary)}
   .oppline .oppv{font-size:18px;font-weight:700;color:var(--primary)}
+  .mirror{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;padding:6px 12px;border-radius:40px;margin:0 0 8px}
+  .mirror .mi{font-weight:700}
+  .mirror.mr-ok{background:var(--success-soft);color:var(--success)}
+  .mirror.mr-warn{background:var(--warning-soft);color:var(--warning)}
+  .mirror.mr-gap{background:var(--surface-2);color:var(--text-3)}
   .panel{padding:var(--s5)}.panel h3{margin:0 0 6px;font-size:18px;font-weight:600}.panel .sub{font-size:14px;color:var(--text-2);margin-bottom:var(--s4);line-height:1.6}
   .limits{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px}.limits li{font-size:15px;line-height:1.6;padding-inline-start:22px;position:relative}.limits li::before{content:"—";position:absolute;inset-inline-start:0;color:var(--warning);font-weight:700}
   .ready{padding:var(--s7) var(--s5);text-align:center;max-width:640px;margin:0 auto}
@@ -388,6 +393,11 @@
     methTriTitle:{ar:"التثليث بالمرآة",en:"Mirror triangulation"},
     methTriD:{ar:"الإقناع يأتي من التقارب لا من المصدر الواحد. لكل تدفّق رقمان مستقلان في Comtrade: ما تُبلّغه دولة الاستيراد (وارداتها من السعودية) وما تُبلّغه السعودية (صادراتها لتلك الدولة). تطابقهما = ثقة أعلى؛ تباعدهما = علَم تحذير معلَن (إعادة تصدير/توقيت)، لا يُخفى.",en:"Conviction comes from convergence, not a single source. Comtrade holds two independent figures per flow: what the importing country reports (its imports from Saudi Arabia) and what Saudi Arabia reports (its exports to that country). Agreement = higher confidence; divergence = a declared warning flag (re-exports/timing), never hidden."},
     methSourcesTitle:{ar:"المصادر المنهجية",en:"Methodological sources"},
+    mirrorLabel:{ar:"تثليث المرآة",en:"Mirror check"},
+    mirrorConverge:{ar:"مصدران يتقاربان",en:"two sources converge"},
+    mirrorDiverge:{ar:"تباعد المصدرين",en:"sources diverge"},
+    mirrorOneSided:{ar:"طرف واحد أبلغ",en:"one side reported"},
+    mirrorGap:{ar:"لا بيانات مرآة",en:"no mirror data"},
     reqFail:{ar:"فشل الطلب",en:"Request failed"},langSwitched:{ar:"تم التبديل إلى العربية",en:"Switched to English"}
   };
   var S={lang:localStorage.getItem("silk_lang")||"ar",product:"",hs:"",selId:null,running:false,raw:null,result:null,sentFlags:{},tab:"position",query:"",
@@ -583,7 +593,7 @@
         requirements:dpList(m.requirements).filter(function(r){return r&&r.value;}),
         localprice:realVals(m.localprice),price_comparison:m.price_comparison||null,
         competitive_position:m.competitive_position||null,quality_flags:m.quality_flags||[],recommendation:m.recommendation||"",
-        addressable:dpv(m.addressable)};
+        addressable:dpv(m.addressable),mirror:m.mirror||null};
     });
     var vw=res.view&&!res.view.error?res.view:null;
     return {classified:true,product:res.product,hs:res.hs_code,hs_confidence:res.hs_confidence,year:res.year,
@@ -685,8 +695,17 @@
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span class="flag">'+esc(sel.code)+'</span><span class="tag">'+esc(t("rank"))+' '+(ms.indexOf(sel)+1)+'</span><span class="tag num">'+esc(t("rowConf"))+' '+esc(sel.confidence)+'</span></div>'+
       '<h2 class="d-country">'+esc(sel.country)+'</h2><div class="d-score"><span class="n">'+(sel.score==null?"—":sel.score)+'</span><span class="o">/100</span></div>'+
       (sel.addressable!=null?'<div class="oppline"><span class="oppk">'+esc(t("kpiOpportunity"))+'</span><span class="oppv num">'+fmtUSD(sel.addressable)+'</span></div>':'')+
+      mirrorBadge(sel)+
       '<div class="tabs">'+tabs.map(function(tb){return '<button class="tab'+(tb[0]===S.tab?" on":"")+'" data-tab="'+tb[0]+'">'+esc(t(tb[1]))+'</button>';}).join("")+'</div>'+
       '<div class="panel-body">'+tabBody(sel)+'</div></div></aside>';
+  }
+  function mirrorBadge(sel){
+    var mr=sel.mirror;if(!mr||!mr.flag)return '';
+    var map={converge:["mr-ok",t("mirrorConverge"),"✓"],diverge:["mr-warn",t("mirrorDiverge"),"⚠"],
+             one_sided:["mr-warn",t("mirrorOneSided"),"◑"],gap:["mr-gap",t("mirrorGap"),"—"]};
+    var m=map[mr.flag]||map.gap;
+    var pct=mr.agreement_pct!=null?' · <span class="num">'+mr.agreement_pct+'%</span>':'';
+    return '<div class="mirror '+m[0]+'" title="'+esc(mr.note||"")+'"><span class="mi">'+m[2]+'</span><span>'+esc(t("mirrorLabel"))+': '+esc(m[1])+pct+'</span></div>';
   }
   function tabBody(sel){
     if(S.tab==="position")return positionTab(sel);

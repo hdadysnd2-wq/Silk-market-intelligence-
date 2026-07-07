@@ -121,6 +121,56 @@ def saudi_world_supply(hs_code: str, year: int) -> DataPoint:
                      retrieved_at=_today())
 
 
+def _mirror_agreement(importer_reported: object,
+                      exporter_reported: object) -> dict:
+    """اتفاق المرآة — pure agreement math (no I/O; unit-testable).
+
+    التثليث (§2 المنهجية): رقمان مستقلان لنفس التدفّق. الاتفاق = الأصغر/الأكبر.
+    - كلاهما مرصود → converge (≥70%) أو diverge (<70%) بنسبة اتفاق صريحة.
+    - واحد فقط → one_sided (طرف واحد أبلغ، الآخر صفر/غائب — علَم لا رقم مخترع).
+    - لا شيء → gap (لا تثليث ممكن).
+    """
+    imp = None if importer_reported is None else float(importer_reported)
+    exp = None if exporter_reported is None else float(exporter_reported)
+    if imp is None and exp is None:
+        return {"flag": "gap", "agreement_pct": None,
+                "importer_reported": None, "exporter_reported": None}
+    if imp is None or exp is None:
+        return {"flag": "one_sided", "agreement_pct": None,
+                "importer_reported": imp, "exporter_reported": exp}
+    hi = max(abs(imp), abs(exp))
+    ratio = (min(abs(imp), abs(exp)) / hi) if hi > 0 else 1.0
+    return {"flag": "converge" if ratio >= 0.70 else "diverge",
+            "agreement_pct": round(ratio * 100, 1),
+            "importer_reported": imp, "exporter_reported": exp}
+
+
+def mirror_triangulation(hs_code: str, market_m49: object,
+                         importer_reported: object, year: int) -> dict:
+    """تثليث بالمرآة لتدفّق ثنائي — importer-reported vs Saudi-reported (§2).
+
+    `importer_reported` = ما أبلغت به دولة الاستيراد عن وارداتها من السعودية
+    (من بيانات المنافسين المجموعة أصلاً). نجلب الطرف المقابل: ما أبلغت به السعودية
+    عن صادراتها لتلك الدولة (نداء Comtrade واحد، السعودية مُبلِّغ). None عند الفشل
+    فيصير الوجه one_sided/gap — لا اختلاق. Adds a declared credibility flag.
+    """
+    from silk_data_layer import comtrade_trade, primary_value
+    recs = comtrade_trade(hs_code, int(_SAUDI_M49), year, flow="X",
+                          partner=int(market_m49))
+    exporter_reported = primary_value(recs[0]) if recs else None
+    out = _mirror_agreement(importer_reported, exporter_reported)
+    notes = {
+        "converge": "مصدران مستقلان يتقاربان — ثقة أعلى (importer ≈ exporter).",
+        "diverge": "تباعد بين المصدرين — قد يعكس إعادة تصدير أو فرق توقيت (معلَن).",
+        "one_sided": "طرف واحد فقط أبلغ عن التدفّق — تثليث جزئي.",
+        "gap": "لا بيانات مرآة — التثليث غير ممكن (غير مرصود).",
+    }
+    out["source"] = "UN Comtrade (mirror)"
+    out["note"] = notes[out["flag"]]
+    out["retrieved_at"] = _today()
+    return out
+
+
 def _competitor_list(comps: list[DataPoint], top: int = 5) -> list[dict]:
     """قائمة المنافسين للوحة — top suppliers (name + share + value) for the UI.
 

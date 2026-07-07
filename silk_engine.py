@@ -151,6 +151,8 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         _enrich_requirements(ranked[:_ENRICH_TOP], hs.value)
     if with_trend:
         _enrich_trend(ranked[:_ENRICH_TOP], hs.value, year, trend_span)
+    # التثليث بالمرآة دائماً للأسواق العليا — core credibility, degrades offline.
+    _enrich_mirror(ranked[:_ENRICH_TOP], hs.value, year)
 
     # 3c) محرّك التقاطع (الموجة ٤) — يعمل فقط عند وجود بطاقة المنتج.
     if product_card:
@@ -360,6 +362,30 @@ def _enrich_trend(rows: list[dict], hs_code: str, end_year: int,
             log.warning("trend enrichment failed for %s: %s", row.get("iso3"), e)
             row["trend"] = {"error": f"trend error: {type(e).__name__}: {e}",
                             "source": "UN Comtrade"}
+
+
+def _enrich_mirror(rows: list[dict], hs_code: str, year: int) -> None:
+    """أضف التثليث بالمرآة لكل سوق أعلى — attach mirror triangulation (§2 المنهجية).
+
+    الطرف المُبلَّغ من دولة الاستيراد (وارداتها من السعودية) نأخذه من المنافسين
+    المجموعين أصلاً؛ الطرف المقابل (صادرات السعودية للسوق) نجلبه من Comtrade
+    (صفر مصدر جديد). أي فشل => وجهٌ موسوم لا إسقاط. Declares a credibility flag.
+    """
+    from silk_market_ranker import mirror_triangulation, _SAUDI_M49
+    for row in rows:
+        importer_reported = None
+        for c in row.get("competitors") or []:
+            if str(c.get("code")) == _SAUDI_M49:
+                importer_reported = c.get("value_usd")
+                break
+        try:
+            row["mirror"] = mirror_triangulation(
+                hs_code, row.get("m49"), importer_reported, year)
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("mirror enrichment failed for %s: %s", row.get("iso3"), e)
+            row["mirror"] = {"flag": "gap", "agreement_pct": None,
+                             "note": f"mirror error: {type(e).__name__}",
+                             "source": "UN Comtrade (mirror)"}
 
 
 def _enrich_requirements(rows: list[dict], hs_code: str) -> None:
