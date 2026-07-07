@@ -72,7 +72,7 @@ def test_search_titles_are_references_never_entity_names():
                       "Google Maps", 0.7, "place", _today())]
     with mock.patch("silk_websearch_agent.web_search", return_value=web), \
          mock.patch("silk_maps_agent.find_places", return_value=maps):
-        out, _refs = R._entities_and_references(["q"], "mq")
+        out, _refs, _dropped = R._entities_and_references(["q"], "mq")
     kinds = {e["kind"] for e in out}
     assert kinds == {"entity", "reference"}
     ref = next(e for e in out if e["kind"] == "reference")

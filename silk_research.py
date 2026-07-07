@@ -517,18 +517,26 @@ class CompetitorAgent(ResearchAgent):
         # عناوين صفحات لا أسماء كيانات فتُدرج «مرجعاً للمراجعة اليدوية»
         # (kind=reference) — لا يُعرض عنوان بحث كاسم منافس أبداً.
         product, market = task.get("product", ""), task.get("market_name", iso3)
-        named, refs = _entities_and_references(
+        named, refs, dropped = _entities_and_references(
             web_queries=[f"top {product} brands importers distributors "
                          f"companies in {market}"],
             maps_query=f"{product} distributor importer {market}")
+        drop_note = (f" · استُبعد {dropped} محل تجزئة/مطعم غير ذي صلة"
+                     if dropped else "")
         if named:
             F.append(_f("named_companies", named, refs,
                         note="كيانات Google Maps بالاسم (غير موثَّقة، ثقة 0.4) "
                              "+ مراجع ويب للمراجعة اليدوية — أكّدها قبل "
-                             "الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"))
+                             "الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
+                             + drop_note))
         else:
-            gaps.append("الطبقة الاسمية (شركات): تتطلب SEARCH_API_KEY و/أو "
-                        "GOOGLE_MAPS_API_KEY في بيئة الخادم — لا أسماء مخترعة")
+            gaps.append(
+                "الطبقة الاسمية (شركات): "
+                + (f"استُبعدت {dropped} نتيجة تجزئة/مطعم غير ذات صلة — لا موزّع/"
+                   "مستورد بالجملة مؤكّد عبر البحث المجاني؛ الأسماء الموثّقة "
+                   "للمستوردين من السجلّات الجمركية عبر Volza/Explee (/deepen). "
+                   if dropped else "تتطلب SEARCH_API_KEY و/أو GOOGLE_MAPS_API_KEY "
+                   "في بيئة الخادم — لا أسماء مخترعة"))
         return F, gaps
 
 
@@ -553,18 +561,30 @@ def _business_hint(types: object) -> str | None:
 
 def _entities_and_references(web_queries: list[str], maps_query: str,
                              region: str | None = None,
-                             num: int = 4) -> tuple[list[dict], list[dict]]:
+                             num: int = 4) -> tuple[list[dict], list[dict], int]:
     """مرشّحون مفصولون بالنوع — entities (Google Places names) vs references
-    (web-result titles for manual review). عنوان بحث ليس اسم كيان (ثغرة ٢)."""
+    (web-result titles for manual review). عنوان بحث ليس اسم كيان (ثغرة ٢).
+
+    بلاغ المالك: «كل البيانات محلات تجزئة». Google Places يرجّع لاستعلام
+    «موزّع/مستورد» محلاتِ تجزئة ومطاعمَ تطابق الكلمات لا موزّعين بالجملة. لم يعد
+    يكفي وسمها بتحذير — **تُستبعد كلياً** من قائمة المرشّحين (لا تُعرض كموزّع/
+    مستورد)، ويُعاد عددُ المُستبعَد ليُعلَن؛ فإن فرَغت القائمة أُعلنت الفجوة
+    وأُحيل المستخدم إلى المستوردين الموثّقين عبر Volza/Explee (سجلّات جمركية).
+    Retail/food-service places are EXCLUDED (not shown), the count returned.
+    """
     out, refs = [], []
+    dropped_retail = 0
     from silk_maps_agent import find_places
     from silk_websearch_agent import web_search
     for dp in find_places(maps_query, region=region):
         if dp.value:
+            if _business_hint(dp.value.get("types")) == "retail_or_food_service":
+                dropped_retail += 1  # محل تجزئة/مطعم ليس موزّعاً بالجملة — يُستبعَد
+                continue
             out.append({"kind": "entity", "name": dp.value.get("name", ""),
                         "address": dp.value.get("address"),
                         "rating": dp.value.get("rating"),
-                        "business_hint": _business_hint(dp.value.get("types")),
+                        "business_hint": None,
                         "via": "Google Maps", "retrieved_at": dp.retrieved_at})
             refs.append(_src("Google Maps", 0.4, retrieved_at=dp.retrieved_at))
     for q in web_queries:
@@ -578,7 +598,7 @@ def _entities_and_references(web_queries: list[str], maps_query: str,
                 refs.append(_src("Web Search (Serper)", 0.3,
                                  url=dp.value.get("link"),
                                  retrieved_at=dp.retrieved_at))
-    return out, refs
+    return out, refs, dropped_retail
 
 
 # ── ٣) الوكيل التنظيمي · regulatory ──────────────────────────────────────────
@@ -959,27 +979,35 @@ class SupplierAgent(ResearchAgent):
         gaps: list[str] = []
         product = task.get("product", "")
         market = task.get("market_name", task.get("iso3", ""))
-        sa, sa_refs = _entities_and_references(
+        sa, sa_refs, sa_drop = _entities_and_references(
             [f"{product} manufacturers suppliers Saudi Arabia",
              f"مصانع موردي {product} السعودية"],
             f"{product} مصنع مورد السعودية", region="sa")
         if sa:
             F.append(_f("saudi_suppliers", sa, sa_refs,
                         note="مرشّحو توريد سعوديون (جانب المنشأ) — غير موثَّقين، "
-                             "أكّدهم قبل التعاقد"))
+                             "أكّدهم قبل التعاقد"
+                             + (f" · استُبعد {sa_drop} محل تجزئة/مطعم" if sa_drop else "")))
         else:
-            gaps.append("saudi_suppliers: يتطلب SEARCH_API_KEY / "
-                        "GOOGLE_MAPS_API_KEY — لا أسماء مخترعة")
-        tg, tg_refs = _entities_and_references(
+            gaps.append("saudi_suppliers: "
+                        + (f"استُبعدت {sa_drop} نتيجة تجزئة/مطعم — لا مورّد/مصنع "
+                           "بالجملة مؤكّد عبر البحث المجاني. " if sa_drop else "")
+                        + "يتطلب SEARCH_API_KEY / GOOGLE_MAPS_API_KEY — لا أسماء مخترعة")
+        tg, tg_refs, tg_drop = _entities_and_references(
             [f"{product} importers wholesale distributors in {market}"],
             f"{product} wholesale distributor {market}")
         if tg:
             F.append(_f("target_distributors", tg, tg_refs,
                         note=f"مرشّحو توزيع في {market} — غير موثَّقين؛ الترقية "
-                             "الموثّقة عبر /deepen"))
+                             "الموثّقة عبر /deepen"
+                             + (f" · استُبعد {tg_drop} محل تجزئة/مطعم" if tg_drop else "")))
         else:
-            gaps.append("target_distributors: يتطلب SEARCH_API_KEY / "
-                        "GOOGLE_MAPS_API_KEY — لا أسماء مخترعة")
+            gaps.append("target_distributors: "
+                        + (f"استُبعدت {tg_drop} نتيجة تجزئة/مطعم غير ذات صلة — لا "
+                           "موزّع بالجملة مؤكّد عبر البحث المجاني؛ المستوردون "
+                           "الموثّقون من السجلّات الجمركية عبر Volza/Explee (/deepen). "
+                           if tg_drop else "")
+                        + "يتطلب SEARCH_API_KEY / GOOGLE_MAPS_API_KEY — لا أسماء مخترعة")
         return F, gaps
 
 

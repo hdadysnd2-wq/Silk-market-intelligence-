@@ -51,7 +51,10 @@ def test_business_hint_flags_restaurant_not_wholesale_distributor():
     assert R._business_hint(None) is None
 
 
-def test_entities_and_references_carries_business_hint_from_maps():
+def test_entities_and_references_excludes_retail_food_service():
+    """بلاغ المالك «كل البيانات محلات تجزئة»: محل التجزئة/المطعم يُستبعَد كلياً
+    من قائمة المرشّحين (لا يُعرض كموزّع/مستورد)، ويُعاد عدد المُستبعَد ليُعلَن؛
+    ويبقى الكيان الحقيقي فقط. Retail is excluded, not merely flagged."""
     import silk_research as R
     juice_shop = DataPoint({"name": "City Juice Restaurant", "rating": 4.1,
                             "address": "Sanaa", "types": ["restaurant"]},
@@ -62,11 +65,12 @@ def test_entities_and_references_carries_business_hint_from_maps():
     with mock.patch("silk_maps_agent.find_places",
                     return_value=[juice_shop, trading_co]), \
          mock.patch("silk_websearch_agent.web_search", return_value=[]):
-        out, _refs = R._entities_and_references(["q"], "mq")
-    by_name = {e["name"]: e for e in out}
-    assert by_name["City Juice Restaurant"]["business_hint"] == \
-        "retail_or_food_service"
-    assert by_name["Yemen Trading Co"]["business_hint"] is None
+        out, _refs, dropped = R._entities_and_references(["q"], "mq")
+    names = [e["name"] for e in out]
+    assert "City Juice Restaurant" not in names   # محل تجزئة مُستبعَد
+    assert names == ["Yemen Trading Co"]           # الكيان الحقيقي فقط باقٍ
+    assert dropped == 1                            # وعددُ المُستبعَد مُعلَن
+    assert out[0]["business_hint"] is None
 
 
 def test_report_text_warns_on_retail_hint_never_asserts_wholesale_silently():
