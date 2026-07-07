@@ -53,6 +53,18 @@ def _fmt(v: object) -> str:
     return str(v)
 
 
+def _data_year_label(view: dict) -> str:
+    """سنة البيانات الفعلية — the year actually used, flagging the declared fallback.
+
+    عند تراجُع المحرّك إلى أحدث سنةٍ منشورة (السنة المطلوبة لم تُنشر بعد) نعرض السنة
+    الفعلية مع سبب التراجُع — لا يظهر رقمُ سنةٍ فارغةٍ كأنه سنة التحليل.
+    """
+    dy = view.get("data_year", view.get("year"))
+    if view.get("year_fell_back") and dy != view.get("year"):
+        return f"{dy} (أحدث سنة منشورة؛ {view.get('year')} لم تُنشر بعد)"
+    return str(dy)
+
+
 # ── مساعدو حزمة البحث وقرار الدخول (§7) — research/decision display helpers ──
 # عرض صرف فوق view.markets[i]: لا شبكة، لا تعديل أرقام، الفجوات تُعلن بنصّها.
 # Pure display over the canonical view; gaps are declared verbatim, never filled.
@@ -60,7 +72,8 @@ def _fmt(v: object) -> str:
 _MODELED_TAG = "مُقدَّر — نموذج بافتراضات معلنة"
 
 _PILLAR_AR = {"market": "جاذبية السوق", "competition": "المنافسة",
-              "regulatory": "التنظيم", "profit": "الربحية"}
+              "regulatory": "التنظيم", "profit": "الربحية",
+              "risk": "أمان السوق (المخاطر)"}
 
 _SEC_AR = {"market_size": "حجم السوق والمنافسة", "demand": "الطلب والقدرة",
            "regulatory": "الاشتراطات والتعريفة", "competitors": "المنافسون بالاسم",
@@ -490,7 +503,7 @@ def render_docx(view: dict, path: str) -> str:
         doc.add_paragraph(d["sufficiency"])
     doc.add_paragraph(f"رمز HS: {view.get('hs_code')} "
                       f"(ثقة التصنيف {view.get('hs_confidence')}) | "
-                      f"سنة البيانات: {view.get('year')} | "
+                      f"سنة البيانات: {_data_year_label(view)} | "
                       "النتيجة أوّلية لا نهائية.")
 
     # ٢) موقعك التنافسي (محرّك التقاطع) بعد الخلاصة مباشرة.
@@ -687,7 +700,7 @@ def render_markdown(view: dict) -> str:
           "| المنشأ | السعودية (SAU) |",
           f"| السوق المستهدف | {_md_cell(h.get('target_market'))} |",
           f"| التاريخ | {_md_cell(h.get('date'))} |",
-          f"| سنة البيانات | {_md_cell(view.get('year'))} |",
+          f"| سنة البيانات | {_md_cell(_data_year_label(view))} |",
           f"| تغطية البيانات الإجمالية | {h.get('coverage_pct')}% |", ""]
 
     # ── الخلاصة التنفيذية — executive summary (حكم واحد لا حكمان) ───────────

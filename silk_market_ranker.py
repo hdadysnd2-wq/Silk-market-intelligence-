@@ -151,7 +151,12 @@ def _imports_with_fallback(hs_code: str, m49: str, iso3: str,
     mi = {"total_usd": None, "competitors": []}
     for back in range(_MAX_YEAR_FALLBACK + 1):
         y = start - back
-        mi = market_imports_cached(hs_code, m49, iso3, y, live=market_imports)
+        try:
+            mi = market_imports_cached(hs_code, m49, iso3, y, live=market_imports)
+        except Exception as e:  # noqa: BLE001 — سنةٌ تفشل لا توقف التراجُع
+            log.warning("imports fallback %s->%s %s failed: %s", hs_code, m49, y, e)
+            mi = {"total_usd": None, "competitors": []}
+            continue
         if mi.get("total_usd") is not None or mi.get("competitors"):
             return mi, y, (y != year)
     return mi, year, False

@@ -552,6 +552,8 @@ def build_view(result: dict) -> dict:
         "product": result.get("product"), "hs_code": result.get("hs_code"),
         "hs_confidence": result.get("hs_confidence"),
         "year": result.get("year"), "preliminary": True,
+        "data_year": result.get("data_year", result.get("year")),
+        "year_fell_back": bool(result.get("year_fell_back")),
         "classified": result.get("classified", False),
         "decision": decision,
         "competitive_position": cp,
