@@ -454,6 +454,7 @@ def create_app():
         market_name: str | None = None
         hs_code: str | None = None
         num_per_angle: int = 4
+        structured: dict | None = None   # الطبقة الأولى (APIs) لطبقة القرار
 
     @app.post("/research")
     def research(req: ResearchRequest, request: Request):
@@ -470,7 +471,8 @@ def create_app():
         name = req.market_name or req.market_iso3
         return _json(silk_country_research.research_country(
             req.product, req.hs_code or "", req.market_iso3, name,
-            num_per_angle=max(1, min(8, req.num_per_angle))))
+            num_per_angle=max(1, min(8, req.num_per_angle)),
+            structured=req.structured))
 
     @app.get("/sources")
     def sources():

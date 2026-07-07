@@ -1,10 +1,10 @@
-"""اختبارات الموجة ١٤ — وكيل البحث القُطري الشامل (تقرير كامل مُسنَد).
+"""اختبارات الموجة ١٤ — وكلاء المجالات + طبقة القرار (استخراج منظّم، لا روابط).
 
 يقفل:
-1. بلا مفتاح بحث => available=False، الفجوة معلنة، صفر اختلاق.
-2. ببحث محقون + كلود محقون => تقرير مؤلَّف بأقسام، مصادر مرقّمة، مُسنَد.
-3. ببحث محقون بلا كلود => ملفّ مصادر (available=True, synthesized=False).
-4. المصادر مُزالة التكرار ومرقّمة، والبحث يغطّي كل الزوايا السبع.
+1. بلا مفتاح بحث => available=False، فجوة معلنة، صفر اختلاق.
+2. بحث+قراءة+كلود محقونين => لكل مجال ملخّص/نقاط/جدول، وطبقة قرار تحكم.
+3. الاستخراج ينقل المعلومة نفسها (نقاط + جدول)، لا مجرّد روابط.
+4. بلا كلود => قرأ الصفحات لكن لا استخراج (synthesized=False) — يُعلن.
 Run:  python3 -m pytest tests/test_wave14_country_research.py -q
 """
 import os
@@ -18,64 +18,62 @@ import silk_ai_judge as aij
 import silk_country_research as cr
 
 
-def _fake_results(n_per):
-    """محاكاة web_search: نتائج حقيقية الشكل مرتبطة بالاستعلام."""
-    def _search(query, num=5):
-        out = []
-        for i in range(min(num, n_per)):
-            out.append(DataPoint(
-                {"title": f"{query[:20]} result {i}",
-                 "snippet": "snippet " + query[:15],
-                 "link": f"https://ex.com/{abs(hash(query)) % 9999}/{i}"},
-                "Web Search (Serper)", 0.5, "organic", "2026-07-07"))
-        return out
-    return _search
+def _fake_search(n=4):
+    def _s(query, num=5):
+        return [DataPoint({"title": f"{query[:16]} {i}", "snippet": "snip",
+                           "link": f"https://ex.com/{abs(hash(query))%999}/{i}"},
+                          "Web Search (Serper)", 0.5, "organic", "2026") for i in range(min(num, n))]
+    return _s
 
 
 def test_no_search_key_declares_gap(monkeypatch):
-    # web_search بلا مفتاح يعيد DataPoint(None) => لا مصادر => فجوة معلنة.
     monkeypatch.setattr(ws, "web_search",
-                        lambda q, num=5: [DataPoint(None, "Web Search", 0.0,
-                                                    "requires SEARCH_API_KEY")])
+                        lambda q, num=5: [DataPoint(None, "Web Search", 0.0, "requires SEARCH_API_KEY")])
     r = cr.research_country("تمور", "080410", "ARE", "الإمارات")
-    assert r["available"] is False and r["sections"] == []
+    assert r["available"] is False and not r["synthesized"]
     assert "SEARCH_API_KEY" in r["note"]
 
 
-def test_full_synthesis_path(monkeypatch):
-    monkeypatch.setattr(ws, "web_search", _fake_results(3))
+def test_per_field_extraction_and_decision(monkeypatch):
+    monkeypatch.setattr(ws, "web_search", _fake_search(3))
+    monkeypatch.setattr(cr, "_fetch_page_text", lambda url: "محتوى صفحة فيه سعر 118 درهم لعلامة Bateel")
     monkeypatch.setattr(aij, "available", lambda: True)
-    captured = {}
 
     def fake_call(system, user, max_tokens=1600):
-        captured["user"] = user
-        return ('{"sections":[{"title":"حجم السوق والطلب","text":"سوق نامٍ [1][2]."},'
-                '{"title":"سلوك المستهلك والثقافة","text":"إقبال موسمي [3]."}]}')
+        if "طبقة القرار" in system:      # decision layer
+            return ('{"verdict":"GO","why":"طلب متنامٍ وأسعار فاخرة [1]",'
+                    '"recommendations":["ابدأ بقناة الفخامة","سعّر عند 110-120 درهم"],'
+                    '"risks":["تذبذب الأسعار","إعادة التصدير"]}')
+        # field extraction: نقاط + جدول
+        return ('{"summary":"أسعار الفخامة 90-130 درهم [1][2].","facts":'
+                '["Bateel 400غ = 118 درهم في نون [1]","Al Foah 500غ = 74 درهم [2]"],'
+                '"table":{"columns":["المنتج","السعر","المتجر"],'
+                '"rows":[["Bateel 400غ","118 درهم","نون [1]"],["Al Foah","74 درهم","أمازون [2]"]]}}')
     monkeypatch.setattr(aij, "_call", fake_call)
 
     r = cr.research_country("تمور", "080410", "ARE", "الإمارات")
     assert r["available"] and r["synthesized"]
-    assert len(r["sections"]) == 2
-    assert r["sections"][0]["title"] == "حجم السوق والطلب" and "[1]" in r["sections"][0]["text"]
-    # المصادر مرقّمة ومزالة التكرار، وكل الزوايا السبع بُحثت.
-    assert r["sources"] and r["sources"][0]["n"] == 1
-    assert len(r["queries_run"]) == len(cr.RESEARCH_ANGLES) == 7
-    # المصادر عُزلت لكلود (تنبيه الحقن).
-    assert "[RAW_FINDINGS_START]" in captured["user"]
+    assert len(r["fields"]) == 7
+    f0 = r["fields"][0]
+    assert f0["facts"] and "[1]" in f0["facts"][0]            # نقطة مُسنَدة
+    assert f0["table"] and f0["table"]["rows"][0][0] == "Bateel 400غ"  # جدول بيانات
+    # طبقة القرار قرّرت من مخرجات الوكلاء
+    assert r["decision"]["verdict"] == "GO"
+    assert r["decision"]["recommendations"] and r["decision"]["risks"]
 
 
-def test_search_only_dossier_without_claude(monkeypatch):
-    monkeypatch.setattr(ws, "web_search", _fake_results(2))
-    monkeypatch.setattr(aij, "available", lambda: False)  # لا كلود
+def test_pages_read_but_no_claude_is_declared(monkeypatch):
+    monkeypatch.setattr(ws, "web_search", _fake_search(2))
+    monkeypatch.setattr(cr, "_fetch_page_text", lambda url: "some content")
+    monkeypatch.setattr(aij, "available", lambda: False)   # لا استخراج
     r = cr.research_country("تمور", "080410", "ARE", "الإمارات")
     assert r["available"] is True and r["synthesized"] is False
-    assert r["sections"] == [] and r["sources"]           # ملفّ مصادر لا تأليف
-    assert "ANTHROPIC_API_KEY" in r["note"]
+    assert r["decision"] is None and "ANTHROPIC_API_KEY" in r["note"]
+    assert all(f["sources"] for f in r["fields"])          # الصفحات جُمعت فعلاً
 
 
-def test_bad_claude_json_falls_back_to_dossier(monkeypatch):
-    monkeypatch.setattr(ws, "web_search", _fake_results(2))
-    monkeypatch.setattr(aij, "available", lambda: True)
-    monkeypatch.setattr(aij, "_call", lambda s, u, max_tokens=1600: "not json at all")
-    r = cr.research_country("تمور", "080410", "ARE", "الإمارات")
-    assert r["available"] is True and r["synthesized"] is False and r["sources"]
+def test_fetch_page_text_graceful_offline(monkeypatch):
+    import silk_country_research as m
+    # فشل الجلب => None لا استثناء (لا اختلاق محتوى).
+    monkeypatch.setattr("requests.get", lambda *a, **k: (_ for _ in ()).throw(OSError("blocked")))
+    assert m._fetch_page_text("https://x.com") is None
