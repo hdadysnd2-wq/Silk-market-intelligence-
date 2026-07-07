@@ -74,6 +74,9 @@ def find_places(query: str, region: str | None = None) -> list[DataPoint]:
                 "rating": place.get("rating"),
                 "address": place.get("formatted_address"),
                 "user_ratings_total": place.get("user_ratings_total"),
+                # تصنيف جوجل الفعلي للمكان — يفرّق تجزئة/مطعماً عن جهة
+                # جملة محتملة (بلاغ مالك حقيقي: محلات عصير ظهرت "مستوردين").
+                "types": place.get("types") or [],
             },
             "Google Maps", 0.7,
             f"place '{name}' for query '{q}'" + (f" region={region}" if region else ""),

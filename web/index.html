@@ -357,6 +357,7 @@
     needResearch:{ar:"يتطلب with_research (سياسة الخادم تفعّله تلقائياً)",en:"Requires with_research (server policy enables it automatically)"},
     modeledBadge:{ar:"مُقدَّر — نموذج بافتراضات معلنة",en:"Modeled — declared assumptions"},
     unverified:{ar:"غير موثَّق",en:"Unverified"},mdReport:{ar:"تقرير Markdown",en:"Markdown report"},
+    retailHint:{ar:"⚠ يبدو محل تجزئة/مطعماً — ليس بالضرورة موزّعاً بالجملة",en:"⚠ Looks like retail/food service — not necessarily a wholesale distributor"},
     refManual:{ar:"مرجع للمراجعة اليدوية — ليس اسم كيان",en:"Reference for manual review — not an entity name"},
     testRun:{ar:"تشغيل برهاني ببدائل موسومة، ليس تقريراً إنتاجياً",en:"Hermetic test run with labeled doubles — not a production report"},
     noItem:{ar:"لا بند مرصوداً",en:"No item observed"},yesL:{ar:"نعم",en:"Yes"},noL:{ar:"لا",en:"No"},
@@ -388,8 +389,11 @@
     dirHdr:{ar:"دليل المورّدين",en:"Supplier directory"},dirSaudi:{ar:"مرشّحون سعوديون (منشأ)",en:"Saudi candidates (origin)"},dirTarget:{ar:"موزّعون في السوق المستهدف",en:"Target-market distributors"},
     agComplete:{ar:"مكتمل",en:"complete"},agPartial:{ar:"جزئي",en:"partial"},agFailed:{ar:"فشل",en:"failed"}
   };
+  // آخر سنة كاملة على الأرجح — محسوبة من تاريخ اليوم لا رقماً ثابتاً يتقادم
+  // (بلاغ مالك حقيقي: كان الافتراضي عالقاً على 2023 رغم توفّر 2024 في القائمة نفسها).
+  var CUR_Y=new Date().getFullYear();
   var S={lang:localStorage.getItem("silk_lang")||"ar",adminKey:localStorage.getItem("silk_admin_key")||"",product:"",hs:"",selId:null,running:false,raw:null,result:null,sentFlags:{},tab:"position",query:"",
-    yearFrom:2019,yearTo:2023,card:JSON.parse(localStorage.getItem("silk_card")||"{}"),
+    yearFrom:CUR_Y-5,yearTo:CUR_Y-1,card:JSON.parse(localStorage.getItem("silk_card")||"{}"),
     keys:JSON.parse(localStorage.getItem("silk_keys")||"{}"),toggles:JSON.parse(localStorage.getItem("silk_toggles")||"{}"),screen:1,mktIdx:0,
     targetMarkets:[],mktQuery:"",marketsRef:null};
   function t(k){var e=I18N[k];return e?e[S.lang]:k;}
@@ -423,7 +427,7 @@
   }
 
   (function initYears(){
-    var Y=[2024,2023,2022,2021,2020,2019,2018,2017];
+    var Y=[];for(var y=CUR_Y;y>=CUR_Y-8;y--)Y.push(y);
     $("#yFrom").innerHTML=Y.map(function(y){return '<option value="'+y+'"'+(y===S.yearFrom?' selected':'')+'>'+y+'</option>';}).join("");
     $("#yTo").innerHTML=Y.map(function(y){return '<option value="'+y+'"'+(y===S.yearTo?' selected':'')+'>'+y+'</option>';}).join("");
   })();
@@ -834,7 +838,8 @@
     var ncF=rFind(ag,"named_companies"),named=(ncF&&ncF.value)||[],nc;
     if(named.length){nc=named.slice(0,12).map(function(c){c=c||{};var isRef=candKind(c)==="reference";var nm=esc((isRef?(c.title||c.name):(c.name||c.title))||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
       var tag=isRef?t("refManual"):t("unverified");
-      return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(tag)+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+'</span></div>';}).join("")+
+      var hint=(!isRef&&c.business_hint==="retail_or_food_service")?'<div class="prov" style="color:var(--warn,#b45309)">'+esc(t("retailHint"))+'</div>':'';
+      return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(tag)+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+'</span>'+hint+'</div>';}).join("")+
       (ncF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(ncF.note)+'</div>':'');}
     else nc='<div class="callout warn">'+esc((ncF&&ncF.note)||t("notObserved"))+'</div>';
     return scrShell("nav4",researchBanner(m)+
@@ -914,7 +919,8 @@
     function dirList(arr){arr=arr||[];if(!arr.length)return '<div class="callout warn">'+esc(t("notObserved"))+'</div>';
       return arr.slice(0,10).map(function(c){c=c||{};var isRef=candKind(c)==="reference";var nm=esc((isRef?(c.title||c.name):(c.name||c.title))||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
         var tag=isRef?t("refManual"):t("unverified");
-        return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(tag)+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+(c.address?' · '+esc(c.address):'')+'</span></div>';}).join("");}
+        var hint=(!isRef&&c.business_hint==="retail_or_food_service")?'<div class="prov" style="color:var(--warn,#b45309)">'+esc(t("retailHint"))+'</div>':'';
+        return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(tag)+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+(c.address?' · '+esc(c.address):'')+'</span>'+hint+'</div>';}).join("");}
     h+='<div class="sec-ttl">'+esc(t("dirHdr"))+'</div><div class="duo"><section class="card panel"><h3>'+esc(t("dirSaudi"))+'</h3>'+dirList(dir.saudi)+'</section><section class="card panel"><h3>'+esc(t("dirTarget"))+'</h3>'+dirList(dir.target)+'</section></div>'+
       (dir.note?'<div class="callout warn" style="margin-top:var(--s3)">'+esc(dir.note)+'</div>':'');
     el.innerHTML=h;

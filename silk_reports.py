@@ -128,7 +128,15 @@ def _entry_text(e: object) -> str:
         return str(e)
     is_ref = _candidate_kind(e) == "reference"
     label = str(e.get("name") or e.get("title") or "؟")
-    bits = [f"مرجع للمراجعة اليدوية: {label}" if is_ref else label]
+    if is_ref:
+        bits = [f"مرجع للمراجعة اليدوية: {label}"]
+    elif e.get("business_hint") == "retail_or_food_service":
+        # بلاغ مالك حقيقي: محلات عصير/مطاعم ظهرت كأنها مستوردون — تصنيف
+        # جوجل الفعلي (types) يكشف ذلك، فنُعلِنه بدل تسميته موزّعاً بالجملة.
+        bits = [f"⚠ {label} — يبدو محل تجزئة/مطعماً حسب تصنيف Google Maps، "
+               "ليس بالضرورة موزّعاً بالجملة"]
+    else:
+        bits = [label]
     if e.get("url"):
         bits.append(str(e["url"]))
     if e.get("address"):

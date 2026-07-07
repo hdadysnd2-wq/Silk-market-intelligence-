@@ -10,6 +10,7 @@ gracefully (no data / fetch failed), never crash, never invent numbers.
 """
 from __future__ import annotations
 
+import datetime
 import logging
 
 from silk_data_layer import DataPoint, _today
@@ -20,7 +21,13 @@ from silk_synthesis import synthesize
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_YEAR = 2022      # آخر سنة كاملة موثوقة في Comtrade — stable full year
+
+def _default_year() -> int:
+    """آخر سنة كاملة على الأرجح — محسوبة من التاريخ الحالي لا رقماً ثابتاً
+    يتقادم كل عام (كانت 2022 عالقة رغم توفّر 2023/2024 — بلاغ مالك حقيقي)."""
+    return datetime.date.today().year - 1
+
+
 _ENRICH_TOP = 3           # كم سوقًا نُثريه بالوكلاء — top markets to deep-enrich
 
 
@@ -79,7 +86,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
       db_path       — SQLite path for persist.
     All optional layers degrade gracefully offline (provenance-tagged None, no fabrication).
     """
-    year = year or _DEFAULT_YEAR
+    year = year or _default_year()
     countries = countries or COUNTRIES
 
     # 1) صنّف المنتج إلى رمز HS — resolve product -> HS6 (carry its confidence).

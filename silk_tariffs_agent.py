@@ -7,6 +7,7 @@ confidence=0.0) + warning. Never guesses a rate (founding principle).
 """
 from __future__ import annotations
 
+import datetime
 import logging
 import xml.etree.ElementTree as ET
 
@@ -21,7 +22,12 @@ log = logging.getLogger(__name__)
 # Path: .../TRN/reporter_partner_product_year_indicator/...
 _WITS_BASE = "https://wits.worldbank.org/API/V1/SDMX/V21/datasource/TRN/reporter"
 _TIMEOUT = 30
-_DEFAULT_YEAR = 2021  # WITS tariff data lags; recent years are often empty.
+
+
+def _default_year() -> int:
+    """آخر سنة على الأرجح متاحة في WITS — بيانات التعريفة أبطأ من التجارة
+    العادية عادةً، فنؤخّرها سنتين إضافيتين؛ محسوبة لا رقماً ثابتاً يتقادم."""
+    return datetime.date.today().year - 3
 
 
 def _hs6(hs_code: str) -> str:
@@ -34,7 +40,7 @@ def applied_tariff(
     hs_code: str,
     market_iso3: str,
     partner_iso3: str = "SAU",
-    year: int = _DEFAULT_YEAR,
+    year: int | None = None,
 ) -> DataPoint:
     """التعريفة المطبّقة (%) — applied import tariff for HS into market from partner.
 
@@ -45,6 +51,7 @@ def applied_tariff(
     if not hs6:
         return DataPoint(None, "World Bank WITS", 0.0,
                          f"invalid HS code {hs_code!r}", _today())
+    year = year or _default_year()
     # SDMX key: reporter/partner/product/year/AHS (applied, simple average).
     url = (f"{_WITS_BASE}/{market_iso3}/partner/{partner_iso3}"
            f"/product/{hs6}/year/{year}/datatype/AHS")
@@ -132,7 +139,7 @@ class TariffsAgent(BaseAgent):
         (default 'SAU'), year. Failure -> failed report, never a guessed rate.
         """
         hs = task.get("hs_code")
-        year = task.get("year") or _DEFAULT_YEAR
+        year = task.get("year") or _default_year()
         partner = task.get("partner_iso3", "SAU")
         iso3 = task.get("iso3") or M49_TO_ISO3.get(str(task.get("reporter_m49")))
         if not hs or not iso3:

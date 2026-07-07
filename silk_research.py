@@ -532,6 +532,25 @@ class CompetitorAgent(ResearchAgent):
         return F, gaps
 
 
+_RETAIL_FOOD_SERVICE_TYPES = {
+    "restaurant", "cafe", "meal_takeaway", "meal_delivery", "bakery",
+    "convenience_store", "supermarket", "grocery_or_supermarket",
+    "food", "bar", "night_club", "meal_kit_delivery",
+}
+
+
+def _business_hint(types: object) -> str | None:
+    """تلميح نوع العمل من تصنيف جوجل الفعلي — لا يُفترض «موزّع/مستورد بالجملة»
+    عن مكان مصنَّف مطعماً/مقهى/محل تجزئة (بلاغ مالك حقيقي: محل عصير محلي ظهر
+    في القائمة كأنه مستورد). Google Places لا يملك تصنيفاً رسمياً لـ«موزّع
+    بالجملة»، فلا نؤكِّد ذلك إيجاباً — فقط نُعلِن حين يكون التصنيف تجزئة/مطعماً
+    صراحةً، فيراجع القارئ بنفسه بدل أن يُصدَّق تلقائياً كمستورد."""
+    for t in (types or []):
+        if t in _RETAIL_FOOD_SERVICE_TYPES:
+            return "retail_or_food_service"
+    return None
+
+
 def _entities_and_references(web_queries: list[str], maps_query: str,
                              region: str | None = None,
                              num: int = 4) -> tuple[list[dict], list[dict]]:
@@ -545,6 +564,7 @@ def _entities_and_references(web_queries: list[str], maps_query: str,
             out.append({"kind": "entity", "name": dp.value.get("name", ""),
                         "address": dp.value.get("address"),
                         "rating": dp.value.get("rating"),
+                        "business_hint": _business_hint(dp.value.get("types")),
                         "via": "Google Maps", "retrieved_at": dp.retrieved_at})
             refs.append(_src("Google Maps", 0.4, retrieved_at=dp.retrieved_at))
     for q in web_queries:
