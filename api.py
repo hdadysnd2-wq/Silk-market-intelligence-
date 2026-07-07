@@ -242,6 +242,20 @@ def create_app():
                   "is set (or the paid keys are removed)"]
         return health
 
+    @app.get("/diagnostics")
+    def diagnostics(year: int = 2022):
+        """تشخيص المصادر الحيّ — probe each data source live; explains empty agents.
+
+        يفحص Comtrade والبنك الدولي فعلياً ويصنّف: متصل/فارغ/غير قابل للوصول مع
+        تلميح إصلاح. للقراءة فقط، بلا مصدر مدفوع. Why the agents may return no data.
+        """
+        import silk_diagnostics
+        try:
+            return silk_diagnostics.run_diagnostics(year)
+        except Exception as e:  # noqa: BLE001 — diagnostics must never 500
+            return {"overall": "unreachable", "agents_can_work": False,
+                    "error": f"{type(e).__name__}: {e}", "sources": []}
+
     @app.get("/resolve/{name}")
     def resolve(name: str):
         """صنّف اسم منتج إلى HS6 — resolve a product name to an HS6 DataPoint."""

@@ -245,6 +245,16 @@
   .stbadge{font-size:12px;padding:4px 11px;border-radius:40px;white-space:nowrap}.st-on{background:var(--success-soft);color:var(--success)}.st-off{background:var(--surface-2);color:var(--text-2)}
   .keyin{font-family:var(--mono);font-size:14px;border:1px solid var(--border-strong);border-radius:var(--r);padding:10px 12px;width:220px;max-width:40vw;outline:0;background:var(--surface);color:var(--text)}.keyin:focus{border-color:var(--primary)}
   .switch{width:46px;height:26px;border-radius:40px;background:var(--border-strong);position:relative;border:0;transition:.2s var(--ease);flex:none}.switch.on{background:var(--primary)}.switch .k{position:absolute;top:3px;inset-inline-start:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s var(--ease)}.switch.on .k{inset-inline-start:23px}
+  .diag-banner{font-size:14px;font-weight:600;padding:10px 14px;border-radius:var(--r);margin-bottom:4px}
+  .diag-banner.diag-ok{background:var(--success-soft);color:var(--success)}.diag-banner.diag-bad{background:var(--danger-soft);color:var(--danger)}
+  .diag-row{border-top:1px solid var(--border);padding:12px 0}
+  .diag-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.diag-h b{font-size:15px}
+  .diag-dot{width:10px;height:10px;border-radius:50%;flex:none}
+  .diag-dot.diag-ok{background:var(--success)}.diag-dot.diag-warn{background:var(--warning)}.diag-dot.diag-bad{background:var(--danger)}
+  .diag-badge{font-size:12px;font-weight:600;padding:3px 10px;border-radius:40px}
+  .diag-badge.diag-ok{background:var(--success-soft);color:var(--success)}.diag-badge.diag-warn{background:var(--warning-soft);color:var(--warning)}.diag-badge.diag-bad{background:var(--danger-soft);color:var(--danger)}
+  .diag-ms{margin-inline-start:auto;font-size:12px;color:var(--text-3)}
+  .diag-hint{font-size:13px;color:var(--text-2);line-height:1.6;margin-top:6px}
   footer{border-top:1px solid var(--border);padding:var(--s5) 0;color:var(--text-3);font-size:14px}
   .footrow{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap}
   .footlink{background:transparent;border:1px solid var(--border-strong);border-radius:var(--r);padding:8px 14px;font-size:13px;font-weight:600;color:var(--primary)}
@@ -373,6 +383,12 @@
     readyTitle:{ar:"ابدأ بالبحث عن منتج",en:"Start by searching a product"},readyP:{ar:"اكتب اسم منتج سعودي لتصفية أسواق تصديره وترتيبها عبر سنوات الدراسة.",en:"Type a Saudi product to shortlist and rank its export markets across the study years."},readyFoot:{ar:"النظام لا يُنشئ بيانات — كل رقم يحمل مصدره وثقته وتاريخه، وكل فجوة تُعلن بسببها.",en:"The system never creates data — every number carries its source, confidence and date, and every gap is declared with its reason."},
     readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"النظام لا يخمّن رمز HS — التصنيف الضعيف يُعلن بدل أن يُخترع.",en:"The system never guesses an HS code — a weak classification is declared, not invented."},
     settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"المفاتيح تُحفظ محلياً في متصفحك. لتفعيلها فعلياً اضبطها في متغيّرات البيئة على الخادم بنفس الأسماء.",en:"Keys are stored locally in your browser. To activate them, set them as server environment variables with the same names."},
+    diagTitle:{ar:"تشخيص المصادر الحيّ",en:"Live source diagnostics"},diagSub:{ar:"لماذا قد تظهر الوكلاء فارغة؟ افحص كل مصدر فعلياً — متصل، أم متصل بلا نتائج، أم غير قابل للوصول — مع سبب الإصلاح.",en:"Why might the agents look empty? Probe each source live — connected, reachable-but-empty, or unreachable — with the fix reason."},
+    diagRun:{ar:"اختبر المصادر الآن",en:"Test sources now"},diagRunning:{ar:"جارٍ الفحص…",en:"Probing…"},
+    diagOk:{ar:"متصل — يعيد بيانات",en:"Connected — returns data"},diagEmpty:{ar:"متصل بلا نتائج",en:"Reachable — no rows"},diagUnreach:{ar:"غير قابل للوصول",en:"Unreachable"},
+    diagAgentsOk:{ar:"✓ المصادر جاهزة — الوكلاء ستنتج بيانات",en:"✓ Sources ready — the agents will produce data"},
+    diagAgentsNo:{ar:"⚠ مصدر أو أكثر غير جاهز — الوكلاء ستعلن «غير مرصود» حتى يُصلح",en:"⚠ One or more sources not ready — agents will declare “not observed” until fixed"},
+    diagKeySet:{ar:"المفتاح مضبوط",en:"key set"},diagKeyNo:{ar:"بلا مفتاح",en:"no key"},diagFail:{ar:"تعذّر الوصول للخادم — تحقّق من عنوان الـ API في الإعدادات.",en:"Could not reach the server — check the API base URL in settings."},
     secAI:{ar:"الذكاء الاصطناعي",en:"AI"},secFree:{ar:"مصادر مجانية",en:"Free sources"},secPaid:{ar:"مصادر مدفوعة",en:"Paid sources"},connected:{ar:"متصل",en:"Connected"},needsKey:{ar:"يحتاج مفتاح",en:"Needs key"},keyless:{ar:"متصل · بلا مفتاح",en:"Connected · keyless"},
     footer:{ar:"سِلك · واجهة مؤسسية ثنائية اللغة (Carbon × Redwood) · بيانات عامة حقيقية فقط · فاتح/داكن · RTL/LTR",en:"Silk · Bilingual enterprise UI (Carbon × Redwood) · Real public data only · Light/Dark · RTL/LTR"},
     methodologyLink:{ar:"المنهجية — كيف بُني كل رقم",en:"Methodology — how every number is built"},
@@ -827,9 +843,29 @@
     return '<div class="srccard"><div class="body"><div class="nm">'+esc(s.nm[S.lang])+'</div><div class="ds">'+esc(s.ds[S.lang])+'</div></div><span class="stbadge '+cls+'">'+esc(badge)+'</span>'+ctrl+'</div>';
   }
   function renderSettings(){
-    $("#settingsBody").innerHTML='<div class="sec-ttl">'+esc(t("secAI"))+'</div>'+AI.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secFree"))+'</div>'+FREE.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secPaid"))+'</div>'+PAID.map(srcCard).join("");
+    $("#settingsBody").innerHTML=
+      '<div class="sec-ttl">'+esc(t("diagTitle"))+'</div>'+
+      '<div class="srccard" style="flex-direction:column;align-items:stretch;gap:12px">'+
+        '<div class="ds">'+esc(t("diagSub"))+'</div>'+
+        '<button class="btn btn-secondary" id="diagBtn" style="align-self:flex-start;height:40px">'+esc(t("diagRun"))+'</button>'+
+        '<div id="diagOut"></div></div>'+
+      '<div class="sec-ttl">'+esc(t("secAI"))+'</div>'+AI.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secFree"))+'</div>'+FREE.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secPaid"))+'</div>'+PAID.map(srcCard).join("");
     $$("#settingsBody .keyin").forEach(function(i){i.addEventListener("input",function(){S.keys[this.getAttribute("data-key")]=this.value;localStorage.setItem("silk_keys",JSON.stringify(S.keys));renderSettings();});});
     $$("#settingsBody .switch").forEach(function(b){b.addEventListener("click",function(){var g=this.getAttribute("data-tg");S.toggles[g]=!S.toggles[g];localStorage.setItem("silk_toggles",JSON.stringify(S.toggles));renderSettings();});});
+    $("#diagBtn").addEventListener("click",runDiagnostics);
+  }
+  function runDiagnostics(){
+    var btn=$("#diagBtn"),out=$("#diagOut");btn.disabled=true;btn.textContent=t("diagRunning");
+    fetch(base()+"/diagnostics").then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false;btn.textContent=t("diagRun");
+      var STATE={ok:["diag-ok",t("diagOk")],reachable_empty:["diag-warn",t("diagEmpty")],unreachable:["diag-bad",t("diagUnreach")]};
+      var banner=d.agents_can_work?'<div class="diag-banner diag-ok">'+esc(t("diagAgentsOk"))+'</div>':'<div class="diag-banner diag-bad">'+esc(t("diagAgentsNo"))+'</div>';
+      var rows=(d.sources||[]).map(function(s){var st=STATE[s.state]||STATE.unreachable;
+        var key=s.key_set==null?"":' · '+(s.key_set?t("diagKeySet"):t("diagKeyNo"));
+        return '<div class="diag-row"><div class="diag-h"><span class="diag-dot '+st[0]+'"></span><b>'+esc(s.name)+'</b><span class="diag-badge '+st[0]+'">'+esc(st[1])+'</span><span class="diag-ms num">'+(s.ms!=null?s.ms+"ms":"")+key+'</span></div><div class="diag-hint">'+esc(s.hint||"")+'</div></div>';
+      }).join("");
+      out.innerHTML=banner+rows;
+    }).catch(function(){btn.disabled=false;btn.textContent=t("diagRun");out.innerHTML='<div class="diag-banner diag-bad">'+esc(t("diagFail"))+'</div>';});
   }
 
   function renderMethodology(){
