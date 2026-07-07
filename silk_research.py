@@ -552,15 +552,30 @@ _RETAIL_FOOD_SERVICE_TYPES = {
     "food", "bar", "night_club", "meal_kit_delivery",
 }
 
+# أنواع ليست موردَ سلعٍ بالجملة إطلاقاً — بلاغ المالك: «Ananas Insurance» و«محمصة
+# أناناس» ظهرت كموردي أناناس. تصنيف Google لهذه (تأمين/عقار/مالية/صحة/تعليم/
+# سياحة…) يكشفها فوراً حتى بلا كلود. Clearly not a wholesale goods supplier.
+_NON_SUPPLIER_TYPES = _RETAIL_FOOD_SERVICE_TYPES | {
+    "insurance_agency", "real_estate_agency", "finance", "bank", "atm",
+    "accounting", "lawyer", "dentist", "doctor", "hospital", "pharmacy",
+    "physiotherapist", "veterinary_care", "school", "primary_school",
+    "secondary_school", "university", "gym", "beauty_salon", "hair_care",
+    "spa", "lodging", "car_dealer", "car_repair", "car_rental",
+    "gas_station", "travel_agency", "lawyer", "mosque", "church",
+    "museum", "park", "tourist_attraction", "gym", "casino", "movie_theater",
+    "clothing_store", "shoe_store", "jewelry_store", "electronics_store",
+    "furniture_store", "book_store", "roasting", "coffee_shop",
+}
+
 
 def _business_hint(types: object) -> str | None:
     """تلميح نوع العمل من تصنيف جوجل الفعلي — لا يُفترض «موزّع/مستورد بالجملة»
-    عن مكان مصنَّف مطعماً/مقهى/محل تجزئة (بلاغ مالك حقيقي: محل عصير محلي ظهر
-    في القائمة كأنه مستورد). Google Places لا يملك تصنيفاً رسمياً لـ«موزّع
-    بالجملة»، فلا نؤكِّد ذلك إيجاباً — فقط نُعلِن حين يكون التصنيف تجزئة/مطعماً
-    صراحةً، فيراجع القارئ بنفسه بدل أن يُصدَّق تلقائياً كمستورد."""
+    عن مكان تصنيفُه ليس مورّدَ سلعٍ (مطعم/مقهى/محل تجزئة/تأمين/عقار/مالية…).
+    بلاغ المالك: محلُّ عصيرٍ وشركةُ تأمينٍ ظهرا كمستوردين. Google Places لا يملك
+    تصنيفاً رسمياً لـ«موزّع بالجملة»، فلا نؤكِّد ذلك إيجاباً — بل نُعلِن ونستبعد
+    حين يكون التصنيف بوضوحٍ غير موردِ سلع."""
     for t in (types or []):
-        if t in _RETAIL_FOOD_SERVICE_TYPES:
+        if t in _NON_SUPPLIER_TYPES:
             return "retail_or_food_service"
     return None
 
@@ -592,9 +607,11 @@ def _qualify_entities(raw: list[dict], product: str, market: str,
     user = (
         f"المنتج: {aij._isolate(product or '؟')} — السوق: {aij._isolate(market or '؟')}.\n"
         f"المرشّحون (كيانات من خرائط Google):\n" + aij._isolate("\n".join(lines)) + "\n\n"
-        f"أبقِ فقط مَن هو **{role} بالجملة حقيقي** لهذا المنتج (استبعِد محلات "
-        "التجزئة والمطاعم والمقاهي وأي كيان غير ذي صلة). استند إلى المعطى فقط؛ عند "
-        'الشكّ استبعِد. أعد **JSON فقط**: {"keep":[أرقام المرشّحين المُبقَين]}.')
+        f"أبقِ فقط مَن هو **{role} بالجملة حقيقي** لهذا المنتج. استبعِد: محلات "
+        "التجزئة والمطاعم والمقاهي والمحامص، وأي كيان **ليس مورّد سلعٍ** (تأمين، "
+        "عقار، مالية، عيادة، صالون، فندق…) حتى لو حمل اسمَ المنتج (مثلاً «Ananas "
+        "Insurance» شركةُ تأمينٍ لا مورّدَ أناناس — استبعِدها). استند إلى المعطى "
+        'فقط؛ عند الشكّ استبعِد. أعد **JSON فقط**: {"keep":[أرقام المُبقَين]}.')
     # نموذج سريع + مهلة قصيرة: الفلترة مهمّة خفيفة يجب ألّا تعلّق التحليل خلف Opus.
     raw_out = aij._call(
         "أنت مصنّف كيانات تجارية في منصة سِلك لتصدير المنتجات السعودية. لا تخترع "
