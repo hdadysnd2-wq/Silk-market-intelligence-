@@ -23,9 +23,14 @@ log = logging.getLogger(__name__)
 
 
 def _default_year() -> int:
-    """آخر سنة كاملة على الأرجح — محسوبة من التاريخ الحالي لا رقماً ثابتاً
-    يتقادم كل عام (كانت 2022 عالقة رغم توفّر 2023/2024 — بلاغ مالك حقيقي)."""
-    return datetime.date.today().year - 1
+    """آخر سنة تتوفّر لها بيانات تجارة سنوية على الأرجح — today-2.
+
+    بلاغ مالك حقيقي: تقرير أناناس→عُمان بسنة 2025 رجع Comtrade فارغاً تماماً
+    (حجم السوق/المنافسة/الحصة كلها «غير مرصود»)، لأن **بيانات التجارة السنوية
+    تتأخّر سنة–سنتين**؛ سنةٌ حديثة جداً (today-1) لم تُنشَر بعد فيُفرَّغ التقرير.
+    today-2 هي أحدث سنة موثوقة الاكتمال. Annual trade lags 1-2y; -1 is too recent.
+    """
+    return datetime.date.today().year - 2
 
 
 _ENRICH_TOP = 3           # كم سوقًا نُثريه بالوكلاء — top markets to deep-enrich
@@ -297,8 +302,11 @@ def _enrich_research(rows: list[dict], product_name: str, hs_code: str,
     يضمن ألا يُسقط فشلُ المنسّق كلَّه التحليلَ — خطأ موسوم لا غياب صامت.
     """
     from silk_research import ResearchOrchestrator  # lazy: optional layer
+    from concurrent.futures import ThreadPoolExecutor
     orch = ResearchOrchestrator()
-    for row in rows:
+
+    def _one(row: dict) -> None:
+        # بحثُ سوقٍ واحد + قراره — the research bundle + deterministic decision.
         try:
             row["research"] = orch.run_market({
                 "product": product_name, "hs6": hs_code,
@@ -311,8 +319,7 @@ def _enrich_research(rows: list[dict], product_name: str, hs_code: str,
                         row.get("iso3"), e)
             row["research"] = {"error": f"research error: {type(e).__name__}: {e}",
                                "agents": {}, "coverage": 0.0}
-            continue
-        # محرك القرار (Stage 4، §8) — حتمي، يقرأ الحزمة بالذاكرة حصراً.
+            return
         try:
             import silk_decision
             row["decision"] = silk_decision.decide(row["research"])
@@ -320,6 +327,14 @@ def _enrich_research(rows: list[dict], product_name: str, hs_code: str,
             log.warning("decision failed for %s: %s", row.get("iso3"), e)
             row["decision"] = {"error":
                                f"decision error: {type(e).__name__}: {e}"}
+
+    # الأسواق الثلاثة تُبحث **بالتوازي** لا تِباعاً — كان تِباعاً فيتراكم زمنُ كل
+    # سوق (٣ × مهلة المنسّق)؛ التوازي يجعل الزمن الكلي ≈ زمن سوق واحد. كل سوق
+    # مستقل (لا حالة مشتركة)، والمنسّق نفسه محاجز بمهلة. Markets researched
+    # concurrently — was sequential, tripling wall-clock.
+    if rows:
+        with ThreadPoolExecutor(max_workers=min(len(rows), 3)) as ex:
+            list(ex.map(_one, rows))
 
 
 def _enrich_trends(rows: list[dict], product_name: str) -> None:

@@ -526,7 +526,7 @@
   // (بلاغ مالك حقيقي: كان الافتراضي عالقاً على 2023 رغم توفّر 2024 في القائمة نفسها).
   var CUR_Y=new Date().getFullYear();
   var S={lang:localStorage.getItem("silk_lang")||"ar",adminKey:localStorage.getItem("silk_admin_key")||"",product:"",hs:"",selId:null,running:false,raw:null,result:null,sentFlags:{},tab:"position",query:"",
-    yearFrom:CUR_Y-5,yearTo:CUR_Y-1,card:JSON.parse(localStorage.getItem("silk_card")||"{}"),
+    yearFrom:CUR_Y-6,yearTo:CUR_Y-2,card:JSON.parse(localStorage.getItem("silk_card")||"{}"),
     keys:JSON.parse(localStorage.getItem("silk_keys")||"{}"),toggles:JSON.parse(localStorage.getItem("silk_toggles")||"{}"),screen:1,mktIdx:0,
     targetMarkets:[],mktQuery:"",marketsRef:null};
   function t(k){var e=I18N[k];return e?e[S.lang]:k;}

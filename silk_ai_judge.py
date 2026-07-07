@@ -52,18 +52,29 @@ def available() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
 
 
-def _call(system: str, user: str, max_tokens: int = 1600) -> str | None:
-    """نداء Messages API — one Claude call; None on missing key / any failure."""
+# نموذج سريع للمهام الخفيفة (تصنيف/فلترة) — Haiku يخفّض زمن التحليل بشدّة
+# مقابل Opus البطيء؛ يُستعمل حيث الجودة كافية والسرعة حرجة.
+_FAST_MODEL = os.environ.get("SILK_AI_FAST_MODEL", "claude-haiku-4-5-20251001")
+
+
+def _call(system: str, user: str, max_tokens: int = 1600,
+          model: str | None = None, timeout: float | None = None) -> str | None:
+    """نداء Messages API — one Claude call; None on missing key / any failure.
+
+    model/timeout اختياريان: للمهام الخفيفة (فلترة الكيانات) مرّر _FAST_MODEL
+    ومهلة قصيرة كي لا يعلّق التحليل خلف Opus البطيء.
+    """
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key:
         return None
     try:
         import requests  # lazy: keep core import offline-safe
         resp = requests.post(
-            _ENDPOINT, timeout=_TIMEOUT,
+            _ENDPOINT, timeout=timeout or _TIMEOUT,
             headers={"x-api-key": key, "anthropic-version": _VERSION,
                      "content-type": "application/json"},
-            json={"model": _MODEL, "max_tokens": max_tokens, "system": system,
+            json={"model": model or _MODEL, "max_tokens": max_tokens,
+                  "system": system,
                   "messages": [{"role": "user", "content": user}]},
         )
         resp.raise_for_status()

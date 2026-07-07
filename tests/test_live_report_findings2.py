@@ -82,7 +82,7 @@ def test_agent_qualifies_entities_with_claude_when_available():
            {"name": "شركة اليمن للاستيراد والتوزيع", "address": "عدن", "types": []}]
     calls = {}
 
-    def fake_call(system, user, max_tokens=400):
+    def fake_call(system, user, max_tokens=400, model=None, timeout=None):
         calls["user"] = user
         return '{"keep":[1]}'   # الوكيل أبقى الكيان التجاري الحقيقي فقط
     with mock.patch("silk_ai_judge.available", return_value=True), \
@@ -116,11 +116,12 @@ def test_ui_renders_retail_hint_warning():
 
 # ── ٢) سنة البيانات الافتراضية محسوبة لا ثابتة ───────────────────────────────
 
-def test_engine_default_year_tracks_current_date_not_hardcoded():
+def test_engine_default_year_is_data_realistic_not_too_recent():
+    """بلاغ أناناس→عُمان: today-1 كان حديثاً جداً فرجع Comtrade فارغاً (التجارة
+    السنوية تتأخّر سنة–سنتين). الافتراضي الآن today-2 — أحدث سنة موثوقة."""
     import silk_engine
-    expected = datetime.date.today().year - 1
-    assert silk_engine._default_year() == expected
-    assert silk_engine._default_year() != 2022   # لم يعد الرقم القديم العالق
+    assert silk_engine._default_year() == datetime.date.today().year - 2
+    assert silk_engine._default_year() != 2022   # ليس رقماً ثابتاً عالقاً
 
 
 def test_tariffs_agent_default_year_computed_not_hardcoded():
@@ -135,6 +136,7 @@ def test_ui_year_dropdown_defaults_computed_from_today():
         os.path.abspath(__file__))), "web", "index.html"),
         encoding="utf-8").read()
     assert "new Date().getFullYear()" in html
-    assert "yearTo:CUR_Y-1" in html or "yearTo: CUR_Y - 1" in html
-    # لا قائمة سنوات ثابتة عالقة على 2024 كأقصى قيمة بعد الآن.
+    # الافتراضي today-2 (بيانات تجارة واقعية) لا today-1 الحديث جداً.
+    assert "yearTo:CUR_Y-2" in html or "yearTo: CUR_Y - 2" in html
+    # لا قائمة سنوات ثابتة عالقة بعد الآن.
     assert "[2024,2023,2022,2021,2020,2019,2018,2017]" not in html

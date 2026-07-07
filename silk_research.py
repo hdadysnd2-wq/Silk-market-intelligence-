@@ -39,7 +39,10 @@ from silk_data_layer import DataPoint, _today
 log = logging.getLogger(__name__)
 
 SCHEMA = "silk.research/v1"
-DEFAULT_TIMEOUT = float(os.environ.get("SILK_AGENT_TIMEOUT", "90"))
+# مهلة المنسّق لكل سوق — خُفِّضت من 90s إلى 45s: وكيلٌ بطيء (Trends/FAOSTAT
+# محدودة المعدّل) كان يحتجز 90s فيبطئ التحليل بشدّة؛ 45s تكفي المصادر السليمة
+# والبطيء يُعلَن فجوةً. قابلة للضبط عبر SILK_AGENT_TIMEOUT.
+DEFAULT_TIMEOUT = float(os.environ.get("SILK_AGENT_TIMEOUT", "45"))
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
@@ -581,6 +584,7 @@ def _qualify_entities(raw: list[dict], product: str, market: str,
         kept = [e for e in raw
                 if _business_hint(e.get("types")) != "retail_or_food_service"]
         return kept, len(raw) - len(kept)
+    raw = raw[:12]  # حدّ أعلى — لا نُثقل نداء الفلترة
     lines = []
     for i, e in enumerate(raw):
         lines.append(f"{i}. {e.get('name', '')} | العنوان: {e.get('address') or '؟'} "
@@ -591,10 +595,11 @@ def _qualify_entities(raw: list[dict], product: str, market: str,
         f"أبقِ فقط مَن هو **{role} بالجملة حقيقي** لهذا المنتج (استبعِد محلات "
         "التجزئة والمطاعم والمقاهي وأي كيان غير ذي صلة). استند إلى المعطى فقط؛ عند "
         'الشكّ استبعِد. أعد **JSON فقط**: {"keep":[أرقام المرشّحين المُبقَين]}.')
+    # نموذج سريع + مهلة قصيرة: الفلترة مهمّة خفيفة يجب ألّا تعلّق التحليل خلف Opus.
     raw_out = aij._call(
         "أنت مصنّف كيانات تجارية في منصة سِلك لتصدير المنتجات السعودية. لا تخترع "
         "أي اسم؛ صنّف المعطى فقط وأعد أرقام مَن يصلح موزّعاً/مستورداً بالجملة.",
-        user, max_tokens=400)
+        user, max_tokens=300, model=aij._FAST_MODEL, timeout=12)
     if not raw_out:
         return raw, 0
     try:
