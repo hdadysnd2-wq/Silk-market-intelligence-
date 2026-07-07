@@ -255,6 +255,14 @@
   .diag-badge.diag-ok{background:var(--success-soft);color:var(--success)}.diag-badge.diag-warn{background:var(--warning-soft);color:var(--warning)}.diag-badge.diag-bad{background:var(--danger-soft);color:var(--danger)}
   .diag-ms{margin-inline-start:auto;font-size:12px;color:var(--text-3)}
   .diag-hint{font-size:13px;color:var(--text-2);line-height:1.6;margin-top:6px}
+  .research-load{display:flex;align-items:center;gap:12px;padding:24px;color:var(--text-2);font-size:15px}
+  .spin{width:18px;height:18px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;flex:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .research-sec{margin-bottom:16px}.research-sec h4{margin:0 0 6px;font-size:15px;font-weight:700;color:var(--primary)}
+  .research-sec p{margin:0;font-size:14px;line-height:1.8;color:var(--text)}
+  .cite{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--primary);background:var(--primary-soft);padding:0 5px;border-radius:4px;margin:0 2px;vertical-align:.5px}
+  .research-src{margin:6px 0 0;padding-inline-start:22px;display:flex;flex-direction:column;gap:8px}
+  .research-src li{font-size:13px;line-height:1.5}.research-src li a{word-break:break-word}
   footer{border-top:1px solid var(--border);padding:var(--s5) 0;color:var(--text-3);font-size:14px}
   .footrow{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap}
   .footlink{background:transparent;border:1px solid var(--border-strong);border-radius:var(--r);padding:8px 14px;font-size:13px;font-weight:600;color:var(--primary)}
@@ -356,7 +364,12 @@
     high:{ar:"عالية",en:"High"},medium:{ar:"متوسطة",en:"Medium"},low:{ar:"منخفضة",en:"Low"},
     tableSrc:{ar:"المصادر مرفقة بكل رقم · التغطية = مكوّنات مرصودة من 4 · الفجوات معلنة",en:"Sources attached to every value · Coverage = observed components of 4 · gaps declared"},
     rank:{ar:"المرتبة",en:"Rank"},rowConf:{ar:"ثقة الصف",en:"Row confidence"},
-    tabPosition:{ar:"موقعك",en:"Your position"},tabRivals:{ar:"المنافسون",en:"Competitors"},tabTrend:{ar:"الاتجاه",en:"Trend"},tabComponents:{ar:"المكوّنات",en:"Components"},tabCompliance:{ar:"الاشتراطات",en:"Compliance"},tabVerdict:{ar:"الحكم",en:"Verdict"},
+    tabPosition:{ar:"موقعك",en:"Your position"},tabRivals:{ar:"المنافسون",en:"Competitors"},tabTrend:{ar:"الاتجاه",en:"Trend"},tabComponents:{ar:"المكوّنات",en:"Components"},tabCompliance:{ar:"الاشتراطات",en:"Compliance"},tabVerdict:{ar:"الحكم",en:"Verdict"},tabResearch:{ar:"التقرير الكامل",en:"Full report"},
+    researchTitle:{ar:"تقرير الدولة الشامل",en:"Comprehensive country report"},
+    researchSub:{ar:"وكيل ذكاء اصطناعي يبحث في ٧ زوايا (السوق، المستهلك، المنافسون، الأسعار، القنوات، التنظيمات، المخاطر) ويؤلّف تقريراً مُسنَداً — كل ادعاء بمرجعه [n].",en:"An AI agent searches 7 angles (market, consumer, competitors, pricing, channels, regulations, risks) and synthesizes a grounded report — every claim cited [n]."},
+    researchRun:{ar:"ولّد التقرير الكامل",en:"Generate full report"},researchRunning:{ar:"الوكيل يبحث ويؤلّف…",en:"Agent researching & synthesizing…"},
+    researchNeed:{ar:"يتطلب SEARCH_API_KEY (اتساع البحث) وANTHROPIC_API_KEY (التأليف) مضبوطين على الخادم. بدونهما يُعلن النقص ولا يُختلق تقرير.",en:"Requires SEARCH_API_KEY (breadth) and ANTHROPIC_API_KEY (synthesis) set on the server. Without them the gap is declared, not invented."},
+    researchSources:{ar:"المصادر المرصودة",en:"Observed sources"},researchDossier:{ar:"ملفّ مصادر (التأليف يتطلب ANTHROPIC_API_KEY)",en:"Source dossier (synthesis needs ANTHROPIC_API_KEY)"},researchRegen:{ar:"أعد التوليد",en:"Regenerate"},
     compSize:{ar:"حجم الاستيراد",en:"Import size"},compShare:{ar:"حصة السعودية",en:"Saudi share"},compIncome:{ar:"دخل الفرد (PPP)",en:"Income (PPP)"},compHHI:{ar:"تركّز المنافسة HHI",en:"Competition HHI"},
     wSize:{ar:"وزن 40%",en:"weight 40%"},wShare:{ar:"وزن 20%",en:"weight 20%"},wIncome:{ar:"وزن 25%",en:"weight 25%"},wHHI:{ar:"وزن 15% · أقل=أسهل",en:"weight 15% · lower=easier"},
     supplierCountries:{ar:"الدول المورّدة وحصصها",en:"Supplier countries & shares"},
@@ -417,7 +430,7 @@
     reqFail:{ar:"فشل الطلب",en:"Request failed"},langSwitched:{ar:"تم التبديل إلى العربية",en:"Switched to English"}
   };
   var S={lang:localStorage.getItem("silk_lang")||"ar",product:"",hs:"",selId:null,running:false,raw:null,result:null,sentFlags:{},tab:"position",query:"",
-    yearFrom:2019,yearTo:2023,card:JSON.parse(localStorage.getItem("silk_card")||"{}"),
+    yearFrom:2019,yearTo:2023,card:JSON.parse(localStorage.getItem("silk_card")||"{}"),research:{},researching:{},
     keys:JSON.parse(localStorage.getItem("silk_keys")||"{}"),toggles:JSON.parse(localStorage.getItem("silk_toggles")||"{}"),view:"dashboard"};
   function t(k){var e=I18N[k];return e?e[S.lang]:k;}
   function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"");}
@@ -664,6 +677,7 @@
       r.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();}});
     });
     $$("#resultArea .tab").forEach(function(b){b.addEventListener("click",function(){S.tab=this.getAttribute("data-tab");render();});});
+    var rb=$("#researchBtn");if(rb)rb.addEventListener("click",function(){runResearch(this.getAttribute("data-iso"));});
     var d=$("#deepBtn");if(d)d.addEventListener("click",runDeepen);
     var j=$("#jsonBtn");if(j)j.addEventListener("click",exportJson);
     var cs=$("#csvBtn");if(cs)cs.addEventListener("click",exportCsv);
@@ -706,7 +720,7 @@
   function margin(price){var cost=S.card.cost_per_unit,ship=S.card.shipping_per_unit||0;if(cost==null||!price||price<=0)return null;return Math.round((price-cost-ship)/price*100);}
   function detailBlock(sel,ms){
     if(!sel)return '<aside class="card detail"><div class="dpad">—</div></aside>';
-    var tabs=[["position","tabPosition"],["rivals","tabRivals"],["trend","tabTrend"],["components","tabComponents"],["compliance","tabCompliance"],["verdict","tabVerdict"]];
+    var tabs=[["position","tabPosition"],["rivals","tabRivals"],["trend","tabTrend"],["components","tabComponents"],["compliance","tabCompliance"],["verdict","tabVerdict"],["research","tabResearch"]];
     return '<aside class="card detail"><div class="dpad">'+
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span class="flag">'+esc(sel.code)+'</span><span class="tag">'+esc(t("rank"))+' '+(ms.indexOf(sel)+1)+'</span><span class="tag num">'+esc(t("rowConf"))+' '+esc(sel.confidence)+'</span></div>'+
       '<h2 class="d-country">'+esc(sel.country)+'</h2><div class="d-score"><span class="n">'+(sel.score==null?"—":sel.score)+'</span><span class="o">/100</span></div>'+
@@ -729,7 +743,42 @@
     if(S.tab==="trend")return trendTab(sel);
     if(S.tab==="components")return componentsTab(sel);
     if(S.tab==="compliance")return complianceTab(sel);
+    if(S.tab==="research")return researchTab(sel);
     return verdictTab(sel);
+  }
+  function citeText(text,sources){
+    var byN={};(sources||[]).forEach(function(s){byN[s.n]=s.link;});
+    return esc(text).replace(/\[(\d+)\]/g,function(m,n){var l=byN[n];return l?'<a class="cite" href="'+esc(l)+'" target="_blank" rel="noopener noreferrer">['+n+']</a>':m;});
+  }
+  function researchTab(sel){
+    var iso=sel.iso3,r=S.research[iso];
+    if(S.researching[iso])return '<div class="subhead">'+esc(t("researchTitle"))+'</div><div class="research-load"><span class="spin"></span>'+esc(t("researchRunning"))+'</div>';
+    if(!r){
+      return '<div class="subhead">'+esc(t("researchTitle"))+'</div><div class="sub" style="margin-bottom:12px">'+esc(t("researchSub"))+'</div>'+
+        '<button class="btn btn-primary" id="researchBtn" data-iso="'+esc(iso)+'">'+esc(t("researchRun"))+'</button>'+
+        '<div class="callout" style="margin-top:12px">'+esc(t("researchNeed"))+'</div>';
+    }
+    var out='<div class="subhead">'+esc(t("researchTitle"))+'</div>';
+    if(!r.available){out+='<div class="callout warn">'+esc(r.note||t("researchNeed"))+'</div>';}
+    else{
+      if(r.synthesized&&r.sections&&r.sections.length){
+        out+=r.sections.map(function(s){return '<div class="research-sec"><h4>'+esc(s.title)+'</h4><p>'+citeText(s.text,r.sources)+'</p></div>';}).join("");
+      }else{out+='<div class="callout">'+esc(t("researchDossier"))+'</div>';}
+      var src=r.sources||[];
+      if(src.length){
+        out+='<div class="subhead">'+esc(t("researchSources"))+' ('+src.length+')</div><ol class="research-src">'+
+          src.map(function(s){return '<li id="src'+s.n+'"><a href="'+esc(s.link)+'" target="_blank" rel="noopener noreferrer">'+esc(s.title||s.link)+'</a></li>';}).join("")+'</ol>';
+      }
+    }
+    out+='<button class="btn btn-ghost" id="researchBtn" data-iso="'+esc(iso)+'" style="margin-top:12px;height:38px">'+esc(t("researchRegen"))+'</button>';
+    return out;
+  }
+  function runResearch(iso){
+    var sel=(S.result.markets||[]).filter(function(m){return m.iso3===iso;})[0];if(!sel)return;
+    S.researching[iso]=true;render();
+    postJSON("/research",{product:S.result.product,hs_code:S.result.hs,market_iso3:iso,market_name:sel.country})
+      .then(function(r){S.researching[iso]=false;S.research[iso]=r;render();})
+      .catch(function(e){S.researching[iso]=false;S.research[iso]={available:false,note:(t("reqFail")+": "+e.message)};render();});
   }
   function positionTab(sel){
     var cp=sel.competitive_position,feas=(cp&&cp.feasibility_threads)||[],out="";

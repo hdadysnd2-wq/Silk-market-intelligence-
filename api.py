@@ -447,6 +447,31 @@ def create_app():
         end_year = req.end_year or 2023
         return _json(silk_trend.import_trend(req.hs_code, m49, end_year, req.span))
 
+    class ResearchRequest(BaseModel):
+        """طلب تقرير قُطري شامل — comprehensive AI country-research request."""
+        product: str
+        market_iso3: str
+        market_name: str | None = None
+        hs_code: str | None = None
+        num_per_angle: int = 4
+
+    @app.post("/research")
+    def research(req: ResearchRequest, request: Request):
+        """تقرير قُطري شامل مُسنَد — AI agent searches many angles, synthesizes a
+        full cited country report. يبحث عبر ٧ زوايا (السوق/المستهلك/المنافسون/
+        الأسعار/القنوات/التنظيمات/المخاطر) ويؤلّف بكلود مع إسناد كل ادعاء.
+
+        يتطلب SEARCH_API_KEY (اتساع) + ANTHROPIC_API_KEY (تأليف)؛ يتدهور بصدق:
+        ملفّ مصادر بلا كلود، فجوة معلنة بلا بحث. صفر اختلاق.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        import silk_country_research
+        name = req.market_name or req.market_iso3
+        return _json(silk_country_research.research_country(
+            req.product, req.hs_code or "", req.market_iso3, name,
+            num_per_angle=max(1, min(8, req.num_per_angle))))
+
     @app.get("/sources")
     def sources():
         """خريطة حالة المصادر التسع — 9-layer data-source status map.
