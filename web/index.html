@@ -319,6 +319,18 @@
   .dlegend .nm{display:inline-flex;align-items:center;gap:8px;font-weight:600;min-width:0}
   .dlegend .nm span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+  /* ─── التشخيص الحيّ ─── */
+  .diag-banner{font-size:13.5px;font-weight:600;padding:10px 14px;border-radius:10px;margin-bottom:6px}
+  .diag-banner.diag-ok{background:var(--success-soft);color:var(--success)}.diag-banner.diag-bad{background:var(--danger-soft);color:var(--danger)}
+  .diag-row{border-top:1px solid var(--border);padding:11px 0}
+  .diag-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.diag-h b{font-size:14.5px}
+  .diag-dot{width:10px;height:10px;border-radius:50%;flex:none}
+  .diag-dot.diag-ok{background:var(--success)}.diag-dot.diag-warn{background:var(--warning)}.diag-dot.diag-bad{background:var(--danger)}.diag-dot.diag-gap{background:var(--text-3)}
+  .diag-badge{font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:40px}
+  .diag-badge.diag-ok{background:var(--success-soft);color:var(--success)}.diag-badge.diag-warn{background:var(--warning-soft);color:var(--warning)}.diag-badge.diag-bad{background:var(--danger-soft);color:var(--danger)}.diag-badge.diag-gap{background:var(--surface-3);color:var(--text-2)}
+  .diag-ms{margin-inline-start:auto;font-size:11.5px;color:var(--text-3)}
+  .diag-hint{font-size:12.5px;color:var(--text-2);line-height:1.6;margin-top:6px}
+
   /* ─── الاستجابة: طيّ الشريط الجانبي ─── */
   @media(max-width:900px){
     .layout{grid-template-columns:1fr}
@@ -462,6 +474,12 @@
     readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"النظام لا يخمّن رمز HS — التصنيف الضعيف يُعلن بدل أن يُخترع.",en:"The system never guesses an HS code — a weak classification is declared, not invented."},
     settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"أدخل المفاتيح ثم «حفظ في الخادم» — تُخزَّن في خادمك وتُفعَّل فوراً (متغيرات بيئة النشر تبقى الأعلى سلطة).",en:"Enter keys then “Save to server” — stored on your server and active immediately (deploy env vars still win)."},saveServer:{ar:"حفظ في الخادم",en:"Save to server"},saved:{ar:"حُفظت المفاتيح في الخادم",en:"Keys saved to server"},adminKey:{ar:"مفتاح الخدمة (X-API-Key) إن كانت المصادقة مفعّلة",en:"Service key (X-API-Key) if auth is enabled"},
     secAI:{ar:"الذكاء الاصطناعي",en:"AI"},secFree:{ar:"مصادر مجانية",en:"Free sources"},secPaid:{ar:"مصادر مدفوعة",en:"Paid sources"},connected:{ar:"متصل",en:"Connected"},needsKey:{ar:"يحتاج مفتاح",en:"Needs key"},keyless:{ar:"متصل · بلا مفتاح",en:"Connected · keyless"},
+    diagTitle:{ar:"تشخيص المصادر الحيّ",en:"Live source diagnostics"},diagSub:{ar:"افحص كل مصدر فعلياً بمفاتيحك على الخادم — أيّه متصل، أم فارغ، أم محجوب، أم بلا مفتاح، مع سبب الإصلاح.",en:"Probe each source live with your server keys — connected, empty, blocked, or no-key, with the fix reason."},
+    diagRun:{ar:"اختبر المصادر الآن",en:"Test sources now"},diagRunning:{ar:"جارٍ الفحص…",en:"Probing…"},
+    diagOk:{ar:"متصل — يعيد بيانات",en:"Connected — returns data"},diagEmpty:{ar:"متصل بلا نتائج",en:"Reachable — no rows"},diagUnreach:{ar:"غير قابل للوصول",en:"Unreachable"},diagNoKey:{ar:"بلا مفتاح",en:"No key"},
+    diagAgentsOk:{ar:"✓ الأساس جاهز — الوكلاء تنتج دراسة حقيقية",en:"✓ Core ready — the agents produce a real study"},
+    diagAgentsNo:{ar:"⚠ مصدر أساسي غير جاهز — الدراسة ستُعلن فجوات حتى يُصلح",en:"⚠ A core source isn't ready — the study declares gaps until fixed"},
+    diagFail:{ar:"تعذّر الوصول للخادم — تحقّق من عنوان الـ API.",en:"Could not reach the server — check the API base URL."},
     footer:{ar:"",en:""},footBadge:{ar:"بيانات حقيقية · لا اختلاق",en:"Real data · no fabrication"},
     reqFail:{ar:"فشل الطلب",en:"Request failed"},langSwitched:{ar:"تم التبديل إلى العربية",en:"Switched to English"},
     nav1:{ar:"تحليل جديد",en:"New analysis"},nav2:{ar:"القرار",en:"Decision"},nav3:{ar:"حجم السوق",en:"Market size"},nav4:{ar:"المنافسة",en:"Competition"},
@@ -1145,14 +1163,31 @@
       .catch(function(e){toast(t("reqFail")+": "+e.message);});
   }
   function renderSettings(){
-    $("#settingsBody").innerHTML='<div class="sec-ttl">'+esc(t("secAI"))+'</div>'+AI.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secFree"))+'</div>'+FREE.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secPaid"))+'</div>'+PAID.map(srcCard).join("")+
+    $("#settingsBody").innerHTML=
+      '<div class="sec-ttl">'+esc(t("diagTitle"))+'</div>'+
+      '<div class="srccard" style="flex-direction:column;align-items:stretch;gap:12px"><div class="ds">'+esc(t("diagSub"))+'</div>'+
+        '<button class="btn btn-secondary" id="diagBtn" style="align-self:flex-start;height:40px">'+esc(t("diagRun"))+'</button><div id="diagOut"></div></div>'+
+      '<div class="sec-ttl">'+esc(t("secAI"))+'</div>'+AI.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secFree"))+'</div>'+FREE.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secPaid"))+'</div>'+PAID.map(srcCard).join("")+
       '<div class="sec-ttl">·</div>'+
       '<input class="keyin" id="adminKey" type="password" placeholder="'+esc(t("adminKey"))+'" value="'+esc(S.adminKey||"")+'" style="width:100%"/>'+
       '<button class="btn primary" id="saveKeysBtn" style="margin-top:8px">'+esc(t("saveServer"))+'</button>';
     var ak=$("#adminKey");if(ak)ak.addEventListener("input",function(){S.adminKey=this.value;localStorage.setItem("silk_admin_key",this.value);});
     var sb=$("#saveKeysBtn");if(sb)sb.addEventListener("click",saveKeysToServer);
+    var db=$("#diagBtn");if(db)db.addEventListener("click",runDiagnostics);
     $$("#settingsBody .keyin").forEach(function(i){i.addEventListener("input",function(){S.keys[this.getAttribute("data-key")]=this.value;localStorage.setItem("silk_keys",JSON.stringify(S.keys));renderSettings();});});
     $$("#settingsBody .switch").forEach(function(b){b.addEventListener("click",function(){var g=this.getAttribute("data-tg");S.toggles[g]=!S.toggles[g];localStorage.setItem("silk_toggles",JSON.stringify(S.toggles));renderSettings();});});
+  }
+  function runDiagnostics(){
+    var btn=$("#diagBtn"),out=$("#diagOut");if(!btn)return;btn.disabled=true;btn.textContent=t("diagRunning");
+    fetch(base()+"/diagnostics").then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false;btn.textContent=t("diagRun");
+      var ST={ok:["diag-ok",t("diagOk")],reachable_empty:["diag-warn",t("diagEmpty")],unreachable:["diag-bad",t("diagUnreach")],no_key:["diag-gap",t("diagNoKey")]};
+      var banner=d.agents_can_work?'<div class="diag-banner diag-ok">'+esc(t("diagAgentsOk"))+'</div>':'<div class="diag-banner diag-bad">'+esc(t("diagAgentsNo"))+'</div>';
+      var rows=(d.sources||[]).map(function(s){var m=ST[s.state]||ST.unreachable;
+        return '<div class="diag-row"><div class="diag-h"><span class="diag-dot '+m[0]+'"></span><b>'+esc(s.name)+'</b><span class="diag-badge '+m[0]+'">'+esc(m[1])+'</span><span class="diag-ms num">'+(s.ms!=null?s.ms+"ms":"")+'</span></div><div class="diag-hint">'+esc(s.hint||"")+'</div></div>';
+      }).join("");
+      out.innerHTML=banner+rows;
+    }).catch(function(){btn.disabled=false;btn.textContent=t("diagRun");out.innerHTML='<div class="diag-banner diag-bad">'+esc(t("diagFail"))+'</div>';});
   }
 
   function applyView(){

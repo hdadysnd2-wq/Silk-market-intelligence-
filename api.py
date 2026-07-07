@@ -521,6 +521,21 @@ def create_app():
         end_year = req.end_year or 2023
         return _json(silk_trend.import_trend(req.hs_code, m49, end_year, req.span))
 
+    @app.get("/diagnostics")
+    def diagnostics(year: int = 2022):
+        """تشخيص المصادر الحيّ — probe each data source live with the server's keys.
+
+        يفحص Comtrade والبنك الدولي وSerper وGoogle Maps وClaude فعلياً ويصنّف:
+        متصل/فارغ/محجوب/بلا مفتاح مع تلميح إصلاح. للقراءة فقط، لا يُصدر 500.
+        يخبرك على نشرك أيّ مفتاحٍ يعمل وأيّه لا.
+        """
+        import silk_diagnostics
+        try:
+            return silk_diagnostics.run_diagnostics(year)
+        except Exception as e:  # noqa: BLE001 — diagnostics must never 500
+            return {"overall": "unreachable", "agents_can_work": False,
+                    "error": f"{type(e).__name__}: {e}", "sources": []}
+
     @app.get("/sources")
     def sources(request: Request):
         """خريطة حالة طبقات المصادر الاثنتي عشرة — 12-layer data-source status map.
