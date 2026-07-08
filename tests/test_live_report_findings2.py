@@ -111,7 +111,8 @@ def test_ui_renders_retail_hint_warning():
         os.path.abspath(__file__))), "web", "index.html"),
         encoding="utf-8").read()
     assert "business_hint" in html and "retail_or_food_service" in html
-    assert "retailHint" in html
+    # الواجهة الجديدة: التحذير يُعرض نصاً عربياً ملاصقاً لاسم العمل.
+    assert "قد يكون محل تجزئة" in html
 
 
 # ── ٢) سنة البيانات الافتراضية محسوبة لا ثابتة ───────────────────────────────
@@ -137,6 +138,7 @@ def test_ui_year_dropdown_defaults_computed_from_today():
         encoding="utf-8").read()
     assert "new Date().getFullYear()" in html
     # الافتراضي today-2 (بيانات تجارة واقعية) لا today-1 الحديث جداً.
-    assert "yearTo:CUR_Y-2" in html or "yearTo: CUR_Y - 2" in html
+    # الواجهة الجديدة (النموذج الملزم): to = CURY-2 داخل years() — نفس العقد.
+    assert "CURY-2" in html or "CUR_Y-2" in html
     # لا قائمة سنوات ثابتة عالقة بعد الآن.
     assert "[2024,2023,2022,2021,2020,2019,2018,2017]" not in html

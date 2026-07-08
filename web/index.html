@@ -1,1326 +1,484 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>منصة سِلك · ذكاء الأسواق</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سِلك — ذكاء الأسواق</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Markazi+Text:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Markazi+Text:wght@600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
-  /* ═══ سِلك · نظام تصميم مؤسسي (Carbon × Redwood) — إعادة تصميم عالمية v2 ═══
-     منهجيات: هرمية بصرية واضحة · كشف تدرّجي · تنقّل جانبي واحد · إسناد لكل رقم.
-     كل أسماء الأصناف التي يولّدها JS محفوظة كما هي — التصميم فقط تغيّر. */
+  /* نظام تصميم سِلك — مطابق للنموذج الملزم docs/mockups/silk_prototype.html */
   :root{
-    --bg:#F2F4F8;--surface:#FFFFFF;--surface-2:#F7F9FC;--surface-3:#EEF2F7;--hover:#E8EDF4;
-    --sidebar:#0B1524;--sidebar-2:#111E32;--sidebar-line:#22314A;--sidebar-txt:#AEBACb;--sidebar-txt-2:#7C8BA3;
-    --border:#E1E7EF;--border-strong:#C4CDDA;--text:#0B1524;--text-2:#48566B;--text-3:#6B7A90;
-    --primary:#2A5CA8;--primary-hover:#21497F;--primary-active:#17355C;--primary-soft:#E9F0FA;--primary-line:#B9CEE8;
-    --brand:#B23A28;--brand-2:#D45A3F;--brand-soft:#FBECE9;
-    --success:#15823B;--success-soft:#E3F5E9;--warning:#9A6B00;--warning-soft:#FBF0D6;
-    --danger:#B3212F;--danger-soft:#FDECEE;--info:#0043CE;--info-soft:#E8F0FE;--focus:#2A5CA8;
-    --shadow-sm:0 1px 2px rgba(11,21,36,.05);
-    --shadow:0 1px 2px rgba(11,21,36,.05),0 10px 22px -12px rgba(11,21,36,.16);
-    --shadow-lg:0 4px 10px rgba(11,21,36,.08),0 26px 46px -16px rgba(11,21,36,.24);
-    --ar:"IBM Plex Sans Arabic",system-ui,Tahoma,sans-serif;--en:"IBM Plex Sans",system-ui,sans-serif;
-    --serif:"Source Serif 4","Markazi Text",Georgia,serif;
-    --mono:"IBM Plex Mono",ui-monospace,monospace;--ease:cubic-bezier(.22,.61,.36,1);
-    --r:6px;--r-lg:10px;--r-xl:14px;--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;--s8:64px;
-    --nav-w:252px;--head-h:64px;
-    --ch1:#2A5CA8;--ch2:#15823B;--ch3:#B23A28;--ch4:#6B3FA0;--ch5:#0C93AA;--ch6:#96660A;
+    --bg:#FBFAF7;--panel:#FFFFFF;--ink:#1A2420;--ink-soft:#5C665F;
+    --line:#ECE8DF;--line-2:#DFDACF;--gold:#A9772F;--gold-soft:#F4ECDC;
+    --go:#3B7355;--go-soft:#E6F0EA;--warn:#A9791F;--warn-soft:#F7EEDA;
+    --bad:#A2402F;--bad-soft:#F6E7E2;--muted:#9C978A;--side:#F6F3EC;
   }
-  @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
-    --bg:#0A0F18;--surface:#111927;--surface-2:#0E1622;--surface-3:#182234;--hover:#1E293B;
-    --sidebar:#070B12;--sidebar-2:#0D1420;--sidebar-line:#1C2942;--sidebar-txt:#9FB0C9;--sidebar-txt-2:#63748f;
-    --border:#22303F;--border-strong:#33455A;--text:#EAF0F8;--text-2:#A8B6CA;--text-3:#78899F;
-    --primary:#4589FF;--primary-hover:#78A9FF;--primary-active:#A6C8FF;--primary-soft:#152238;--primary-line:#2A4570;
-    --brand:#FF8A75;--brand-2:#FFA791;--brand-soft:#2A1B17;--success:#3FBF6A;--success-soft:#14271B;
-    --warning:#E5A93B;--warning-soft:#2A2210;--danger:#FF5C6B;--danger-soft:#2B1518;--info:#4589FF;--info-soft:#152238;
-    --shadow-sm:0 1px 2px rgba(0,0,0,.5);--shadow:0 2px 8px rgba(0,0,0,.45),0 16px 40px -12px rgba(0,0,0,.6);
-    --shadow-lg:0 8px 24px rgba(0,0,0,.5),0 32px 64px -16px rgba(0,0,0,.7);
-    --ch1:#4589FF;--ch2:#3FBF6A;--ch3:#FF8A75;--ch4:#A78BFA;--ch5:#22C3D6;--ch6:#E5B84B;
-  }}
-  :root[data-theme="dark"]{
-    --bg:#0A0F18;--surface:#111927;--surface-2:#0E1622;--surface-3:#182234;--hover:#1E293B;
-    --sidebar:#070B12;--sidebar-2:#0D1420;--sidebar-line:#1C2942;--sidebar-txt:#9FB0C9;--sidebar-txt-2:#63748f;
-    --border:#22303F;--border-strong:#33455A;--text:#EAF0F8;--text-2:#A8B6CA;--text-3:#78899F;
-    --primary:#4589FF;--primary-hover:#78A9FF;--primary-active:#A6C8FF;--primary-soft:#152238;--primary-line:#2A4570;
-    --brand:#FF8A75;--brand-2:#FFA791;--brand-soft:#2A1B17;--success:#3FBF6A;--success-soft:#14271B;
-    --warning:#E5A93B;--warning-soft:#2A2210;--danger:#FF5C6B;--danger-soft:#2B1518;--info:#4589FF;--info-soft:#152238;
-    --shadow-sm:0 1px 2px rgba(0,0,0,.5);--shadow:0 2px 8px rgba(0,0,0,.45),0 16px 40px -12px rgba(0,0,0,.6);
-    --shadow-lg:0 8px 24px rgba(0,0,0,.5),0 32px 64px -16px rgba(0,0,0,.7);
-    --ch1:#4589FF;--ch2:#3FBF6A;--ch3:#FF8A75;--ch4:#A78BFA;--ch5:#22C3D6;--ch6:#E5B84B;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ar);font-size:15px;line-height:1.55;
-    -webkit-font-smoothing:antialiased;transition:background .3s var(--ease),color .3s var(--ease)}
-  html[lang="en"] body{font-family:var(--en)}
-  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:plaintext}
-  button{font-family:inherit;cursor:pointer;color:inherit}
-  a{color:var(--primary);text-decoration:none}a:hover{text-decoration:underline}
-  h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.01em;font-family:var(--serif)}
-  :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
-  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-  @keyframes slideup{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .hidden{display:none!important}
-  .eyebrow{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--primary)}
-
-  /* ─── التخطيط: شريط جانبي + مساحة عمل ─── */
-  .layout{display:grid;grid-template-columns:var(--nav-w) 1fr;min-height:100vh}
-  .sidebar{background:var(--sidebar);color:var(--sidebar-txt);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
-    border-inline-end:1px solid var(--sidebar-line);z-index:40}
-  .sb-brand{display:flex;align-items:center;gap:12px;padding:20px var(--s5);border-bottom:1px solid var(--sidebar-line)}
-  .sb-brand .logo{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--brand),var(--brand-2));
-    display:grid;place-items:center;color:#fff;font-weight:700;font-size:19px;flex:none;box-shadow:0 4px 12px -2px rgba(199,70,52,.5)}
-  .sb-brand .t{font-size:15.5px;font-weight:600;color:#fff;line-height:1.25;font-family:var(--serif)}
-  .sb-brand .s{font-size:11.5px;color:var(--sidebar-txt-2);margin-top:1px}
-  .sb-nav{padding:var(--s4) var(--s3);display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
-  .sb-nav button{display:flex;align-items:center;gap:12px;width:100%;padding:11px 13px;border:0;background:transparent;
-    color:var(--sidebar-txt);font-size:14.5px;font-weight:500;border-radius:10px;text-align:start;transition:.15s var(--ease);position:relative}
-  .sb-nav button .sn-n{width:24px;height:24px;border-radius:7px;background:var(--sidebar-2);border:1px solid var(--sidebar-line);
-    display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--sidebar-txt-2);flex:none;transition:.15s var(--ease)}
-  .sb-nav button:hover{background:var(--sidebar-2);color:#fff}
-  .sb-nav button.on{background:linear-gradient(90deg,rgba(15,98,254,.16),transparent);color:#fff}
-  .sb-nav button.on::before{content:"";position:absolute;inset-inline-start:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--primary)}
-  .sb-nav button.on .sn-n{background:var(--primary);border-color:var(--primary);color:#fff}
-  .sb-foot{padding:var(--s4) var(--s5);border-top:1px solid var(--sidebar-line);font-size:11px;color:var(--sidebar-txt-2);line-height:1.6}
-  .workspace{min-width:0;display:flex;flex-direction:column}
-
-  /* ─── الشريط العلوي ─── */
-  .topbar{position:sticky;top:0;z-index:30;height:var(--head-h);background:color-mix(in srgb,var(--surface) 88%,transparent);
-    backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:var(--s4);padding:0 var(--s6)}
-  .tb-title{font-size:17px;font-weight:600}.tb-title .sub{font-size:12.5px;color:var(--text-3);font-weight:400}
-  .spacer{flex:1}.actions{display:flex;align-items:center;gap:var(--s3)}
-  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:3px}
-  .seg button{padding:6px 13px;font-size:13px;font-weight:600;background:transparent;color:var(--text-2);border:0;border-radius:6px;transition:.15s var(--ease)}
-  .seg button.on{background:var(--surface);color:var(--primary);box-shadow:var(--shadow-sm)}
-  .seg button:not(.on):hover{color:var(--text)}
-  .iconbtn{display:inline-grid;place-items:center;width:40px;height:40px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text-2);transition:.15s var(--ease)}
-  .iconbtn:hover{background:var(--hover);color:var(--text)}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding-inline:20px;font-size:14.5px;font-weight:600;border-radius:10px;border:1px solid transparent;transition:.15s var(--ease);white-space:nowrap}
-  .btn:disabled{opacity:.5;cursor:default}
-  .btn-primary,.btn.primary{background:var(--primary);color:#fff;box-shadow:0 6px 16px -6px rgba(15,98,254,.6)}
-  .btn-primary:hover:not(:disabled),.btn.primary:hover{background:var(--primary-hover)}
-  .btn-secondary{background:transparent;color:var(--primary);border-color:var(--primary-line)}.btn-secondary:hover{background:var(--primary-soft)}
-  .btn-ghost{background:var(--surface);color:var(--text-2);border-color:var(--border)}.btn-ghost:hover{background:var(--hover);color:var(--text)}
-
-  /* ─── حاوية المحتوى ─── */
-  .content{max-width:1240px;width:100%;margin:0 auto;padding:var(--s6)}
-  @media(max-width:640px){.content{padding:var(--s4)}}
-  .scr-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s4);flex-wrap:wrap;margin-bottom:var(--s5)}
-  .scr-title{font-size:26px;font-weight:700;letter-spacing:-.02em}
-  .section-gap{display:flex;flex-direction:column;gap:var(--s5);padding-bottom:var(--s7)}
-
-  /* ─── البطاقات ─── */
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:none}
-  .panel{padding:var(--s5)}.panel>h3{font-size:16px;margin-bottom:var(--s2)}.panel .sub{font-size:13.5px;color:var(--text-2);margin-bottom:var(--s4);line-height:1.6}
-  .subhead{font-size:12px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:var(--s5) 0 var(--s3)}
-  .pipe-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);flex-wrap:wrap;margin-bottom:var(--s4)}
-  .pipe-head h3{font-size:16px}
-
-  /* ─── شريط الأوامر (تحليل جديد) ─── */
-  .cmdbar{display:flex;align-items:flex-end;gap:var(--s4);flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);
-    border-radius:var(--r-lg);box-shadow:var(--shadow);padding:var(--s5);margin-bottom:var(--s5)}
-  .field{display:flex;flex-direction:column;gap:7px;position:relative}
-  .field label{font-size:12.5px;font-weight:600;color:var(--text-2)}
-  .control{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:10px;height:46px;padding-inline:14px;transition:.15s var(--ease)}
-  .control:focus-within{border-color:var(--primary);background:var(--surface);box-shadow:0 0 0 3px var(--primary-soft)}
-  .control input,.control select{border:0;outline:0;background:transparent;font-family:inherit;font-size:14.5px;color:var(--text);height:100%;min-width:0;width:100%}
-  .field.search{flex:1;min-width:240px}.mkt-field{min-width:240px;flex:1}
-  .range{display:flex;align-items:center;gap:8px}.range .dash{color:var(--text-3)}
-  .hs-chip{font-family:var(--mono);font-size:12px;font-weight:600;background:var(--primary-soft);color:var(--primary);padding:4px 9px;border-radius:6px;direction:ltr;white-space:nowrap;border:1px solid var(--primary-line)}
-  .drop{position:absolute;top:calc(100% + 6px);inset-inline:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);z-index:40;max-height:320px;overflow-y:auto;padding:6px}
-  .drow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer;border-radius:8px}
-  .drow:hover{background:var(--hover)}.drow .nm{font-size:14.5px;font-weight:500}
-  .mkt-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-  .mkt-chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;background:var(--primary-soft);color:var(--primary);border:1px solid var(--primary-line);padding:4px 6px 4px 11px;border-radius:40px}
-  .mkt-chip button{border:0;background:transparent;color:var(--primary);font-size:15px;line-height:1;padding:0 2px}
-  .mkt-hint{font-size:12px;color:var(--text-3);margin-top:6px;line-height:1.5}
-  .myprod{padding:var(--s5);margin-bottom:var(--s5);border-inline-start:4px solid var(--brand);border-radius:var(--r-lg)}
-  .mp-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:var(--s4)}
-  .mp-econ{display:flex;flex-wrap:wrap;gap:var(--s4)}
-  .mp-econ .e{display:flex;flex-direction:column;gap:5px}
-  .mp-econ .e label{font-size:11.5px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
-  .mp-econ .e .control{height:42px;width:150px}
-  .mp-hint{font-size:12.5px;color:var(--text-3);line-height:1.5;margin-top:var(--s4)}
-
-  /* ─── مقياس الاكتمال ─── */
-  .completeness{display:flex;align-items:center;gap:var(--s4);padding:var(--s4) var(--s5);margin-bottom:var(--s5);flex-wrap:wrap;border-radius:var(--r-lg)}
-  .comp-meter{height:8px;background:var(--surface-3);border-radius:6px;overflow:hidden}
-  .comp-meter .fill{display:block;height:100%;border-radius:6px;transition:width .6s var(--ease)}
-  .comp-label{font-size:13.5px;font-weight:600}.comp-pct{font-family:var(--mono);font-size:26px;font-weight:600}
-
-  /* ─── خط الأنابيب ─── */
-  .pipe{padding:var(--s5) var(--s6)}
-  .status{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;padding:6px 13px;border-radius:40px}
-  .status.ok{background:var(--success-soft);color:var(--success)}.status.warn{background:var(--warning-soft);color:var(--warning)}
-  .status.run{background:var(--primary-soft);color:var(--primary)}.status.idle{background:var(--surface-3);color:var(--text-2)}
-  .status .dot{width:7px;height:7px;border-radius:50%;background:currentColor}.run .dot{animation:pulse 1s infinite}
-  .steps{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s3)}
-  .steps-4{grid-template-columns:repeat(4,1fr)}
-  @media(max-width:860px){.steps,.steps-4{grid-template-columns:repeat(2,1fr)}}
-  .step{padding:var(--s4);border-radius:12px;background:var(--surface-2);border:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
-  .step.gap{background:var(--warning-soft);border-color:transparent}
-  .step.locked{opacity:.62;border-style:dashed}.step.locked .num-badge{background:var(--text-3)}
-  .step .sn{display:flex;align-items:center;gap:8px}.step .sn b{font-size:14px;font-weight:600}
-  .step .num-badge{width:22px;height:22px;border-radius:7px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
-  .step .sd{font-size:12px;color:var(--text-3);line-height:1.45}
-  .step .sf{display:flex;align-items:center;gap:7px;font-size:12.5px;margin-top:2px}.step .sf .dot{width:7px;height:7px;border-radius:50%;flex:none}.step .sf b{font-family:var(--mono)}
-
-  /* ─── بطاقة القرار (hero) — غلاف تقرير لا لوحة تطبيق: قاعدة علوية رفيعة +
-     عنوان بخط نصّي (serif) + مقياس دقيق رفيع، بلا ظل ثقيل ─── */
-  .decision{padding:var(--s6);position:relative;overflow:hidden;border-radius:var(--r-lg);border-top:3px solid var(--success)}
-  .decision.no{border-top-color:var(--danger)}.decision.watch{border-top-color:var(--warning)}
-  .d-head{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-bottom:var(--s5);padding-bottom:var(--s4);border-bottom:1px solid var(--border)}
-  .badge{font-size:12.5px;font-weight:700;padding:6px 15px;border-radius:40px;letter-spacing:.01em}
-  .b-go{background:var(--success-soft);color:var(--success)}.b-no{background:var(--danger-soft);color:var(--danger)}
-  .b-watch{background:var(--warning-soft);color:var(--warning)}.b-info{background:var(--info-soft);color:var(--info)}
-  .tag{font-size:12.5px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:5px 12px;border-radius:40px}
-  .d-grid{display:grid;grid-template-columns:1fr 200px;gap:var(--s6);align-items:center}
-  @media(max-width:760px){.d-grid{grid-template-columns:1fr}}
-  .d-verdict{font-family:var(--serif);font-size:32px;font-weight:600;line-height:1.25;text-wrap:balance;margin:8px 0 var(--s3);letter-spacing:-.01em}
-  .d-why{font-size:15.5px;color:var(--text-2);line-height:1.75;max-width:64ch}
-  .d-brief{margin:var(--s4) 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
-  .d-brief li{font-size:14.5px;color:var(--text-2);padding-inline-start:22px;position:relative;line-height:1.6}
-  .d-brief li::before{content:"";position:absolute;inset-inline-start:0;top:8px;width:8px;height:8px;border-radius:3px;background:var(--primary)}
-  .gauge{width:172px;height:172px;border-radius:50%;display:grid;place-items:center;margin-inline:auto;background:conic-gradient(var(--primary) calc(var(--p,0)*1%),var(--surface-3) 0)}
-  .gauge .in{width:150px;height:150px;border-radius:50%;background:var(--surface);display:grid;place-items:center;text-align:center;box-shadow:inset 0 0 0 1px var(--border)}
-  .gauge .n{font-family:var(--mono);font-size:36px;font-weight:600;line-height:1}.gauge .l{font-size:11.5px;color:var(--text-3);margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
-  .d-actions{display:flex;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--border)}
-  .score-big{font-family:var(--mono);font-size:52px;font-weight:600;color:var(--primary);line-height:1}
-
-  /* ─── جدول الأسواق ─── */
-  .dt-head{display:flex;align-items:center;justify-content:space-between;padding:var(--s4) var(--s5);border-bottom:1px solid var(--border)}
-  .dt-head h3{font-size:16px}.dt-head .cnt{font-size:13px;color:var(--text-3)}
-  table.dt{width:100%;border-collapse:collapse}
-  table.dt th{font-size:11.5px;font-weight:600;color:var(--text-3);text-align:start;padding:10px var(--s5);background:transparent;border-bottom:2px solid var(--border-strong);white-space:nowrap;text-transform:uppercase;letter-spacing:.05em}
-  table.dt td{padding:12px var(--s5);border-bottom:1px solid var(--border);font-size:14px;vertical-align:middle}
-  table.dt tbody tr{cursor:pointer;transition:background .12s var(--ease)}
-  table.dt tbody tr:nth-child(even){background:var(--surface-2)}
-  table.dt tbody tr:hover{background:var(--hover)}table.dt tr.sel{background:var(--primary-soft)!important;box-shadow:inset 3px 0 0 var(--primary)}
-  table.dt tbody tr:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
-  .rk{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--primary)}
-  .cty{display:flex;align-items:center;gap:10px}
-  .flag{font-family:var(--mono);font-size:11px;background:var(--surface-3);border:1px solid var(--border);padding:3px 7px;border-radius:6px;color:var(--text-2);direction:ltr}
-  .cname{font-weight:600}.gap-txt{color:var(--text-3);border-bottom:1px dotted var(--text-3);cursor:help;font-size:13px}
-  .bar{display:flex;align-items:center;gap:10px}.bar .bv{font-family:var(--mono);font-weight:600;color:var(--primary);min-width:26px}
-  .bar .track{flex:1;min-width:48px;height:7px;background:var(--surface-3);border-radius:5px;overflow:hidden}.bar .fill{display:block;height:100%;background:linear-gradient(90deg,var(--primary),var(--ch5));border-radius:5px}
-  .trend{display:flex;align-items:center;gap:8px}
-  .growth{font-family:var(--mono);font-size:12.5px;font-weight:600}.growth.up{color:var(--success)}.growth.down{color:var(--danger)}
-  .cov{font-size:12.5px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:4px 10px;border-radius:40px;white-space:nowrap}.cov.mid{color:var(--warning);background:var(--warning-soft);border-color:transparent}
-  .dt-foot{padding:11px var(--s5);font-size:12px;color:var(--text-3);font-family:var(--mono);border-top:1px solid var(--border);direction:ltr;text-align:start}
-  .body-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:var(--s4);align-items:start}
-  @media(max-width:960px){.body-grid{grid-template-columns:1fr}}
-  .body-grid>*,.duo>*{min-width:0}
-
-  /* ─── لوحة التفاصيل ─── */
-  .detail{position:sticky;top:calc(var(--head-h) + var(--s4))}.dpad{padding:var(--s5)}
-  .d-country{font-size:22px;font-weight:700}
-  .d-score{display:flex;align-items:baseline;gap:8px;margin:var(--s3) 0}.d-score .n{font-family:var(--mono);font-size:46px;font-weight:600;color:var(--primary);line-height:.9}.d-score .o{font-size:17px;color:var(--text-3)}
-  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin:var(--s4) 0;overflow-x:auto}
-  .tab{padding:11px 13px;font-size:13.5px;font-weight:600;color:var(--text-2);background:transparent;border:0;border-bottom:2px solid transparent;white-space:nowrap;transition:.15s var(--ease)}
-  .tab:hover{color:var(--text)}.tab.on{color:var(--primary);border-bottom-color:var(--primary)}
-  .panel-body{animation:slideup .25s var(--ease) both}
-  .kv{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:14.5px}.kv:last-child{border-bottom:0}.kv .kk{color:var(--text-2)}.kv .vv{font-weight:600}
-  .mypos{background:var(--brand-soft);border-radius:12px;padding:var(--s4);margin-bottom:var(--s4)}
-  .mypos h4{font-size:14.5px;font-weight:700;color:var(--brand);margin-bottom:6px}.mypos .big{font-size:14.5px;line-height:1.7}
-  .supplier{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:13.5px}.supplier:last-child{border-bottom:0}.supplier .sh{font-family:var(--mono);font-weight:600;color:var(--primary);white-space:nowrap}
-
-  /* ─── بطاقات المقاييس (شبكة) ─── */
-  .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:var(--s4)}
-  .mcard{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:var(--s4)}
-  .mcard .mc-l{font-size:12.5px;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-  .mcard .mc-v{font-family:var(--mono);font-size:24px;font-weight:600;margin-top:8px;line-height:1.1;color:var(--text)}
-  .mcard .mc-f{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:6px;direction:ltr;text-align:start;word-break:break-word}
-  .modeled{font-size:10.5px;font-weight:600;color:var(--warning);background:var(--warning-soft);padding:2px 7px;border-radius:40px}
-  .prov{font-size:11.5px;color:var(--text-3);font-family:var(--mono);margin-top:6px;direction:ltr;text-align:start;word-break:break-word;line-height:1.5}
-
-  /* ─── الأعمدة الأربعة ─── */
-  .pillar{margin-bottom:var(--s4)}
-  .pillar .ph{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:600;margin-bottom:6px}
-  .pillar .ph .num{color:var(--primary)}
-  .pillar .track{height:9px;background:var(--surface-3);border-radius:5px;overflow:hidden}
-  .pillar .track .fill{display:block;height:100%;background:linear-gradient(90deg,var(--primary),var(--ch5));border-radius:5px;transition:width .5s var(--ease)}
-
-  /* ─── الجداول العامة (سلالم/قوائم) ─── */
-  .ladder{width:100%;border-collapse:collapse;margin-top:6px}
-  .ladder th{font-size:11.5px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.03em;text-align:start;padding:9px 11px;border-bottom:1px solid var(--border-strong);white-space:nowrap}
-  .ladder td{padding:11px 11px;border-bottom:1px solid var(--border);font-size:13.5px;vertical-align:top}
-  .ladder tr.you{background:var(--brand-soft)}.ladder tr.you td{font-weight:700}
-  .you-tag{font-size:10.5px;font-weight:700;color:#fff;background:var(--brand);padding:2px 7px;border-radius:40px;margin-inline-start:6px}
-  .pill{font-size:10.5px;padding:2px 8px;border-radius:40px;background:var(--surface-3);border:1px solid var(--border);color:var(--text-2);white-space:nowrap}
-  .unverified{font-size:10.5px;padding:2px 8px;border-radius:40px;background:var(--warning-soft);color:var(--warning)}
-  .comp{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
-  .comp-h{display:flex;align-items:center;justify-content:space-between;gap:10px}.comp-nm{font-size:14px;font-weight:600}.comp-w{font-size:12.5px;color:var(--text-3)}
-  .comp-v{font-size:20px;font-weight:700;margin-top:4px;font-family:var(--mono)}
-  .gapline{display:inline-flex;align-items:center;gap:7px;margin-top:5px;font-size:13px;font-weight:600;color:var(--warning)}.gapline .dot{width:7px;height:7px;border-radius:50%;background:var(--warning);flex:none}
-  .list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:11px}
-  .list li{font-size:14px;line-height:1.6;padding-inline-start:20px;position:relative}.list li::before{content:"";position:absolute;inset-inline-start:0;top:8px;width:7px;height:7px;border-radius:50%;background:var(--primary)}
-  .limits{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:11px}.limits li{font-size:14px;line-height:1.6;padding-inline-start:22px;position:relative}.limits li::before{content:"—";position:absolute;inset-inline-start:0;color:var(--warning);font-weight:700}
-  .callout{font-size:13.5px;color:var(--text-2);background:var(--info-soft);border-inline-start:3px solid var(--info);border-radius:10px;padding:12px 14px;line-height:1.6;margin-top:var(--s3)}
-  .callout.warn{background:var(--warning-soft);border-color:var(--warning)}
-  .ins-list{display:flex;flex-direction:column;gap:12px}
-  .ins{background:var(--surface-2);border:1px solid var(--border);border-inline-start:3px solid var(--primary);border-radius:10px;padding:13px 15px}
-  .ins-p{font-size:14.5px;line-height:1.65;font-weight:600;color:var(--text-1)}
-  .ins-e{font-size:12px;color:var(--text-3);margin-top:7px;line-height:1.5}
-  .src-details{margin-top:14px;font-size:13px}.src-details summary{cursor:pointer;color:var(--text-3);font-weight:600;user-select:none}.src-details[open] summary{margin-bottom:10px}
-  .duo{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}@media(max-width:960px){.duo{grid-template-columns:1fr}}
-
-  /* ─── SWOT ─── */
-  .swotgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}@media(max-width:640px){.swotgrid{grid-template-columns:1fr}}
-  .swotcell{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:var(--s4)}
-  .swotcell h4{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:10px;color:var(--text-2)}
-
-  /* ─── حالات فارغة/جاهزة ─── */
-  .ready{padding:var(--s8) var(--s5);text-align:center;max-width:600px;margin:0 auto;border-radius:var(--r-lg)}
-  .ready h2{font-size:23px;margin-bottom:10px}.ready p{color:var(--text-2);margin-bottom:var(--s4);font-size:15px;line-height:1.6}
-  .ready .foot{font-size:13px;color:var(--text-3);margin-top:var(--s4);line-height:1.6}
-  .err{color:var(--danger);background:var(--danger-soft);border-radius:10px;padding:16px;font-size:14.5px}
-  .skl{height:16px;background:linear-gradient(90deg,var(--surface-2),var(--hover),var(--surface-2));background-size:200% 100%;border-radius:6px;animation:pulse 1.2s infinite}
-
-  /* ─── الإعدادات ─── */
-  .settings{max-width:860px;margin:0 auto}
-  .sec-ttl{font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--primary);margin:var(--s5) 0 var(--s3)}
-  .srccard{display:flex;align-items:center;gap:var(--s4);padding:var(--s4);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;background:var(--surface);box-shadow:var(--shadow-sm)}
-  .srccard .body{flex:1;min-width:0}.srccard .nm{font-size:15px;font-weight:600}.srccard .ds{font-size:13px;color:var(--text-2)}
-  .stbadge{font-size:11.5px;padding:4px 11px;border-radius:40px;white-space:nowrap}.st-on{background:var(--success-soft);color:var(--success)}.st-off{background:var(--surface-3);color:var(--text-2)}
-  .keyin{font-family:var(--mono);font-size:13px;border:1px solid var(--border-strong);border-radius:9px;padding:10px 12px;width:220px;max-width:44vw;outline:0;background:var(--surface-2);color:var(--text)}.keyin:focus{border-color:var(--primary);background:var(--surface)}
-  .switch{width:44px;height:25px;border-radius:40px;background:var(--border-strong);position:relative;border:0;transition:.2s var(--ease);flex:none}.switch.on{background:var(--primary)}.switch .k{position:absolute;top:3px;inset-inline-start:3px;width:19px;height:19px;border-radius:50%;background:#fff;transition:.2s var(--ease)}.switch.on .k{inset-inline-start:22px}
-
-  .toast{position:fixed;inset-block-end:24px;inset-inline-end:24px;background:var(--sidebar);color:#fff;padding:13px 20px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:var(--shadow-lg);z-index:100;animation:slideup .25s var(--ease);max-width:90vw}
-  footer{border-top:1px solid var(--border);padding:var(--s4) var(--s6);color:var(--text-3);font-size:12.5px}
-
-  /* ─── مركز القيادة البصري: KPI + رسوم ─── */
-  .sb-foot{display:flex;align-items:center;gap:8px}.sb-dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px rgba(63,191,106,.18);flex:none}
-  /* شريط مؤشرات واحد متّصل بفواصل رأسية — لا أربع بطاقات منفصلة (نمط لوحات القيادة
-     المؤسسية: Bloomberg/PitchBook تعرض الأرقام كشريط إحصاء متلاصق لا صناديق متكررة). */
-  .kpis{display:flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
-  .kpis>*,.charts>*{min-width:0}
-  .kpi{flex:1 1 200px;padding:var(--s5);display:flex;flex-direction:column;gap:8px;position:relative;border-inline-start:1px solid var(--border)}
-  .kpi:first-child{border-inline-start:0}
-  @media(max-width:700px){.kpi{border-inline-start:0;border-top:1px solid var(--border);flex-basis:50%}.kpi:nth-child(-n+2){border-top:0}}
-  @media(max-width:480px){.kpi{flex-basis:100%}.kpi:nth-child(1){border-top:0}}
-  .kpi .kl{font-size:11.5px;font-weight:600;color:var(--text-2);line-height:1.4;text-transform:uppercase;letter-spacing:.04em}
-  .kpi .kvv{font-family:var(--mono);font-size:28px;font-weight:600;line-height:1.05;direction:ltr;unicode-bidi:plaintext;text-align:start;color:var(--text)}
-  .kpi .kvv .u{font-size:15px;color:var(--text-3);font-weight:500}
-  .kpi .kvv.gap{font-family:var(--ar);font-size:15px;color:var(--warning);direction:inherit;text-transform:none;letter-spacing:0}
-  .kpi .kfoot{font-size:11px;color:var(--text-3);font-family:var(--mono);direction:ltr;text-align:start;min-height:14px;word-break:break-word;line-height:1.5}
-  .kpi-accent{background:linear-gradient(160deg,var(--primary-soft),var(--surface) 65%)}
-  .kpi-accent::after{content:"";position:absolute;inset-block-start:0;inset-inline-start:0;inset-inline-end:0;height:2px;background:var(--primary)}
-  .kpi-accent .kvv{color:var(--primary)}
-  .charts{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);align-items:start}
-  @media(max-width:960px){.charts{grid-template-columns:1fr}}
-  .chart-empty{border:1.5px dashed var(--border-strong);border-radius:12px;padding:var(--s6);text-align:center;color:var(--text-3);font-size:13.5px;background:var(--surface-2);margin-top:8px}
-  .hbars{display:flex;flex-direction:column;gap:2px;margin-top:8px}
-  .hbar-row{display:grid;grid-template-columns:minmax(80px,120px) 1fr 40px;align-items:center;gap:12px;padding:8px;border-radius:8px;cursor:pointer;transition:background .12s var(--ease)}
-  .hbar-row:hover{background:var(--hover)}.hbar-row.sel{background:var(--primary-soft)}
-  .hbar-row .lbl{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hbar-row .track{height:20px;background:var(--surface-3);border-radius:6px;overflow:hidden}
-  .hbar-row .hfill{display:block;height:100%;background:linear-gradient(90deg,var(--primary),var(--ch5));border-radius:6px;transition:width .5s var(--ease)}
-  .hbar-row .val{font-size:13px;font-weight:700;text-align:end;color:var(--primary)}
-  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:4px 0 10px}
-  .lg{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--text-2)}
-  .lg .sw,.dlegend .sw{width:12px;height:12px;border-radius:4px;flex:none}
-  .linewrap{direction:ltr}.linewrap svg{display:block;width:100%;height:auto}
-  .donutwrap{display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap;margin-top:8px}
-  .donutwrap svg{flex:none}
-  .dlegend{display:flex;flex-direction:column;gap:9px;min-width:150px;flex:1}
-  .dlegend .drow2{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
-  .dlegend .nm{display:inline-flex;align-items:center;gap:8px;font-weight:600;min-width:0}
-  .dlegend .nm span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
-  /* ─── التشخيص الحيّ ─── */
-  .diag-banner{font-size:13.5px;font-weight:600;padding:10px 14px;border-radius:10px;margin-bottom:6px}
-  .diag-banner.diag-ok{background:var(--success-soft);color:var(--success)}.diag-banner.diag-bad{background:var(--danger-soft);color:var(--danger)}
-  .diag-row{border-top:1px solid var(--border);padding:11px 0}
-  .diag-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.diag-h b{font-size:14.5px}
-  .diag-dot{width:10px;height:10px;border-radius:50%;flex:none}
-  .diag-dot.diag-ok{background:var(--success)}.diag-dot.diag-warn{background:var(--warning)}.diag-dot.diag-bad{background:var(--danger)}.diag-dot.diag-gap{background:var(--text-3)}
-  .diag-badge{font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:40px}
-  .diag-badge.diag-ok{background:var(--success-soft);color:var(--success)}.diag-badge.diag-warn{background:var(--warning-soft);color:var(--warning)}.diag-badge.diag-bad{background:var(--danger-soft);color:var(--danger)}.diag-badge.diag-gap{background:var(--surface-3);color:var(--text-2)}
-  .diag-ms{margin-inline-start:auto;font-size:11.5px;color:var(--text-3)}
-  .diag-hint{font-size:12.5px;color:var(--text-2);line-height:1.6;margin-top:6px}
-
-  /* ─── الاستجابة: طيّ الشريط الجانبي ─── */
-  @media(max-width:900px){
-    .layout{grid-template-columns:1fr}
-    .sidebar{position:sticky;top:0;height:auto;flex-direction:row;align-items:center;border-inline-end:0;border-bottom:1px solid var(--sidebar-line);overflow-x:auto}
-    .sb-brand{border-bottom:0;border-inline-end:1px solid var(--sidebar-line);padding:12px var(--s4);flex:none}
-    .sb-brand .s{display:none}
-    .sb-nav{flex-direction:row;padding:8px var(--s3);gap:4px;flex:1}
-    .sb-nav button{white-space:nowrap;padding:9px 12px}.sb-nav button.on::before{inset:auto 8px 0 8px;width:auto;height:3px;top:auto}
-    .sb-nav button span:not(.sn-n){display:none}
-    .sb-foot{display:none}
-    .topbar{padding:0 var(--s4)}.tb-title .sub{display:none}
-  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);height:100vh;overflow:hidden;
+    font-family:"IBM Plex Sans Arabic",sans-serif;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .num{font-family:"IBM Plex Mono",monospace;font-feature-settings:"tnum";direction:ltr;unicode-bidi:plaintext}
+  .app{display:grid;grid-template-columns:230px 1fr;height:100vh}
+  @media(max-width:840px){.app{grid-template-columns:1fr}.rail{display:none!important}}
+  .rail{background:var(--side);border-inline-end:1px solid var(--line);display:flex;flex-direction:column;padding:16px 12px}
+  .rail .brand{display:flex;align-items:baseline;gap:8px;padding:6px 8px 16px}
+  .rail .brand b{font-family:"Markazi Text",serif;font-size:26px;font-weight:700;line-height:1}
+  .rail .brand span{font-size:11px;color:var(--muted)}
+  .navbtn{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-soft);
+    padding:11px 12px;border-radius:10px;cursor:pointer;font-weight:500;margin-bottom:3px}
+  .navbtn:hover{background:#EEEAE0}.navbtn.on{background:var(--ink);color:#fff}
+  .rail-lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;padding:14px 10px 8px;font-weight:600}
+  .hist{font-size:12.5px;color:var(--ink-soft);padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hist:hover{background:#EEEAE0}
+  .rail-foot{margin-top:auto}
+  .gear{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);padding:11px 12px;border-radius:10px;cursor:pointer}
+  .gear:hover{background:#EEEAE0}
+  .stage{overflow-y:auto;position:relative}
+  .view{display:none;min-height:100vh}.view.on{display:block}
+  .wrap{max-width:940px;margin:0 auto;padding:0 30px}
+  .topbar{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;background:var(--bg);z-index:5;gap:10px}
+  .topbar .ttl{font-family:"Markazi Text",serif;font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .modes{display:flex;gap:4px;background:#EFEBE2;border-radius:9px;padding:3px}
+  .mode{font-size:13px;padding:6px 14px;border-radius:7px;cursor:pointer;color:var(--ink-soft)}
+  .mode.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .band{padding:34px 0 6px}
+  .eyebrow{color:var(--gold);font-size:12px;font-weight:700;letter-spacing:2px;margin-bottom:8px}
+  .band h1{font-family:"Markazi Text",serif;font-size:36px;font-weight:700;line-height:1.15}
+  .band .sub{color:var(--ink-soft);font-size:15px;margin-top:4px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px;margin-top:22px}
+  .card.dash{border-style:dashed;border-color:var(--line-2);background:#FDFBF6}
+  .flabel{font-size:14px;font-weight:600;margin-bottom:10px;display:block}
+  .search{position:relative}
+  .search input{width:100%;height:54px;border:1.5px solid var(--line-2);border-radius:12px;padding:0 50px 0 16px;font-family:inherit;font-size:16px;background:#fff;color:var(--ink)}
+  .search input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 4px var(--gold-soft)}
+  .drop{position:absolute;top:58px;inset-inline:0;background:#fff;border:1px solid var(--line-2);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.08);z-index:20;max-height:260px;overflow-y:auto;padding:6px;display:none}
+  .drop.open{display:block}
+  .drow{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px}
+  .drow:hover{background:var(--gold-soft)}
+  .drow .hs{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted)}
+  .resolved{display:none;align-items:center;gap:8px;margin-top:11px;font-size:13px;color:var(--go);background:var(--go-soft);border-radius:8px;padding:8px 12px;width:fit-content}
+  .resolved.on{display:flex}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media(max-width:840px){.row2{grid-template-columns:1fr}}
+  .allm{font-size:13px;color:var(--ink-soft);padding:10px;border-radius:8px;cursor:pointer;border:1px dashed var(--line-2);text-align:center;margin-bottom:6px}
+  .allm:hover,.allm.sel{border-color:var(--gold);color:var(--gold);background:var(--gold-soft)}
+  .marketbox{max-height:210px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;padding:6px}
+  .mrow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+  .mrow:hover{background:var(--gold-soft)}.mrow.sel{background:var(--go-soft)}
+  .mrow .iso{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);margin-inline-start:auto}
+  .presets{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .preset{font-size:13px;padding:7px 13px;border:1px solid var(--line-2);border-radius:8px;cursor:pointer;background:#fff;color:var(--ink-soft)}
+  .preset.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .yval{font-family:"IBM Plex Mono",monospace;font-size:20px;font-weight:600;color:var(--gold)}
+  .fourcol{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+  @media(max-width:840px){.fourcol{grid-template-columns:repeat(2,1fr)}}
+  .mini label{font-size:12px;color:var(--ink-soft);display:block;margin-bottom:6px}
+  .mini input,.mini select{width:100%;height:42px;border:1px solid var(--line-2);border-radius:9px;padding:0 11px;font-family:inherit;font-size:14px;background:#fff;color:var(--ink)}
+  .opthead{display:flex;align-items:center;gap:10px;margin-bottom:5px}
+  .opthead b{font-family:"Markazi Text",serif;font-size:21px;font-weight:600}
+  .opttag{font-size:11px;color:var(--ink-soft);background:var(--line);padding:3px 9px;border-radius:6px}
+  .runbar{display:flex;align-items:center;justify-content:space-between;margin:26px 0 50px;gap:20px;flex-wrap:wrap}
+  .rsum{font-size:14px;color:var(--ink-soft)}.rsum b{color:var(--ink)}
+  .runbtn{background:var(--ink);color:#fff;border:none;border-radius:12px;padding:15px 32px;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer}
+  .runbtn:hover{background:#0f1712}.runbtn:disabled{opacity:.5;cursor:default}
+  .verdict{margin:24px 0;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 28px;display:grid;grid-template-columns:1fr auto;gap:26px;align-items:center}
+  @media(max-width:840px){.verdict{grid-template-columns:1fr}}
+  .vtag{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:5px 12px;border-radius:20px;margin-bottom:12px;background:var(--warn-soft);color:var(--warn)}
+  .vtag.go{background:var(--go-soft);color:var(--go)}.vtag.no{background:var(--bad-soft);color:var(--bad)}
+  .vtag .d{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .verdict h2{font-family:"Markazi Text",serif;font-size:28px;font-weight:700;line-height:1.25;margin-bottom:10px}
+  .verdict p{color:var(--ink-soft);font-size:15px;max-width:62ch}
+  .conf{text-align:center;padding-inline-start:24px;border-inline-start:1px solid var(--line);min-width:140px}
+  .conf .lvl{font-family:"Markazi Text",serif;font-size:24px;font-weight:700;color:var(--warn)}
+  .conf .cap{font-size:12px;color:var(--muted);margin-top:3px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:840px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .kpi .lab{font-size:12.5px;color:var(--ink-soft);margin-bottom:8px}
+  .kpi .val{font-size:24px;font-weight:600;margin-bottom:7px}.kpi .val small{font-size:14px;color:var(--ink-soft);font-weight:500}
+  .state{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:12px}
+  .s-good{background:var(--go-soft);color:var(--go)}.s-warn{background:var(--warn-soft);color:var(--warn)}.s-mut{background:var(--line);color:var(--ink-soft)}
+  .kpi .src{font-size:11px;color:var(--muted);margin-top:9px}
+  .grid{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin:18px 0}
+  @media(max-width:840px){.grid{grid-template-columns:1fr}}
+  .bcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;min-width:0}
+  .bcard h3{font-family:"Markazi Text",serif;font-size:22px;font-weight:600;margin-bottom:3px}
+  .bcard .note{font-size:12px;color:var(--muted);margin-bottom:16px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:start;font-size:12px;color:var(--muted);font-weight:600;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  td{padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}tr:last-child td{border-bottom:none}
+  .rowname{font-weight:600}
+  .bar{height:6px;border-radius:4px;background:var(--line);width:90px;display:inline-block;overflow:hidden;vertical-align:middle}
+  .bar i{display:block;height:100%;background:var(--gold)}
+  .you td{background:var(--gold-soft)}.you .rowname{color:var(--gold)}
+  .funnel{display:flex;flex-direction:column;gap:8px}
+  .fl{border-radius:8px;padding:12px 15px;color:#fff}.fl .k{font-size:12px;opacity:.9}.fl .v{font-size:18px;font-weight:600;font-family:"IBM Plex Mono",monospace;direction:ltr}
+  .f1{background:#2C4A43}.f2{background:#3E6A5E;margin:0 8%}.f3{background:var(--gold);margin:0 18%}
+  .price{grid-column:1/-1;background:linear-gradient(180deg,#fff,#FDFBF6);border-color:var(--line-2)}
+  .newbadge{background:var(--go);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;margin-inline-start:8px}
+  .rec{text-align:center;padding:14px 18px;background:var(--go-soft);border:1px solid var(--go);border-radius:12px;width:fit-content}
+  .rec .k{font-size:12px;color:var(--go);font-weight:600}.rec .v{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:600;margin:3px 0;direction:ltr}.rec .s{font-size:11px;color:var(--ink-soft)}
+  .next{background:var(--ink);color:#fff;border-radius:14px;padding:22px 26px;margin:18px 0;display:flex;align-items:center;justify-content:space-between;gap:22px;flex-wrap:wrap}
+  .next h4{font-family:"Markazi Text",serif;font-size:21px;font-weight:600;margin-bottom:5px}
+  .next ol{margin-top:10px;padding-inline-start:18px;color:#D4DEDA;font-size:13px}
+  .next .cta{background:var(--gold);color:#fff;border:none;border-radius:8px;padding:11px 20px;font-family:inherit;font-weight:600;font-size:14px;white-space:nowrap;cursor:pointer}
+  .toc{border-top:1px solid var(--line);padding:20px 0 50px}
+  .toc .h{font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:12px}
+  .tocg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px 24px}
+  @media(max-width:840px){.tocg{grid-template-columns:repeat(2,1fr)}}
+  .ti{display:flex;gap:9px;font-size:12.5px;padding:5px 0;color:var(--ink-soft)}.ti b{color:var(--gold);font-family:"IBM Plex Mono",monospace;font-size:11px}
+  .expbtn{display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .gap{color:var(--muted)}
+  .empty{padding:70px 20px;text-align:center;color:var(--ink-soft);font-size:15px}
+  .cstream{padding:30px 0;flex:1;overflow-y:auto}
+  .turn{max-width:700px;margin:0 auto 24px;padding:0 24px}
+  .turn.me{display:flex;justify-content:flex-start}
+  .me .txt{background:var(--gold-soft);border-radius:16px 16px 16px 5px;padding:12px 18px;font-size:15px;max-width:80%}
+  .ai{display:flex;gap:13px}
+  .ava{width:30px;height:30px;border-radius:8px;background:var(--ink);color:#fff;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:"Markazi Text",serif;font-weight:700;font-size:16px}
+  .aibody{flex:1;min-width:0}.aibody>p{font-size:15px;margin-bottom:12px}
+  .agents{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px;background:var(--panel)}
+  .ahead{display:flex;align-items:center;gap:9px;padding:11px 15px;font-size:13px;font-weight:600;background:#FCFBF8}
+  .ahead .p{margin-inline-start:auto;font-size:12px;color:var(--muted);font-weight:500}
+  .alist{padding:4px 8px 8px}
+  .arow{display:flex;align-items:center;gap:10px;padding:7px 8px;font-size:13px;border-radius:7px}
+  .abadge{width:6px;height:6px;border-radius:50%}.b-done{background:var(--go)}.b-off{border:1px solid var(--line-2)}
+  .aname{flex:1}.aout{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--go);direction:ltr}.aout.off{color:var(--muted);font-family:inherit}
+  .rescard{border:1px solid var(--line-2);border-radius:14px;padding:20px;margin-bottom:12px;background:var(--panel)}
+  .rescard h4{font-family:"Markazi Text",serif;font-size:22px;font-weight:600;margin:8px 0}
+  .rescard p{font-size:14.5px;color:var(--ink-soft)}
+  .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .abtn{font-size:13px;padding:9px 15px;border-radius:9px;border:1px solid var(--line-2);background:#fff;cursor:pointer;color:var(--ink);font-family:inherit}
+  .abtn.main{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .composer{border-top:1px solid var(--line);padding:14px 24px 20px}
+  .cbox{max-width:700px;margin:0 auto;background:#fff;border:1.5px solid var(--line-2);border-radius:15px;padding:8px 8px 8px 16px;display:flex;align-items:flex-end;gap:10px}
+  .cbox:focus-within{border-color:var(--gold)}
+  .cbox textarea{flex:1;border:none;resize:none;font-family:inherit;font-size:15px;background:transparent;padding:9px 0;min-height:24px;outline:none;color:var(--ink)}
+  .sendb{width:38px;height:38px;border-radius:11px;background:var(--ink);color:#fff;border:none;cursor:pointer;font-size:16px}
+  .fnote{max-width:700px;margin:8px auto 0;font-size:11px;color:var(--muted);text-align:center}
+  .overlay{position:fixed;inset:0;background:rgba(26,36,32,.28);opacity:0;visibility:hidden;transition:.2s;z-index:40}
+  .overlay.open{opacity:1;visibility:visible}
+  .drawer{position:fixed;inset-block:0;inset-inline-start:0;width:400px;max-width:92vw;background:var(--bg);box-shadow:6px 0 30px rgba(0,0,0,.12);transform:translateX(-100%);transition:.25s;z-index:41;display:flex;flex-direction:column}
+  [dir="rtl"] .drawer{transform:translateX(100%)}
+  .drawer.open{transform:translateX(0)!important}
+  .dhead{padding:20px 22px 15px;border-bottom:1px solid var(--line)}
+  .dhead h3{font-family:"Markazi Text",serif;font-size:22px;font-weight:600}
+  .dhead .shared{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--go);background:var(--go-soft);padding:3px 9px;border-radius:6px;margin-top:6px}
+  .dbody{flex:1;overflow-y:auto;padding:15px 18px 30px}
+  .slbl{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:1px;margin:12px 4px 9px}
+  .acard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:10px}
+  .atop{display:flex;align-items:center;gap:11px}.aname2{flex:1}.aname2 b{font-size:13.5px;font-weight:600;display:block}.aname2 span{font-size:11px;color:var(--muted)}
+  .tg{width:40px;height:23px;border-radius:12px;background:var(--go);position:relative;cursor:pointer;flex-shrink:0}.tg.off{background:var(--line-2)}
+  .tg i{position:absolute;top:2.5px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;inset-inline-end:2.5px}.tg.off i{inset-inline-end:19.5px}
+  .cmd{margin-top:11px}.cmd label{font-size:11px;color:var(--ink-soft);display:block;margin-bottom:6px}
+  .cmd textarea{width:100%;font-family:inherit;font-size:12.5px;line-height:1.55;border:1px solid var(--line-2);border-radius:9px;padding:9px 11px;background:#FCFBF7;color:var(--ink);resize:none;min-height:48px}
+  .cmd textarea:focus{outline:none;border-color:var(--gold)}
+  .paidtag{font-size:10px;font-weight:700;color:var(--gold);background:var(--gold-soft);padding:2px 7px;border-radius:5px;margin-inline-start:6px}
+  .dfoot{padding:13px 20px;border-top:1px solid var(--line);display:flex;gap:10px}
+  .saveb{flex:1;background:var(--ink);color:#fff;border:none;border-radius:10px;padding:12px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer}
+  .resetb{background:#fff;border:1px solid var(--line-2);border-radius:10px;padding:12px 16px;font-family:inherit;font-size:13px;color:var(--ink-soft);cursor:pointer}
+  .keyrow{display:flex;gap:8px;margin-top:8px}
+  .keyrow input{flex:1;height:38px;border:1px solid var(--line-2);border-radius:8px;padding:0 10px;font-family:"IBM Plex Mono",monospace;font-size:12px;background:#fff;color:var(--ink)}
+  .toast{position:fixed;bottom:22px;inset-inline-start:50%;transform:translateX(50%);background:var(--ink);color:#fff;padding:11px 20px;border-radius:10px;font-size:13.5px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+  ::-webkit-scrollbar{width:9px}::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:5px}
 </style>
 </head>
 <body>
-<div class="layout">
-  <aside class="sidebar">
-    <div class="sb-brand"><div class="logo">S</div><div><div class="t" data-t="appName"></div><div class="s" data-t="appTag"></div></div></div>
-    <nav class="sb-nav" id="scrnav">
-      <button data-scr="1" class="on"><span class="sn-n">1</span><span data-t="nav1"></span></button>
-      <button data-scr="2"><span class="sn-n">2</span><span data-t="nav2"></span></button>
-      <button data-scr="3"><span class="sn-n">3</span><span data-t="nav3"></span></button>
-      <button data-scr="4"><span class="sn-n">4</span><span data-t="nav4"></span></button>
-      <button data-scr="5"><span class="sn-n">5</span><span data-t="nav5"></span></button>
-      <button data-scr="6"><span class="sn-n">6</span><span data-t="nav6"></span></button>
-      <button data-scr="7"><span class="sn-n">7</span><span data-t="nav7"></span></button>
-      <button data-scr="8"><span class="sn-n">8</span><span data-t="nav8"></span></button>
-    </nav>
-    <div class="sb-foot"><span class="sb-dot"></span><span data-t="footBadge"></span></div>
-  </aside>
-
-  <div class="workspace">
-    <header class="topbar">
-      <div class="tb-title" data-t="appName"></div>
-      <div class="spacer"></div>
-      <div class="actions">
-        <div class="seg" id="langSeg" role="group" aria-label="Language"><button data-lang="ar" class="on">العربية</button><button data-lang="en">EN</button></div>
-        <button class="iconbtn" id="settingsBtn" aria-label="Settings"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg></button>
-        <button class="iconbtn" id="themeBtn" aria-label="Theme"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19"/></svg></button>
-        <button class="btn btn-primary" id="runBtn" disabled><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9z"/></svg><span data-t="analyze"></span></button>
-      </div>
-    </header>
-
-    <main id="dashboard" class="content">
-      <div class="scr-head"><h1 class="scr-title" data-t="nav1"></h1></div>
-      <div class="cmdbar">
-        <div class="field search">
-          <label data-t="searchLabel"></label>
-          <div class="control"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="search" autocomplete="off" /><span class="hs-chip hidden" id="hschip"></span></div>
-          <div class="drop hidden" id="drop"></div>
-        </div>
-        <div class="field"><label data-t="studyYears"></label><div class="control range"><select id="yFrom"></select><span class="dash">—</span><select id="yTo"></select></div></div>
-        <div class="field search mkt-field">
-          <label data-t="targetMarkets"></label>
-          <div class="control"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.8" stroke-linecap="round"><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg><input id="mktSearch" autocomplete="off" /></div>
-          <div class="drop hidden" id="mktDrop"></div>
-          <div id="mktChips" class="mkt-chips"></div>
-          <div class="mkt-hint" data-t="targetMarketsHint"></div>
-        </div>
-      </div>
-
-      <section class="card myprod">
-        <div class="mp-title"><span class="eyebrow" data-t="myProduct"></span><span class="hs-chip hidden" id="mpHs"></span></div>
-        <div class="mp-econ">
-          <div class="e"><label data-t="cost"></label><div class="control"><input id="mpCost" type="number" min="0" step="0.01" class="num"/></div></div>
-          <div class="e"><label data-t="myPrice"></label><div class="control"><input id="mpPrice" type="number" min="0" step="0.01" class="num"/></div></div>
-          <div class="e"><label data-t="shipping"></label><div class="control"><input id="mpShip" type="number" min="0" step="0.01" class="num"/></div></div>
-          <div class="e"><label data-t="tier"></label><div class="control"><select id="mpTier"></select></div></div>
-          <div class="e"><label data-t="capacity"></label><div class="control"><input id="mpCap" type="number" min="0" step="1" class="num"/></div></div>
-        </div>
-        <div class="mp-hint" data-t="mpHint"></div>
-      </section>
-
-      <div class="card completeness hidden" id="completeness"></div>
-      <div id="resultArea"></div>
-    </main>
-
-    <main id="screens" class="content hidden"><div id="screenBody" style="padding-bottom:var(--s7)"></div></main>
-
-    <main id="settings" class="content hidden"><div class="settings"><h1 class="scr-title" data-t="settingsTitle"></h1><div class="sub" data-t="settingsSub" style="color:var(--text-2);margin:8px 0 var(--s4)"></div><div id="settingsBody"></div><div id="dataPanels"></div></div></main>
+<div class="app">
+  <div class="rail">
+    <div class="brand"><b>سِلك</b><span>ذكاء الأسواق</span></div>
+    <div class="navbtn on" data-go="input">＋ تحليل جديد</div>
+    <div class="navbtn" data-go="board">▦ اللوحة الأخيرة</div>
+    <div class="navbtn" data-go="chat">✎ دردشة</div>
+    <div class="rail-lbl">التحليلات الأخيرة</div>
+    <div id="histList"></div>
+    <div class="rail-foot"><div class="gear" id="gearBtn">⚙ إعدادات الوكلاء</div></div>
   </div>
+
+  <div class="stage">
+    <!-- ===== INPUT ===== -->
+    <div class="view on" id="v-input">
+      <div class="topbar"><span class="ttl">تحليل جديد</span>
+        <div class="modes"><span class="mode on">إدخال</span><span class="mode" data-go="chat">دردشة</span></div></div>
+      <div class="wrap">
+        <div class="band"><div class="eyebrow">ابدأ بمنتجك</div><h1>حلّل سوق تصدير</h1>
+          <div class="sub">اكتب المنتج، اختر السوق، وحدّد سنوات الدراسة — والمنصة تسحب البيانات الحقيقية.</div></div>
+        <div class="card">
+          <label class="flabel">١ · ما المنتج؟</label>
+          <div class="search"><input id="pSearch" placeholder="تمر، زعفران، عسل، رطب…" autocomplete="off">
+            <div class="drop" id="pDrop"></div></div>
+          <div class="resolved" id="pResolved"></div>
+        </div>
+        <div class="row2">
+          <div class="card">
+            <label class="flabel">٢ · السوق المستهدف</label>
+            <div class="allm sel" id="allMarkets">قارن كل الأسواق — دع المنصة ترتّبها</div>
+            <div class="marketbox" id="marketBox"></div>
+          </div>
+          <div class="card">
+            <label class="flabel">٣ · سنوات الدراسة</label>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+              <span class="yval" id="yearLabel"></span><span style="font-size:13px;color:var(--ink-soft)" id="yearSpanLbl"></span></div>
+            <div class="presets">
+              <span class="preset on" data-span="5">آخر ٥ سنوات</span>
+              <span class="preset" data-span="3">٣ سنوات</span>
+              <span class="preset" data-span="1">سنة واحدة</span></div>
+          </div>
+        </div>
+        <div class="card dash">
+          <div class="opthead"><b>٤ · بطاقة منتجك</b><span class="opttag">اختياري</span></div>
+          <div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px">أدخل تكلفتك لتفعيل «موقعك التنافسي» واقتراح التسعير.</div>
+          <div class="fourcol">
+            <div class="mini"><label>تكلفتك / وحدة</label><input class="num" id="cCost" type="number" step="0.01"></div>
+            <div class="mini"><label>سعرك المستهدف</label><input class="num" id="cPrice" type="number" step="0.01"></div>
+            <div class="mini"><label>الفئة</label><select id="cTier"><option value="premium">فاخر</option><option value="standard">قياسي</option><option value="economy">اقتصادي</option></select></div>
+            <div class="mini"><label>الطاقة الشهرية</label><input class="num" id="cCap" type="number"></div>
+          </div>
+        </div>
+        <div class="runbar">
+          <div class="rsum" id="runSum">اختر منتجاً للبدء</div>
+          <button class="runbtn" id="runBtn" disabled>حلّل السوق ←</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== BOARD ===== -->
+    <div class="view" id="v-board">
+      <div class="topbar"><span class="ttl" id="bTitle">اللوحة</span>
+        <div style="display:flex;gap:8px">
+          <button class="expbtn" id="pdfBtn">⇩ تصدير التقرير (Word/PDF)</button>
+          <button class="abtn" id="mdBtn">Markdown</button>
+        </div></div>
+      <div class="wrap" id="boardBody"><div class="empty">شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.</div></div>
+    </div>
+
+    <!-- ===== CHAT ===== -->
+    <div class="view" id="v-chat" style="flex-direction:column;height:100vh">
+      <div class="topbar"><span class="ttl">دردشة</span>
+        <div class="modes"><span class="mode" data-go="input">إدخال</span><span class="mode on">دردشة</span></div></div>
+      <div class="cstream" id="cStream">
+        <div class="turn"><div class="ai"><div class="ava">س</div><div class="aibody">
+          <p>اسأل عن أي منتج وسوق — مثال: «حلّل التمور في الصين لآخر ٥ سنوات». أستخدم نفس الوكلاء ونفس إعداداتهم في المسار الأساسي.</p>
+        </div></div></div>
+      </div>
+      <div class="composer"><div class="cbox"><textarea id="chatBox" placeholder="اسأل عن أي منتج أو سوق…" rows="1"></textarea>
+        <button class="sendb" id="sendBtn">↑</button></div>
+        <div class="fnote">كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- shared settings drawer — إعدادات الوكلاء المشتركة بين الإدخال والدردشة -->
+<div class="overlay" id="ov"></div>
+<div class="drawer" id="dr">
+  <div class="dhead"><h3>إعدادات الوكلاء</h3>
+    <div class="shared">✓ مشتركة بين الإدخال والدردشة</div>
+    <div class="keyrow"><input id="adminKey" placeholder="مفتاح الخدمة X-API-Key (إن كانت المصادقة مفعّلة)"></div></div>
+  <div class="dbody" id="drawerBody"></div>
+  <div class="dfoot"><button class="saveb" id="savePrefs">حفظ التوجيهات</button><button class="resetb" id="resetPrefs">استعادة الافتراضي</button></div>
 </div>
 
 <script>
 (function(){
-  "use strict";
-  var $=function(s,r){return (r||document).querySelector(s);};
-  var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s));};
-  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
-  var ISO2={SAU:"SA",ARE:"AE",QAT:"QA",KWT:"KW",OMN:"OM",BHR:"BH",JOR:"JO",LBN:"LB",EGY:"EG",MAR:"MA",TUN:"TN",DZA:"DZ",IRQ:"IQ",TUR:"TR",YEM:"YE",ZAF:"ZA",NGA:"NG",KEN:"KE",ETH:"ET",GHA:"GH",IND:"IN",PAK:"PK",BGD:"BD",IDN:"ID",MYS:"MY",SGP:"SG",THA:"TH",VNM:"VN",CHN:"CN",JPN:"JP",KOR:"KR",GBR:"GB",DEU:"DE",FRA:"FR",ITA:"IT",ESP:"ES",NLD:"NL",USA:"US",CAN:"CA"};
-  function iso2(i){return ISO2[i]||(i||"").slice(0,2);}
+"use strict";
+var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"")}
+var CURY=new Date().getFullYear();
+var S={product:"",hs:"",market:null,span:5,raw:null,view:null,busy:false,
+  adminKey:localStorage.getItem("silk_admin_key")||"",
+  prefs:JSON.parse(localStorage.getItem("silk_agent_prefs")||"null"),
+  hist:JSON.parse(localStorage.getItem("silk_hist")||"[]")};
 
-  var I18N={
-    appName:{ar:"منصة سِلك · ذكاء الأسواق",en:"Silk · Market Intelligence"},
-    appTag:{ar:"من منتجك إلى خطة دخولك",en:"From your product to your entry plan"},
-    searchLabel:{ar:"المنتج",en:"Product"},searchPh:{ar:"ابحث عن منتج… (تمور، زعفران، عسل)",en:"Search a product… (dates, saffron, honey)"},
-    studyYears:{ar:"سنوات الدراسة (مدى)",en:"Study years (range)"},
-    targetMarkets:{ar:"الأسواق المستهدفة (اختياري)",en:"Target markets (optional)"},
-    targetMarketsHint:{ar:"افتراضياً: تُرتَّب أكبر أسواق الاستيراد لهذا المنتج عالمياً — أضف سوقاً أو أكثر لتضييق التحليل إليها فقط",en:"Default: ranks the product's top global import markets — add one or more to restrict the analysis to just those"},
-    removeMarket:{ar:"إزالة",en:"Remove"},
-    analyze:{ar:"تحليل الأسواق",en:"Analyze markets"},analyzing:{ar:"جارٍ التحليل…",en:"Analyzing…"},
-    deepen:{ar:"دراسة عميقة",en:"Deep dive"},wordReport:{ar:"تقرير Word",en:"Word report"},brief:{ar:"المختصر",en:"Brief"},exportCsv:{ar:"تصدير CSV",en:"Export CSV"},exportJson:{ar:"تحميل JSON",en:"Download JSON"},
-    myProduct:{ar:"منتجك (اختياري)",en:"Your product (optional)"},
-    cost:{ar:"تكلفتك/وحدة",en:"Cost/unit"},myPrice:{ar:"سعرك المستهدف",en:"Your price"},shipping:{ar:"الشحن/وحدة",en:"Shipping/unit"},tier:{ar:"الفئة",en:"Tier"},capacity:{ar:"الطاقة الشهرية",en:"Monthly capacity"},
-    tierPrem:{ar:"فاخر",en:"Premium"},tierStd:{ar:"قياسي",en:"Standard"},tierEco:{ar:"اقتصادي",en:"Economy"},
-    mpHint:{ar:"أدخل اقتصاديات منتجك لتفعيل «موقعك التنافسي» ومقارنة سعرك بالمنافسين — بدونها التحليل وصفي فقط.",en:"Enter your product economics to unlock \"your position\" and price comparison vs rivals — without them the analysis is descriptive only."},
-    completeness:{ar:"اكتمال الدراسة",en:"Study completeness"},
-    pipeline:{ar:"المعمار — الطبقات الأربع",en:"Architecture — the four layers"},
-    idle:{ar:"بانتظار التشغيل",en:"Awaiting run"},running:{ar:"جارٍ توزيع المهام…",en:"Dispatching agents…"},
-    completeCov:{ar:"اكتمل — تغطية",en:"Complete — coverage"},completeGaps:{ar:"اكتمل — بنواقص",en:"Complete — with gaps"},agents:{ar:"وكلاء",en:"agents"},
-    step1:{ar:"المصنّف (HS)",en:"HS classifier"},step1d:{ar:"اسم المنتج → رمز HS6",en:"Product name → HS6"},
-    step2:{ar:"وكيل التجارة",en:"Trade agent"},step2d:{ar:"Comtrade · الاستيراد",en:"Comtrade · imports"},
-    step3:{ar:"وكيل الاقتصاد",en:"Economic agent"},step3d:{ar:"World Bank · دخل الفرد",en:"World Bank · income"},
-    step4:{ar:"وكيل المنافسة",en:"Competition agent"},step4d:{ar:"Comtrade · حصص المورّدين",en:"Comtrade · supplier shares"},
-    step5:{ar:"التوليف والحكم",en:"Synthesis & verdict"},step5d:{ar:"توزن النتائج → القرار",en:"weighs results → verdict"},
-    lyr1:{ar:"المصادر المجانية",en:"Free data sources"},lyr1d:{ar:"Comtrade · World Bank · Trends · FAOSTAT",en:"Comtrade · World Bank · Trends · FAOSTAT"},
-    lyr2:{ar:"الوكلاء الثمانية",en:"The eight agents"},lyr2d:{ar:"سوق · منافسة · تنظيم · تسعير · مخاطر · مستهلك · موردون · لوجستيات",en:"market · competition · regulatory · pricing · risk · consumer · supplier · logistics"},
-    lyr3:{ar:"قرار كلود (٥ أعمدة)",en:"Claude decision (5 pillars)"},lyr3d:{ar:"يوزن مخرجات الوكلاء → الحكم",en:"weighs agent outputs → verdict"},
-    lyr4:{ar:"الطبقة المدفوعة",en:"Paid layer"},lyr4d:{ar:"Volza · Explee · LocalPrice (عبر التعميق)",en:"Volza · Explee · LocalPrice (via deep-dive)"},
-    lyrLocked:{ar:"مقفلة — تُفعَّل بالتعميق",en:"Locked — unlocked by deep-dive"},lyrActive:{ar:"مُفعّلة",en:"Active"},agentsN:{ar:"وكلاء بنتائج",en:"agents with data"},pillarsN:{ar:"أعمدة محسوبة",en:"pillars computed"},
-    obs:{ar:"مرصود",en:"observed"},declaredGap:{ar:"غير متوفر",en:"unavailable"},notObserved:{ar:"غير متوفر",en:"Not available"},
-    dataYearL:{ar:"بيانات",en:"Data"},dataYearHint:{ar:"السنة المطلوبة لم تُنشر بعد في كومتريد — اعتُمدت أحدث سنة فيها بيانات فعلية (التجارة السنوية تتأخّر سنة–سنتين).",en:"Requested year not yet published in Comtrade — used the most recent year with real data (annual trade lags 1–2 years)."},
-    decision:{ar:"القرار",en:"Decision"},prelim:{ar:"قرار مبدئي",en:"Preliminary"},noVerdict:{ar:"تعذّر الحكم — لا بيانات كافية",en:"No verdict — insufficient data"},whyLabel:{ar:"لماذا",en:"Why"},confLabel:{ar:"الثقة",en:"Confidence"},stageL:{ar:"مرحلة التوليف",en:"Synthesis stage"},
-    rankedMarkets:{ar:"الأسواق المرشّحة",en:"Candidate markets"},
-    colRank:{ar:"#",en:"#"},colMarket:{ar:"السوق",en:"Market"},colImports:{ar:"الاستيراد",en:"Imports"},colTrend:{ar:"الاتجاه",en:"Trend"},colShare:{ar:"حصة السعودية",en:"Saudi share"},colScore:{ar:"النقاط",en:"Score"},colCov:{ar:"التغطية",en:"Coverage"},
-    high:{ar:"عالية",en:"High"},medium:{ar:"متوسطة",en:"Medium"},low:{ar:"منخفضة",en:"Low"},
-    tableSrc:{ar:"",en:""},
-    rank:{ar:"المرتبة",en:"Rank"},rowConf:{ar:"ثقة الصف",en:"Row confidence"},
-    tabPosition:{ar:"موقعك",en:"Your position"},tabRivals:{ar:"المنافسون",en:"Competitors"},tabTrend:{ar:"الاتجاه",en:"Trend"},tabComponents:{ar:"المكوّنات",en:"Components"},tabCompliance:{ar:"الاشتراطات",en:"Compliance"},tabVerdict:{ar:"الحكم",en:"Verdict"},
-    compSize:{ar:"حجم الاستيراد",en:"Import size"},compShare:{ar:"حصة السعودية",en:"Saudi share"},compIncome:{ar:"دخل الفرد (PPP)",en:"Income (PPP)"},compHHI:{ar:"تركّز المنافسة HHI",en:"Competition HHI"},
-    wSize:{ar:"وزن 40%",en:"weight 40%"},wShare:{ar:"وزن 20%",en:"weight 20%"},wIncome:{ar:"وزن 25%",en:"weight 25%"},wHHI:{ar:"وزن 15% · أقل=أسهل",en:"weight 15% · lower=easier"},
-    supplierCountries:{ar:"الدول المورّدة وحصصها",en:"Supplier countries & shares"},
-    onShelf:{ar:"المنتجات المنافسة على الرفّ",en:"Competing products on the shelf"},colBrand:{ar:"المنتج",en:"Product"},colPrice:{ar:"السعر",en:"Price"},colMargin:{ar:"هامشك عند المضاهاة",en:"Margin at match"},youLabel:{ar:"منتجك",en:"You"},
-    needProduct:{ar:"أدخل بطاقة منتجك أعلى الصفحة لحساب هامشك مقابل هذه الأسعار.",en:"Enter your product card above to compute your margin against these prices."},
-    needDeepen:{ar:"أسعار الرفّ الفعلية تتوافر مع الدراسة العميقة.",en:"Actual shelf prices are available with a deep dive."},
-    yourPos:{ar:"موقعك التنافسي",en:"Your competitive position"},posNeed:{ar:"أضف بطاقة منتجك (التكلفة/السعر) لحساب موقعك مقابل المنافسين المرصودين.",en:"Add your product card (cost/price) to compute your position against observed rivals."},
-    trendTitle:{ar:"استيراد السوق عبر السنوات",en:"Market imports over the years"},cagr:{ar:"نمو سنوي مركّب",en:"CAGR"},trendNeed:{ar:"بيانات الاتجاه غير كافية لهذه السنوات.",en:"Trend data insufficient for these years."},
-    kTop:{ar:"استيراد السوق الأول",en:"Top-market imports"},kShare:{ar:"حصة السعودية — الأول",en:"Saudi share — top"},kGrowth:{ar:"نمو الاستيراد",en:"Import growth"},kObs:{ar:"أسواق مرصودة",en:"Observed markets"},
-    chScores:{ar:"مقارنة الأسواق — النقاط",en:"Market comparison — score"},chScoresSub:{ar:"أفضل الأسواق على 0–100. انقر شريطاً لفتح تفاصيله.",en:"Top markets on 0–100. Click a bar to open it."},
-    chTrend:{ar:"الاستيراد عبر سنوات الدراسة",en:"Imports across the study years"},chTrendSub:{ar:"قيمة استيراد أفضل الأسواق سنةً بسنة (Comtrade).",en:"Top markets' import value year by year (Comtrade)."},
-    sharesDonut:{ar:"حصص الدول المورّدة",en:"Supplier-country shares"},othersL:{ar:"أخرى",en:"Other"},
-    complianceEntry:{ar:"اشتراطات الدخول والخروج",en:"Entry & exit requirements"},officialSrc:{ar:"المصدر الرسمي",en:"Official source"},
-    juryTitle:{ar:"لجنة التحكيم",en:"Jury committee"},claudeJudge:{ar:"كلود · الحَكَم",en:"Claude · Judge"},coverageL:{ar:"تغطية",en:"Coverage"},gapsL:{ar:"فجوات",en:"Gaps"},sufficiencyL:{ar:"كفاية البيانات",en:"Data sufficiency"},
-    reportLimits:{ar:"حدود هذا التقرير",en:"Limits of this report"},limitsSub:{ar:"نطاق ما لم يشمله هذا التحليل.",en:"What this analysis does not cover."},noLimits:{ar:"لا حدود مسجّلة لهذا التحليل.",en:"No limits recorded for this analysis."},
-    cultureTitle:{ar:"ثقافة المستهلك ونبض السوق",en:"Consumer culture & market pulse"},cultureSub:{ar:"عناوين ومقالات مرصودة من بحث الويب — ما يهتم به المستهلك فعلياً.",en:"Observed headlines & articles from web search — what the consumer actually cares about."},cultureNeed:{ar:"يتطلب مفتاح بحث الويب (SEARCH_API_KEY) — فعّله في الإعدادات.",en:"Requires a web-search key (SEARCH_API_KEY) — enable it in Settings."},
-    cultureExtracted:{ar:"رؤًى مستخلَصة بالطبقة الثالثة (كلود) من عناوين الويب — لا روابط خام. كلُّ رؤيةٍ مسنودةٌ بدليلها.",en:"Layer-3 (Claude) insights extracted from web headlines — not raw links. Each insight cites its evidence."},
-    cultureRawSub:{ar:"عناوين خام من بحث الويب — لم تُحلَّل بعد (مفتاح كلود غائب).",en:"Raw web-search headlines — not analyzed yet (no Claude key)."},
-    cultureNeedAI:{ar:"مفتاح كلود غائب: تُعرَض العناوين خامًا. فعّل ANTHROPIC_API_KEY ليستخلص الوكيلُ ثقافةَ المستهلك بدل الروابط.",en:"No Claude key: headlines shown raw. Enable ANTHROPIC_API_KEY so the agent extracts consumer culture instead of links."},
-    basedOn:{ar:"مبنيّة على",en:"Based on"},cultureSources:{ar:"العناوين المصدر",en:"Source headlines"},
-    readyTitle:{ar:"ابدأ بالبحث عن منتج",en:"Start by searching a product"},readyP:{ar:"اكتب اسم منتج سعودي لتصفية أسواق تصديره وترتيبها عبر سنوات الدراسة.",en:"Type a Saudi product to shortlist and rank its export markets across the study years."},readyFoot:{ar:"اختر منتجاً وابدأ — النتائج خلال دقائق.",en:"Pick a product and start — results arrive in minutes."},
-    readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"جرّب اسماً أدق للمنتج، أو أدخل رمز HS مباشرة.",en:"Try a more specific product name, or enter an HS code directly."},
-    settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"أدخل المفاتيح ثم «حفظ في الخادم» — تُخزَّن في خادمك وتُفعَّل فوراً (متغيرات بيئة النشر تبقى الأعلى سلطة).",en:"Enter keys then “Save to server” — stored on your server and active immediately (deploy env vars still win)."},saveServer:{ar:"حفظ في الخادم",en:"Save to server"},saved:{ar:"حُفظت المفاتيح في الخادم",en:"Keys saved to server"},adminKey:{ar:"مفتاح الخدمة (X-API-Key) إن كانت المصادقة مفعّلة",en:"Service key (X-API-Key) if auth is enabled"},
-    secAI:{ar:"الذكاء الاصطناعي",en:"AI"},secFree:{ar:"مصادر مجانية",en:"Free sources"},secPaid:{ar:"مصادر مدفوعة",en:"Paid sources"},connected:{ar:"متصل",en:"Connected"},needsKey:{ar:"يحتاج مفتاح",en:"Needs key"},keyless:{ar:"متصل · بلا مفتاح",en:"Connected · keyless"},
-    diagTitle:{ar:"تشخيص المصادر الحيّ",en:"Live source diagnostics"},diagSub:{ar:"افحص كل مصدر فعلياً بمفاتيحك على الخادم — أيّه متصل، أم فارغ، أم محجوب، أم بلا مفتاح، مع سبب الإصلاح.",en:"Probe each source live with your server keys — connected, empty, blocked, or no-key, with the fix reason."},
-    diagRun:{ar:"اختبر المصادر الآن",en:"Test sources now"},diagRunning:{ar:"جارٍ الفحص…",en:"Probing…"},
-    diagOk:{ar:"متصل — يعيد بيانات",en:"Connected — returns data"},diagEmpty:{ar:"متصل بلا نتائج",en:"Reachable — no rows"},diagUnreach:{ar:"غير قابل للوصول",en:"Unreachable"},diagNoKey:{ar:"بلا مفتاح",en:"No key"},
-    diagAgentsOk:{ar:"✓ الأساس جاهز — الوكلاء تنتج دراسة حقيقية",en:"✓ Core ready — the agents produce a real study"},
-    diagAgentsNo:{ar:"⚠ مصدر أساسي غير جاهز — الدراسة ستُعلن فجوات حتى يُصلح",en:"⚠ A core source isn't ready — the study declares gaps until fixed"},
-    diagFail:{ar:"تعذّر الوصول للخادم — تحقّق من عنوان الـ API.",en:"Could not reach the server — check the API base URL."},
-    footer:{ar:"",en:""},footBadge:{ar:"الخدمة جاهزة",en:"Service ready"},
-    reqFail:{ar:"فشل الطلب",en:"Request failed"},langSwitched:{ar:"تم التبديل إلى العربية",en:"Switched to English"},
-    nav1:{ar:"تحليل جديد",en:"New analysis"},nav2:{ar:"القرار",en:"Decision"},nav3:{ar:"حجم السوق",en:"Market size"},nav4:{ar:"المنافسة",en:"Competition"},
-    nav5:{ar:"التسعير",en:"Pricing"},nav6:{ar:"الاشتراطات",en:"Requirements"},nav7:{ar:"الطلب والمخاطر",en:"Demand & risk"},nav8:{ar:"المصادر والإعدادات",en:"Sources & settings"},
-    marketSel:{ar:"السوق",en:"Market"},
-    runFirst:{ar:"شغّل تحليلاً أولاً من شاشة «تحليل جديد» — كل الشاشات تُشتق من نموذج العرض القانوني نفسه.",en:"Run an analysis first from “New analysis” — every screen derives from the same canonical view-model."},
-    goRun:{ar:"إلى شاشة التحليل",en:"Go to analysis"},
-    needResearch:{ar:"يتطلب with_research (سياسة الخادم تفعّله تلقائياً)",en:"Requires with_research (server policy enables it automatically)"},
-    modeledBadge:{ar:"مُقدَّر — نموذج بافتراضات معلنة",en:"Modeled — declared assumptions"},
-    unverified:{ar:"غير موثَّق",en:"Unverified"},mdReport:{ar:"تقرير Markdown",en:"Markdown report"},
-    retailHint:{ar:"⚠ يبدو محل تجزئة/مطعماً — ليس بالضرورة موزّعاً بالجملة",en:"⚠ Looks like retail/food service — not necessarily a wholesale distributor"},
-    refManual:{ar:"مرجع للمراجعة اليدوية — ليس اسم كيان",en:"Reference for manual review — not an entity name"},
-    testRun:{ar:"تشغيل برهاني ببدائل موسومة، ليس تقريراً إنتاجياً",en:"Hermetic test run with labeled doubles — not a production report"},
-    noItem:{ar:"لا بند مرصوداً",en:"No item observed"},yesL:{ar:"نعم",en:"Yes"},noL:{ar:"لا",en:"No"},
-    scoreL:{ar:"الدرجة",en:"Score"},pillarsL:{ar:"الأعمدة الخمسة",en:"The five pillars"},
-    pMarket:{ar:"السوق",en:"Market"},pCompetition:{ar:"المنافسة",en:"Competition"},pRegulatory:{ar:"التنظيم",en:"Regulatory"},pProfit:{ar:"الربحية",en:"Profit"},pRisk:{ar:"أمان السوق (المخاطر)",en:"Market safety (risk)"},
-    weightsL:{ar:"خيارا الأوزان A/B",en:"Weight options A/B"},optionL:{ar:"خيار",en:"Option"},activeOpt:{ar:"المعتمد",en:"Active"},
-    conditionsL:{ar:"الشروط",en:"Conditions"},firstStepsL:{ar:"الخطوات الأولى",en:"First steps"},
-    risksL:{ar:"سجل المخاطر",en:"Risk register"},colRisk:{ar:"الخطر",en:"Risk"},colSeverity:{ar:"الشدة",en:"Severity"},colEvidence:{ar:"الدليل",en:"Evidence"},
-    missingPillarsL:{ar:"أعمدة غائبة",en:"Missing pillars"},
-    criticalRiskL:{ar:"بوابة خطر حرجة مفتوحة (PV.EST < −1.5) — القرار NO-GO قاعدياً",en:"Critical risk gate open (PV.EST < −1.5) — rule-based NO-GO"},
-    gapsHdr:{ar:"فجوات معلنة",en:"Declared gaps"},
-    tamL:{ar:"TAM — إجمالي واردات السوق",en:"TAM — total market imports"},samL:{ar:"SAM — السوق القابل للخدمة",en:"SAM — serviceable market"},somL:{ar:"SOM — الحصة القابلة للتحصيل",en:"SOM — obtainable share"},
-    growthL:{ar:"نمو الواردات",en:"Import growth"},
-    intlLayer:{ar:"الطبقة الدولية — حصص المورّدين",en:"International layer — supplier shares"},namedLayer:{ar:"شركات بالاسم",en:"Named companies"},
-    hhiL:{ar:"تركّز المنافسة HHI",en:"Competition HHI"},topShareL:{ar:"حصة المورّد الأكبر",en:"Top supplier share"},saudiShareL:{ar:"الحصة السعودية",en:"Saudi share"},colValueL:{ar:"القيمة",en:"Value"},
-    borderLayer:{ar:"الطبقة الحدودية — قيم الوحدة",en:"Border layer — unit values"},
-    uvL:{ar:"قيمة الوحدة الحدودية $/kg",en:"Border unit value $/kg"},suvL:{ar:"قيمة الوحدة السعودية $/kg",en:"Saudi border unit value $/kg"},marginBL:{ar:"الهامش عند الحدود",en:"Margin at border"},
-    retailLayer:{ar:"أسعار التجزئة",en:"Retail prices"},retailRefs:{ar:"مصادر الأسعار (للاستشهاد)",en:"Price sources (citations)"},storeL:{ar:"المتجر",en:"Store"},pricePointsL:{ar:"أسعار مُستخلَصة (كلود)",en:"Extracted prices (Claude)"},
-    reqList:{ar:"قائمة الاشتراطات (بند + جهة + رابط)",en:"Requirements checklist (item + authority + link)"},
-    tariffL:{ar:"التعريفة المطبّقة",en:"Applied tariff"},reqCount:{ar:"عدد البنود",en:"Items count"},
-    eligGateL:{ar:"بوابة أهلية أمامية: منشأة معتمدة (EU 2017/625) قبل أي بند لاحق — لا بند يُعد قابلاً للاستيفاء قبل عبورها",en:"Front eligibility gate: EU 2017/625 listed establishment required before any later item"},
-    demandHdr:{ar:"الطلب الاستهلاكي",en:"Consumer demand"},riskHdr:{ar:"مؤشرات المخاطر",en:"Risk indicators"},
-    swotHdr:{ar:"SWOT قاعدي",en:"Rule-based SWOT"},segmentsHdr:{ar:"شرائح العملاء",en:"Customer segments"},
-    gdpL:{ar:"دخل الفرد",en:"GDP per capita"},popL:{ar:"السكان",en:"Population"},supplyL:{ar:"الاستهلاك للفرد kg",en:"Per-capita supply kg"},searchL:{ar:"اهتمام البحث /100",en:"Search interest /100"},muslimL:{ar:"حصة المسلمين",en:"Muslim share"},ramadanL:{ar:"موسمية رمضان",en:"Ramadan seasonality"},
-    wgiPolL:{ar:"استقرار سياسي WGI",en:"Political stability WGI"},wgiRegL:{ar:"جودة تنظيمية WGI",en:"Regulatory quality WGI"},lpiL:{ar:"اللوجستيات LPI",en:"Logistics LPI"},fxL:{ar:"تقلب العملة",en:"FX volatility"},hhiRiskL:{ar:"تركّز التوريد HHI",en:"Supplier concentration HHI"},critL:{ar:"خطر حرج",en:"Critical risk"},
-    logisticsHdr:{ar:"اللوجستيات وزمن التوريد",en:"Logistics & lead time"},leadTimeL:{ar:"زمن التخليص الحدودي (يوم)",en:"Border clearance time (days)"},timelinessL:{ar:"توقيت التسليم LPI",en:"Timeliness LPI"},intlShipL:{ar:"سهولة الشحن الدولي LPI",en:"Intl shipments LPI"},freightL:{ar:"سعر الشحن ($/كغ)",en:"Freight cost ($/kg)"},landedL:{ar:"التكلفة حتى الوصول ($/كغ)",en:"Landed cost ($/kg)"},
-    swotS:{ar:"قوة",en:"Strengths"},swotW:{ar:"ضعف",en:"Weaknesses"},swotO:{ar:"فرص",en:"Opportunities"},swotT:{ar:"تهديدات",en:"Threats"},
-    covSec:{ar:"تغطية الأقسام",en:"Section coverage"},sectionL:{ar:"القسم",en:"Section"},statusL:{ar:"الحالة",en:"Status"},singleSrc:{ar:"مصدر واحد",en:"single source"},
-    provHdr:{ar:"أثر المصادر — لا فشل صامتاً",en:"Source provenance — no silent failure"},colSource:{ar:"المصدر",en:"Source"},colContrib:{ar:"مُسهم/مُحاوَل",en:"Contributed/attempted"},colFail:{ar:"أمثلة فشل",en:"Failure examples"},
-    dirHdr:{ar:"دليل المورّدين",en:"Supplier directory"},dirSaudi:{ar:"مرشّحون سعوديون (منشأ)",en:"Saudi candidates (origin)"},dirTarget:{ar:"موزّعون في السوق المستهدف",en:"Target-market distributors"},
-    agComplete:{ar:"مكتمل",en:"complete"},agPartial:{ar:"جزئي",en:"partial"},agFailed:{ar:"فشل",en:"failed"}
-  };
-  // آخر سنة كاملة على الأرجح — محسوبة من تاريخ اليوم لا رقماً ثابتاً يتقادم
-  // (بلاغ مالك حقيقي: كان الافتراضي عالقاً على 2023 رغم توفّر 2024 في القائمة نفسها).
-  var CUR_Y=new Date().getFullYear();
-  var S={lang:localStorage.getItem("silk_lang")||"ar",adminKey:localStorage.getItem("silk_admin_key")||"",product:"",hs:"",selId:null,running:false,raw:null,result:null,sentFlags:{},tab:"position",query:"",
-    yearFrom:CUR_Y-6,yearTo:CUR_Y-2,card:JSON.parse(localStorage.getItem("silk_card")||"{}"),
-    keys:JSON.parse(localStorage.getItem("silk_keys")||"{}"),toggles:JSON.parse(localStorage.getItem("silk_toggles")||"{}"),screen:1,mktIdx:0,
-    targetMarkets:[],mktQuery:"",marketsRef:null};
-  function t(k){var e=I18N[k];return e?e[S.lang]:k;}
-  function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"");}
-  function saveCard(){localStorage.setItem("silk_card",JSON.stringify(S.card));}
+/* الوكلاء المعروضون في الدرج — أسماء بشرية، المدفوع مفصول ومطفأ افتراضياً.
+   التوجيهات تُخزَّن محلياً وتُرسل agent_prefs مع كل تحليل (حقن الخادم لاحقاً). */
+var AGENTS=[
+ {k:"trade",n:"وكيل التجارة",d:"حجم استيراد السوق · الأمم المتحدة",paid:false},
+ {k:"competition",n:"وكيل المنافسة",d:"الدول المورّدة وحصصها · الأمم المتحدة",paid:false},
+ {k:"regulatory",n:"وكيل الاشتراطات",d:"اشتراطات الدخول والتعريفة",paid:false},
+ {k:"risk",n:"وكيل المخاطر",d:"استقرار ولوجستيات وعملة · البنك الدولي",paid:false},
+ {k:"consumer",n:"وكيل ثقافة المستهلك",d:"هل المنتج مرغوب؟ · بحث + كلود",paid:false},
+ {k:"dynamics",n:"وكيل الديناميكيات",d:"دوافع وكوابح وفرص · بحث + كلود",paid:false},
+ {k:"pricing",n:"وكيل التسعير",d:"أسعار التجزئة الفعلية",paid:true},
+ {k:"importers",n:"وكيل المستوردين",d:"مستوردون بالاسم · Volza",paid:true}];
+function defaultPrefs(){var p={};AGENTS.forEach(function(a){p[a.k]={on:!a.paid,cmd:""}});return p}
+if(!S.prefs)S.prefs=defaultPrefs();
 
-  function dpv(c){return c&&typeof c==="object"?c.value:c;}
-  function dpList(x){return x==null?[]:(Array.isArray(x)?x:[x]);}
-  function realVals(l){return dpList(l).map(function(f){return f&&f.value;}).filter(function(v){return v!=null;});}
-  function prov(dp){if(!dp||typeof dp!=="object")return "";var b=[];if(dp.source)b.push(dp.source);if(dp.confidence!=null)b.push((S.lang==="ar"?"ثقة ":"conf ")+dp.confidence);if(dp.retrieved_at)b.push(dp.retrieved_at);return b.join(" · ");}
-  function fmtUSD(v){if(v==null)return "—";var n=Number(v);if(n>=1e9)return "$"+(n/1e9).toFixed(1)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(1)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(0)+"K";return "$"+n.toLocaleString("en-US");}
+/* ── تنقّل ── */
+function nav(v){$$(".view").forEach(function(x){x.classList.remove("on");x.style.display="none"});
+  var t=$("#v-"+v);t.classList.add("on");t.style.display=(v==="chat")?"flex":"block";
+  $$(".navbtn").forEach(function(b){b.classList.toggle("on",b.dataset.go===v)})}
+$$(".navbtn,[data-go]").forEach(function(b){if(b.dataset.go)b.addEventListener("click",function(){nav(this.dataset.go)})});
 
-  function spark(series,w,h){
-    var vals=(series||[]).map(function(p){return p.value;});
-    var obs=vals.filter(function(v){return v!=null;});
-    if(obs.length<2)return '<span class="gap-txt">'+esc(t("notObserved"))+'</span>';
-    var mn=Math.min.apply(null,obs),mx=Math.max.apply(null,obs),rng=(mx-mn)||1,step=w/(vals.length-1),pts=[];
-    for(var i=0;i<vals.length;i++){if(vals[i]==null)continue;var x=i*step,y=h-((vals[i]-mn)/rng)*(h-4)-2;pts.push(x.toFixed(1)+","+y.toFixed(1));}
-    var last=obs[obs.length-1],li=vals.lastIndexOf(last),lx=li*step,ly=h-((last-mn)/rng)*(h-4)-2;
-    return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="display:block;overflow:visible"><polyline points="'+pts.join(" ")+'" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+lx.toFixed(1)+'" cy="'+ly.toFixed(1)+'" r="3" fill="var(--primary)"/></svg>';
-  }
-  function growthTag(g){if(g==null)return '';var up=g>=0;return '<span class="growth '+(up?"up":"down")+'">'+(up?"▲":"▼")+' '+Math.abs(g)+'%</span>';}
+/* ── الشبكة ── */
+function hdrs(json){var h=json?{"Content-Type":"application/json"}:{};if(S.adminKey)h["X-API-Key"]=S.adminKey;return h}
+function toast(m){var el=document.createElement("div");el.className="toast";el.textContent=m;document.body.appendChild(el);setTimeout(function(){el.remove()},3200)}
+function post(path,body){return fetch(base()+path,{method:"POST",headers:hdrs(true),body:JSON.stringify(body)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+((d&&d.detail)||t).toString().slice(0,200));return d})})}
 
-  /* ═══ محرّك الرسوم البيانية (SVG صرف) — مركز قيادة بصري، يرسم المرصود فقط ═══ */
-  var CHC=["var(--ch1)","var(--ch2)","var(--ch3)","var(--ch4)","var(--ch5)","var(--ch6)"];
-  function niceStep(raw){if(!(raw>0))return 1;var p=Math.pow(10,Math.floor(Math.log(raw)/Math.LN10)),n=raw/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p;}
-  function trendPts(m){var pts=((m&&m.trend&&m.trend.series)||[]).filter(function(p){return p&&p.value!=null;});return pts.length>=2?pts:null;}
-  function lineChartSVG(seriesArr,opts){
-    opts=opts||{};var W=560,H=opts.h||210,PL=52,PR=18,PT=16,PB=30,iw=W-PL-PR,ih=H-PT-PB;
-    var ys={};seriesArr.forEach(function(s){s.pts.forEach(function(p){ys[p.year]=1;});});
-    var yr=Object.keys(ys).map(Number).sort(function(a,b){return a-b;});
-    var mx=0;seriesArr.forEach(function(s){s.pts.forEach(function(p){if(p.value>mx)mx=p.value;});});
-    if(yr.length<2||mx<=0)return null;
-    var step=niceStep(mx/4),top=Math.ceil(mx/step)*step;
-    function X(y){return PL+(yr.indexOf(y)/(yr.length-1))*iw;}function Y(v){return PT+ih-(v/top)*ih;}
-    var grid="";for(var tv=0;tv<=top+1;tv+=step){grid+='<line x1="'+PL+'" x2="'+(W-PR)+'" y1="'+Y(tv).toFixed(1)+'" y2="'+Y(tv).toFixed(1)+'" stroke="var(--border)" stroke-width="1"/><text x="'+(PL-8)+'" y="'+(Y(tv)+3.5).toFixed(1)+'" text-anchor="end" font-size="10" fill="var(--text-3)" font-family="IBM Plex Mono,monospace">'+esc(fmtUSD(tv).replace("$",""))+'</text>';}
-    var xl=yr.map(function(y){return '<text x="'+X(y).toFixed(1)+'" y="'+(H-9)+'" text-anchor="middle" font-size="11" fill="var(--text-3)" font-family="IBM Plex Mono,monospace">'+y+'</text>';}).join("");
-    var marks=seriesArr.map(function(s,i){var col=s.color||CHC[i%6],pts=s.pts.slice().sort(function(a,b){return a.year-b.year;});
-      var d=pts.map(function(p,j){return (j?"L":"M")+X(p.year).toFixed(1)+","+Y(p.value).toFixed(1);}).join(" ");
-      var area=opts.area?'<path d="'+d+' L'+X(pts[pts.length-1].year).toFixed(1)+','+(PT+ih)+' L'+X(pts[0].year).toFixed(1)+','+(PT+ih)+' Z" fill="'+col+'" opacity=".08"/>':"";
-      var dots=pts.map(function(p){return '<circle cx="'+X(p.year).toFixed(1)+'" cy="'+Y(p.value).toFixed(1)+'" r="4" fill="'+col+'" stroke="var(--surface)" stroke-width="2"><title>'+esc(s.name)+' '+p.year+': '+esc(fmtUSD(p.value))+'</title></circle>';}).join("");
-      return area+'<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'+dots;}).join("");
-    return '<div class="linewrap"><svg viewBox="0 0 '+W+' '+H+'" role="img">'+grid+'<line x1="'+PL+'" x2="'+(W-PR)+'" y1="'+(PT+ih)+'" y2="'+(PT+ih)+'" stroke="var(--border-strong)"/>'+marks+xl+'</svg></div>';
-  }
-  function donutSVG(slices){var R=52,C=2*Math.PI*R,acc=0,seg="";
-    slices.forEach(function(s){var len=Math.max(s.pct/100*C-2.5,0.5);seg+='<circle cx="66" cy="66" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="22" stroke-dasharray="'+len.toFixed(1)+' '+(C-len).toFixed(1)+'" stroke-dashoffset="'+(-acc/100*C).toFixed(1)+'"><title>'+esc(s.label)+': '+s.pct+'%</title></circle>';acc+=s.pct;});
-    return '<svg width="132" height="132" viewBox="0 0 132 132" role="img"><g transform="rotate(-90 66 66)">'+seg+'</g></svg>';}
-  function kpiRow(ms){
-    var top=ms[0]||{},c=top.components||{},tr=top.trend||{},g=tr.growth_pct;
-    var obs=ms.filter(function(m){var cc=m.components||{};return ["market_size","saudi_position","demand_capacity","competition"].some(function(k){return cc[k]&&cc[k].value!=null;});}).length;
-    function tile(l,v,foot,accent){return '<div class="kpi'+(accent?" kpi-accent":"")+'"><span class="kl">'+esc(l)+'</span>'+v+'<span class="kfoot">'+esc(foot||"")+'</span></div>';}
-    function val(x,f){return x!=null?'<span class="kvv">'+f(x)+'</span>':'<span class="kvv gap">'+esc(t("notObserved"))+'</span>';}
-    var gH=g!=null?'<span class="kvv" style="color:'+(g>=0?"var(--success)":"var(--danger)")+'">'+(g>=0?"▲":"▼")+" "+Math.abs(g)+'%</span>':'<span class="kvv gap">'+esc(t("notObserved"))+'</span>';
-    return '<div class="kpis">'+
-      tile(t("kTop")+(top.country?" · "+top.country:""),val(top.import_value,fmtUSD),prov(c.market_size),true)+
-      tile(t("kShare"),val(top.saudi_share,function(v){return v+'<span class="u">%</span>';}),prov(c.saudi_position))+
-      tile(t("kGrowth"),gH,tr.cagr_pct!=null?("CAGR "+tr.cagr_pct+"%"):"")+
-      tile(t("kObs"),'<span class="kvv">'+obs+'<span class="u">/'+ms.length+'</span></span>',t("declaredGap")+": "+(ms.length-obs))+'</div>';
-  }
-  function scoreBars(ms){
-    var rows=ms.filter(function(m){return m.score!=null;}).slice(0,8);
-    if(!rows.length)return '<div class="chart-empty">'+esc(t("notObserved"))+'</div>';
-    return '<div class="hbars">'+rows.map(function(m){
-      return '<div class="hbar-row'+(m.id===S.selId?" sel":"")+'" data-goto="'+esc(m.id)+'" role="button" tabindex="0"><span class="lbl">'+esc(m.country)+'</span><span class="track"><span class="hfill" style="width:'+m.score+'%"></span></span><span class="val num">'+m.score+'</span></div>';
-    }).join("")+'</div>';
-  }
-  function multiTrend(ms){
-    var ser=[];for(var i=0;i<ms.length&&ser.length<3;i++){var p=trendPts(ms[i]);if(p)ser.push({name:ms[i].country,pts:p,color:CHC[ser.length]});}
-    if(!ser.length)return '<div class="chart-empty">'+esc(t("trendNeed"))+'</div>';
-    var svg=lineChartSVG(ser,{h:210});if(!svg)return '<div class="chart-empty">'+esc(t("trendNeed"))+'</div>';
-    return '<div class="legend">'+ser.map(function(s){return '<span class="lg"><span class="sw" style="background:'+s.color+'"></span>'+esc(s.name)+'</span>';}).join("")+'</div>'+svg;
-  }
-  function supplierDonut(sel){
-    var sup=((sel&&sel.competitors)||[]).filter(function(s){return s&&s.share!=null;});
-    if(!sup.length)return '';
-    var sl=sup.slice(0,5).map(function(s,i){return {label:s.partner||"—",pct:Math.round(s.share*10)/10,color:CHC[i]};});
-    var rest=Math.round((100-sl.reduce(function(a,s){return a+s.pct;},0))*10)/10;
-    if(rest>0.5)sl.push({label:t("othersL"),pct:rest,color:"var(--border-strong)"});
-    return '<section class="card panel"><h3>'+esc(t("sharesDonut"))+(sel&&sel.country?" · "+esc(sel.country):"")+'</h3><div class="donutwrap">'+donutSVG(sl)+'<div class="dlegend">'+
-      sl.map(function(s){return '<div class="drow2"><span class="nm"><span class="sw" style="background:'+s.color+'"></span>'+esc(s.label)+'</span><span class="num">'+s.pct+'%</span></div>';}).join("")+'</div></div></section>';
-  }
-  function commandCenter(ms,sel){
-    return kpiRow(ms)+
-      '<div class="charts">'+
-        '<section class="card panel"><h3>'+esc(t("chScores"))+'</h3><div class="sub">'+esc(t("chScoresSub"))+'</div>'+scoreBars(ms)+'</section>'+
-        '<section class="card panel"><h3>'+esc(t("chTrend"))+'</h3><div class="sub">'+esc(t("chTrendSub"))+'</div>'+multiTrend(ms)+'</section>'+
-      '</div>'+supplierDonut(sel);
-  }
+/* ── بحث المنتج ── */
+var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim();clearTimeout(pT);if(!q){$("#pDrop").classList.remove("open");return}
+  pT=setTimeout(function(){fetch(base()+"/index?q="+encodeURIComponent(q)+"&limit=10").then(function(r){return r.json()}).then(function(list){
+    if(!Array.isArray(list)||!list.length){$("#pDrop").classList.remove("open");return}
+    $("#pDrop").innerHTML=list.map(function(it){return '<div class="drow" data-n="'+esc(it.name)+'" data-hs="'+esc(it.hs)+'"><span>'+esc(it.name)+'</span><span class="hs">'+esc(it.hs)+'</span></div>'}).join("");
+    $("#pDrop").classList.add("open")}).catch(function(){})},200)});
+$("#pDrop").addEventListener("click",function(e){var r=e.target.closest(".drow");if(!r)return;
+  S.product=r.dataset.n;S.hs=r.dataset.hs;$("#pSearch").value=S.product;$("#pDrop").classList.remove("open");
+  $("#pResolved").classList.add("on");$("#pResolved").textContent="✓ صُنّف تلقائياً — رمز HS "+S.hs;sync()});
 
-  function applyLang(){
-    document.documentElement.lang=S.lang;document.documentElement.dir=S.lang==="ar"?"rtl":"ltr";
-    $$("[data-t]").forEach(function(el){el.textContent=t(el.getAttribute("data-t"));});
-    $("#search").placeholder=t("searchPh");
-    $$("#langSeg button").forEach(function(b){b.classList.toggle("on",b.getAttribute("data-lang")===S.lang);});
-    var tier=$("#mpTier");if(tier){var cur=tier.value||S.card.tier||"premium";tier.innerHTML='<option value="premium">'+t("tierPrem")+'</option><option value="standard">'+t("tierStd")+'</option><option value="economy">'+t("tierEco")+'</option>';tier.value=cur;}
-    var rb=$("#runBtn").querySelector("[data-t]");if(rb)rb.textContent=S.running?t("analyzing"):t("analyze");
-  }
+/* ── الأسواق ── */
+fetch(base()+"/markets").then(function(r){return r.json()}).then(function(list){
+  if(!Array.isArray(list))return;
+  $("#marketBox").innerHTML=list.map(function(m){return '<div class="mrow" data-iso3="'+esc(m.iso3)+'" data-name="'+esc(m.name)+'">'+esc(m.name)+'<span class="iso">'+esc(m.iso3)+'</span></div>'}).join("")}).catch(function(){});
+$("#marketBox").addEventListener("click",function(e){var r=e.target.closest(".mrow");if(!r)return;
+  var was=r.classList.contains("sel");$$(".mrow").forEach(function(x){x.classList.remove("sel")});$("#allMarkets").classList.remove("sel");
+  if(was){$("#allMarkets").classList.add("sel");S.market=null}else{r.classList.add("sel");S.market={iso3:r.dataset.iso3,name:r.dataset.name}}sync()});
+$("#allMarkets").addEventListener("click",function(){$$(".mrow").forEach(function(x){x.classList.remove("sel")});this.classList.add("sel");S.market=null;sync()});
 
-  (function initYears(){
-    var Y=[];for(var y=CUR_Y;y>=CUR_Y-8;y--)Y.push(y);
-    $("#yFrom").innerHTML=Y.map(function(y){return '<option value="'+y+'"'+(y===S.yearFrom?' selected':'')+'>'+y+'</option>';}).join("");
-    $("#yTo").innerHTML=Y.map(function(y){return '<option value="'+y+'"'+(y===S.yearTo?' selected':'')+'>'+y+'</option>';}).join("");
-  })();
-  $("#yFrom").addEventListener("change",function(){S.yearFrom=+this.value;});
-  $("#yTo").addEventListener("change",function(){S.yearTo=+this.value;});
+/* ── السنوات ── */
+$$(".preset").forEach(function(p){p.addEventListener("click",function(){$$(".preset").forEach(function(x){x.classList.remove("on")});this.classList.add("on");S.span=+this.dataset.span;sync()})});
+function years(){var to=CURY-2,from=to-S.span+1;return[from,to]}
+function sync(){var y=years();$("#yearLabel").textContent=y[0]+" – "+y[1];$("#yearSpanLbl").textContent=S.span+(S.span>2?" سنوات":" سنة");
+  $("#runBtn").disabled=!S.product||S.busy;
+  $("#runSum").innerHTML=S.product?("جاهز لتحليل <b>"+esc(S.product)+"</b> في <b>"+esc(S.market?S.market.name:"كل الأسواق")+"</b> عبر <b>"+y[0]+"–"+y[1]+"</b>"):"اختر منتجاً للبدء"}
+sync();
 
-  (function initCard(){
-    var m={mpCost:"cost_per_unit",mpPrice:"own_price",mpShip:"shipping_per_unit",mpCap:"monthly_capacity"};
-    Object.keys(m).forEach(function(id){var el=$("#"+id);if(S.card[m[id]]!=null)el.value=S.card[m[id]];el.addEventListener("change",function(){var v=parseFloat(this.value);if(isNaN(v))delete S.card[m[id]];else S.card[m[id]]=v;saveCard();});});
-    var tier=$("#mpTier");tier.value=S.card.tier||"premium";tier.addEventListener("change",function(){S.card.tier=this.value;saveCard();});
-  })();
+/* ── التحليل ── */
+function buildBody(){var y=years();
+  var b={product:S.product,year:y[1],persist:true,trend_span:S.span<2?2:S.span,agent_prefs:S.prefs};
+  if(S.market)b.markets=[S.market.iso3];
+  var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value);
+  if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null};
+  if(!isNaN(price))b.own_price=price;return b}
+function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#runBtn").textContent="جارٍ التحليل…";
+  post("/analyze",buildBody()).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#runBtn").textContent="حلّل السوق ←";sync();
+    pushHist();renderBoard();if(then)then(res);else nav("board")})
+  .catch(function(e){S.busy=false;$("#runBtn").textContent="حلّل السوق ←";sync();toast("فشل الطلب: "+e.message)})}
+$("#runBtn").addEventListener("click",function(){runAnalysis()});
+function pushHist(){var label=S.product+" · "+((S.view&&S.view.header&&S.view.header.target_market)||"—");
+  S.hist=[{label:label}].concat(S.hist.filter(function(h){return h.label!==label})).slice(0,5);
+  localStorage.setItem("silk_hist",JSON.stringify(S.hist));drawHist()}
+function drawHist(){$("#histList").innerHTML=S.hist.map(function(h){return '<div class="hist">'+esc(h.label)+'</div>'}).join("")}
+drawHist();
 
-  var searchT;
-  $("#search").addEventListener("input",function(){S.query=this.value;clearTimeout(searchT);searchT=setTimeout(doSearch,180);});
-  $("#search").addEventListener("focus",function(){if(S.query)doSearch();});
-  document.addEventListener("click",function(e){
-    if(!e.target.closest(".field.search:not(.mkt-field)"))$("#drop").classList.add("hidden");
-    if(!e.target.closest(".mkt-field"))$("#mktDrop").classList.add("hidden");
-  });
+/* ── اللوحة — تُبنى من view الحقيقي حصراً؛ الغائب «—» هادئة ── */
+function money(v){if(v==null)return"—";var n=+v;if(n>=1e9)return"$"+(n/1e9).toFixed(1)+" مليار";if(n>=1e6)return"$"+(n/1e6).toFixed(1)+" م";if(n>=1e3)return"$"+(n/1e3).toFixed(0)+" ألف";return"$"+n}
+function comp(m,k){var c=(m.components_detail||[]).filter(function(x){return x.name===k})[0]||{};return c}
+function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class="empty">شغّل تحليلاً أولاً.</div>';return}
+  var d=v.decision||{},m=(v.markets||[{}])[0],h=v.header||{};
+  $("#bTitle").textContent=(v.product||"")+" · "+(h.target_market||"");
+  var tone=/NO-GO/.test(d.verdict||"")?"no":(/CONDITIONAL|WATCH/.test(d.verdict||"")?"":"go");
+  var brief=(v.brief||[])[0]||"";
+  var ms=comp(m,"market_size"),sp=comp(m,"saudi_position"),tr=m.trend||{};
+  var kpi=function(lab,val,st,stTxt,src){return '<div class="kpi"><div class="lab">'+lab+'</div><div class="val num">'+val+'</div><span class="state '+st+'">'+stTxt+'</span><div class="src">'+esc(src||"—")+'</div></div>'};
+  var growth=tr.growth_pct!=null?((tr.growth_pct>=0?"+":"−")+Math.abs(tr.growth_pct)+"%"):"—";
+  var html='';
+  html+='<div class="verdict"><div><span class="vtag '+tone+'"><span class="d"></span>'+esc(brief.split("—")[0].replace("التوصية:","").trim()||"القرار")+'</span>'
+    +'<h2>'+esc(brief||"—")+'</h2><p>'+esc((v.brief||[])[1]||"")+'</p></div>'
+    +'<div class="conf"><div class="lvl">'+esc((brief.match(/ثقة ([^)]*)\(/)||[])[1]||"الثقة")+'</div><div class="cap">تغطية البيانات '+(h.coverage_pct!=null?h.coverage_pct+"%":"—")+'</div></div></div>';
+  html+='<div class="kpis">'
+    +kpi("حجم السوق",money(ms.value),ms.value!=null?"s-good":"s-mut",ms.value!=null?"مرصود":"غير متوفر",ms.source)
+    +kpi("النمو",growth,tr.growth_pct!=null?(tr.growth_pct>=0?"s-good":"s-warn"):"s-mut",tr.cagr_pct!=null?("نمو مركّب "+tr.cagr_pct+"%"):"—",tr.source||"UN Comtrade")
+    +kpi("حصة السعودية",sp.value!=null?sp.value+"%":"—",sp.value!=null?(sp.value>=20?"s-good":"s-warn"):"s-mut",sp.value!=null?(sp.value>=20?"قوية":"قابلة للنمو"):"غير متوفر",sp.source)
+    +kpi("النقاط",m.score!=null?Math.round(m.score*100)+"/100":"—","s-good","الترتيب "+((v.markets||[]).indexOf(m)+1),"محرّك سِلك")+'</div>';
+  // المورّدون
+  var sup=(m.supplier_countries||[]).slice(0,6);
+  var supRows=sup.map(function(s){var you=/Saudi/.test(s.partner||"");return '<tr class="'+(you?"you":"")+'"><td class="rowname">'+esc(s.partner)+'</td><td class="num">'+money(s.value_usd)+'</td><td class="num">'+(s.share!=null?s.share+"%":"—")+'</td><td><span class="bar"><i style="width:'+Math.min(100,(s.share||0)*2)+'%"></i></span></td></tr>'}).join("");
+  // القمع من حزمة البحث
+  var ag=((m.research||{}).agents)||{},msA=ag.market_size||{};
+  function fnd(a,k){var f=(a.findings||[]).filter(function(x){return x.metric===k&&x.value!=null})[0];return f?f.value:null}
+  var tam=fnd(msA,"tam_usd"),sam=fnd(msA,"sam_usd"),som=fnd(msA,"som_usd");
+  html+='<div class="grid">';
+  html+='<div class="bcard"><h3>من يورّد للسوق؟</h3><div class="note">المنافسة: الدول المورّدة وحصصها · المصدر: UN Comtrade</div>'
+    +(supRows?('<table><thead><tr><th>الدولة</th><th>القيمة</th><th>الحصة</th><th></th></tr></thead><tbody>'+supRows+'</tbody></table>'):'<div class="gap">—</div>')+'</div>';
+  html+='<div class="bcard"><h3>حجم الفرصة</h3><div class="note">TAM / SAM / SOM — من حزمة البحث</div>'
+    +(tam!=null?('<div class="funnel"><div class="fl f1"><div class="k">السوق الكلي</div><div class="v">'+money(tam)+'</div></div>'
+      +(sam!=null?'<div class="fl f2"><div class="k">المتاح لك</div><div class="v">'+money(sam)+'</div></div>':"")
+      +(som!=null?'<div class="fl f3"><div class="k">المتوقع تحقيقه</div><div class="v">'+money(som)+'</div></div>':"")+'</div>'):'<div class="gap">—</div>')+'</div>';
+  // اقتراح التسعير — من قوائم حقيقية فقط
+  var prices=(m.prices||[]).map(function(p){return +p.price}).filter(function(x){return x>0}).sort(function(a,b){return a-b});
+  var pHtml;
+  if(prices.length>=3){var q1=prices[Math.floor((prices.length-1)*.25)],med=prices[Math.floor((prices.length-1)*.5)],avg=(prices.reduce(function(a,b){return a+b},0)/prices.length).toFixed(1);
+    pHtml='<div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap"><div class="rec"><div class="k">النطاق المقترح</div><div class="v">'+q1+' – '+med+'</div><div class="s">من '+prices.length+' سعراً مرصوداً</div></div>'
+      +'<p style="font-size:13.5px;color:var(--ink-soft);max-width:46ch">بناءً على القوائم المرصودة (متوسط '+avg+'، مدى '+prices[0]+'–'+prices[prices.length-1]+'): سعّر بين <b>'+q1+' و'+med+'</b> لتبقى دون متوسط السوق بهامش موجب.</p></div>'}
+  else pHtml='<p class="gap">اقتراح التسعير يتطلب أسعار رفّ مرصودة — تتوافر مع الدراسة العميقة.</p>';
+  html+='<div class="bcard price"><div style="display:flex;align-items:center"><h3>السعر المقترح لمنتجك</h3><span class="newbadge">من بيانات مرصودة</span></div><div class="note">التسعير — مشتق من القوائم الحقيقية فقط</div>'+pHtml+'</div>';
+  html+='</div>';
+  // الخطوة التالية من قرار §8
+  var ed=m.entry_decision||{},steps=(ed.first_steps||ed.conditions||[]).slice(0,3);
+  if(steps.length)html+='<div class="next"><div><h4>الخطوة التالية</h4><ol>'+steps.map(function(s){return '<li>'+esc(s)+'</li>'}).join("")+'</ol></div><button class="cta" id="deepBtn">دراسة معمّقة ←</button></div>';
+  // ثقافة المستهلك — رؤى مستخلصة لا روابط خام (consumer_culture)
+  var cc=(v.consumer_culture||{}),ins=cc.insights||[];
+  if(ins.length){html+='<div class="bcard" style="margin:18px 0"><h3>ثقافة المستهلك ونبض السوق</h3><div class="note">رؤى مستخلصة من إشارات ويب حقيقية — كل رؤية بدليلها</div>'
+    +ins.slice(0,4).map(function(o){return '<p style="font-size:14px;margin-bottom:8px">• '+esc(o.point||"")+(o.evidence&&o.evidence.length?'<span style="display:block;font-size:11.5px;color:var(--muted)">الدليل: '+esc(o.evidence[0])+'</span>':'')+'</p>'}).join("")+'</div>'}
+  // الموردون والأعمال بالاسم — تحذير التجزئة يُحترم (business_hint)
+  var sups=(m.suppliers||[]);
+  if(sups.length){html+='<div class="bcard" style="margin:18px 0"><h3>أعمال مرصودة بالاسم</h3><div class="note">من الخرائط — للمراجعة اليدوية</div>'
+    +sups.slice(0,8).map(function(sx){var hint=(sx.business_hint==="retail_or_food_service")?' <span class="state s-warn">قد يكون محل تجزئة لا موزّعاً</span>':'';
+      return '<p style="font-size:14px;margin-bottom:6px">• '+esc(sx.name)+hint+' <span style="font-size:11px;color:var(--muted)">'+esc(sx.source||"")+'</span></p>'}).join("")+'</div>'}
+  // فهرس الأقسام الـ14
+  var toc=["الخلاصة","المنهجية","تعريف السوق","نظرة عامة","الديناميكيات","حجم السوق","التقسيم","التجارة","الإقليمي","المنافسة","استخبارات العميل","التنظيم والمخاطر (الاشتراطات)","الاتجاهات","التوصيات"];
+  html+='<div class="toc"><div class="h">أقسام التقرير الكامل — ١٤ قسماً (Word)</div><div class="tocg">'+toc.map(function(t,i){return '<div class="ti"><b>'+String(i+1).padStart(2,"0")+'</b> '+t+'</div>'}).join("")+'</div></div>';
+  $("#boardBody").innerHTML=html;
+  var dq=$("#deepBtn");if(dq)dq.addEventListener("click",function(){toast("الدراسة العميقة تتطلب مفاتيح المصادر المدفوعة — فعّلها من الإعدادات")});
+}
+/* تنزيل التقرير — fetch يحمل X-API-Key ثم blob (الرابط العادي لا يرسل الترويسة) */
+function dlReport(kind){var id=S.raw&&S.raw.analysis_id;if(id==null){toast("شغّل تحليلاً أولاً");return}
+  if(kind==="docx"){fetch(base()+"/analyses/"+id+"/report.docx",{headers:hdrs(false)}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.blob()})
+    .then(function(b){var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="silk_report_"+id+".docx";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)})
+    .catch(function(e){toast("فشل التنزيل: "+e.message)});return}
+  fetch(base()+"/analyses/"+id+"/report.md",{headers:hdrs(false)}).then(function(r){return r.text()}).then(function(t){
+    var w=window.open("","_blank");if(!w)return;var pre=w.document.createElement("pre");pre.style.cssText="white-space:pre-wrap;font-family:monospace;padding:28px;max-width:900px;margin:0 auto";pre.textContent=t;w.document.body.appendChild(pre)}).catch(function(e){toast("فشل: "+e.message)})}
+$("#pdfBtn").addEventListener("click",function(){dlReport("docx")});
+$("#mdBtn").addEventListener("click",function(){dlReport("md")});
 
-  // ── منتقي الأسواق المستهدفة — target-market picker (يضيّق silk_market_ranker.COUNTRIES) ──
-  // مرجع الأسواق الـ٣٨ يُحمَّل مرة واحدة (بلا مفتاح، عبر GET /markets)؛ الفارغ = كل الأسواق
-  // (سلوك الاكتشاف الحالي بلا تغيير) — اختيار سوق أو أكثر يضيّق silk_engine.analyze(countries=…).
-  var mktT;
-  function loadMarketsRef(){
-    if(S.marketsRef)return;
-    fetch(base()+"/markets").then(function(r){return r.json();}).then(function(list){
-      S.marketsRef=Array.isArray(list)?list:[];
-    }).catch(function(){S.marketsRef=[];});
-  }
-  function renderMktChips(){
-    var el=$("#mktChips");if(!el)return;
-    el.innerHTML=S.targetMarkets.map(function(m){
-      return '<span class="mkt-chip">'+esc(m.name||m.iso3)+' <button type="button" data-iso3="'+esc(m.iso3)+'" aria-label="'+esc(t("removeMarket"))+'">×</button></span>';
-    }).join("");
-  }
-  function doMktSearch(){
-    var q=(S.mktQuery||"").trim().toLowerCase();
-    var pool=S.marketsRef||[];
-    var chosen={};S.targetMarkets.forEach(function(m){chosen[m.iso3]=1;});
-    var rows=pool.filter(function(m){return !chosen[m.iso3]&&(!q||m.name.toLowerCase().indexOf(q)>=0||m.iso3.toLowerCase().indexOf(q)>=0);}).slice(0,12);
-    if(!rows.length){$("#mktDrop").classList.add("hidden");return;}
-    $("#mktDrop").innerHTML=rows.map(function(m){return '<div class="drow" data-iso3="'+esc(m.iso3)+'" data-name="'+esc(m.name)+'"><span class="nm">'+esc(m.name)+'</span><span class="hs-chip">'+esc(m.iso3)+'</span></div>';}).join("");
-    $("#mktDrop").classList.remove("hidden");
-  }
-  $("#mktSearch").addEventListener("focus",function(){loadMarketsRef();setTimeout(doMktSearch,120);});
-  $("#mktSearch").addEventListener("input",function(){S.mktQuery=this.value;clearTimeout(mktT);mktT=setTimeout(doMktSearch,120);});
-  $("#mktDrop").addEventListener("click",function(e){
-    var row=e.target.closest(".drow");if(!row)return;
-    S.targetMarkets.push({iso3:row.getAttribute("data-iso3"),name:row.getAttribute("data-name")});
-    $("#mktSearch").value="";S.mktQuery="";$("#mktDrop").classList.add("hidden");renderMktChips();
-  });
-  $("#mktChips").addEventListener("click",function(e){
-    var btn=e.target.closest("button[data-iso3]");if(!btn)return;
-    var iso3=btn.getAttribute("data-iso3");
-    S.targetMarkets=S.targetMarkets.filter(function(m){return m.iso3!==iso3;});
-    renderMktChips();
-  });
-  function doSearch(){
-    fetch(base()+"/index?q="+encodeURIComponent(S.query)+"&limit=12").then(function(r){return r.json();}).then(function(list){
-      if(!Array.isArray(list)||!list.length){$("#drop").classList.add("hidden");return;}
-      $("#drop").innerHTML=list.map(function(it){return '<div class="drow" data-n="'+esc(it.name)+'" data-hs="'+esc(it.hs)+'"><span class="nm">'+esc(it.name)+'</span><span class="hs-chip">'+esc(it.hs)+'</span></div>';}).join("");
-      $("#drop").classList.remove("hidden");
-    }).catch(function(){$("#drop").classList.add("hidden");});
-  }
-  $("#drop").addEventListener("click",function(e){var row=e.target.closest(".drow");if(!row)return;selectProduct(row.getAttribute("data-n"),row.getAttribute("data-hs"));});
-  function selectProduct(name,hs){
-    S.product=name;S.hs=hs;S.raw=null;S.result=null;S.selId=null;S.query="";
-    $("#search").value="";$("#drop").classList.add("hidden");
-    $("#hschip").classList.remove("hidden");$("#hschip").textContent=hs;
-    $("#mpHs").classList.remove("hidden");$("#mpHs").textContent=hs;
-    $("#runBtn").disabled=false;renderReady();
-  }
+/* ── الدردشة — نفس المحرّك ونفس الإعدادات ── */
+function chatAdd(html,me){var t=document.createElement("div");t.className="turn"+(me?" me":"");
+  t.innerHTML=me?('<div class="txt">'+esc(html)+'</div>'):('<div class="ai"><div class="ava">س</div><div class="aibody">'+html+'</div></div>');
+  $("#cStream").appendChild(t);$("#cStream").scrollTop=1e9;return t}
+function parseChat(msg){ // استخراج المنتج/السوق/المدى من النص — عبر /index و/markets الحقيقيين
+  var span=/٥|5/.test(msg)?5:(/٣|3/.test(msg)?3:S.span);
+  return fetch(base()+"/index?q="+encodeURIComponent(msg)+"&limit=1").then(function(r){return r.json()}).then(function(list){
+    var prod=(Array.isArray(list)&&list[0])||null;
+    return fetch(base()+"/markets").then(function(r){return r.json()}).then(function(mk){
+      var market=null;(Array.isArray(mk)?mk:[]).forEach(function(m){if(msg.indexOf(m.name)>=0)market=m});
+      return{product:prod,market:market,span:span}})})}
+$("#sendBtn").addEventListener("click",send);
+$("#chatBox").addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
+function send(){var msg=$("#chatBox").value.trim();if(!msg||S.busy)return;$("#chatBox").value="";chatAdd(msg,true);
+  var wait=chatAdd("<p>أطلق الوكلاء المفعّلين على طلبك…</p>");
+  parseChat(msg).then(function(p){
+    if(!p.product){wait.remove();chatAdd("<p>لم أتعرّف على منتج في رسالتك — جرّب اسماً أوضح مثل «تمور» أو «عسل».</p>");return}
+    S.product=p.product.name;S.hs=p.product.hs;if(p.market)S.market={iso3:p.market.iso3,name:p.market.name};S.span=p.span;sync();
+    runAnalysis(function(res){wait.remove();
+      var v=res.view||{},m=(v.markets||[{}])[0],brief=(v.brief||[])[0]||"—";
+      var ag=((m.research||{}).agents)||{},done=0,total=0,rows="";
+      Object.keys(ag).forEach(function(k){total++;var a=ag[k]||{};var ok=a.status&&a.status!=="failed";if(ok)done++;
+        rows+='<div class="arow"><span class="abadge '+(ok?"b-done":"b-off")+'"></span><span class="aname">'+esc(k)+'</span><span class="aout'+(ok?"":" off")+'">'+(ok?"✓":"—")+'</span></div>'});
+      var agHtml=total?('<div class="agents"><div class="ahead">الوكلاء<span class="p">'+done+' / '+total+' أسهموا</span></div><div class="alist">'+rows+'</div></div>'):"";
+      chatAdd('<p>حلّلت <b>'+esc(v.product||"")+'</b>'+(v.header&&v.header.target_market?(' في <b>'+esc(v.header.target_market)+'</b>'):'')+'.</p>'+agHtml
+        +'<div class="rescard"><h4>'+esc(brief)+'</h4><p>'+esc((v.decision||{}).why||"")+'</p>'
+        +'<div class="acts"><button class="abtn main" data-act="board">افتح اللوحة الكاملة</button><button class="abtn" data-act="docx">تصدير التقرير</button></div></div>');
+      $$("#cStream [data-act]").forEach(function(b){b.onclick=function(){this.dataset.act==="board"?nav("board"):dlReport("docx")}})})
+  }).catch(function(e){wait.remove();chatAdd("<p>تعذّر التحليل: "+esc(e.message)+"</p>")})}
 
-  $("#runBtn").addEventListener("click",runAnalysis);
-  function buildBody(deepen){
-    var span=Math.max(2,Math.min(10,S.yearTo-S.yearFrom+1));
-    // Stage 2A: لا أعلام مصادر من المتصفح — سياسة الخادم تقرر المصادر كلها.
-    var b={product:S.product,year:S.yearTo,persist:true,trend_span:span};
-    if(S.targetMarkets.length)b.markets=S.targetMarkets.map(function(m){return m.iso3;});
-    if(S.card.cost_per_unit!=null){b.product_card={cost_per_unit:S.card.cost_per_unit,tier:S.card.tier||null,monthly_capacity:S.card.monthly_capacity!=null?S.card.monthly_capacity:null,shipping_per_unit:S.card.shipping_per_unit!=null?S.card.shipping_per_unit:null};}
-    if(S.card.own_price!=null)b.own_price=S.card.own_price;
-    if(deepen){b.with_localprice=!!S.keys.LOCALPRICE;b.with_volza=!!S.keys.VOLZA;b.with_explee=!!S.keys.EXPLEE;b.with_ai=!!S.keys.CLAUDE;}
-    return b;
-  }
-  function postJSON(path,body){
-    var hdrs={"Content-Type":"application/json"};if(S.adminKey)hdrs["X-API-Key"]=S.adminKey;
-    return fetch(base()+path,{method:"POST",headers:hdrs,body:JSON.stringify(body)}).then(function(r){return r.text().then(function(tx){var d=null;try{d=JSON.parse(tx);}catch(_){}if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?tx:(typeof de==="string"?de:JSON.stringify(de))));}return d;});});
-  }
-  // تحميل/فتح ملفات التقرير المحمية — plain <a href> لا يرسل X-API-Key أبداً
-  // (المتصفح لا يرفق ترويسات مخصّصة عند التنقّل)، فكان الرابط يفشل 401 حين
-  // تُفعَّل المصادقة (بلاغ مالك حقيقي: «File wasn't available on site» على
-  // زر تقرير Word). الحل: نجلب الملف بـ fetch يحمل الترويسة، ثم نُنزّله/نعرضه
-  // من blob محلي — لا تسريب مفتاح في الرابط أو سجلات الخادم.
-  function authedFetch(path){
-    var hdrs=S.adminKey?{"X-API-Key":S.adminKey}:{};
-    return fetch(base()+path,{headers:hdrs}).then(function(r){
-      return r.text().then(function(tx){
-        if(!r.ok)throw new Error("HTTP "+r.status+" — "+tx.slice(0,300));
-        return {text:tx,type:r.headers.get("Content-Type")||""};
-      });
-    });
-  }
-  function downloadReport(kind){
-    var id=S.result&&S.result.analysis_id;if(id==null)return;
-    if(kind==="docx"){
-      var hdrs=S.adminKey?{"X-API-Key":S.adminKey}:{};
-      fetch(base()+"/analyses/"+id+"/report.docx",{headers:hdrs}).then(function(r){
-        if(!r.ok)return r.text().then(function(tx){throw new Error("HTTP "+r.status+" — "+tx.slice(0,300));});
-        return r.blob();
-      }).then(function(blob){
-        var url=URL.createObjectURL(blob),a=document.createElement("a");
-        a.href=url;a.download="silk_report_"+id+".docx";document.body.appendChild(a);a.click();a.remove();
-        setTimeout(function(){URL.revokeObjectURL(url);},4000);
-      }).catch(function(e){toast(t("reqFail")+": "+e.message);});
-      return;
-    }
-    var path=kind==="md"?"/analyses/"+id+"/report.md":"/analyses/"+id+"/brief";
-    authedFetch(path).then(function(res){
-      var w=window.open("","_blank");
-      if(!w)return;
-      var pre=w.document.createElement("pre");
-      pre.style.cssText="white-space:pre-wrap;font-family:'IBM Plex Mono',monospace;padding:28px;line-height:1.6;max-width:900px;margin:0 auto";
-      pre.textContent=res.text;
-      w.document.title="silk_"+kind+"_"+id;
-      w.document.body.appendChild(pre);
-    }).catch(function(e){toast(t("reqFail")+": "+e.message);});
-  }
-  function runAnalysis(){
-    if(!S.product){$("#search").focus();return;}
-    S.running=true;S.sentFlags=buildBody(false);applyLang();$("#runBtn").disabled=true;
-    $("#resultArea").innerHTML='<section class="card" style="padding:24px"><div class="skl" style="width:30%"></div><div class="skl" style="width:90%;margin-top:16px"></div><div class="skl" style="width:80%;margin-top:12px"></div></section>';
-    postJSON("/analyze",S.sentFlags).then(onResult).catch(onError);
-  }
-  function runDeepen(){
-    if(!S.product)return;var paid=buildBody(true);
-    if(!paid.with_localprice&&!paid.with_volza&&!paid.with_explee&&!paid.with_ai){setScreen(8);return;}
-    S.running=true;S.sentFlags=paid;applyLang();postJSON("/deepen",paid).then(onResult).catch(onError);
-  }
-  function onResult(res){S.running=false;$("#runBtn").disabled=false;S.raw=res;S.result=mapResult(res);S.selId=S.result.markets&&S.result.markets[0]&&S.result.markets[0].id;S.mktIdx=0;applyLang();render();applyView();}
-  function onError(e){S.running=false;$("#runBtn").disabled=false;applyLang();$("#completeness").classList.add("hidden");$("#resultArea").innerHTML='<section class="card err">'+esc(t("reqFail"))+': '+esc(e.message)+'</section>';}
-
-  function confLabel(c){return c==null?"—":(c>=.66?t("high"):c>=.33?t("medium"):t("low"));}
-  function mapResult(res){
-    if(!res||res.classified===false)return {classified:false,product:res&&res.product,note:(res&&(res.hs_note||res.note))||null,view:(res&&res.view)||null};
-    var markets=(res.markets||[]).map(function(m,i){
-      var c=m.components||{};
-      return {id:m.iso3+"-"+i,country:m.country,iso3:m.iso3,code:iso2(m.iso3),components:c,
-        import_value:dpv(c.market_size),saudi_share:dpv(c.saudi_position),
-        score:m.total_score==null?null:Math.round(m.total_score*100),confidence:m.confidence,confLabel:confLabel(m.confidence),
-        income_ppp:m.income_ppp,population:m.population,tariff:m.tariff||null,top_competitor:m.top_competitor||null,
-        competitors:m.competitors||[],trend:m.trend||null,jury:m.jury||null,ai:(m.jury&&m.jury.ai)||null,
-        requirements:dpList(m.requirements).filter(function(r){return r&&r.value;}),
-        localprice:realVals(m.localprice),price_comparison:m.price_comparison||null,
-        competitive_position:m.competitive_position||null,quality_flags:m.quality_flags||[],recommendation:m.recommendation||""};
-    });
-    return {classified:true,product:res.product,hs:res.hs_code,hs_confidence:res.hs_confidence,year:res.year,
-      data_year:res.data_year!=null?res.data_year:res.year,year_fell_back:!!res.year_fell_back,
-      analysis_id:res.analysis_id!=null?res.analysis_id:null,view:res.view&&!res.view.error?res.view:null,markets:markets};
-  }
-
-  function coverage(key){var ms=(S.raw&&S.raw.markets)||[],n=0,ok=null;ms.forEach(function(m){var dp=(m.components||{})[key];if(dp&&dp.value!=null){n++;if(!ok)ok=dp;}});return {n:n,total:ms.length,ok:ok};}
-  // الطبقات الأربع للمعمار (بلاغ المالك: «الكور طبقات API مجانية ثم وكلاء ثم كلود
-  // ثم مدفوعة»). كلُّ طبقةٍ تُضيء من بياناتٍ حقيقيةٍ لا كنصٍّ ثابت.
-  function layerStates(){
-    var raw=S.raw||{},ms=raw.markets||[],top=ms[0]||{},L=[];
-    // ١) المصادر المجانية — كم سوقاً رُصد له حجمُ استيرادٍ فعلي
-    var cov=coverage("market_size"),ok1=cov.n>0;
-    L.push({k:"lyr1",d:"lyr1d",on:ok1,gap:!ok1,foot:ok1?("<b class='num'>"+cov.n+"/"+cov.total+"</b> "+t("obs")):t("declaredGap")});
-    // ٢) الوكلاء الثمانية — من بحث السوق الأعلى: كم وكيلاً أعاد نتائج
-    var r=top.research,ag=(r&&!r.error&&r.agents)||null,tot=8,have=0;
-    if(ag)Object.keys(ag).forEach(function(k){var a=ag[k];if(a&&a.status&&a.status!=="failed"&&(a.findings||[]).some(function(f){return f&&f.value!=null;}))have++;});
-    var ok2=have>0;
-    L.push({k:"lyr2",d:"lyr2d",on:ok2,gap:!ok2,foot:ok2?("<b class='num'>"+have+"/"+tot+"</b> "+t("agentsN")):t("declaredGap")});
-    // ٣) قرار كلود — الأعمدة الخمسة + الحكم
-    var ed=top.entry_decision,pil=(ed&&!ed.error)?ed:null,pc=0,verd=pil&&pil.verdict;
-    if(pil&&pil.pillars)Object.keys(pil.pillars).forEach(function(k){var p=pil.pillars[k];if(p&&p.value!=null)pc++;});
-    var ok3=!!verd;
-    L.push({k:"lyr3",d:"lyr3d",on:ok3,gap:!ok3,foot:ok3?("<b class='num'>"+verd+"</b> · "+pc+"/5 "+t("pillarsN")):t("declaredGap")});
-    // ٤) الطبقة المدفوعة — مقفلة حتى التعميق؛ مُفعّلة إن رُصدت بياناتها
-    var paid=ms.some(function(m){return (m.localprice&&m.localprice.length)||(m.volza&&m.volza.length)||(m.explee&&m.explee.length);});
-    L.push({k:"lyr4",d:"lyr4d",on:paid,locked:!paid,foot:paid?t("lyrActive"):t("lyrLocked")});
-    return L;
-  }
-  function pipeHTML(){
-    var stCls,stTxt;
-    if(S.running){stCls="run";stTxt=t("running");}
-    else if(!S.raw){stCls="idle";stTxt=t("idle");}
-    else{var top=(S.raw.markets||[])[0],j=top&&top.jury;if(j&&j.agents_with_data>0){stCls="ok";stTxt=t("completeCov")+" "+j.agents_with_data+"/"+j.agents_total+" "+t("agents");}else{stCls="warn";stTxt=t("completeGaps");}}
-    var L=S.raw?layerStates():[{k:"lyr1",d:"lyr1d"},{k:"lyr2",d:"lyr2d"},{k:"lyr3",d:"lyr3d"},{k:"lyr4",d:"lyr4d"}];
-    var steps=L.map(function(s,i){
-      var col="var(--text-3)",cls="",foot="—";
-      if(S.raw){
-        if(s.locked){col="var(--text-3)";cls="locked";foot=s.foot;}
-        else if(s.on){col=i===3?"var(--primary)":"var(--success)";foot=s.foot;}
-        else{col="var(--warning)";cls="gap";foot=s.foot||t("declaredGap");}
-      }
-      return '<div class="step '+cls+'"><div class="sn"><span class="num-badge">'+(i+1)+'</span><b>'+esc(t(s.k))+'</b></div><div class="sd">'+esc(t(s.d))+'</div><div class="sf"><span class="dot" style="background:'+col+'"></span><span>'+foot+'</span></div></div>';
-    }).join("");
-    return '<section class="card pipe'+(S.running?" run":"")+'"><div class="pipe-head"><div class="eyebrow">'+esc(t("pipeline"))+'</div><span class="status '+stCls+'"><span class="dot"></span>'+esc(stTxt)+'</span></div><div class="steps steps-4">'+steps+'</div></section>';
-  }
-  function renderCompleteness(){
-    var v=S.result&&S.result.view,c=v&&v.completeness;if(!c){$("#completeness").classList.add("hidden");return;}
-    var col=c.pct>=75?"var(--success)":c.pct>=40?"var(--warning)":"var(--danger)";
-    $("#completeness").classList.remove("hidden");
-    $("#completeness").innerHTML='<span class="comp-pct" style="color:'+col+'">'+c.pct+'%</span>'+
-      '<div style="flex:1;min-width:180px"><div class="comp-label">'+esc(t("completeness"))+'</div><div class="comp-meter" style="margin-top:6px"><span class="fill" style="width:'+c.pct+'%;background:'+col+'"></span></div></div>'+
-      '<span class="tag num" title="'+esc(c.label)+'">'+c.observed+'/'+c.total+' '+t("obs")+' · '+c.gap_count+' '+t("declaredGap")+'</span>';
-  }
-
-  function render(){
-    if(!S.result){renderReady();return;}
-    if(!S.result.classified){$("#completeness").classList.add("hidden");
-      $("#resultArea").innerHTML=pipeHTML()+'<section class="card ready" style="margin-top:var(--s5)"><h2>'+esc(t("noClass"))+'</h2><p>'+esc(S.result.note||"")+'</p><div class="foot">'+esc(t("noClassFoot"))+'</div></section>';return;}
-    renderCompleteness();
-    var ms=S.result.markets,sel=ms.filter(function(m){return m.id===S.selId;})[0]||ms[0];S.selId=sel&&sel.id;
-    $("#resultArea").innerHTML=testRunBanner()+pipeHTML()+'<div class="section-gap" style="margin-top:var(--s5)">'+heroBlock()+commandCenter(ms,sel)+'<div class="body-grid">'+tableBlock(ms,sel)+detailBlock(sel,ms)+'</div>'+duoBlock()+cultureBlock()+'</div>';
-    bindEvents();
-  }
-  function bindEvents(){
-    $$("#resultArea tbody tr").forEach(function(tr){
-      function pick(){S.selId=tr.getAttribute("data-id");render();}
-      tr.addEventListener("click",pick);
-      tr.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();}});
-    });
-    $$("#resultArea .hbar-row").forEach(function(r){function go(){S.selId=r.getAttribute("data-goto");render();}r.addEventListener("click",go);r.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});});
-    $$("#resultArea .tab").forEach(function(b){b.addEventListener("click",function(){S.tab=this.getAttribute("data-tab");render();});});
-    var d=$("#deepBtn");if(d)d.addEventListener("click",runDeepen);
-    var j=$("#jsonBtn");if(j)j.addEventListener("click",exportJson);
-    var cs=$("#csvBtn");if(cs)cs.addEventListener("click",exportCsv);
-    $$("#resultArea [data-dl]").forEach(function(b){b.addEventListener("click",function(){downloadReport(this.getAttribute("data-dl"));});});
-  }
-  function tone(v){v=String(v||"").toUpperCase();if(v.indexOf("NO-GO")>=0)return "no";if(v.indexOf("INSUFFICIENT")>=0||v.indexOf("WATCH")>=0)return "watch";if(v.indexOf("GO")>=0)return "go";return "watch";}
-  function heroBlock(){
-    var v=S.result.view||{},d=v.decision||{},tn=tone(d.verdict);
-    var badge=tn==="go"?"b-go":tn==="no"?"b-no":"b-watch";
-    var chips='<span class="badge '+badge+'">'+esc(t("prelim"))+'</span>'+(d.market?'<span class="tag">'+esc(d.market)+'</span>':'')+
-      (S.result.hs?'<span class="tag num">HS '+esc(S.result.hs)+' · '+esc(S.result.hs_confidence)+'</span>':'')+
-      '<span class="tag num">'+S.yearFrom+'–'+S.yearTo+'</span>'+
-      (S.result.year_fell_back?'<span class="tag num" style="background:var(--warning-soft);color:var(--warning)" title="'+esc(t("dataYearHint"))+'">'+esc(t("dataYearL"))+' '+esc(S.result.data_year)+'</span>':'')+
-      (d.stage!=null?'<span class="tag">'+esc(t("stageL"))+' '+esc(d.stage)+'</span>':'');
-    var brief=(v.brief||[]).map(function(l){return '<li>'+esc(l)+'</li>';}).join("");
-    var conf=d.confidence!=null?d.confidence:0,p=Math.round((conf||0)*100);
-    var acts='<div class="d-actions"><button class="btn btn-primary" id="deepBtn">'+esc(t("deepen"))+'</button>'+
-      (S.result.analysis_id!=null?'<button class="btn btn-secondary" data-dl="docx">'+esc(t("wordReport"))+'</button><button class="btn btn-ghost" data-dl="md">'+esc(t("mdReport"))+'</button><button class="btn btn-ghost" data-dl="brief">'+esc(t("brief"))+'</button>':'')+
-      '<button class="btn btn-ghost" id="csvBtn">'+esc(t("exportCsv"))+'</button><button class="btn btn-ghost" id="jsonBtn">'+esc(t("exportJson"))+'</button></div>';
-    return '<section class="card decision '+tn+'"><div class="d-head">'+chips+'</div><div class="d-grid"><div>'+
-      '<div class="eyebrow">'+esc(t("decision"))+'</div><h1 class="d-verdict">'+esc(d.verdict||t("noVerdict"))+'</h1>'+
-      (d.why?'<p class="d-why"><b>'+esc(t("whyLabel"))+':</b> '+esc(d.why)+'</p>':'')+(brief?'<ul class="d-brief">'+brief+'</ul>':'')+acts+'</div>'+
-      '<div class="gauge" style="--p:'+p+'" role="img" aria-label="'+conf+'"><div class="in"><div><div class="n">'+conf+'</div><div class="l">'+esc(t("confLabel"))+'</div></div></div></div></div></section>';
-  }
-  function tableBlock(ms,sel){
-    var rows=ms.map(function(m){
-      var c=m.components||{};
-      var present=["market_size","saudi_position","demand_capacity","competition"].filter(function(k){return c[k]&&c[k].value!=null;}).length;
-      var imp=m.import_value!=null?'<span class="num" style="font-weight:600" title="'+esc(prov(c.market_size))+'">'+fmtUSD(m.import_value)+'</span>':'<span class="gap-txt" title="'+esc((c.market_size&&c.market_size.note)||"")+'">'+esc(t("notObserved"))+'</span>';
-      var sh=m.saudi_share!=null?'<span class="num" style="font-weight:600'+(m.saudi_share>=30?';color:var(--primary)':'')+'" title="'+esc(prov(c.saudi_position))+'">'+m.saudi_share+'%</span>':'<span class="gap-txt">'+esc(t("notObserved"))+'</span>';
-      var tr=m.trend||{},trc=(tr.series?spark(tr.series,64,26):'<span class="gap-txt">'+esc(t("notObserved"))+'</span>')+" "+growthTag(tr.growth_pct);
-      return '<tr class="'+(m.id===(sel&&sel.id)?"sel":"")+'" data-id="'+m.id+'" tabindex="0" role="button" aria-label="'+esc(m.country)+'"><td><span class="rk">'+(ms.indexOf(m)+1)+'</span></td>'+
-        '<td><div class="cty"><span class="flag">'+esc(m.code)+'</span><span class="cname">'+esc(m.country)+'</span></div></td>'+
-        '<td>'+imp+'</td><td><div class="trend">'+trc+'</div></td><td>'+sh+'</td>'+
-        '<td><div class="bar"><span class="bv">'+(m.score==null?"—":m.score)+'</span><span class="track"><span class="fill" style="width:'+(m.score||0)+'%"></span></span></div></td>'+
-        '<td><span class="cov'+(present>=4?"":" mid")+'" title="'+present+'/4">'+present+'/4 · '+esc(m.confLabel)+'</span></td></tr>';
-    }).join("");
-    return '<section class="card"><div class="dt-head"><h3>'+esc(t("rankedMarkets"))+'</h3><span class="cnt"><span class="num">'+ms.length+'</span> · '+S.yearFrom+'–'+S.yearTo+'</span></div>'+
-      '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>'+t("colRank")+'</th><th>'+t("colMarket")+'</th><th>'+t("colImports")+'</th><th>'+t("colTrend")+'</th><th>'+t("colShare")+'</th><th>'+t("colScore")+'</th><th>'+t("colCov")+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-      '</section>';
-  }
-  var COMPS=[["market_size","compSize","wSize",function(v){return fmtUSD(v);}],["saudi_position","compShare","wShare",function(v){return v+"%";}],["demand_capacity","compIncome","wIncome",function(v){return fmtUSD(v);}],["competition","compHHI","wHHI",function(v){return v;}]];
-  function margin(price){var cost=S.card.cost_per_unit,ship=S.card.shipping_per_unit||0;if(cost==null||!price||price<=0)return null;return Math.round((price-cost-ship)/price*100);}
-  function detailBlock(sel,ms){
-    if(!sel)return '<aside class="card detail"><div class="dpad">—</div></aside>';
-    var tabs=[["position","tabPosition"],["rivals","tabRivals"],["trend","tabTrend"],["components","tabComponents"],["compliance","tabCompliance"],["verdict","tabVerdict"]];
-    return '<aside class="card detail"><div class="dpad">'+
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span class="flag">'+esc(sel.code)+'</span><span class="tag">'+esc(t("rank"))+' '+(ms.indexOf(sel)+1)+'</span><span class="tag num">'+esc(t("rowConf"))+' '+esc(sel.confidence)+'</span></div>'+
-      '<h2 class="d-country">'+esc(sel.country)+'</h2><div class="d-score"><span class="n">'+(sel.score==null?"—":sel.score)+'</span><span class="o">/100</span></div>'+
-      '<div class="tabs">'+tabs.map(function(tb){return '<button class="tab'+(tb[0]===S.tab?" on":"")+'" data-tab="'+tb[0]+'">'+esc(t(tb[1]))+'</button>';}).join("")+'</div>'+
-      '<div class="panel-body">'+tabBody(sel)+'</div></div></aside>';
-  }
-  function tabBody(sel){
-    if(S.tab==="position")return positionTab(sel);
-    if(S.tab==="rivals")return rivalsTab(sel);
-    if(S.tab==="trend")return trendTab(sel);
-    if(S.tab==="components")return componentsTab(sel);
-    if(S.tab==="compliance")return complianceTab(sel);
-    return verdictTab(sel);
-  }
-  function positionTab(sel){
-    var cp=sel.competitive_position,feas=(cp&&cp.feasibility_threads)||[],out="";
-    if(feas.length){
-      out+='<div class="subhead">'+esc(t("yourPos"))+'</div>';
-      out+=feas.map(function(f){return '<div class="kv"><span class="kk">'+esc(f.competitor)+' · <span class="num">'+esc(f.observed_price)+(f.currency?' '+esc(f.currency):'')+'</span></span><span class="vv num" style="color:var(--success)">'+esc(f.margin_at_match_pct)+'%</span></div>';}).join("");
-    }else out+='<div class="callout warn">'+esc((cp&&cp.note)||t("posNeed"))+'</div>';
-    if(sel.price_comparison&&sel.price_comparison.your_price!=null&&sel.price_comparison.listings_count){var pc=sel.price_comparison;out+='<div class="mypos" style="margin-top:16px"><h4>'+esc(t("myPrice"))+'</h4><div class="big">'+esc(pc.verdict||"")+'</div></div>';}
-    return out;
-  }
-  function rivalsTab(sel){
-    var out='<div class="subhead">'+esc(t("onShelf"))+'</div>',listings=sel.localprice||[];
-    if(listings.length){
-      var lad=listings.slice(0,8).map(function(x){return {brand:String(x.title||"").slice(0,40),price:Number(x.price),cur:x.currency||"",you:false};}).filter(function(x){return !isNaN(x.price);});
-      if(S.card.own_price!=null)lad.push({brand:t("youLabel"),price:S.card.own_price,cur:"",you:true});
-      lad.sort(function(a,b){return b.price-a.price;});
-      out+='<div style="overflow-x:auto"><table class="ladder"><thead><tr><th>'+t("colBrand")+'</th><th>'+t("colPrice")+'</th><th>'+t("colMargin")+'</th></tr></thead><tbody>'+
-        lad.map(function(r){var mg=margin(r.price);return '<tr class="'+(r.you?"you":"")+'"><td>'+esc(r.brand)+(r.you?'<span class="you-tag">'+esc(t("youLabel"))+'</span>':'')+'</td><td class="num">'+r.price+(r.cur?' '+esc(r.cur):'')+'</td><td>'+(mg==null?'<span class="gap-txt">—</span>':'<span class="num" style="color:'+(r.you?"var(--brand)":"var(--success)")+';font-weight:600">'+mg+'%</span>')+'</td></tr>';}).join("")+'</tbody></table></div>';
-      if(S.card.cost_per_unit==null)out+='<div class="callout warn">'+esc(t("needProduct"))+'</div>';
-    }else out+='<div class="callout warn">'+esc(t("needDeepen"))+'</div>';
-    out+='<div class="subhead">'+esc(t("supplierCountries"))+'</div>';
-    var sup=sel.competitors||[];
-    out+=sup.length?sup.slice(0,6).map(function(s){return '<div class="supplier"><span>'+esc(s.partner||"—")+'</span><span class="sh">'+(s.share!=null?s.share+"%":"—")+' · '+fmtUSD(s.value_usd)+'</span></div>';}).join(""):'<div class="callout warn">'+esc(t("notObserved"))+'</div>';
-    return out;
-  }
-  function trendTab(sel){
-    var tr=sel.trend;
-    if(!tr||!tr.series||(tr.observed_years||[]).length<2)return '<div class="callout warn">'+esc((tr&&tr.note)||t("trendNeed"))+'</div>';
-    var years=tr.series.map(function(p){return p.year;});
-    return '<div class="subhead">'+esc(t("trendTitle"))+'</div><div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px">'+
-      '<div style="display:flex;justify-content:space-between;margin-bottom:6px">'+growthTag(tr.growth_pct)+'<span class="tag num">'+esc(t("cagr"))+' '+(tr.cagr_pct==null?"—":tr.cagr_pct+"%")+'</span></div>'+
-      spark(tr.series,320,60)+'<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:6px" class="num">'+years.map(function(y){return '<span>'+y+'</span>';}).join("")+'</div></div>'+
-      '<div class="prov" style="margin-top:10px">'+esc(tr.note||"")+'</div>';
-  }
-  function componentsTab(sel){
-    return COMPS.map(function(m){var dp=(sel.components||{})[m[0]]||{};
-      if(dp.value!=null)return '<div class="comp"><div class="comp-h"><span class="comp-nm">'+esc(t(m[1]))+'</span><span class="comp-w">'+esc(t(m[2]))+'</span></div><div class="comp-v">'+m[3](dp.value)+'</div><div class="prov">'+esc(prov(dp))+'</div></div>';
-      return '<div class="comp"><div class="comp-h"><span class="comp-nm">'+esc(t(m[1]))+'</span><span class="comp-w">'+esc(t(m[2]))+'</span></div><div class="gapline"><span class="dot"></span>'+esc(t("declaredGap"))+'</div><div class="prov">'+esc(dp.note||prov(dp))+'</div></div>';
-    }).join("");
-  }
-  function complianceTab(sel){
-    var reqs=sel.requirements||[];
-    if(!reqs.length)return '<div class="callout">'+esc(t("notObserved"))+'</div>';
-    return '<div class="subhead">'+esc(t("complianceEntry"))+'</div><ul class="list">'+reqs.map(function(r){var v=r.value||{};return '<li>'+esc(v.item||"")+(v.authority?' <span class="pill">'+esc(v.authority)+'</span>':'')+(v.source_url?' <a href="'+esc(v.source_url)+'" target="_blank" rel="noopener">'+esc(t("officialSrc"))+'</a>':'')+'</li>';}).join("")+'</ul>';
-  }
-  function verdictTab(sel){
-    var out="",j=sel.jury;
-    if(j)out+='<div class="comp"><div class="comp-h"><span class="badge b-info">'+esc(t("juryTitle"))+'</span><span class="prov" style="margin:0">'+esc(t("coverageL"))+' '+esc(j.agents_with_data)+'/'+esc(j.agents_total)+' · '+esc(t("sufficiencyL"))+' '+esc(j.confidence)+'</span></div><div style="margin-top:8px;font-size:15px;line-height:1.6">'+esc(j.verdict||"")+'</div>'+((j.data_gaps||[]).length?'<div class="prov" style="margin-top:6px">'+esc(t("gapsL"))+': '+esc(j.data_gaps.join(", "))+'</div>':'')+'</div>';
-    var a=sel.ai;
-    if(a){var vm={"GO":"b-go","WATCH":"b-watch","NO-GO":"b-no"},cls=vm[(a.verdict||"").toUpperCase()]||"b-info";out+='<div class="comp" style="background:var(--primary-soft);border-color:transparent"><div class="comp-h"><span class="badge b-info">'+esc(t("claudeJudge"))+'</span><span class="badge '+cls+'">'+esc(a.verdict||"")+'</span></div>'+(a.reasoning?'<div style="margin-top:8px;font-size:15px;line-height:1.7">'+esc(a.reasoning)+'</div>':'')+'</div>';}
-    if(sel.recommendation)out+='<div class="callout">'+esc(sel.recommendation)+'</div>';
-    return out||'<div class="callout">'+esc(t("notObserved"))+'</div>';
-  }
-  function duoBlock(){
-    var v=S.result.view||{},limits=v.limits||[];
-    var lim=limits.length?'<ul class="limits">'+limits.slice(0,8).map(function(l){return '<li>'+esc(l)+'</li>';}).join("")+'</ul>':'<div class="callout">'+esc(t("noLimits"))+'</div>';
-    var cp=v.competitive_position;
-    var cpb=(!cp||!cp.available)?'<div class="callout warn">'+esc((cp&&cp.note)||t("posNeed"))+'</div>':'<ul class="list">'+((cp.feasibility_threads||[]).map(function(f){return '<li>'+esc(f.competitor)+': '+esc(t("colMargin"))+' <b class="num">'+esc(f.margin_at_match_pct)+'%</b></li>';}).join("")||'<li>'+esc(t("notObserved"))+'</li>')+'</ul>';
-    return '<div class="duo"><section class="card panel"><h3>'+esc(t("reportLimits"))+'</h3><div class="sub">'+esc(t("limitsSub"))+'</div>'+lim+'</section>'+
-      '<section class="card panel"><h3>'+esc(t("yourPos"))+'</h3><div class="sub">'+esc((cp&&cp.market)||"")+'</div>'+cpb+'</section></div>';
-  }
-  function cultureBlock(){
-    var v=S.result.view||{},cc=v.consumer_culture||{},ins=cc.insights||[],raw=cc.raw||(v.culture||[]);
-    var body,sub;
-    if(ins.length){
-      // الطبقة ٣: رؤًى مستخلَصة (لا روابط) — كلُّ رؤيةٍ بدليلها من العناوين.
-      sub=t("cultureExtracted");
-      body='<div class="ins-list">'+ins.slice(0,5).map(function(o){
-        o=o||{};var ev=(o.evidence||[]).slice(0,3).map(function(e){return esc(String(e));}).join(" · ");
-        return '<div class="ins"><div class="ins-p">'+esc(o.point||"")+'</div>'+(ev?'<div class="ins-e">'+esc(t("basedOn"))+': '+ev+'</div>':'')+'</div>';
-      }).join("");
-      if(cc.note)body+='<div class="prov" style="margin-top:8px;font-family:var(--ar);direction:rtl;text-align:start">'+esc(cc.note)+'</div>';
-      body+='</div>';
-      if(raw.length){
-        body+='<details class="src-details"><summary>'+esc(t("cultureSources"))+' ('+raw.length+')</summary><ul class="list">'+raw.slice(0,8).map(function(c){var title=esc(c.title||"");return '<li>'+(c.link?'<a href="'+esc(c.link)+'" target="_blank" rel="noopener noreferrer">'+title+'</a>':title)+'</li>';}).join("")+'</ul></details>';
-      }
-    }else if(raw.length){
-      // تراجُع: بلا مفتاح كلود تبقى العناوينُ خامًا — يُعلَن أنها لم تُحلَّل بعد.
-      sub=t("cultureRawSub");
-      body='<div class="callout warn" style="margin-bottom:12px">'+esc(t("cultureNeedAI"))+'</div><ul class="list">'+raw.slice(0,8).map(function(c){
-        var title=esc(c.title||"");
-        return '<li>'+(c.link?'<a href="'+esc(c.link)+'" target="_blank" rel="noopener noreferrer">'+title+'</a>':title)+'</li>';
-      }).join("")+'</ul>';
-    }else{
-      sub=t("cultureSub");
-      body='<div class="callout warn">'+esc(t("cultureNeed"))+'</div>';
-    }
-    return '<section class="card panel" style="margin-top:var(--s5)"><h3>'+esc(t("cultureTitle"))+'</h3><div class="sub">'+esc(sub)+'</div>'+body+'</section>';
-  }
-  function renderReady(){
-    $("#completeness").classList.add("hidden");
-    if(!S.product){$("#resultArea").innerHTML='<section class="card ready"><h2>'+esc(t("readyTitle"))+'</h2><p>'+esc(t("readyP"))+'</p><div class="foot">'+esc(t("readyFoot"))+'</div></section>';return;}
-    $("#resultArea").innerHTML='<section class="card ready"><span class="hs-chip">HS '+esc(S.hs)+'</span><h2 style="margin-top:12px">'+esc(S.product)+'</h2><p>'+esc(t("readyProduct"))+'</p><button class="btn btn-primary" onclick="document.getElementById(\'runBtn\').click()">'+esc(t("analyze"))+'</button></section>';
-  }
-
-  function exportJson(){var raw=S.raw;if(!raw)return;var a=document.createElement("a");a.href="data:application/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(raw,null,2));a.download="silk_"+(S.product||"analysis")+".json";a.click();}
-  function exportCsv(){if(!S.result||!S.result.classified)return;var rows=[["rank","country","code","import_usd","saudi_share_pct","score","confidence","growth_pct"]];S.result.markets.forEach(function(m,i){rows.push([i+1,m.country,m.code,m.import_value,m.saudi_share,m.score,m.confidence,m.trend&&m.trend.growth_pct]);});var csv=rows.map(function(r){return r.map(function(x){return x==null?"":'"'+String(x).replace(/"/g,'""')+'"';}).join(",");}).join("\n");var a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download="silk_"+(S.product||"report")+".csv";a.click();}
-
-  // ── شاشات §9 (٢–٧) — تُشتق حصراً من نموذج العرض القانوني view (silk_render.build_view)
-  //    لا قراءة مباشرة لنتيجة المحرك ولا أي نداء شبكة من طبقة العرض هذه.
-  //    EN: screens 2–7 derive strictly from result.view; no engine reads, no network.
-  function vw(){return S.result&&S.result.view;}
-  function vmarkets(){var v=vw();return (v&&v.markets)||[];}
-  function curM(){var ms=vmarkets();if(!ms.length)return null;if(S.mktIdx>=ms.length)S.mktIdx=0;return ms[S.mktIdx];}
-  function research(m){var r=m&&m.research;return (r&&!r.error&&r.agents)?r:null;}
-  function rAgent(m,name){var r=research(m);return (r&&r.agents[name])||null;}
-  function rFind(ag,metric){var fs=(ag&&ag.findings)||[];for(var i=0;i<fs.length;i++)if(fs[i]&&fs[i].metric===metric)return fs[i];return null;}
-  // سطر المصدر لكل رقم (قاعدة ٢) — source · retrieved_at · confidence per finding
-  function srcLine(f){var ss=(f&&f.sources)||[],seen={},parts=[];ss.forEach(function(s){if(!s)return;var b=[];if(s.source)b.push(s.source);if(s.retrieved_at)b.push(s.retrieved_at);if(s.confidence!=null)b.push((S.lang==="ar"?"ثقة ":"conf ")+s.confidence);var ln=b.join(" · ");if(ln&&!seen[ln]){seen[ln]=1;parts.push(ln);}});return parts.slice(0,3).join(" | ");}
-  function fmtPct(v){return (typeof v==="number"?Math.round(v*100)/100:v)+"%";}
-  function fmtNum(v){var n=Number(v);return isNaN(n)?String(v):n.toLocaleString("en-US");}
-  function fmtBool(v){return v===true?t("yesL"):v===false?t("noL"):String(v);}
-  function gapT(){return '<span class="gap-txt">'+esc(t("notObserved"))+'</span>';}
-  // بطاقة مقياس: القيمة أو «غير مرصود» + شارة «مُقدَّر» والمعادلة + سطر المصدر — أبداً ليست صفراً
-  function metricCard(label,f,fmt){
-    var has=f&&f.value!=null,h='<div class="mcard"><div class="mc-l">'+esc(label);
-    if(f&&f.modeled)h+=' <span class="modeled">'+esc(t("modeledBadge"))+'</span>';
-    h+='</div>';
-    if(has){var val=fmt?fmt(f.value):String(f.value);h+='<div class="mc-v num">'+esc(String(val))+((!fmt&&f.unit)?' <span style="font-size:13px;color:var(--text-3)">'+esc(f.unit)+'</span>':'')+'</div>';}
-    else h+='<div class="mc-v">'+gapT()+'</div>';
-    if(f&&f.modeled&&f.formula)h+='<div class="mc-f">'+esc(f.formula)+'</div>';
-    var pl=srcLine(f);if(pl)h+='<div class="prov">'+esc(pl)+'</div>';
-    if(f&&f.note)h+='<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(f.note)+'</div>';
-    return h+'</div>';
-  }
-  function agentChip(ag){
-    if(!ag)return '<span class="stbadge st-off">'+esc(t("notObserved"))+'</span>';
-    var m={complete:["st-on",t("agComplete")],partial:["st-off",t("agPartial")],failed:["st-off",t("agFailed")]}[ag.status]||["st-off",String(ag.status||"")];
-    return '<span class="stbadge '+m[0]+'">'+esc(m[1])+(ag.coverage!=null?' · '+Math.round(ag.coverage*100)+'%':'')+'</span>';
-  }
-  function gapsBlock(ag){var gs=(ag&&ag.gaps)||[];if(!gs.length)return '';return '<div class="subhead">'+esc(t("gapsHdr"))+'</div>'+gs.map(function(g){return '<div class="gapline" style="display:flex;align-items:flex-start;font-weight:500"><span class="dot" style="margin-top:7px"></span><span style="flex:1">'+esc(g)+'</span></div>';}).join('');}
-  function scrShell(titleKey,inner){
-    var ms=vmarkets(),sw='';
-    if(ms.length)sw='<div class="field" style="min-width:220px"><label>'+esc(t("marketSel"))+'</label><div class="control" style="height:42px"><select id="mktSel">'+ms.map(function(m,i){return '<option value="'+i+'"'+(i===S.mktIdx?' selected':'')+'>'+esc(m.country||m.iso3||("#"+(i+1)))+'</option>';}).join('')+'</select></div></div>';
-    return testRunBanner()+'<div class="scr-head"><h1 class="scr-title">'+esc(t(titleKey))+'</h1>'+sw+'</div>'+inner;
-  }
-  // راية التشغيل البرهاني — SILK_HERMETIC على الخادم = view.test_run؛ لافتة
-  // ظاهرة في كل الشاشات (إصلاح مراجعة Stage 5): لا يُعرض برهان كأنه إنتاج.
-  function testRunBanner(){
-    var v=S.result&&S.result.view;
-    if(!v||!v.test_run)return '';
-    return '<section class="card err" style="padding:var(--s3) var(--s4);margin-bottom:var(--s4);font-weight:600">⚠ TEST RUN — '+esc(t("testRun"))+'</section>';
-  }
-  // نوع المرشّح: عنوان بحث ويب ليس اسم كيان (ثغرة ٢) — يُعرض «مرجع للمراجعة».
-  function candKind(c){c=c||{};if(c.kind)return c.kind;return c.via==="Google Maps"?"entity":"reference";}
-  function noAnalysisCard(){return '<div class="scr-head"><h1 class="scr-title">'+esc(t("nav"+S.screen))+'</h1></div><section class="card ready"><h2>'+esc(t("readyTitle"))+'</h2><p>'+esc(t("runFirst"))+'</p><button class="btn btn-primary" id="goRunBtn">'+esc(t("goRun"))+'</button></section>';}
-  function needResearchCard(err){return '<section class="card ready"><p>'+esc(t("needResearch"))+'</p>'+(err?'<div class="err" style="margin-top:12px;text-align:start">'+esc(String(err))+'</div>':'')+'</section>';}
-  function researchBanner(m){return research(m)?'':'<section class="card" style="padding:var(--s4);margin-bottom:var(--s4)"><span class="gapline"><span class="dot"></span>'+esc(t("needResearch"))+'</span></section>';}
-  // ٢) القرار — بطاقة entry_decision (silk.decision/v1)
-  function screen2(){
-    var m=curM();if(!m)return noAnalysisCard();
-    var ed=m.entry_decision;
-    if(!ed||ed.error)return scrShell("nav2",needResearchCard(ed&&ed.error));
-    var tn=ed.verdict==="GO"?"go":ed.verdict==="NO-GO"?"no":"watch";
-    var badgeCls=tn==="go"?"b-go":tn==="no"?"b-no":"b-watch";
-    var pills=[["market","pMarket"],["competition","pCompetition"],["regulatory","pRegulatory"],["profit","pProfit"],["risk","pRisk"]].map(function(p){
-      var d=(ed.pillars||{})[p[0]]||{},v=d.value;
-      var bar='<div class="track">'+(v!=null?'<span class="fill" style="width:'+Math.round(v*100)+'%"></span>':'')+'</div>';
-      var miss=(d.missing||[]).length?'<div class="gapline" style="font-size:12px"><span class="dot"></span>'+esc((S.lang==="ar"?"غائب: ":"missing: ")+d.missing.join("، "))+'</div>':'';
-      return '<div class="pillar"><div class="ph"><span>'+esc(t(p[1]))+'</span><span class="num">'+(v==null?gapT():v)+'</span></div>'+bar+(d.basis?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(d.basis)+'</div>':'')+miss+'</div>';
-    }).join("");
-    var sbo=ed.scores_by_option||{};
-    var opts='<div class="duo">'+["A","B"].map(function(k){
-      var on=ed.weights_option===k;
-      return '<div class="comp" style="'+(on?'border-color:var(--primary)':'')+'"><div class="comp-h"><span class="comp-nm">'+esc(t("optionL"))+' '+k+'</span>'+(on?'<span class="badge b-info">'+esc(t("activeOpt"))+'</span>':'')+'</div><div class="comp-v num">'+(sbo[k]==null?gapT():esc(String(sbo[k])))+'</div></div>';
-    }).join("")+'</div>'+(ed.weights_note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(ed.weights_note)+'</div>':'');
-    var crit=ed.critical_risk?'<div class="callout warn" style="border-color:var(--danger);background:var(--danger-soft);font-weight:600">'+esc(t("criticalRiskL"))+'</div>':'';
-    var missP=(ed.missing_pillars||[]).length?'<div class="gapline"><span class="dot"></span>'+esc(t("missingPillarsL"))+': '+esc(ed.missing_pillars.join("، "))+'</div>':'';
-    var conds=(ed.conditions||[]).length?'<div class="subhead">'+esc(t("conditionsL"))+'</div><ul class="limits">'+ed.conditions.map(function(c){return '<li>'+esc(c)+'</li>';}).join("")+'</ul>':'';
-    var steps=(ed.first_steps||[]).length?'<div class="subhead">'+esc(t("firstStepsL"))+'</div><ul class="list">'+ed.first_steps.map(function(c){return '<li>'+esc(c)+'</li>';}).join("")+'</ul>':'';
-    var risks='';
-    if((ed.risks||[]).length)risks='<div class="subhead">'+esc(t("risksL"))+'</div><div style="overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colRisk"))+'</th><th>'+esc(t("colSeverity"))+'</th><th>'+esc(t("colEvidence"))+'</th></tr></thead><tbody>'+
-      ed.risks.map(function(r){r=r||{};var sev=String(r.severity||"");var col=(sev.indexOf("عال")>=0||/high/i.test(sev))?"var(--danger)":"var(--warning)";return '<tr><td>'+esc(r.risk||"")+'</td><td><span style="color:'+col+';font-weight:600">'+esc(sev)+'</span></td><td style="font-size:13px">'+esc(r.evidence||"")+'</td></tr>';}).join("")+'</tbody></table></div>';
-    return scrShell("nav2",
-      '<section class="card decision '+tn+'"><div class="d-head"><span class="badge '+badgeCls+'" style="font-size:16px;padding:8px 18px">'+esc(ed.verdict||"")+'</span>'+(ed.schema?'<span class="tag num">'+esc(ed.schema)+'</span>':'')+'</div>'+
-      '<div class="d-grid"><div>'+
-      (ed.why?'<p class="d-why"><b>'+esc(t("whyLabel"))+':</b> '+esc(ed.why)+'</p>':'')+crit+missP+
-      '<div class="subhead">'+esc(t("pillarsL"))+'</div>'+pills+
-      '<div class="subhead">'+esc(t("weightsL"))+'</div>'+opts+conds+steps+risks+
-      (ed.note?'<div class="callout">'+esc(ed.note)+'</div>':'')+
-      '</div><div><div class="score-big num" style="text-align:center">'+(ed.score==null?gapT():esc(String(ed.score)))+'</div><div style="text-align:center;color:var(--text-3);font-size:13px;margin-top:4px">'+esc(t("scoreL"))+' /1</div>'+
-      '<div style="text-align:center;margin-top:14px"><span class="tag num">'+esc(t("confLabel"))+' '+(ed.confidence==null?"—":esc(String(ed.confidence)))+'</span></div>'+
-      (ed.confidence_basis?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:center">'+esc(ed.confidence_basis)+'</div>':'')+
-      '</div></div></section>');
-  }
-  // ٣) حجم السوق — TAM/SAM/SOM + نمو/CAGR من research.agents.market_size
-  function screen3(){
-    var m=curM();if(!m)return noAnalysisCard();
-    if(!research(m))return scrShell("nav3",needResearchCard(m.research&&m.research.error));
-    var ag=rAgent(m,"market_size");
-    return scrShell("nav3",'<section class="card panel"><div class="pipe-head"><h3>'+esc(t("nav3"))+'</h3>'+agentChip(ag)+'</div>'+
-      '<div class="mgrid">'+metricCard(t("tamL"),rFind(ag,"tam_usd"),fmtUSD)+metricCard(t("samL"),rFind(ag,"sam_usd"),fmtUSD)+metricCard(t("somL"),rFind(ag,"som_usd"),fmtUSD)+
-      metricCard(t("growthL"),rFind(ag,"import_growth_pct"),fmtPct)+metricCard(t("cagr"),rFind(ag,"import_cagr_pct"),fmtPct)+'</div>'+gapsBlock(ag)+'</section>');
-  }
-  // ٤) المنافسة — الطبقة الدولية (حصص) ثم الشركات بالاسم
-  function screen4(){
-    var m=curM();if(!m)return noAnalysisCard();
-    var ag=rAgent(m,"competitor");
-    var cards='<div class="mgrid">'+metricCard(t("hhiL"),rFind(ag,"hhi"))+metricCard(t("topShareL"),rFind(ag,"top_supplier_share_pct"),fmtPct)+metricCard(t("saudiShareL"),rFind(ag,"saudi_share_pct"),fmtPct)+'</div>';
-    var scF=rFind(ag,"supplier_countries"),rows=(scF&&scF.value)||m.supplier_countries||[];
-    var tbl;
-    if(rows.length){tbl='<div style="overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colMarket"))+'</th><th>'+esc(t("colShare"))+'</th><th>'+esc(t("colValueL"))+'</th></tr></thead><tbody>'+
-      rows.slice(0,10).map(function(s){s=s||{};var nm=s.partner||s.country||s.name||"—";return '<tr><td>'+esc(String(nm))+'</td><td class="num">'+(s.share!=null?esc(fmtPct(s.share)):gapT())+'</td><td class="num">'+(s.value_usd!=null?fmtUSD(s.value_usd):gapT())+'</td></tr>';}).join("")+'</tbody></table></div>'+(scF&&srcLine(scF)?'<div class="prov">'+esc(srcLine(scF))+'</div>':'');}
-    else tbl='<div class="callout warn">'+esc(t("notObserved"))+'</div>';
-    var ncF=rFind(ag,"named_companies"),named=(ncF&&ncF.value)||[],nc;
-    if(named.length){nc=named.slice(0,12).map(function(c){c=c||{};var isRef=candKind(c)==="reference";var nm=esc((isRef?(c.title||c.name):(c.name||c.title))||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
-      var tag=isRef?t("refManual"):t("unverified");
-      var hint=(!isRef&&c.business_hint==="retail_or_food_service")?'<div class="prov" style="color:var(--warn,#b45309)">'+esc(t("retailHint"))+'</div>':'';
-      return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(tag)+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+'</span>'+hint+'</div>';}).join("")+
-      (ncF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(ncF.note)+'</div>':'');}
-    else nc='<div class="callout warn">'+esc((ncF&&ncF.note)||t("notObserved"))+'</div>';
-    return scrShell("nav4",researchBanner(m)+
-      '<section class="card panel"><div class="pipe-head"><h3>'+esc(t("intlLayer"))+'</h3>'+agentChip(ag)+'</div>'+cards+'<div class="subhead">'+esc(t("supplierCountries"))+'</div>'+tbl+gapsBlock(ag)+'</section>'+
-      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("namedLayer"))+'</h3>'+nc+'</section>');
-  }
-  // ٥) التسعير — الطبقة الحدودية بمعادلاتها + التجزئة أو فجوة /deepen الصريحة
-  function screen5(){
-    var m=curM();if(!m)return noAnalysisCard();
-    var ag=rAgent(m,"pricing");
-    var cards='<div class="mgrid">'+metricCard(t("uvL"),rFind(ag,"border_unit_value_usd_kg"))+metricCard(t("suvL"),rFind(ag,"saudi_border_unit_value_usd_kg"))+metricCard(t("marginBL"),rFind(ag,"margin_at_border_pct"),fmtPct)+'</div>';
-    var rpF=rFind(ag,"retail_prices"),listings=(rpF&&rpF.value)||[];
-    if(!listings.length)listings=m.prices||[];
-    var retail;
-    if(listings.length){retail='<div style="overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colBrand"))+'</th><th>'+esc(t("colPrice"))+'</th><th>'+esc(t("storeL"))+'</th></tr></thead><tbody>'+
-      listings.slice(0,10).map(function(p){p=p||{};return '<tr><td>'+esc(String(p.title||"—").slice(0,60))+'</td><td class="num">'+(p.price!=null?esc(String(p.price))+(p.currency?' '+esc(p.currency):''):gapT())+'</td><td>'+esc(p.store||"—")+'</td></tr>';}).join("")+'</tbody></table></div>'+(rpF&&srcLine(rpF)?'<div class="prov">'+esc(srcLine(rpF))+'</div>':'');}
-    else retail='<div class="callout warn">'+esc(t("needDeepen"))+'</div>';
-    // نقاطُ أسعارٍ مُستخلَصة (كلود) — أرقامٌ مذكورةٌ صراحةً، تتصدّر الروابط.
-    var ppF=rFind(ag,"retail_price_points"),pts=(ppF&&ppF.value)||[];
-    var ptsHtml=pts.length?'<div class="ins-list">'+pts.slice(0,8).map(function(p){p=p||{};var lbl=esc(String(p.price))+' '+esc(p.currency||"")+(p.unit?'/'+esc(p.unit):'');return '<div class="ins"><div class="ins-p num">'+lbl+'</div>'+(p.url?'<div class="ins-e"><a href="'+esc(p.url)+'" target="_blank" rel="noopener noreferrer">'+esc(t("cultureSources"))+'</a></div>':'')+'</div>';}).join("")+'</div>'+(ppF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start;margin-top:8px">'+esc(ppF.note)+'</div>':''):'';
-    var rfF=rFind(ag,"retail_references"),refs=(rfF&&rfF.value)||[];
-    var refsHtml=refs.length?'<ul class="list">'+refs.slice(0,8).map(function(x){x=x||{};var ttl=esc(String(x.title||x.url||""));return '<li>'+(x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+ttl+'</a>':ttl)+(x.retrieved_at?' <span class="prov" style="display:inline">'+esc(x.retrieved_at)+'</span>':'')+'</li>';}).join("")+'</ul>'+
-      (rfF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(rfF.note)+'</div>':''):(pts.length?'':'<div class="callout">'+esc(t("notObserved"))+'</div>');
-    return scrShell("nav5",researchBanner(m)+
-      '<section class="card panel"><div class="pipe-head"><h3>'+esc(t("borderLayer"))+'</h3>'+agentChip(ag)+'</div>'+cards+gapsBlock(ag)+'</section>'+
-      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("retailLayer"))+'</h3>'+retail+'</section>'+
-      (pts.length?'<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("pricePointsL"))+'</h3>'+ptsHtml+'</section>':'')+
-      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("retailRefs"))+'</h3>'+refsHtml+'</section>');
-  }
-  // ٦) الاشتراطات — القائمة + بوابة الأهلية + التعريفة
-  function screen6(){
-    var m=curM();if(!m)return noAnalysisCard();
-    var ag=rAgent(m,"regulatory");
-    var gateF=rFind(ag,"eligibility_gate");
-    var gate=(gateF&&gateF.value===true)?'<div class="callout warn" style="font-weight:600">'+esc(t("eligGateL"))+(srcLine(gateF)?'<div class="prov">'+esc(srcLine(gateF))+'</div>':'')+'</div>':'';
-    var cards='<div class="mgrid">'+metricCard(t("tariffL"),rFind(ag,"tariff_applied_pct"),fmtPct)+metricCard(t("reqCount"),rFind(ag,"entry_requirements_count"),fmtNum)+'</div>';
-    var rcF=rFind(ag,"requirements_checklist"),items=(rcF&&rcF.value)||[],list;
-    if(items.length)list='<ul class="list">'+items.map(function(v){v=v||{};return '<li>'+esc(String(v.item||v.requirement||v.name||""))+(v.authority?' <span class="pill">'+esc(v.authority)+'</span>':'')+(v.direction?' <span class="pill">'+esc(v.direction)+'</span>':'')+(v.source_url?' <a href="'+esc(v.source_url)+'" target="_blank" rel="noopener">'+esc(t("officialSrc"))+'</a>':'')+'</li>';}).join("")+'</ul>'+
-      (rcF&&srcLine(rcF)?'<div class="prov">'+esc(srcLine(rcF))+'</div>':'')+(rcF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(rcF.note)+'</div>':'');
-    else list='<div class="callout warn">'+esc(t("notObserved"))+'</div>';
-    return scrShell("nav6",researchBanner(m)+
-      '<section class="card panel"><div class="pipe-head"><h3>'+esc(t("nav6"))+'</h3>'+agentChip(ag)+'</div>'+gate+cards+'<div class="subhead">'+esc(t("reqList"))+'</div>'+list+gapsBlock(ag)+'</section>');
-  }
-  // ٧) الطلب والمخاطر — consumer_demand + risk + SWOT 2×2 + شرائح
-  function screen7(){
-    var m=curM();if(!m)return noAnalysisCard();
-    var cd=rAgent(m,"consumer_demand"),rk=rAgent(m,"risk"),lg=rAgent(m,"logistics");
-    var demand='<div class="mgrid">'+metricCard(t("gdpL"),rFind(cd,"gdp_per_capita_usd"),fmtUSD)+metricCard(t("popL"),rFind(cd,"population"),fmtNum)+metricCard(t("supplyL"),rFind(cd,"percapita_supply_kg"))+
-      metricCard(t("searchL"),rFind(cd,"search_interest"))+metricCard(t("muslimL"),rFind(cd,"muslim_share_pct"),fmtPct)+metricCard(t("ramadanL"),rFind(cd,"ramadan_seasonality"))+'</div>';
-    var risk='<div class="mgrid">'+metricCard(t("wgiPolL"),rFind(rk,"political_stability_wgi"))+metricCard(t("wgiRegL"),rFind(rk,"regulatory_quality_wgi"))+metricCard(t("lpiL"),rFind(rk,"logistics_lpi"))+
-      metricCard(t("fxL"),rFind(rk,"fx_volatility_pct"),fmtPct)+metricCard(t("hhiRiskL"),rFind(rk,"supplier_concentration_hhi"))+metricCard(t("critL"),rFind(rk,"critical_risk"),fmtBool)+'</div>';
-    // اللوجستيات (الوكيل الثامن): زمن التوريد + LPI؛ الشحن/التكلفة حتى الوصول
-    // فجوةٌ صريحةٌ للطبقة المدفوعة (تُعرَض كـ«غير مرصود» لا صفراً مخترَعاً).
-    var logi='<div class="mgrid">'+metricCard(t("leadTimeL"),rFind(lg,"lead_time_days"))+metricCard(t("timelinessL"),rFind(lg,"lpi_timeliness"))+metricCard(t("intlShipL"),rFind(lg,"lpi_intl_shipments"))+
-      metricCard(t("freightL"),rFind(lg,"freight_cost_usd_kg"))+metricCard(t("landedL"),rFind(lg,"landed_cost_usd_kg"))+'</div>';
-    var sw=m.swot||{};
-    function swotCell(k,items,color){
-      var body=(items&&items.length)?items.map(function(it){it=it||{};return '<div style="margin-bottom:10px"><div style="font-size:14px;line-height:1.6">'+esc(it.text||"")+'</div>'+(it.evidence?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(it.evidence)+'</div>':'')+'</div>';}).join(""):'<span class="gap-txt">'+esc(t("noItem"))+'</span>';
-      return '<div class="swotcell" style="border-top:3px solid '+color+'"><h4>'+esc(t(k))+'</h4>'+body+'</div>';
-    }
-    var swot='<div class="swotgrid">'+swotCell("swotS",sw.S,"var(--success)")+swotCell("swotW",sw.W,"var(--danger)")+swotCell("swotO",sw.O,"var(--primary)")+swotCell("swotT",sw.T,"var(--warning)")+'</div>'+
-      (sw.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(sw.note)+'</div>':'');
-    var segs=(m.segments||[]).length?'<ul class="list">'+m.segments.map(function(s){s=s||{};return '<li>'+esc(s.segment||"")+(s.basis?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(s.basis)+'</div>':'')+'</li>';}).join("")+'</ul>':'<div class="callout">'+esc(t("notObserved"))+'</div>';
-    return scrShell("nav7",researchBanner(m)+
-      '<section class="card panel"><div class="pipe-head"><h3>'+esc(t("demandHdr"))+'</h3>'+agentChip(cd)+'</div>'+demand+gapsBlock(cd)+'</section>'+
-      '<section class="card panel" style="margin-top:var(--s4)"><div class="pipe-head"><h3>'+esc(t("riskHdr"))+'</h3>'+agentChip(rk)+'</div>'+risk+gapsBlock(rk)+'</section>'+
-      '<section class="card panel" style="margin-top:var(--s4)"><div class="pipe-head"><h3>'+esc(t("logisticsHdr"))+'</h3>'+agentChip(lg)+'</div>'+logi+gapsBlock(lg)+'</section>'+
-      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("swotHdr"))+'</h3>'+swot+'</section>'+
-      '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("segmentsHdr"))+'</h3>'+segs+'</section>');
-  }
-  // ٨) لوحات البيانات في شاشة المصادر — التغطية + الأثر + دليل المورّدين
-  function renderDataPanels(){
-    var el=$("#dataPanels");if(!el)return;
-    var v=vw(),m=curM(),h="";
-    if(!v){el.innerHTML='<div class="sec-ttl">'+esc(t("covSec"))+'</div><div class="callout">'+esc(t("runFirst"))+'</div>';return;}
-    var cov=(m&&m.section_coverage)||{},st=(m&&m.section_status)||{};
-    var covRows=Object.keys(cov).map(function(k){var c=cov[k]||{},s=st[k]||{};
-      return '<tr><td>'+esc(k)+'</td><td class="num">'+esc(String(c.contributed))+'/'+esc(String(c.attempted))+'</td><td class="num">'+esc(String(c.score))+'</td><td>'+(s.status==="ok"?'<span class="stbadge st-on">ok</span>':'<span class="stbadge st-off">'+esc(t("declaredGap"))+'</span>')+'</td><td>'+(c.single_source?'<span class="pill">'+esc(t("singleSrc"))+'</span>':'')+'</td></tr>';}).join("");
-    h+='<div class="sec-ttl">'+esc(t("covSec"))+(m&&m.country?' — '+esc(m.country):'')+'</div>';
-    h+=covRows?'<div class="card" style="padding:var(--s4);overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("sectionL"))+'</th><th>'+esc(t("colContrib"))+'</th><th>score</th><th>'+esc(t("statusL"))+'</th><th></th></tr></thead><tbody>'+covRows+'</tbody></table></div>':'<div class="callout">'+esc(t("notObserved"))+'</div>';
-    var prv=v.provenance||[];
-    h+='<div class="sec-ttl">'+esc(t("provHdr"))+'</div>';
-    h+=prv.length?'<div class="card" style="padding:var(--s4);overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colSource"))+'</th><th>'+esc(t("colContrib"))+'</th><th>'+esc(t("colFail"))+'</th></tr></thead><tbody>'+
-      prv.map(function(b){b=b||{};return '<tr><td>'+esc(b.source||"")+'</td><td class="num">'+esc(String(b.contributed))+'/'+esc(String(b.attempted))+'</td><td style="font-size:12px;color:var(--text-3)">'+esc((b.failures||[]).join(" | "))+'</td></tr>';}).join("")+'</tbody></table></div>':'<div class="callout">'+esc(t("notObserved"))+'</div>';
-    var dir=(m&&m.supplier_directory)||{};
-    function dirList(arr){arr=arr||[];if(!arr.length)return '<div class="callout warn">'+esc(t("notObserved"))+'</div>';
-      return arr.slice(0,10).map(function(c){c=c||{};var isRef=candKind(c)==="reference";var nm=esc((isRef?(c.title||c.name):(c.name||c.title))||"");var link=c.url?'<a href="'+esc(c.url)+'" target="_blank" rel="noopener noreferrer">'+nm+'</a>':nm;
-        var tag=isRef?t("refManual"):t("unverified");
-        var hint=(!isRef&&c.business_hint==="retail_or_food_service")?'<div class="prov" style="color:var(--warn,#b45309)">'+esc(t("retailHint"))+'</div>':'';
-        return '<div class="supplier"><span>'+link+' <span class="unverified">'+esc(tag)+'</span></span><span style="color:var(--text-3);font-size:13px">'+esc(c.via||"")+(c.retrieved_at?' · <span class="num">'+esc(c.retrieved_at)+'</span>':'')+(c.address?' · '+esc(c.address):'')+'</span>'+hint+'</div>';}).join("");}
-    h+='<div class="sec-ttl">'+esc(t("dirHdr"))+'</div><div class="duo"><section class="card panel"><h3>'+esc(t("dirSaudi"))+'</h3>'+dirList(dir.saudi)+'</section><section class="card panel"><h3>'+esc(t("dirTarget"))+'</h3>'+dirList(dir.target)+'</section></div>'+
-      (dir.note?'<div class="callout warn" style="margin-top:var(--s3)">'+esc(dir.note)+'</div>':'');
-    el.innerHTML=h;
-  }
-  var SCREENS={2:screen2,3:screen3,4:screen4,5:screen5,6:screen6,7:screen7};
-  function renderScreen(){
-    var fn=SCREENS[S.screen];if(!fn)return;
-    $("#screenBody").innerHTML=fn();
-    var sel=$("#mktSel");if(sel)sel.addEventListener("change",function(){S.mktIdx=+this.value;renderScreen();});
-    var g=$("#goRunBtn");if(g)g.addEventListener("click",function(){setScreen(1);});
-  }
-  function setScreen(n){S.screen=n;applyView();}
-
-  var FREE=[{k:null,nm:{ar:"UN Comtrade",en:"UN Comtrade"},ds:{ar:"الاستيراد/التصدير بالـ HS — العمود الفقري.",en:"HS imports/exports — the backbone."}},
-    {k:null,nm:{ar:"World Bank",en:"World Bank"},ds:{ar:"الدخل، القوة الشرائية، السكان.",en:"Income, PPP, population."}},
-    {k:null,nm:{ar:"مرجع الاشتراطات L1",en:"Requirements L1 reference"},ds:{ar:"اشتراطات دخول/خروج بمصادرها الرسمية.",en:"Entry/exit requirements with official sources."}},
-    {k:null,nm:{ar:"Google Trends",en:"Google Trends"},ds:{ar:"الطلب والموسمية — مفعّل دائماً من الخادم.",en:"Demand & seasonality — always on (server)."}},
-    {k:null,nm:{ar:"WITS / WTO",en:"WITS / WTO"},ds:{ar:"الرسوم المطبّقة — بلا مفتاح، مفعّل دائماً.",en:"Applied tariffs — keyless, always on."}},
-    {k:null,nm:{ar:"FAOSTAT",en:"FAOSTAT"},ds:{ar:"الاستهلاك للفرد — بلا مفتاح، مفعّل دائماً.",en:"Per-capita supply — keyless, always on."}},
-    {k:"MAPS",nm:{ar:"Google Maps",en:"Google Maps"},ds:{ar:"المصانع والموزّعون بأسمائهم.",en:"Named factories & distributors."}},
-    {k:"SEARCH",nm:{ar:"بحث الويب (Serper)",en:"Web Search (Serper)"},ds:{ar:"ثقافة المستهلك ونبض السوق — عناوين ومقالات مرصودة.",en:"Consumer culture & market pulse — observed headlines & articles."}}];
-  var PAID=[{k:"LOCALPRICE",nm:{ar:"أسعار السوق المحلي",en:"Local market prices"},ds:{ar:"أسعار الرفّ الفعلية (أمازون/نون/جوميا) + مقارنة سعرك.",en:"Real shelf prices (Amazon/Noon/Jumia) + your price comparison."}},
-    {k:"VOLZA",nm:{ar:"Volza",en:"Volza"},ds:{ar:"المستوردون بالاسم من بوالص الشحن.",en:"Named importers from shipping bills."}},
-    {k:"EXPLEE",nm:{ar:"explee",en:"explee"},ds:{ar:"مشترون وجهات اتصال B2B.",en:"B2B buyers & contacts."}}];
-  var AI=[{k:"CLAUDE",nm:{ar:"Claude (Anthropic)",en:"Claude (Anthropic)"},ds:{ar:"حَكَم وتلخيص ذكي فوق النتائج.",en:"AI judge & summary over results."}}];
-  function srcCard(s){
-    var has=s.k&&S.keys[s.k],ctrl="",badge,cls;
-    if(s.tg){var on=!!S.toggles[s.tg];badge=on?t("obs"):"—";cls=on?"st-on":"st-off";ctrl='<button class="switch'+(on?" on":"")+'" data-tg="'+s.tg+'"><span class="k"></span></button>';}
-    else if(s.k){badge=has?t("connected"):t("needsKey");cls=has?"st-on":"st-off";ctrl='<input class="keyin" type="password" data-key="'+s.k+'" value="'+esc(S.keys[s.k]||"")+'" placeholder="'+(s.k==="CLAUDE"?"sk-ant-…":"API key")+'" />';}
-    else{badge=t("keyless");cls="st-on";}
-    return '<div class="srccard"><div class="body"><div class="nm">'+esc(s.nm[S.lang])+'</div><div class="ds">'+esc(s.ds[S.lang])+'</div></div><span class="stbadge '+cls+'">'+esc(badge)+'</span>'+ctrl+'</div>';
-  }
-  var KEY_ENV={SEARCH:"SEARCH_API_KEY",MAPS:"GOOGLE_MAPS_API_KEY",LOCALPRICE:"LOCALPRICE_API_KEY",VOLZA:"VOLZA_API_KEY",EXPLEE:"EXPLEE_API_KEY",CLAUDE:"ANTHROPIC_API_KEY",COMTRADE:"COMTRADE_API_KEY"};
-  function saveKeysToServer(){
-    var payload={};Object.keys(S.keys).forEach(function(k){if(S.keys[k]&&KEY_ENV[k])payload[KEY_ENV[k]]=S.keys[k];});
-    var hdrs={"Content-Type":"application/json"};if(S.adminKey)hdrs["X-API-Key"]=S.adminKey;
-    fetch(base()+"/settings/keys",{method:"POST",headers:hdrs,body:JSON.stringify({keys:payload})})
-      .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
-      .then(function(){toast(t("saved"));})
-      .catch(function(e){toast(t("reqFail")+": "+e.message);});
-  }
-  function renderSettings(){
-    $("#settingsBody").innerHTML=
-      '<div class="sec-ttl">'+esc(t("diagTitle"))+'</div>'+
-      '<div class="srccard" style="flex-direction:column;align-items:stretch;gap:12px"><div class="ds">'+esc(t("diagSub"))+'</div>'+
-        '<button class="btn btn-secondary" id="diagBtn" style="align-self:flex-start;height:40px">'+esc(t("diagRun"))+'</button><div id="diagOut"></div></div>'+
-      '<div class="sec-ttl">'+esc(t("secAI"))+'</div>'+AI.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secFree"))+'</div>'+FREE.map(srcCard).join("")+'<div class="sec-ttl">'+esc(t("secPaid"))+'</div>'+PAID.map(srcCard).join("")+
-      '<div class="sec-ttl">·</div>'+
-      '<input class="keyin" id="adminKey" type="password" placeholder="'+esc(t("adminKey"))+'" value="'+esc(S.adminKey||"")+'" style="width:100%"/>'+
-      '<button class="btn primary" id="saveKeysBtn" style="margin-top:8px">'+esc(t("saveServer"))+'</button>';
-    var ak=$("#adminKey");if(ak)ak.addEventListener("input",function(){S.adminKey=this.value;localStorage.setItem("silk_admin_key",this.value);});
-    var sb=$("#saveKeysBtn");if(sb)sb.addEventListener("click",saveKeysToServer);
-    var db=$("#diagBtn");if(db)db.addEventListener("click",runDiagnostics);
-    $$("#settingsBody .keyin").forEach(function(i){i.addEventListener("input",function(){S.keys[this.getAttribute("data-key")]=this.value;localStorage.setItem("silk_keys",JSON.stringify(S.keys));renderSettings();});});
-    $$("#settingsBody .switch").forEach(function(b){b.addEventListener("click",function(){var g=this.getAttribute("data-tg");S.toggles[g]=!S.toggles[g];localStorage.setItem("silk_toggles",JSON.stringify(S.toggles));renderSettings();});});
-  }
-  function runDiagnostics(){
-    var btn=$("#diagBtn"),out=$("#diagOut");if(!btn)return;btn.disabled=true;btn.textContent=t("diagRunning");
-    fetch(base()+"/diagnostics",{headers:S.adminKey?{"X-API-Key":S.adminKey}:{}}).then(function(r){return r.json();}).then(function(d){
-      btn.disabled=false;btn.textContent=t("diagRun");
-      var ST={ok:["diag-ok",t("diagOk")],reachable_empty:["diag-warn",t("diagEmpty")],unreachable:["diag-bad",t("diagUnreach")],no_key:["diag-gap",t("diagNoKey")]};
-      var banner=d.agents_can_work?'<div class="diag-banner diag-ok">'+esc(t("diagAgentsOk"))+'</div>':'<div class="diag-banner diag-bad">'+esc(t("diagAgentsNo"))+'</div>';
-      var rows=(d.sources||[]).map(function(s){var m=ST[s.state]||ST.unreachable;
-        return '<div class="diag-row"><div class="diag-h"><span class="diag-dot '+m[0]+'"></span><b>'+esc(s.name)+'</b><span class="diag-badge '+m[0]+'">'+esc(m[1])+'</span><span class="diag-ms num">'+(s.ms!=null?s.ms+"ms":"")+'</span></div><div class="diag-hint">'+esc(s.hint||"")+'</div></div>';
-      }).join("");
-      out.innerHTML=banner+rows;
-    }).catch(function(){btn.disabled=false;btn.textContent=t("diagRun");out.innerHTML='<div class="diag-banner diag-bad">'+esc(t("diagFail"))+'</div>';});
-  }
-
-  function applyView(){
-    $$("#scrnav button").forEach(function(b){b.classList.toggle("on",+b.getAttribute("data-scr")===S.screen);});
-    $("#dashboard").classList.toggle("hidden",S.screen!==1);
-    $("#screens").classList.toggle("hidden",!(S.screen>=2&&S.screen<=7));
-    $("#settings").classList.toggle("hidden",S.screen!==8);
-    $("#runBtn").classList.toggle("hidden",S.screen!==1);
-    if(S.screen>=2&&S.screen<=7)renderScreen();
-    if(S.screen===8){renderSettings();renderDataPanels();}
-  }
-  $$("#scrnav button").forEach(function(b){b.addEventListener("click",function(){setScreen(+this.getAttribute("data-scr"));});});
-  $("#settingsBtn").addEventListener("click",function(){setScreen(S.screen===8?1:8);});
-  $("#themeBtn").addEventListener("click",function(){var cur=document.documentElement.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");var nx=cur==="dark"?"light":"dark";document.documentElement.setAttribute("data-theme",nx);localStorage.setItem("silk_theme",nx);});
-  $$("#langSeg button").forEach(function(b){b.addEventListener("click",function(){S.lang=this.getAttribute("data-lang");localStorage.setItem("silk_lang",S.lang);applyLang();if(S.result)render();else renderReady();applyView();toast(t("langSwitched"));});});
-  function toast(m){var el=document.createElement("div");el.className="toast";el.textContent=m;document.body.appendChild(el);setTimeout(function(){el.style.transition="opacity .3s";el.style.opacity="0";setTimeout(function(){el.remove();},300);},1600);}
-
-  (function init(){var th=localStorage.getItem("silk_theme");if(th)document.documentElement.setAttribute("data-theme",th);applyLang();renderReady();applyView();loadMarketsRef();})();
+/* ── درج إعدادات الوكلاء المشترك ── */
+function drawDrawer(){var free=AGENTS.filter(function(a){return!a.paid}),paid=AGENTS.filter(function(a){return a.paid});
+  function card(a){var p=S.prefs[a.k]||{on:!a.paid,cmd:""};
+    return '<div class="acard" data-k="'+a.k+'"><div class="atop"><span class="aname2"><b>'+a.n+(a.paid?'<span class="paidtag">مدفوع</span>':'')+'</b><span>'+a.d+'</span></span><span class="tg'+(p.on?"":" off")+'"><i></i></span></div>'
+      +'<div class="cmd"><label>توجيه الوكيل (نص حر)</label><textarea placeholder="مثال: ركّز على الطلب في رمضان وأهمية الحلال">'+esc(p.cmd)+'</textarea></div></div>'}
+  $("#drawerBody").innerHTML='<div class="slbl">الوكلاء المجانيون</div>'+free.map(card).join("")+'<div class="slbl">الوكلاء المدفوعون</div>'+paid.map(card).join("");
+  $$("#drawerBody .tg").forEach(function(t){t.addEventListener("click",function(){this.classList.toggle("off")})})}
+$("#gearBtn").addEventListener("click",function(){$("#adminKey").value=S.adminKey;drawDrawer();$("#ov").classList.add("open");$("#dr").classList.add("open")});
+$("#ov").addEventListener("click",function(){$("#ov").classList.remove("open");$("#dr").classList.remove("open")});
+$("#savePrefs").addEventListener("click",function(){
+  S.adminKey=$("#adminKey").value.trim();localStorage.setItem("silk_admin_key",S.adminKey);
+  $$("#drawerBody .acard").forEach(function(c){var k=c.dataset.k;
+    S.prefs[k]={on:!c.querySelector(".tg").classList.contains("off"),cmd:c.querySelector("textarea").value.trim()}});
+  localStorage.setItem("silk_agent_prefs",JSON.stringify(S.prefs));
+  $("#ov").classList.remove("open");$("#dr").classList.remove("open");toast("حُفظت التوجيهات — تسري على الإدخال والدردشة معاً")});
+$("#resetPrefs").addEventListener("click",function(){S.prefs=defaultPrefs();drawDrawer()});
+/* روابط تحليلية للمحلّل: report.md متاح من زر Markdown في اللوحة */
 })();
 </script>
 </body>

@@ -96,4 +96,6 @@ def test_ui_renders_extracted_insights_not_just_links():
     html = open(os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), "web", "index.html"), encoding="utf-8").read()
     assert "consumer_culture" in html
-    assert "ins-list" in html and "cultureExtracted" in html
+    # الواجهة الجديدة (النموذج الملزم): الرؤى تُعرض ببطاقة «ثقافة المستهلك»
+    # وكل رؤية بدليلها — لا روابط خام.
+    assert "ثقافة المستهلك ونبض السوق" in html and "الدليل:" in html

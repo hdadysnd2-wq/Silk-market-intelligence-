@@ -106,5 +106,7 @@ def test_ui_has_target_market_picker_wired_to_analyze_body():
         os.path.abspath(__file__))), "web", "index.html"),
         encoding="utf-8").read()
     assert '"/markets"' in html
-    assert "targetMarkets" in html
+    # الواجهة الجديدة: اختيار سوق واحد أو «كل الأسواق» — التقييد يمرّ
+    # markets:[iso3] في جسم /analyze، نفس عقد الخادم.
+    assert "b.markets=[S.market.iso3]" in html
     assert "b.markets=" in html
