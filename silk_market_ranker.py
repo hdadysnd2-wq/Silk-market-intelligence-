@@ -92,16 +92,32 @@ def _competitor_list(comps: list[DataPoint], top: int = 5) -> list[dict]:
 
 
 def _saudi_position_component(comps: list[DataPoint]) -> DataPoint:
-    """موقع السعودية — Saudi supplier share of this market (0 if absent)."""
+    """موقع السعودية — Saudi supplier share of this market (0 if absent).
+
+    ثقة واعية بالبَتر (مراجعة المشروع): «غياب السعودية» المستنتَج من قائمة
+    شركاء قد تكون مبتورة (طبقة المعاينة محدودة الصفوف) ليس رصداً مباشراً —
+    فالصفر المستنتَج يحمل ثقةً أدنى من حصةٍ مرصودة، ويرث الجميعُ خفضَ الثقة
+    حين يتباين مجموع الشركاء عن صف العالم (اكتشفه market_imports).
+    """
     if not comps:
         return DataPoint(None, "UN Comtrade", 0.0,
                          note="no competitor data", retrieved_at=_today())
     sa = next((c for c in comps if c.value and c.value.get("code") == _SAUDI_M49),
               None)
-    share = sa.value["share"] if sa else 0.0
-    note = (f"Saudi share {share}%" if sa
-            else "Saudi not yet a supplier (share 0%)")
-    return DataPoint(share, "UN Comtrade", 0.9, note=note, retrieved_at=_today())
+    base = min((c.confidence for c in comps if c.value), default=0.9)
+    if sa:
+        share = sa.value.get("share")
+        if share is None:  # صف مورّد بلا حصة — فجوة معلنة لا KeyError
+            return DataPoint(None, "UN Comtrade", 0.0,
+                             note="Saudi supplier row lacks a share value",
+                             retrieved_at=_today())
+        return DataPoint(share, "UN Comtrade", base,
+                         note=f"Saudi share {share}%", retrieved_at=_today())
+    return DataPoint(
+        0.0, "UN Comtrade", round(min(base, 0.6), 2),
+        note=("Saudi not yet a supplier (share 0%) — غيابٌ مستنتَج من قائمة "
+              "الموردين المرصودة (قد تكون مبتورة في طبقة المعاينة)"),
+        retrieved_at=_today())
 
 
 def _income_dp(iso3: str, year: int) -> DataPoint:
@@ -208,19 +224,32 @@ def _top_competitor(comps: list[DataPoint]) -> str | None:
 
 
 def _competition_component(comps: list[DataPoint]) -> DataPoint:
-    """المنافسة — Herfindahl concentration of suppliers (lower share top = easier)."""
+    """المنافسة — Herfindahl concentration of suppliers (lower share top = easier).
+
+    يرث الثقةَ من نقاط الموردين نفسها (0.7 عند تباين المقام، 0.9 وإلا) —
+    مؤشر تركُّزٍ على قائمةٍ قد تكون مبتورة لا يستحق ثقةً أعلى من مدخلاته.
+    """
     if not comps:
         return DataPoint(None, "UN Comtrade", 0.0,
                          note="no competitor data", retrieved_at=_today())
     # HHI من الحصص (0..1) — sum of squared shares; 1 = monopoly, ~0 = fragmented.
-    hhi = sum((c.value["share"] / 100.0) ** 2 for c in comps if c.value)
-    return DataPoint(round(hhi, 4), "UN Comtrade", 0.9,
+    # صفٌّ بلا حصة يُسقَط (لا يُعدّ صفراً) — .get يمنع KeyError كامناً.
+    shares = [c.value.get("share") for c in comps if c.value]
+    hhi = sum((s / 100.0) ** 2 for s in shares if s is not None)
+    conf = min((c.confidence for c in comps if c.value), default=0.9)
+    return DataPoint(round(hhi, 4), "UN Comtrade", conf,
                      note=f"supplier HHI over {len(comps)} suppliers",
                      retrieved_at=_today())
 
 
 def _normalize(raw: dict[str, float], value: float) -> float:
-    """طبّع 0..1 — min-max normalize one component across all rows."""
+    """طبّع 0..1 — min-max normalize one component across all rows.
+
+    حدّ موثَّق (مراجعة المشروع): hi == lo (سوقٌ واحد له بيانات هذا المكوّن،
+    أو تساوى الجميع) يعيد 1.0 — علامة كاملة بحكم ندرة البيانات لا الجدارة.
+    لا نغيّر الرياضيات كي لا تنقلب الترتيبات القائمة؛ ثقةُ الصف (المكوّنات
+    الناقصة تخفضها) هي حاملُ إشارة الندرة إلى المستهلك.
+    """
     vals = [v for v in raw.values() if v is not None]
     if not vals:
         return 0.0

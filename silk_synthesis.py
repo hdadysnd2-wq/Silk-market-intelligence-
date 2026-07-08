@@ -42,7 +42,8 @@ def _stage2(product: str, market: str, reports: list,
     None عند غياب المفتاح/فشل النداء (المرحلة ١ تكفي وحدها حينها).
     """
     facts = _isolate(_facts(reports))
-    parts = [f"المنتج: {_isolate(product)}", f"السوق: {market}", "",
+    # market يُعزل كسائر الحقول (مراجعة المشروع) — اتساق العزل لا يستثني حقلاً.
+    parts = [f"المنتج: {_isolate(product)}", f"السوق: {_isolate(market)}", "",
              f"حقائق الوكلاء (لا تتجاوزها):\n{facts}"]
     if threads:
         blob = json.dumps(threads, ensure_ascii=False, default=str)

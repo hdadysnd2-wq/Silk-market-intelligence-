@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 
 log = logging.getLogger(__name__)
@@ -22,6 +23,26 @@ UNREACHABLE = "unreachable"  # شبكة/بروكسي محجوب — لم يصل
 NO_KEY = "no_key"            # المصدر يتطلب مفتاحاً وهو غير مضبوط
 
 
+def _redact(text: str) -> str:
+    """نقِّ رسالة فشلٍ من الأسرار — strip provider keys before the text leaves.
+
+    رسائل requests.HTTPError تحمل الرابط كاملاً بمعاملاته (key=… /
+    subscription-key=…)؛ تُعاد `detail` للمتصل، فبلا تنقيحٍ يُسرَّب مفتاح
+    الخادم لكل من يستطيع بلوغ النقطة. القاعدة: تُحذف سلاسل الاستعلام من أي
+    رابط، وتُستبدل قيمُ مفاتيح البيئة المعروفة أينما ظهرت حرفياً.
+    """
+    out = str(text or "")
+    for env in ("COMTRADE_API_KEY", "GOOGLE_MAPS_API_KEY", "SEARCH_API_KEY",
+                "LOCALPRICE_API_KEY", "VOLZA_API_KEY", "EXPLEE_API_KEY",
+                "ANTHROPIC_API_KEY"):
+        val = os.environ.get(env, "").strip()
+        if val:
+            out = out.replace(val, f"<{env}>")
+    # سلسلة استعلام أي رابط تُبتر — query strings may carry key params.
+    out = re.sub(r"(https?://[^\s?'\"]+)\?[^\s'\"]*", r"\1?<query-redacted>", out)
+    return out
+
+
 def _timed(fn) -> dict:
     """نفّذ مؤقّتاً بلا رمي — run a probe fn; classify reach vs failure."""
     t0 = time.time()
@@ -29,7 +50,8 @@ def _timed(fn) -> dict:
         r = fn()
         return dict(r, ms=int((time.time() - t0) * 1000))
     except Exception as e:  # noqa: BLE001 — a probe must never raise
-        return {"state": UNREACHABLE, "detail": f"{type(e).__name__}: {e}",
+        return {"state": UNREACHABLE,
+                "detail": _redact(f"{type(e).__name__}: {e}"),
                 "ms": int((time.time() - t0) * 1000)}
 
 
