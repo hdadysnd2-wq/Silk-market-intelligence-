@@ -759,11 +759,44 @@ def render_docx(view: dict, path: str) -> str:
         doc.add_paragraph("لم تُجمع إشارات نوعية عن حالة الصناعة في هذا "
                           "التشغيل — يتطلب مفتاح بحث الويب.")
 
-    # ═══ ٥) ديناميكيات السوق — يتغذى من وكيل الديناميكيات (قادم) ═══
+    # ═══ ٥) ديناميكيات السوق — وكيل الديناميكيات (P2-8) ═══
     doc.add_heading("٥. ديناميكيات السوق", level=1)
-    doc.add_paragraph("تحليل الدوافع والكوابح والفرص والتحديات (مع أطر "
-                      "بورتر وPESTEL) لم يُشغَّل في هذا التحليل — يتطلب "
-                      "وكيل الديناميكيات النوعي.")
+    dyn = view.get("dynamics") or {}
+    dyn_v = dyn.get("value") if isinstance(dyn, dict) else None
+    if isinstance(dyn_v, dict) and dyn_v.get("classified"):
+        _AR_DYN = (("drivers", "الدوافع"), ("restraints", "الكوابح"),
+                   ("opportunities", "الفرص"), ("threats", "التحديات"))
+        for key, ttl in _AR_DYN:
+            items = dyn_v.get(key) or []
+            if not items:
+                continue
+            doc.add_heading(ttl, level=2)
+            for it in items[:5]:
+                doc.add_paragraph(str(it.get("point")), style="List Bullet")
+                ev = "؛ ".join(map(str, (it.get("evidence") or [])[:2]))
+                if ev:
+                    doc.add_paragraph(f"الدليل: {ev}", style="Intense Quote")
+        for key, ttl, label in (("porter", "قوى المنافسة الخمس", "force"),
+                                ("pestel", "تحليل PESTEL", "dimension")):
+            items = dyn_v.get(key) or []
+            if items:
+                doc.add_heading(ttl, level=2)
+                _add_table(doc, ["البُعد", "الملاحظة", "الدليل"],
+                           [[it.get(label), it.get("point"),
+                             "؛ ".join(map(str, (it.get("evidence") or [])[:1]))]
+                            for it in items[:7]])
+        if dyn_v.get("note"):
+            doc.add_paragraph(str(dyn_v["note"]), style="Intense Quote")
+    elif isinstance(dyn_v, dict) and dyn_v.get("raw_signals"):
+        doc.add_paragraph("إشارات ويب خام (لم تُصنَّف بعد — التصنيف في "
+                          "الأطر يتطلب مفتاح كلود):")
+        for sig in dyn_v["raw_signals"][:6]:
+            t = sig.get("title") if isinstance(sig, dict) else sig
+            doc.add_paragraph(str(t)[:180], style="List Bullet")
+    else:
+        doc.add_paragraph(str(dyn.get("note") or
+                          "تحليل الدوافع والكوابح والفرص والتحديات يتطلب "
+                          "مفتاح بحث الويب — لم يُشغَّل في هذا التحليل."))
 
     # ═══ ٦) حجم السوق والتوقعات — TAM/SAM/SOM + النمو ═══
     doc.add_heading("٦. حجم السوق والتوقعات", level=1)
