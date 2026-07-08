@@ -189,6 +189,10 @@ def create_app():
         product_card: ProductCard | None = None
         hs_code: str | None = None
         markets: list[str] | None = None  # ISO3s لتضييق المرشّحين؛ فارغ = كل الأسواق
+        # P3: توجيهات درج «إعدادات الوكلاء» — {agent_key: {on: bool, cmd: str}}.
+        # تُطبَّع شكلياً في _clean_agent_prefs؛ الأمر يوجّه تركيز برومبتات
+        # كلود حصراً داخل العزل — لا يغيّر رقماً ولا يصل وكيل بيانات.
+        agent_prefs: dict | None = None
         persist: bool = False
 
     class DeepenRequest(BaseModel):
@@ -279,8 +283,14 @@ def create_app():
         _rate_limit(request)
         from silk_market_ranker import COUNTRIES
         from silk_data_layer import partner_name
+        from silk_narrative import COUNTRY_AR
+        # P3 (بلاغ المالك): الاسم العربي إلى جانب الإنجليزي — الواجهة تعرض
+        # العربية في وضعها العربي بدل أسماء إنجليزية خام.
         return _json([{"iso3": c["iso3"], "m49": c["m49"],
-                      "name": partner_name(c["m49"])} for c in COUNTRIES])
+                      "name": partner_name(c["m49"]),
+                      "name_ar": COUNTRY_AR.get(c["iso3"],
+                                                partner_name(c["m49"]))}
+                      for c in COUNTRIES])
 
     def _require_key(request: Request) -> None:
         """حارس المصادقة — 401 when the key mismatches, constant-time (L-1).
@@ -434,7 +444,8 @@ def create_app():
         import silk_context
         ctx = (contextlib.nullcontext() if ai_ok
                else silk_context.block_ai_extras())
-        with ctx:
+        with ctx, silk_context.agent_prefs_context(
+                _clean_agent_prefs(req.agent_prefs)):
             result = silk_engine.analyze(
                 req.product, year=req.year,
                 countries=_target_countries(req.markets),
@@ -447,6 +458,22 @@ def create_app():
             result["ai_extras_note"] = ai_note   # الغياب مُعلَن لا صامت
         result["view"] = _view(result)
         return _json(result)
+
+    def _clean_agent_prefs(raw: dict | None) -> dict | None:
+        """طبّع توجيهات الوكلاء شكلياً (P3) — {key: {on: bool, cmd: str<=500}}.
+
+        أي شكل آخر يُتجاهل بصمت (إعداد عميل لا بيانات)؛ الأمر نص حر يذهب
+        حصراً إلى برومبتات كلود داخل عزل _isolate — لا يمسّ وكلاء الأرقام.
+        """
+        if not isinstance(raw, dict):
+            return None
+        out = {}
+        for k, v in list(raw.items())[:24]:
+            if not isinstance(v, dict):
+                continue
+            out[str(k)[:40]] = {"on": bool(v.get("on", True)),
+                                "cmd": str(v.get("cmd") or "")[:500]}
+        return out or None
 
     def _target_countries(iso3s: list[str] | None):
         """ضيّق قائمة الأسواق المرشّحة — an explicit ISO3 subset of COUNTRIES,

@@ -220,3 +220,12 @@ docker run -p 8000:8000 silk-api
 The post-V3 roadmap lives in **[`docs/VISION.md`](docs/VISION.md)**: the Correlation Engine,
 "if rebuilt" leaner-architecture lessons, a unified output template, the reverse
 opportunity-discovery engine, and the compliance layer upgraded to executable checklists.
+
+## الخطوط على النشر — self-hosted fonts (deploy step)
+
+الواجهة تحمّل خطوط IBM Plex Sans Arabic وMarkazi Text وIBM Plex Mono من
+Google Fonts CDN. للاستضافة الذاتية (أداء وخصوصية أفضل): نزّل ملفات woff2
+من fonts.google.com على جهاز متصل، ضعها في `web/fonts/`، واستبدل وسم
+`<link href="https://fonts.googleapis.com/...">` في `web/index.html`
+بقواعد `@font-face` محلية. (بيئة التطوير المعزولة تحجب fonts.gstatic،
+فلا يمكن تنفيذ التنزيل منها — خطوة نشر يدوية واحدة.)

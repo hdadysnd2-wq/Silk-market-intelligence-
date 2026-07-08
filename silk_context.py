@@ -56,3 +56,39 @@ def block_ai_extras():
         yield
     finally:
         _ai_extras_blocked.reset(token)
+
+
+# توجيهات الوكلاء (P3): درج «إعدادات الوكلاء» بالواجهة يرسل agent_prefs
+# — {agent_key: {on: bool, cmd: str}}. الأمر النصي يوجّه **تركيز** برومبتات
+# كلود حصراً (يُلحق داخل عزل _isolate القائم)؛ لا يصل أي وكيل بيانات رقمي
+# ولا يستطيع توليد رقم — الثابت التأسيسي محفوظ بنيوياً.
+_agent_prefs: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "silk_agent_prefs", default=None)
+
+
+def agent_pref(agent_key: str) -> dict:
+    """تفضيل وكيل واحد — {} حين لا سياق/لا تفضيل (السلوك الافتراضي)."""
+    prefs = _agent_prefs.get() or {}
+    p = prefs.get(agent_key)
+    return p if isinstance(p, dict) else {}
+
+
+def agent_command(agent_key: str) -> str:
+    """أمر المستخدم النصي لوكيل — "" افتراضياً؛ مقصوص لطول آمن."""
+    return str(agent_pref(agent_key).get("cmd") or "")[:500].strip()
+
+
+def agent_enabled(agent_key: str) -> bool:
+    """هل الوكيل مفعّل؟ — True افتراضياً (غياب التفضيل لا يعطّل شيئاً)."""
+    p = agent_pref(agent_key)
+    return bool(p.get("on", True))
+
+
+@contextlib.contextmanager
+def agent_prefs_context(prefs: dict | None):
+    """فعّل تفضيلات الوكلاء للكتلة — contextvar بنمط deepen_context نفسه."""
+    token = _agent_prefs.set(prefs if isinstance(prefs, dict) else None)
+    try:
+        yield
+    finally:
+        _agent_prefs.reset(token)

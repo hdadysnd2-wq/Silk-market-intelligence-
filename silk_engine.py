@@ -229,6 +229,13 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         # (بلاغ المالك المتكرّر «ترسل روابط = أنت قوقل»). غيابٌ ظاهرٌ بلا مفتاح.
         result["consumer_culture"] = _consumer_culture(
             product_name, top_country, result["websearch"])
+    from silk_context import agent_enabled as _agent_on
+    if with_dynamics and not _agent_on("dynamics"):
+        log.info("dynamics agent disabled by user prefs — skipped")
+        with_dynamics = False
+    if with_websearch and not _agent_on("consumer"):
+        log.info("consumer-culture layer disabled by user prefs — skipped")
+        with_websearch = False
     if with_dynamics:
         # وكيل الديناميكيات (P2-8): إشارات ويب مصنّفة في أطر معلنة بمصادرها
         # للسوق الأول — يتدهور صادقاً بلا مفاتيح (فجوة/إشارات خام معلنة).
