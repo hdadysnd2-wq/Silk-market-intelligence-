@@ -339,6 +339,80 @@ def extract_prices(references: list, product: str, market: str) -> list[dict] | 
     return out or None
 
 
+def classify_dynamics(product: str, market: str, headlines: list) -> dict | None:
+    """صنّف إشارات الويب في أطر الديناميكيات (P2-8) — Drivers/Restraints/
+    Opportunities/Threats + خلاصة بورتر وPESTEL، كل نقطة بمؤشر مصدرها.
+
+    نفس انضباط consumer_culture: الأطر بنية تحليلية معلنة فوق عناوين
+    مرصودة — لا رأي بلا سند؛ نقطة بلا رقم عنوان تُسقط. يعيد None بلا
+    مفتاح/عناوين/فشل — الغياب ظاهر لا مُصطنَع.
+    """
+    if not available():
+        return None
+    lines = _headline_lines(headlines)
+    if not lines:
+        return None
+    numbered = "\n".join(f"{i}. {ln}" for i, ln in enumerate(lines[:14], 1))
+    user = (
+        f"المنتج: {_isolate(str(product))}. السوق: {_isolate(str(market))}.\n"
+        "عناوين بحث ويب خام (استند إليها حصراً، لا تخترع):\n"
+        + _isolate(numbered) + "\n\n"
+        "صنّف ما تسنده العناوين فعلاً في ديناميكيات هذا السوق: drivers "
+        "(دوافع)، restraints (كوابح)، opportunities (فرص)، threats "
+        "(تحديات)، ثم سطر واحد لكل قوة من قوى بورتر الخمس تسنده العناوين "
+        "(porter)، وسطر لكل بُعد PESTEL مسنود (pestel). لكل نقطة أرقام "
+        "العناوين المستندة إليها في evidence — نقطة بلا سند لا تُذكر. "
+        "إن كانت العناوين ضعيفة قل ذلك في note ولا تلفّق. أعد JSON فقط: "
+        '{"drivers":[{"point":"...","evidence":[1]}],"restraints":[...],'
+        '"opportunities":[...],"threats":[...],"porter":[{"force":"...",'
+        '"point":"...","evidence":[2]}],"pestel":[{"dimension":"...",'
+        '"point":"...","evidence":[3]}],"note":"..."}')
+    raw = _call(_PRINCIPLE, user, max_tokens=1200, model=_FAST_MODEL,
+                timeout=25)
+    if not raw:
+        return None
+    try:
+        start, end = raw.find("{"), raw.rfind("}")
+        obj = json.loads(raw[start:end + 1]) if start >= 0 else {}
+    except Exception:  # noqa: BLE001 — رد غير-JSON = لا تصنيف، لا اختلاق
+        return None
+
+    def _clean(items, extra_key=None):
+        out = []
+        for it in items if isinstance(items, list) else []:
+            if not isinstance(it, dict):
+                continue
+            point = str(it.get("point") or "").strip()
+            ev = []
+            for e in it.get("evidence") or []:
+                try:
+                    j = int(e) - 1
+                    if 0 <= j < len(lines):
+                        ev.append(lines[j])
+                except (TypeError, ValueError):
+                    continue
+            if not point or not ev:      # نقطة بلا سند لا تمرّ
+                continue
+            row = {"point": point, "evidence": ev}
+            if extra_key and it.get(extra_key):
+                row[extra_key] = str(it[extra_key])
+            out.append(row)
+        return out
+
+    result = {"drivers": _clean(obj.get("drivers")),
+              "restraints": _clean(obj.get("restraints")),
+              "opportunities": _clean(obj.get("opportunities")),
+              "threats": _clean(obj.get("threats")),
+              "porter": _clean(obj.get("porter"), extra_key="force"),
+              "pestel": _clean(obj.get("pestel"), extra_key="dimension"),
+              "note": str(obj.get("note") or ""),
+              "source": "Web Search → Claude تصنيف (أطر معلنة)"}
+    if not any(result[k] for k in ("drivers", "restraints",
+                                   "opportunities", "threats")):
+        return None
+    return result
+
+
 def ai_report(result: dict) -> str | None:
     """تقرير تصدير مبدئي — a written market-entry report over the full analysis.
 

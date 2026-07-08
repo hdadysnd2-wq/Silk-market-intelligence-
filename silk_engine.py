@@ -40,6 +40,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             year: int | None = None, *, with_trends: bool = False,
             with_tariffs: bool = False, with_faostat: bool = False,
             with_maps: bool = False, with_websearch: bool = False,
+            with_dynamics: bool = False,
             with_localprice: bool = False, own_price: float | None = None,
             with_volza: bool = False, with_explee: bool = False,
             with_ai: bool = False,
@@ -228,6 +229,18 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         # (بلاغ المالك المتكرّر «ترسل روابط = أنت قوقل»). غيابٌ ظاهرٌ بلا مفتاح.
         result["consumer_culture"] = _consumer_culture(
             product_name, top_country, result["websearch"])
+    if with_dynamics:
+        # وكيل الديناميكيات (P2-8): إشارات ويب مصنّفة في أطر معلنة بمصادرها
+        # للسوق الأول — يتدهور صادقاً بلا مفاتيح (فجوة/إشارات خام معلنة).
+        try:
+            from silk_dynamics_agent import DynamicsAgent
+            top_country = (result.get("markets") or [{}])[0].get("country") or ""
+            rep = DynamicsAgent().run({"product": product_name,
+                                       "market": top_country})
+            result["dynamics"] = rep.findings[0] if rep.findings else None
+        except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
+            log.warning("dynamics enrichment failed: %s", e)
+            result["dynamics"] = _enrich_error_dp("Web Search + Claude تصنيف", e)
     if with_ai:  # الطبقة 3: كلود يكتب التقرير المبدئي — Claude writes the report
         rep = _ai_report(result)
         result["report"] = rep  # None = فشل/غياب المفتاح، ظاهرٌ لا محذوف (الموجة ١)

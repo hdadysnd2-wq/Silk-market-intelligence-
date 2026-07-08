@@ -575,6 +575,7 @@ def build_view(result: dict) -> dict:
         "year_fell_back": bool(result.get("year_fell_back")),
         "classified": result.get("classified", False),
         "decision": decision,
+        "dynamics": _dp(result.get("dynamics")) if result.get("dynamics") is not None else None,
         "competitive_position": cp,
         "completeness": _completeness(markets),
         "markets": view_markets,
