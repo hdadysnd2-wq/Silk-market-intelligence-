@@ -136,14 +136,20 @@ class TradeFlowAgent(BaseAgent):
         for flow, label in (("M", "imports"), ("X", "exports")):
             row = self._world_row_from_store(hs, iso3, year, flow)
             if row is not None:
+                import silk_store
                 day = (row.get("retrieved_at") or "")[:10]
+                stale = silk_store.freshness(row.get("retrieved_at"),
+                                             "trade") != "fresh"
                 findings.append(DataPoint(
                     row["value_usd"], "UN Comtrade (مخزن الحقائق)", 0.9,
                     f"HS{hs} total {label} (World) to market {market} {year}, "
                     f"USD — من المخزن"
-                    + (f"، جُلبت أصلاً {day}" if day else ""),
+                    + (f"، جُلبت أصلاً {day}" if day else "")
+                    + (" — أقدم من نافذة الحداثة (يحدّثها التحديث الدوري)"
+                       if stale else ""),
                     row.get("retrieved_at") or
-                    datetime.date.today().isoformat()))
+                    datetime.date.today().isoformat(),
+                    status="stale" if stale else ""))
                 continue
             recs = comtrade_trade(hs, market, year, flow=flow, partner=0)
             # 1b: None = تعذّر الجلب (429/شبكة — أعد المحاولة)؛ [] = ردّ ناجح
@@ -259,13 +265,18 @@ class CompetitionAgent(BaseAgent):
             comps = []
             for p in valued:
                 day = (p.get("retrieved_at") or "")[:10]
+                stale = silk_store.freshness(p.get("retrieved_at"),
+                                             "trade") != "fresh"
                 comps.append(_competitor_dp(
                     ISO3_TO_M49.get(p["iso3"], p["iso3"]), p["value_usd"],
                     grand, hs_code=hs, market_label=iso3, year=int(year),
                     source="UN Comtrade (مخزن الحقائق)",
                     note_suffix=(" — من المخزن"
-                                 + (f"، جُلبت أصلاً {day}" if day else "")),
+                                 + (f"، جُلبت أصلاً {day}" if day else "")
+                                 + (" — أقدم من نافذة الحداثة" if stale else "")),
                     retrieved_at=p.get("retrieved_at")))
+                if stale:
+                    comps[-1].status = "stale"
             return comps
         except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط
             log.debug("competitor store read unavailable (%s %s %s): %s",

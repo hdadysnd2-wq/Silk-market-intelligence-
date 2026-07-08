@@ -102,6 +102,50 @@ def migrate() -> list[str]:
     return applied
 
 
+# ── سياسة الحداثة · freshness policy ────────────────────────────────────────
+# نافذة حداثة لكل نوع بيانات: التجارة سنوية وتتغير نادراً (90 يوماً)، مؤشرات
+# البنك الدولي (30)، الأسعار متقلبة (7). قابلة للضبط بالبيئة SILK_FRESH_*_DAYS.
+# القيمة العتيقة تُخدم فوراً معلَّمة «stale» ويُطلَق تحديث بالخلفية — لا تُعرض
+# أبداً كحديثة (قاعدة الإسناد)، ولا تُحجب (القيمة المرصودة خير من فجوة).
+
+_FRESH_DAYS_DEFAULT = {"trade": 90, "indicator": 30, "price": 7}
+
+
+def fresh_days(kind: str = "trade") -> int:
+    """نافذة الحداثة بالأيام لنوع بيانات — env override or per-kind default."""
+    default = _FRESH_DAYS_DEFAULT.get(kind, 90)
+    raw = os.environ.get(f"SILK_FRESH_{kind.upper()}_DAYS", "").strip()
+    try:
+        return int(raw) if raw else default
+    except ValueError:
+        log.warning("SILK_FRESH_%s_DAYS=%r not an integer — using %d",
+                    kind.upper(), raw, default)
+        return default
+
+
+def freshness(retrieved_at: str | None, kind: str = "trade") -> str:
+    """حالة حداثة قيمة مخزّنة — 'fresh' | 'stale' | 'unknown'.
+
+    'unknown' لتاريخ غائب/غير قابل للتفسير — يُعامل معاملة العتيق (تحديث)
+    لكنه يُميَّز في الإسناد؛ لا تخمين لتاريخ لم يُسجَّل. Never guesses a date.
+    """
+    if not retrieved_at:
+        return "unknown"
+    raw = str(retrieved_at).strip()
+    try:
+        if len(raw) == 10:  # تاريخ يوم فقط — date-only stamps (_today())
+            dt = datetime.datetime.fromisoformat(raw).replace(
+                tzinfo=datetime.timezone.utc)
+        else:
+            dt = datetime.datetime.fromisoformat(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return "unknown"
+    age = datetime.datetime.now(datetime.timezone.utc) - dt
+    return "fresh" if age.days < fresh_days(kind) else "stale"
+
+
 # ── مخزن الحقائق · fact store ────────────────────────────────────────────────
 
 def upsert_indicator(iso3: str, indicator: str, year: int, value,
