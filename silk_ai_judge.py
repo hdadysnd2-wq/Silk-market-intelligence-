@@ -48,7 +48,16 @@ def _isolate(text: str) -> str:
 
 
 def available() -> bool:
-    """هل مفتاح كلود متوفّر؟ — is the AI layer usable right now?"""
+    """هل طبقة كلود قابلة للاستعمال الآن؟ — key present AND not context-blocked.
+
+    الحجب السياقي (silk_context.block_ai_extras): يفعّله api.py على المسار
+    المجاني حين يكون مفتاح Anthropic بلا SILK_API_KEY أو السقف اليومي
+    مستنفداً — فتتدهور الطبقات المستهلِكة (ثقافة المستهلك، فلترة الكيانات)
+    إلى مسارها الكيليسي بدل صرف رصيدٍ خارج المحاسبة.
+    """
+    from silk_context import ai_extras_blocked  # stdlib-only, cycle-safe
+    if ai_extras_blocked():
+        return False
     return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
 
 
@@ -64,6 +73,10 @@ def _call(system: str, user: str, max_tokens: int = 1600,
     model/timeout اختياريان: للمهام الخفيفة (فلترة الكيانات) مرّر _FAST_MODEL
     ومهلة قصيرة كي لا يعلّق التحليل خلف Opus البطيء.
     """
+    from silk_context import ai_extras_blocked
+    if ai_extras_blocked():  # حزام أمان ثانٍ فوق available() — لا نداء داخل الحجب
+        log.info("AI call skipped: ai-extras blocked in this context")
+        return None
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key:
         return None
@@ -346,8 +359,9 @@ def ai_report(result: dict) -> str | None:
             f"استيراد {cv('market_size')}$، حصة السعودية {cv('saudi_position')}%، "
             f"دخل/PPP {m.get('income_ppp')}، سكان {m.get('population')}، "
             f"منافس مهيمن {m.get('top_competitor')}")
-    user = (
-        f"المنتج: {_isolate(str(result.get('product')))} (HS {result.get('hs_code')}).\n"
+    user = (  # hs_code قد يصل من جسم الطلب مباشرة — يُعزل كسائر الخارجي
+        f"المنتج: {_isolate(str(result.get('product')))} "
+        f"(HS {_isolate(str(result.get('hs_code')))}).\n"
         f"الأسواق مرتّبة:\n" + _isolate("\n".join(rows)) + "\n\n"
         "اكتب تقريرًا أوّليًّا موجزًا (٤–٧ فقرات): أفضل ١–٣ أسواق ولماذا (بالأدلة)، "
         "تحذيرات وفجوات البيانات، وخطوة تالية مقترحة. لا تخترع أرقامًا غير معطاة.")

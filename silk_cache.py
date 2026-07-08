@@ -38,7 +38,11 @@ def cached_get(
     getter for connection reuse; falls back to requests.get standalone.
     """
     path = os.path.join(_CACHE_DIR, _key(url, params) + ".json")
-    if os.path.exists(path) and (time.time() - os.path.getmtime(path)) < ttl_seconds:
+    try:  # سباق exists/getmtime — ملف يُحذف بينهما لا يُسقط الطلب
+        fresh = (time.time() - os.path.getmtime(path)) < ttl_seconds
+    except OSError:
+        fresh = False
+    if fresh:
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 return json.load(fh)

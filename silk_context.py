@@ -32,3 +32,27 @@ def deepen_context():
         yield
     finally:
         _deepen.reset(token)
+
+
+# حجب إضافات كلود (مراجعة المشروع، H2): استخلاص ثقافة المستهلك وفلترة
+# الكيانات نداءاتُ كلود تجري على مسار /analyze المجاني — خارج وكلاء PAID
+# الثلاثة فلا يمسكها حارس BaseAgent. هذا السياق يحجبها بنيوياً حين يقرّر
+# api.py ذلك (مفتاح Anthropic بلا SILK_API_KEY، أو السقف اليومي مستنفد)،
+# فتتدهور الطبقات إلى مسارها الكيليسي المعهود (لا اختلاق، الغياب مُعلَن).
+_ai_extras_blocked: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "silk_ai_extras_blocked", default=False)
+
+
+def ai_extras_blocked() -> bool:
+    """هل إضافات كلود محجوبة؟ — True only inside a block_ai_extras() block."""
+    return _ai_extras_blocked.get()
+
+
+@contextlib.contextmanager
+def block_ai_extras():
+    """احجب إضافات كلود للكتلة — silk_ai_judge.available() يعيد False داخلها."""
+    token = _ai_extras_blocked.set(True)
+    try:
+        yield
+    finally:
+        _ai_extras_blocked.reset(token)

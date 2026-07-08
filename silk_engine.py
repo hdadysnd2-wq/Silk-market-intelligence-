@@ -307,7 +307,7 @@ def _enrich_risk(rows: list[dict]) -> None:
                     "worldbank (tools/refresh.py)", _today()))
         except Exception as e:  # noqa: BLE001 — طبقة سياق لا تُسقط التحليل
             log.warning("risk enrichment failed for %s: %s", iso3, e)
-            findings = [_enrich_error_dp("World Bank", "risk", e)]
+            findings = [_enrich_error_dp("World Bank", e)]
         row["risk"] = findings
 
 
@@ -375,7 +375,10 @@ def _enrich_tariffs(rows: list[dict], hs_code: str, year: int) -> None:
         try:
             rep = agent.run({"hs_code": hs_code, "iso3": row.get("iso3"),
                              "year": year})
-            row["tariff"] = rep.findings[0] if rep.findings else None
+            # تقرير بلا نتائج => نقطة موسومة لا None صامت (قاعدة الموجة ١).
+            row["tariff"] = (rep.findings[0] if rep.findings else DataPoint(
+                None, "World Bank WITS", 0.0,
+                f"agent returned no findings: {rep.summary}", _today()))
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("tariff enrichment failed for %s: %s", row.get("iso3"), e)
             row["tariff"] = _enrich_error_dp("World Bank WITS", e)
@@ -389,7 +392,10 @@ def _enrich_faostat(rows: list[dict], product_name: str, year: int) -> None:
         try:
             rep = agent.run({"iso3": row.get("iso3"), "item": product_name,
                              "year": year})
-            row["faostat"] = rep.findings[0] if rep.findings else None
+            # تقرير بلا نتائج => نقطة موسومة لا None صامت (قاعدة الموجة ١).
+            row["faostat"] = (rep.findings[0] if rep.findings else DataPoint(
+                None, "FAOSTAT", 0.0,
+                f"agent returned no findings: {rep.summary}", _today()))
         except Exception as e:  # noqa: BLE001 — context layer must not crash analysis
             log.warning("faostat enrichment failed for %s: %s", row.get("iso3"), e)
             row["faostat"] = _enrich_error_dp("FAOSTAT", e)

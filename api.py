@@ -253,27 +253,30 @@ def create_app():
         return health
 
     @app.get("/resolve/{name}")
-    def resolve(name: str):
+    def resolve(name: str, request: Request):
         """صنّف اسم منتج إلى HS6 — resolve a product name to an HS6 DataPoint."""
+        _rate_limit(request)   # قراءة رخيصة لكنها ليست مجانية بلا حدود
         dp = silk_hs_resolver.resolve(name)
         return _json({"hs_code": dp.value, "confidence": dp.confidence,
                       "note": dp.note, "source": dp.source,
                       "retrieved_at": dp.retrieved_at})
 
     @app.get("/index")
-    def index(q: str = "", limit: int = 20):
+    def index(request: Request, q: str = "", limit: int = 20):
         """فهرس المنتجات للبحث — product search index for the dashboard combobox.
 
         limit مُقيَّد إلى [1..100] (M0): قيمة ضخمة/سالبة لا تُمرَّر للبحث كما هي.
         """
+        _rate_limit(request)
         return _json(_index_search(q, max(1, min(int(limit), 100))))
 
     @app.get("/markets")
-    def markets_reference():
+    def markets_reference(request: Request):
         """مرجع الأسواق المرشَّحة — the candidate-market list for the target
         picker: {iso3, m49, name}. Same reference `rank_markets()` scores
         against — يُبنى مرة واحدة، لا نداء شبكة، ثابت لكل التشغيلات.
         """
+        _rate_limit(request)
         from silk_market_ranker import COUNTRIES
         from silk_data_layer import partner_name
         return _json([{"iso3": c["iso3"], "m49": c["m49"],
@@ -318,8 +321,21 @@ def create_app():
                 w, c = win, 0
             c += 1
             _rl_hits[ident] = (w, c)
-            if len(_rl_hits) > 4096:          # backstop against unbounded growth
-                _rl_hits.clear()
+            if len(_rl_hits) > 4096:
+                # سدّ النمو بلا تصفير شامل (مراجعة المشروع): .clear() كان
+                # يمحو نوافذ كل العملاء، فيستطيع مهاجم إرسال 4096 هوية
+                # زائفة ليصفّر عدّاده هو. الآن: تُقلَّم النوافذ المنتهية
+                # فقط؛ وإن بقي الفيض (هجوم هويات في نافذة واحدة) تُطرد
+                # هويات أخرى — عدّاد الهوية الحالية لا يُمسّ أبداً.
+                stale = [k for k, (w0, _c0) in _rl_hits.items() if w0 != win]
+                for k in stale:
+                    del _rl_hits[k]
+                if len(_rl_hits) > 4096:
+                    for k in list(_rl_hits):
+                        if k != ident:
+                            del _rl_hits[k]
+                        if len(_rl_hits) <= 4096:
+                            break
         if c > _rl_max:
             raise HTTPException(
                 status_code=429,
@@ -378,6 +394,29 @@ def create_app():
             "with_maps": bool(os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()),
         }
 
+    def _free_ai_extras_allowed() -> tuple[bool, str]:
+        """هل تُسمح إضافات كلود على المسار المجاني؟ — (allowed, reason).
+
+        مراجعة المشروع (H2): استخلاص الثقافة وفلترة الكيانات نداءاتُ كلود
+        تجري داخل /analyze خارج وكلاء PAID الثلاثة، فكانت (١) تُصرف لمجهولين
+        حين يوجد ANTHROPIC_API_KEY بلا SILK_API_KEY — خرقاً لقاعدة حارس 503،
+        و(٢) لا تُحتسب على SILK_PAID_DAILY_CAP. الآن: النشر غير المحمي يحجبها،
+        والمحمي يحجز تفعيلة واحدة ذرّياً من نفس عدّاد السقف قبل السماح.
+        الرفض يتدهور (تحليل بلا إضافات كلود + ملاحظة معلنة) — لا 429 لمسارٍ
+        مجاني في أصله.
+        """
+        if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+            return True, ""            # لا مفتاح => لا إنفاق ممكن أصلاً
+        if _unprotected_paid_keys():
+            return False, ("ANTHROPIC_API_KEY مضبوط بلا SILK_API_KEY — "
+                           "إضافات كلود (ثقافة المستهلك، فلترة الكيانات) "
+                           "حُجبت على المسار المجاني حتى تُضبط المصادقة.")
+        if not silk_usage.try_reserve_paid_calls(1):
+            return False, ("سقف الاستهلاك اليومي (SILK_PAID_DAILY_CAP) "
+                           "مستنفد — إضافات كلود حُجبت لهذا الطلب؛ "
+                           "التحليل المجاني اكتمل بدونها.")
+        return True, ""
+
     @app.post("/analyze")
     def analyze(req: AnalyzeRequest, request: Request):
         """حلّل منتجًا عبر الأسواق (المسار العادي، مجاني حصراً) — free-only path.
@@ -389,14 +428,22 @@ def create_app():
         _require_key(request)
         _rate_limit(request)
         policy = _source_policy()
-        result = silk_engine.analyze(
-            req.product, year=req.year,
-            countries=_target_countries(req.markets),
-            trend_span=req.trend_span,
-            product_card=(req.product_card.model_dump()
-                          if req.product_card else None),
-            hs_code=req.hs_code,
-            persist=req.persist, **policy)
+        ai_ok, ai_note = _free_ai_extras_allowed()
+        import contextlib
+        import silk_context
+        ctx = (contextlib.nullcontext() if ai_ok
+               else silk_context.block_ai_extras())
+        with ctx:
+            result = silk_engine.analyze(
+                req.product, year=req.year,
+                countries=_target_countries(req.markets),
+                trend_span=req.trend_span,
+                product_card=(req.product_card.model_dump()
+                              if req.product_card else None),
+                hs_code=req.hs_code,
+                persist=req.persist, **policy)
+        if not ai_ok:
+            result["ai_extras_note"] = ai_note   # الغياب مُعلَن لا صامت
         result["view"] = _view(result)
         return _json(result)
 
@@ -522,13 +569,19 @@ def create_app():
         return _json(silk_trend.import_trend(req.hs_code, m49, end_year, req.span))
 
     @app.get("/diagnostics")
-    def diagnostics(year: int = 2022):
+    def diagnostics(request: Request, year: int = 2022):
         """تشخيص المصادر الحيّ — probe each data source live with the server's keys.
 
         يفحص Comtrade والبنك الدولي وSerper وGoogle Maps وClaude فعلياً ويصنّف:
         متصل/فارغ/محجوب/بلا مفتاح مع تلميح إصلاح. للقراءة فقط، لا يُصدر 500.
         يخبرك على نشرك أيّ مفتاحٍ يعمل وأيّه لا.
+
+        محروسة (مراجعة المشروع): كل نقرة تُطلق نداءاتٍ حيّةً بمفاتيح الخادم
+        (Serper/Maps/Claude) — بلا مصادقةٍ وحدِّ معدّلٍ كانت باباً مفتوحاً
+        لاستنزاف الرصيد من أي مجهول.
         """
+        _require_key(request)
+        _rate_limit(request)
         import silk_diagnostics
         try:
             return silk_diagnostics.run_diagnostics(year)
@@ -545,6 +598,7 @@ def create_app():
         — مجهول يرى قائمة الطبقات بلا كشف إعدادات الخادم (ANALYSIS.md §7-5).
         وضع التطوير (بلا SILK_API_KEY) يبقى كما كان: الأعلام ظاهرة.
         """
+        _rate_limit(request)
         layers = [
             ("UN Comtrade", "free", None),
             ("World Bank", "free", None),

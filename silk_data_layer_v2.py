@@ -9,6 +9,8 @@ import logging
 
 from silk_data_layer import (
     DataPoint,
+    ISO3_TO_M49,
+    M49_TO_ISO3,
     comtrade_trade,
     partner_name,
     primary_value,
@@ -55,6 +57,25 @@ def ppp_per_capita(iso3: str, year: int | None = None) -> DataPoint:
     return world_bank(iso3, "NY.GDP.PCAP.PP.CD", year)
 
 
+def _competitor_dp(code: object, value_usd: float, grand: float, *,
+                   hs_code: str, market_label: object, year: int,
+                   source: str = "UN Comtrade",
+                   confidence: float = 0.9, note_suffix: str = "") -> DataPoint:
+    """نقطة مورّدٍ موحّدة — the ONE competitor-DataPoint constructor.
+
+    كان الشكل {partner, code, value_usd, share} يُبنى في ثلاثة مواضع
+    (market_imports، مسار المخزن، والمُرتِّب يستهلكه) — توحيدُه يمنع انحرافها.
+    """
+    share = round(100 * value_usd / grand, 2)
+    return DataPoint(
+        value={"partner": partner_name(code), "code": str(code),
+               "value_usd": value_usd, "share": share},
+        source=source, confidence=confidence,
+        note=(f"HS{hs_code} imports to {market_label} {year}; "
+              f"share {share}%{note_suffix}"),
+        retrieved_at=_today())
+
+
 def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
     """واردات سوق ومنافسوه من نداء Comtrade واحد — ONE call: total imports + suppliers.
 
@@ -96,15 +117,17 @@ def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
                          f"{round(world):,}$ مقابل مجموع الشركاء {round(grand):,}$")
     competitors: list[DataPoint] = []
     if grand > 0:
+        # ثقة واعية بالبَتر (مراجعة المشروع): الحصص تُقسم على مجموع الشركاء
+        # المرصودين — وطبقة المعاينة محدودة الصفوف، فمقامٌ متباينٌ عن صف
+        # العالم (>20%) يعني احتمال شركاء ساقطين وحصصاً منتفخة. لا نخفي
+        # الرقم (لا اختلاق عكسي) بل نخفض ثقته ونعلن السبب في الملاحظة.
+        comp_conf = 0.7 if xval_note else 0.9
+        comp_note = (" | الحصة على مجموعٍ قد يكون ناقصاً (تباين صف العالم)"
+                     if xval_note else "")
         for code, val in sorted(totals.items(), key=lambda kv: kv[1], reverse=True):
-            share = round(100 * val / grand, 2)
-            competitors.append(DataPoint(
-                value={"partner": partner_name(code), "code": code,
-                       "value_usd": val, "share": share},
-                source="UN Comtrade", confidence=0.9,
-                note=f"HS{hs_code} imports to {market_m49} {year}; share {share}%",
-                retrieved_at=_today(),
-            ))
+            competitors.append(_competitor_dp(
+                code, val, grand, hs_code=hs_code, market_label=market_m49,
+                year=year, confidence=comp_conf, note_suffix=comp_note))
     return {"total_usd": total_usd, "competitors": competitors,
             "xval_note": xval_note}
 
@@ -145,24 +168,24 @@ def market_imports_cached(hs_code: str, market_m49: object, market_iso3: str,
     فيستفيد كل تحليل لاحق. أي فشل في طبقة المخزن يسقط بأمان للمسار الحي — المخزن
     تحسين، ليس شرطاً. لا اختلاق: مخزن فارغ لا يُنتج صفوفاً.
     """
-    from silk_data_layer import M49_TO_ISO3, ISO3_TO_M49, partner_name, _today
     try:  # 1) المخزن أولاً — the warm store
         import silk_store
         got = silk_store.market_imports_from_store(hs_code, market_iso3, int(year))
         if got["total_usd"] is not None or got["partners"]:
-            grand = sum(p["value_usd"] for p in got["partners"]) or None
+            # صفٌّ مخزّن بقيمة None لا يُجمَع (كان يرمي TypeError فيُهدر
+            # المخزنُ الدافئ كلُّه صامتاً إلى المسار الحي) ولا يُعدّ صفراً.
+            valued = [p for p in got["partners"]
+                      if p.get("value_usd") is not None]
+            grand = sum(p["value_usd"] for p in valued) or None
             competitors = []
             if grand:
-                for p in got["partners"]:
+                for p in valued:
                     m49 = ISO3_TO_M49.get(p["iso3"], p["iso3"])
-                    share = round(100 * p["value_usd"] / grand, 2)
-                    competitors.append(DataPoint(
-                        value={"partner": partner_name(m49), "code": str(m49),
-                               "value_usd": p["value_usd"], "share": share},
-                        source="UN Comtrade (مخزن الحقائق)", confidence=0.9,
-                        note=f"HS{hs_code} imports to {market_iso3} {year} "
-                             f"(fact store); share {share}%",
-                        retrieved_at=_today()))
+                    competitors.append(_competitor_dp(
+                        m49, p["value_usd"], grand, hs_code=hs_code,
+                        market_label=market_iso3, year=year,
+                        source="UN Comtrade (مخزن الحقائق)",
+                        note_suffix=" (fact store)"))
             return {"total_usd": got["total_usd"], "competitors": competitors,
                     "xval_note": ""}
     except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط (هدوء: debug)

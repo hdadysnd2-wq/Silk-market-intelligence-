@@ -162,14 +162,24 @@ def collect_comtrade(hs6: str, targets: list[dict], year: int,
     # الميزانية تُقرأ مرة وتُخصم محلياً داخل التشغيلة (صف collection_runs يُحدَّث
     # عند النهاية فقط) — read once, decrement locally within the run.
     budget = comtrade_budget_left()
+    # مراجعة المشروع: الميزانية تُحاسِب **النداءات الفعلية** لا الأهداف —
+    # حلقة الإعادة كانت تطلق حتى ٣ نداءات وتُحتسب هدفاً واحداً، فيتجاوز
+    # الصرف الحقيقي السقف اليومي. `calls` = كل استدعاء comtrade_trade؛
+    # ودفتر collection_runs يبقى صادقاً لأن failed صار "محاولات فاشلة"
+    # (calls - نجاحات) فيساوي SUM(fetched+failed) مجموعَ النداءات الفعلية.
+    # حدّ معروف: [] لا يميّز "فشل جلب" عن "سوق لا يستورد فعلاً" (عقد
+    # comtrade_trade) — فالإعادة قد تكرّر سؤالاً جوابه الصادق فارغ.
+    calls = 0
+    failed_targets = 0
     for t in targets:
-        if (fetched + failed) >= budget:
-            skipped = len(targets) - fetched - failed
+        if calls >= budget:
+            skipped = len(targets) - fetched - failed_targets
             log.warning("comtrade budget exhausted — %d target(s) deferred", skipped)
             break
         ok = False
         for attempt in range(3):  # محاولة + إعادتان بتراجع أُسّي
             recs = comtrade_trade(hs6, t["m49"], year, flow="M", partner="all")
+            calls += 1
             if recs:
                 rows = []
                 for rec in recs:
@@ -185,10 +195,15 @@ def collect_comtrade(hs6: str, targets: list[dict], year: int,
                     silk_store.upsert_trade_flows(rows)
                 ok = True
                 break
+            if calls >= budget:  # لا محاولة إضافية فوق الميزانية
+                break
             time.sleep(pace * (2 ** attempt))  # backoff — طبقة المعاينة حسّاسة للاندفاع
-        fetched += 1 if ok else 0
-        failed += 0 if ok else 1
+        if ok:
+            fetched += 1
+        else:
+            failed_targets += 1
         time.sleep(pace)  # إيقاع بين الأهداف — pacing between targets
+    failed = calls - fetched   # محاولات فاشلة — keeps the daily ledger honest
     left = comtrade_budget_left()
     _run_finish(run, fetched, failed, left,
                 f"skipped_budget={skipped}" if skipped else "")
