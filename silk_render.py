@@ -78,18 +78,25 @@ def _competitive_position(top: dict | None) -> dict:
 
 
 def _brief(decision: dict, cp: dict) -> list[str]:
-    """المختصر — سطران للموقع التنافسي فوق سطر القرار (vision §6, §10.4)."""
-    lines = [f"القرار: {decision.get('verdict') or 'تعذّر الحكم'} "
-             f"(ثقة {decision.get('confidence')}) — {decision.get('market') or '؟'}"]
+    """المختصر — سطران للموقع التنافسي فوق سطر القرار (vision §6, §10.4).
+
+    P1 (طبقة السرد): رمز الحكم الآلي (CONDITIONAL-GO) والكسر العشري الخام
+    وأسماء أعلام الكود (with_localprice) لا تصل وجه المستخدم — تُترجم عبر
+    silk_narrative. القيم نفسها بلا تغيير.
+    """
+    import silk_narrative as N
+    market = N.country_ar(decision.get("market"), decision.get("market"))
+    lines = [f"التوصية: {N.verdict_ar(decision.get('verdict'))} — "
+             f"سوق {market} (ثقة {N.confidence_phrase(decision.get('confidence'))})"]
     if cp.get("available"):
         best = cp.get("nearest_beatable")
         lines.append(
             f"أقرب منافس قابل للمنافسة: {best['competitor']} — هامشك عند "
             f"مضاهاته {best['margin_at_match_pct']}%" if best else
-            "لا منافس بسعر مرصود بعد — فعّل with_localprice/deepen")
+            "أسعار المنافسين على الرفّ لم تُجمع بعد — تتوافر مع الدراسة العميقة")
         door = cp.get("best_door")
         lines.append(f"أفضل باب دخول مرصود: {door['name']} ({door['assessment']})"
-                     if door else "لا أبواب دخول مرصودة — فعّل with_channels")
+                     if door else "قنوات الدخول التفصيلية تتوافر مع الدراسة العميقة")
     else:
         lines.append(cp.get("note", ""))
     return lines

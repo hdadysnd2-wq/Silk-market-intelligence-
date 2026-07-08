@@ -438,7 +438,7 @@
 
   var I18N={
     appName:{ar:"منصة سِلك · ذكاء الأسواق",en:"Silk · Market Intelligence"},
-    appTag:{ar:"من منتجك إلى خطة دخولك — كل رقم بمصدره",en:"From your product to your entry plan — every number sourced"},
+    appTag:{ar:"من منتجك إلى خطة دخولك",en:"From your product to your entry plan"},
     searchLabel:{ar:"المنتج",en:"Product"},searchPh:{ar:"ابحث عن منتج… (تمور، زعفران، عسل)",en:"Search a product… (dates, saffron, honey)"},
     studyYears:{ar:"سنوات الدراسة (مدى)",en:"Study years (range)"},
     targetMarkets:{ar:"الأسواق المستهدفة (اختياري)",en:"Target markets (optional)"},
@@ -453,7 +453,7 @@
     completeness:{ar:"اكتمال الدراسة",en:"Study completeness"},
     pipeline:{ar:"المعمار — الطبقات الأربع",en:"Architecture — the four layers"},
     idle:{ar:"بانتظار التشغيل",en:"Awaiting run"},running:{ar:"جارٍ توزيع المهام…",en:"Dispatching agents…"},
-    completeCov:{ar:"اكتمل — تغطية",en:"Complete — coverage"},completeGaps:{ar:"اكتمل — بفجوات معلنة",en:"Complete — with declared gaps"},agents:{ar:"وكلاء",en:"agents"},
+    completeCov:{ar:"اكتمل — تغطية",en:"Complete — coverage"},completeGaps:{ar:"اكتمل — بنواقص",en:"Complete — with gaps"},agents:{ar:"وكلاء",en:"agents"},
     step1:{ar:"المصنّف (HS)",en:"HS classifier"},step1d:{ar:"اسم المنتج → رمز HS6",en:"Product name → HS6"},
     step2:{ar:"وكيل التجارة",en:"Trade agent"},step2d:{ar:"Comtrade · الاستيراد",en:"Comtrade · imports"},
     step3:{ar:"وكيل الاقتصاد",en:"Economic agent"},step3d:{ar:"World Bank · دخل الفرد",en:"World Bank · income"},
@@ -464,13 +464,13 @@
     lyr3:{ar:"قرار كلود (٥ أعمدة)",en:"Claude decision (5 pillars)"},lyr3d:{ar:"يوزن مخرجات الوكلاء → الحكم",en:"weighs agent outputs → verdict"},
     lyr4:{ar:"الطبقة المدفوعة",en:"Paid layer"},lyr4d:{ar:"Volza · Explee · LocalPrice (عبر التعميق)",en:"Volza · Explee · LocalPrice (via deep-dive)"},
     lyrLocked:{ar:"مقفلة — تُفعَّل بالتعميق",en:"Locked — unlocked by deep-dive"},lyrActive:{ar:"مُفعّلة",en:"Active"},agentsN:{ar:"وكلاء بنتائج",en:"agents with data"},pillarsN:{ar:"أعمدة محسوبة",en:"pillars computed"},
-    obs:{ar:"مرصود",en:"observed"},declaredGap:{ar:"فجوة معلنة",en:"declared gap"},notObserved:{ar:"غير مرصود",en:"Not observed"},
+    obs:{ar:"مرصود",en:"observed"},declaredGap:{ar:"غير متوفر",en:"unavailable"},notObserved:{ar:"غير متوفر",en:"Not available"},
     dataYearL:{ar:"بيانات",en:"Data"},dataYearHint:{ar:"السنة المطلوبة لم تُنشر بعد في كومتريد — اعتُمدت أحدث سنة فيها بيانات فعلية (التجارة السنوية تتأخّر سنة–سنتين).",en:"Requested year not yet published in Comtrade — used the most recent year with real data (annual trade lags 1–2 years)."},
     decision:{ar:"القرار",en:"Decision"},prelim:{ar:"قرار مبدئي",en:"Preliminary"},noVerdict:{ar:"تعذّر الحكم — لا بيانات كافية",en:"No verdict — insufficient data"},whyLabel:{ar:"لماذا",en:"Why"},confLabel:{ar:"الثقة",en:"Confidence"},stageL:{ar:"مرحلة التوليف",en:"Synthesis stage"},
     rankedMarkets:{ar:"الأسواق المرشّحة",en:"Candidate markets"},
     colRank:{ar:"#",en:"#"},colMarket:{ar:"السوق",en:"Market"},colImports:{ar:"الاستيراد",en:"Imports"},colTrend:{ar:"الاتجاه",en:"Trend"},colShare:{ar:"حصة السعودية",en:"Saudi share"},colScore:{ar:"النقاط",en:"Score"},colCov:{ar:"التغطية",en:"Coverage"},
     high:{ar:"عالية",en:"High"},medium:{ar:"متوسطة",en:"Medium"},low:{ar:"منخفضة",en:"Low"},
-    tableSrc:{ar:"المصادر مرفقة بكل رقم · التغطية = مكوّنات مرصودة من 4 · الفجوات معلنة",en:"Sources attached to every value · Coverage = observed components of 4 · gaps declared"},
+    tableSrc:{ar:"",en:""},
     rank:{ar:"المرتبة",en:"Rank"},rowConf:{ar:"ثقة الصف",en:"Row confidence"},
     tabPosition:{ar:"موقعك",en:"Your position"},tabRivals:{ar:"المنافسون",en:"Competitors"},tabTrend:{ar:"الاتجاه",en:"Trend"},tabComponents:{ar:"المكوّنات",en:"Components"},tabCompliance:{ar:"الاشتراطات",en:"Compliance"},tabVerdict:{ar:"الحكم",en:"Verdict"},
     compSize:{ar:"حجم الاستيراد",en:"Import size"},compShare:{ar:"حصة السعودية",en:"Saudi share"},compIncome:{ar:"دخل الفرد (PPP)",en:"Income (PPP)"},compHHI:{ar:"تركّز المنافسة HHI",en:"Competition HHI"},
@@ -478,23 +478,23 @@
     supplierCountries:{ar:"الدول المورّدة وحصصها",en:"Supplier countries & shares"},
     onShelf:{ar:"المنتجات المنافسة على الرفّ",en:"Competing products on the shelf"},colBrand:{ar:"المنتج",en:"Product"},colPrice:{ar:"السعر",en:"Price"},colMargin:{ar:"هامشك عند المضاهاة",en:"Margin at match"},youLabel:{ar:"منتجك",en:"You"},
     needProduct:{ar:"أدخل بطاقة منتجك أعلى الصفحة لحساب هامشك مقابل هذه الأسعار.",en:"Enter your product card above to compute your margin against these prices."},
-    needDeepen:{ar:"أسعار الرفّ الفعلية تتطلب تعميقاً مدفوعاً (localprice) — لم تُرصد بعد. المنصة لا تختلق سعراً.",en:"Actual shelf prices require a paid deep-dive (localprice) — not observed yet. The platform never invents a price."},
+    needDeepen:{ar:"أسعار الرفّ الفعلية تتوافر مع الدراسة العميقة.",en:"Actual shelf prices are available with a deep dive."},
     yourPos:{ar:"موقعك التنافسي",en:"Your competitive position"},posNeed:{ar:"أضف بطاقة منتجك (التكلفة/السعر) لحساب موقعك مقابل المنافسين المرصودين.",en:"Add your product card (cost/price) to compute your position against observed rivals."},
-    trendTitle:{ar:"استيراد السوق عبر السنوات",en:"Market imports over the years"},cagr:{ar:"نمو سنوي مركّب",en:"CAGR"},trendNeed:{ar:"لم يُرصد خط اتجاه كافٍ لهذه السنوات — الفجوات معلنة.",en:"No sufficient trend observed for these years — gaps declared."},
+    trendTitle:{ar:"استيراد السوق عبر السنوات",en:"Market imports over the years"},cagr:{ar:"نمو سنوي مركّب",en:"CAGR"},trendNeed:{ar:"بيانات الاتجاه غير كافية لهذه السنوات.",en:"Trend data insufficient for these years."},
     kTop:{ar:"استيراد السوق الأول",en:"Top-market imports"},kShare:{ar:"حصة السعودية — الأول",en:"Saudi share — top"},kGrowth:{ar:"نمو الاستيراد",en:"Import growth"},kObs:{ar:"أسواق مرصودة",en:"Observed markets"},
     chScores:{ar:"مقارنة الأسواق — النقاط",en:"Market comparison — score"},chScoresSub:{ar:"أفضل الأسواق على 0–100. انقر شريطاً لفتح تفاصيله.",en:"Top markets on 0–100. Click a bar to open it."},
     chTrend:{ar:"الاستيراد عبر سنوات الدراسة",en:"Imports across the study years"},chTrendSub:{ar:"قيمة استيراد أفضل الأسواق سنةً بسنة (Comtrade).",en:"Top markets' import value year by year (Comtrade)."},
     sharesDonut:{ar:"حصص الدول المورّدة",en:"Supplier-country shares"},othersL:{ar:"أخرى",en:"Other"},
     complianceEntry:{ar:"اشتراطات الدخول والخروج",en:"Entry & exit requirements"},officialSrc:{ar:"المصدر الرسمي",en:"Official source"},
     juryTitle:{ar:"لجنة التحكيم",en:"Jury committee"},claudeJudge:{ar:"كلود · الحَكَم",en:"Claude · Judge"},coverageL:{ar:"تغطية",en:"Coverage"},gapsL:{ar:"فجوات",en:"Gaps"},sufficiencyL:{ar:"كفاية البيانات",en:"Data sufficiency"},
-    reportLimits:{ar:"حدود هذا التقرير",en:"Limits of this report"},limitsSub:{ar:"ما لا يعرفه النظام يُقال صراحةً — الفجوات تُعلن ولا تُقدَّر.",en:"What the system doesn't know is stated plainly — gaps declared, not estimated."},noLimits:{ar:"لا حدود مسجّلة — كل مكوّنات الأسواق الأولى مرصودة.",en:"No limits recorded — all top-market components observed."},
-    cultureTitle:{ar:"ثقافة المستهلك ونبض السوق",en:"Consumer culture & market pulse"},cultureSub:{ar:"عناوين ومقالات مرصودة من بحث الويب — ما يهتم به المستهلك فعلياً.",en:"Observed headlines & articles from web search — what the consumer actually cares about."},cultureNeed:{ar:"غير مرصود — يتطلب مفتاح بحث الويب (SEARCH_API_KEY). فعّله في الإعدادات؛ لا نختلق اهتماماً.",en:"Not observed — requires a web-search key (SEARCH_API_KEY). Enable it in Settings; we never invent interest."},
+    reportLimits:{ar:"حدود هذا التقرير",en:"Limits of this report"},limitsSub:{ar:"نطاق ما لم يشمله هذا التحليل.",en:"What this analysis does not cover."},noLimits:{ar:"لا حدود مسجّلة لهذا التحليل.",en:"No limits recorded for this analysis."},
+    cultureTitle:{ar:"ثقافة المستهلك ونبض السوق",en:"Consumer culture & market pulse"},cultureSub:{ar:"عناوين ومقالات مرصودة من بحث الويب — ما يهتم به المستهلك فعلياً.",en:"Observed headlines & articles from web search — what the consumer actually cares about."},cultureNeed:{ar:"يتطلب مفتاح بحث الويب (SEARCH_API_KEY) — فعّله في الإعدادات.",en:"Requires a web-search key (SEARCH_API_KEY) — enable it in Settings."},
     cultureExtracted:{ar:"رؤًى مستخلَصة بالطبقة الثالثة (كلود) من عناوين الويب — لا روابط خام. كلُّ رؤيةٍ مسنودةٌ بدليلها.",en:"Layer-3 (Claude) insights extracted from web headlines — not raw links. Each insight cites its evidence."},
     cultureRawSub:{ar:"عناوين خام من بحث الويب — لم تُحلَّل بعد (مفتاح كلود غائب).",en:"Raw web-search headlines — not analyzed yet (no Claude key)."},
     cultureNeedAI:{ar:"مفتاح كلود غائب: تُعرَض العناوين خامًا. فعّل ANTHROPIC_API_KEY ليستخلص الوكيلُ ثقافةَ المستهلك بدل الروابط.",en:"No Claude key: headlines shown raw. Enable ANTHROPIC_API_KEY so the agent extracts consumer culture instead of links."},
     basedOn:{ar:"مبنيّة على",en:"Based on"},cultureSources:{ar:"العناوين المصدر",en:"Source headlines"},
-    readyTitle:{ar:"ابدأ بالبحث عن منتج",en:"Start by searching a product"},readyP:{ar:"اكتب اسم منتج سعودي لتصفية أسواق تصديره وترتيبها عبر سنوات الدراسة.",en:"Type a Saudi product to shortlist and rank its export markets across the study years."},readyFoot:{ar:"النظام لا يُنشئ بيانات — كل رقم يحمل مصدره وثقته وتاريخه، وكل فجوة تُعلن بسببها.",en:"The system never creates data — every number carries its source, confidence and date, and every gap is declared with its reason."},
-    readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"النظام لا يخمّن رمز HS — التصنيف الضعيف يُعلن بدل أن يُخترع.",en:"The system never guesses an HS code — a weak classification is declared, not invented."},
+    readyTitle:{ar:"ابدأ بالبحث عن منتج",en:"Start by searching a product"},readyP:{ar:"اكتب اسم منتج سعودي لتصفية أسواق تصديره وترتيبها عبر سنوات الدراسة.",en:"Type a Saudi product to shortlist and rank its export markets across the study years."},readyFoot:{ar:"اختر منتجاً وابدأ — النتائج خلال دقائق.",en:"Pick a product and start — results arrive in minutes."},
+    readyProduct:{ar:"جاهز للتحليل — وزِّع المهام على الوكلاء.",en:"Ready — dispatch the agents."},noClass:{ar:"تعذّر تصنيف المنتج",en:"Could not classify the product"},noClassFoot:{ar:"جرّب اسماً أدق للمنتج، أو أدخل رمز HS مباشرة.",en:"Try a more specific product name, or enter an HS code directly."},
     settingsTitle:{ar:"الإعدادات والمصادر",en:"Settings & sources"},settingsSub:{ar:"أدخل المفاتيح ثم «حفظ في الخادم» — تُخزَّن في خادمك وتُفعَّل فوراً (متغيرات بيئة النشر تبقى الأعلى سلطة).",en:"Enter keys then “Save to server” — stored on your server and active immediately (deploy env vars still win)."},saveServer:{ar:"حفظ في الخادم",en:"Save to server"},saved:{ar:"حُفظت المفاتيح في الخادم",en:"Keys saved to server"},adminKey:{ar:"مفتاح الخدمة (X-API-Key) إن كانت المصادقة مفعّلة",en:"Service key (X-API-Key) if auth is enabled"},
     secAI:{ar:"الذكاء الاصطناعي",en:"AI"},secFree:{ar:"مصادر مجانية",en:"Free sources"},secPaid:{ar:"مصادر مدفوعة",en:"Paid sources"},connected:{ar:"متصل",en:"Connected"},needsKey:{ar:"يحتاج مفتاح",en:"Needs key"},keyless:{ar:"متصل · بلا مفتاح",en:"Connected · keyless"},
     diagTitle:{ar:"تشخيص المصادر الحيّ",en:"Live source diagnostics"},diagSub:{ar:"افحص كل مصدر فعلياً بمفاتيحك على الخادم — أيّه متصل، أم فارغ، أم محجوب، أم بلا مفتاح، مع سبب الإصلاح.",en:"Probe each source live with your server keys — connected, empty, blocked, or no-key, with the fix reason."},
@@ -503,7 +503,7 @@
     diagAgentsOk:{ar:"✓ الأساس جاهز — الوكلاء تنتج دراسة حقيقية",en:"✓ Core ready — the agents produce a real study"},
     diagAgentsNo:{ar:"⚠ مصدر أساسي غير جاهز — الدراسة ستُعلن فجوات حتى يُصلح",en:"⚠ A core source isn't ready — the study declares gaps until fixed"},
     diagFail:{ar:"تعذّر الوصول للخادم — تحقّق من عنوان الـ API.",en:"Could not reach the server — check the API base URL."},
-    footer:{ar:"",en:""},footBadge:{ar:"بيانات حقيقية · لا اختلاق",en:"Real data · no fabrication"},
+    footer:{ar:"",en:""},footBadge:{ar:"الخدمة جاهزة",en:"Service ready"},
     reqFail:{ar:"فشل الطلب",en:"Request failed"},langSwitched:{ar:"تم التبديل إلى العربية",en:"Switched to English"},
     nav1:{ar:"تحليل جديد",en:"New analysis"},nav2:{ar:"القرار",en:"Decision"},nav3:{ar:"حجم السوق",en:"Market size"},nav4:{ar:"المنافسة",en:"Competition"},
     nav5:{ar:"التسعير",en:"Pricing"},nav6:{ar:"الاشتراطات",en:"Requirements"},nav7:{ar:"الطلب والمخاطر",en:"Demand & risk"},nav8:{ar:"المصادر والإعدادات",en:"Sources & settings"},
@@ -917,7 +917,7 @@
     }).join("");
     return '<section class="card"><div class="dt-head"><h3>'+esc(t("rankedMarkets"))+'</h3><span class="cnt"><span class="num">'+ms.length+'</span> · '+S.yearFrom+'–'+S.yearTo+'</span></div>'+
       '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>'+t("colRank")+'</th><th>'+t("colMarket")+'</th><th>'+t("colImports")+'</th><th>'+t("colTrend")+'</th><th>'+t("colShare")+'</th><th>'+t("colScore")+'</th><th>'+t("colCov")+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-      '<div class="dt-foot">'+esc(t("tableSrc"))+'</div></section>';
+      '</section>';
   }
   var COMPS=[["market_size","compSize","wSize",function(v){return fmtUSD(v);}],["saudi_position","compShare","wShare",function(v){return v+"%";}],["demand_capacity","compIncome","wIncome",function(v){return fmtUSD(v);}],["competition","compHHI","wHHI",function(v){return v;}]];
   function margin(price){var cost=S.card.cost_per_unit,ship=S.card.shipping_per_unit||0;if(cost==null||!price||price<=0)return null;return Math.round((price-cost-ship)/price*100);}

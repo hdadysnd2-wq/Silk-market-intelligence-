@@ -59,11 +59,14 @@ def test_brief_is_a_different_product_not_a_shrunk_copy():
     from silk_reports import render_brief
 
     brief = render_brief(build_view(_result()), dashboard_url="https://x/y")
-    assert "القرار: PRELIMINARY GO" in brief
-    assert "241,000,000" in brief and "[UN Comtrade]" in brief  # رقم بمصدره
-    assert "أضف بطاقة منتجك" in brief          # الموقع التنافسي: فجوة معلنة
+    # طبقة السرد P1: رمز الآلة لا يصل وجه المستخدم — ترجمته العربية فقط،
+    # والمبلغ بصيغة بشرية، وسطر المصدر مع كل رقم هو إشارة النزاهة الوحيدة.
+    assert "توصية أولية بالدخول" in brief
+    assert "PRELIMINARY GO" not in brief
+    assert "مليون دولار" in brief and "[UN Comtrade]" in brief  # رقم بمصدره
+    assert "أضف بطاقة منتجك" in brief          # الموقع التنافسي: غياب معلن
     assert "https://x/y" in brief               # إحالة اللوحة
-    assert "قرار أوّلي لا نهائي" in brief
+    assert "لا اختلاق" not in brief and "لا مخمّنة" not in brief  # بلا شعار
 
 
 def test_docx_full_report_structure():
@@ -130,7 +133,7 @@ def test_report_endpoints_over_stored_analysis():
     try:
         client = TestClient(api.create_app())
         r = client.get(f"/analyses/{aid}/brief")
-        assert r.status_code == 200 and "القرار" in r.text
+        assert r.status_code == 200 and "التوصية" in r.text
         assert client.get("/analyses/424242/brief").status_code == 404
         r = client.get(f"/analyses/{aid}/report.docx")
         assert r.status_code in (200, 501)          # 501 فقط بلا python-docx
@@ -148,7 +151,7 @@ def test_samples_rule_10_6_files_exist():
                                        "report_full_latest.docx"))
     brief = open(os.path.join(root, "samples", "brief_latest.txt"),
                  encoding="utf-8").read()
-    assert "سِلك" in brief and "القرار" in brief
+    assert "سِلك" in brief and "التوصية" in brief   # طبقة السرد P1
 
 
 def test_all_fifteen_agents_on_base_agent():

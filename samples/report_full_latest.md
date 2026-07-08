@@ -14,18 +14,18 @@
 
 ## الخلاصة التنفيذية
 
-التوصية: CONDITIONAL-GO في سوق China، بثقة 31% استناداً إلى 0.8 نقطة من 100 في تقييم الجاذبية المرجّح.
-السبب التجاري: score 0.636 في النطاق الشرطي أو الثقة 0.31 دون 0.6 أو شروط مفتوحة (3).
-أهم ما ينقص للتأكّد من هذه التوصية: China: demand_capacity missing (no income/population signal).
-- بوابة كفاية البيانات: 0/3 وكلاء أساسيون لديهم بيانات؛ فجوات: TradeFlowAgent، EconomicAgent، CompetitionAgent
-- النتيجة أوّلية لا نهائية.
+التوصية: دخول مشروط لسوق الصين، بدرجة ثقة منخفضة (31%). الفرصة قائمة، لكن اكتمال الصورة يتطلب استيفاء الشروط الواردة أدناه قبل قرار نهائي.
+الأساس التجاري: يستورد السوق ما قيمته 60.0 مليون دولار سنوياً من هذا المنتج (المصدر: UN Comtrade)؛ والمنتجات السعودية حاضرة فعلاً بحصة 30% من واردات السوق (المصدر: UN Comtrade)؛ وسوق عالي التركّز — مورّد أو اثنان يهيمنان.
+لاكتمال الثقة في هذه التوصية يلزم: الصين: دخل الفرد غير متوفر.
 
 ## منهجية البحث
 
 - سنة البيانات المعتمدة: 2023.
 - تغطية البيانات الإجمالية لهذا التحليل: 57.1%.
 - المصادر التي أسهمت فعلياً في هذا التشغيل: Pew Research Center (لقطة ساكنة مقرّبة)، Silk L1 requirements reference (official portals / EUR-Lex)، UN Comtrade، UN Comtrade (مخزن الحقائق).
-- منهج الثقة: كل رقم في هذا التقرير يحمل مصدره وتاريخ سحبه ودرجة ثقة صريحة (DataPoint) — الفجوة تُعلن بسببها ولا تُقدَّر أو تُخفى أبداً.
+- كل رقم في هذا التقرير يُعرض مع مصدره وتاريخ سحبه؛ القيمة غير المتاحة تُعرض «—».
+- بوابة كفاية البيانات: 0/3 وكلاء أساسيون لديهم بيانات؛ فجوات: بيانات التدفق التجاري، المؤشرات الاقتصادية، بيانات المنافسة
+- هذه قراءة أولية مبنية على البيانات العامة المتاحة وقت الإعداد.
 
 ## تعريف السوق ونطاقه
 
@@ -57,7 +57,7 @@
 1. أغلق بنود قائمة الاشتراطات (وكيل regulatory) بنداً بنداً بمرجعها الرسمي
 2. سوق مركّز: ادخل عبر موزّع قائم من مرشّحي وكيل supplier بدل البناء المباشر
 
-لماذا: score 0.636 في النطاق الشرطي أو الثقة 0.31 دون 0.6 أو شروط مفتوحة (3)
+لماذا: score 0.636 في النطاق الشرطي والثقة 0.31 دون 0.6 وشروط مفتوحة (3)
 قرار حتمي قابل للتفسير من حزمة §4b المتحقَّق منها — الأعمدة الغائبة شروط معلنة، لا تخمين
 
 ## موقعك التنافسي
@@ -140,7 +140,7 @@
 - متطلبات SFDA لتصدير الفئات الخاضعة (منشآت مرخّصة وشهادات صحية عند طلب سوق الوجهة) — الجهة: الهيئة العامة للغذاء والدواء SFDA — الاتجاه: exit — https://www.sfda.gov.sa
 - التسجيل في بوابة هيئة تنمية الصادرات السعودية (خدمات وبرامج دعم المصدرين) — الجهة: هيئة تنمية الصادرات السعودية — الاتجاه: exit — https://saudiexports.sa
 - (المصدر: Silk L1 requirements reference (official portals / EUR-Lex) | سُحب: 2026-07-08 | ثقة: 0.8)
-- فجوة معلنة: tariff_applied_pct: WITS unavailable: ProxyError for HS080410 SAU->CHN 2023: HTTPSConnectionPool(host='wits.worldbank.org', port=443): Max retries exceeded with url: /API/V1/SDMX/V21/datasource/TRN/reporter/CHN/partner/SAU/product/080410/year/2023/datatype/AHS?format=JSON (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=44727): Failed to establish a new connection: network disabled for offline test")))
+- فجوة معلنة: tariff_applied_pct: WITS unavailable: ProxyError for HS080410 SAU->CHN 2023: HTTPSConnectionPool(host='wits.worldbank.org', port=443): Max retries exceeded with url: /API/V1/SDMX/V21/datasource/TRN/reporter/CHN/partner/SAU/product/080410/year/2023/datatype/AHS?format=JSON (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=38299): Failed to establish a new connection: network disabled for offline test")))
 
 ## سجل المخاطر
 
@@ -179,7 +179,7 @@
 
 ## التوصية / المختصر
 
-- القرار: CONDITIONAL-GO (ثقة 0.31) — China
+- التوصية: دخول مشروط — سوق الصين (ثقة منخفضة (31%))
 - أضف بطاقة منتجك (product_card) للحصول على موقعك التنافسي
 
 نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. Preliminary, real public data only; gaps flagged, not estimated.

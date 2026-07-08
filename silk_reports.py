@@ -54,34 +54,16 @@ def _fmt(v: object) -> str:
 
 
 def _narrative_exec_summary(view: dict) -> list[str]:
-    """خلاصة تنفيذية سردية (مواصفة تقرير عالمي §1) — ٣ فقرات كاملة من حقول
-    محسوبة فعلاً في decision/markets[0]/limits، لا صياغة كودية («score في
-    النطاق الشرطي») ولا استدعاء ذكاء اصطناعي ولا رقم جديد — قابلة للاختبار
-    الحتمي وتحافظ على مبدأ «لا اختلاق» لأنها تُعيد صياغة أرقام موجودة فقط.
+    """خلاصة تنفيذية سردية — تفويض كامل لطبقة الترجمة (P1، silk_narrative).
+
+    النسخة الأولى هنا كانت تعيد صياغة الحقول لكنها ما تزال تمرّر «السبب
+    التجاري: score 0.636 في النطاق الشرطي» حرفياً — شرط كود على وجه
+    التقرير. exec_summary في silk_narrative يبني الفقرات الثلاث من الأرقام
+    المرصودة نفسها (حجم الاستيراد/النمو/الحصة السعودية/حالة المنافسة)
+    بعربية بشرية، بلا درجة معيارية ولا اسم وكيل ولا شرط كود.
     """
-    d = view.get("decision") or {}
-    top = (view.get("markets") or [{}])[0]
-    verdict = d.get("verdict") or "تعذّر الحكم"
-    market = d.get("market") or top.get("country") or "السوق المدروس"
-    conf = d.get("confidence")
-    conf_txt = f"{round(conf * 100)}%" if isinstance(conf, (int, float)) else "غير محسوبة"
-    score = top.get("score")
-    p1 = (f"التوصية: {verdict} في سوق {market}، بثقة {conf_txt}"
-          + (f" استناداً إلى {score} نقطة من 100 في تقييم الجاذبية المرجّح."
-             if score is not None else " — تقييم الجاذبية غير مكتمل بعد."))
-    why = d.get("why")
-    p2 = (f"السبب التجاري: {why}." if why else
-          "السبب التجاري: لم يُحسب — بيانات غير كافية لحكم مرجّح.")
-    limits = view.get("limits") or []
-    if limits:
-        rest = len(limits) - 1
-        p3 = ("أهم ما ينقص للتأكّد من هذه التوصية: " + str(limits[0])
-              + (f" (و{rest} بنداً إضافياً في قسم «حدود هذا التقرير» أدناه)."
-                 if rest > 0 else "."))
-    else:
-        p3 = ("لا فجوات جوهرية مرصودة في مكوّنات السوق الأول — التوصية "
-              "مبنية على تغطية بيانات كاملة لكل عمود مرجّح.")
-    return [p1, p2, p3]
+    from silk_narrative import exec_summary
+    return exec_summary(view)
 
 
 def _market_scope_paragraph(view: dict) -> str:
@@ -104,8 +86,12 @@ def _market_scope_paragraph(view: dict) -> str:
 
 
 def _methodology_lines(view: dict) -> list[str]:
-    """أسطر قسم المنهجية (مواصفة تقرير عالمي §2) — من حقول محسوبة فعلاً
-    (سنة البيانات، التغطية، المصادر التي أسهمت هذا التشغيل تحديداً)."""
+    """أسطر قسم المنهجية (مواصفة تقرير عالمي §2) — من حقول محسوبة فعلاً.
+
+    P1: تحفّظ «قراءة أولية» يُقال هنا مرة واحدة هادئة — لا يتكرر في كل قسم؛
+    وسطر كفاية البيانات يُترجم (لا اسم صنف وكيل على وجه التقرير).
+    """
+    from silk_narrative import translate_gaps
     h = view.get("header") or {}
     prov = view.get("provenance") or []
     sources = sorted({str(b.get("source")) for b in prov
@@ -115,9 +101,13 @@ def _methodology_lines(view: dict) -> list[str]:
     if sources:
         lines.append("المصادر التي أسهمت فعلياً في هذا التشغيل: "
                      + "، ".join(sources) + ".")
-    lines.append("منهج الثقة: كل رقم في هذا التقرير يحمل مصدره وتاريخ سحبه "
-                 "ودرجة ثقة صريحة (DataPoint) — الفجوة تُعلن بسببها ولا "
-                 "تُقدَّر أو تُخفى أبداً.")
+    lines.append("كل رقم في هذا التقرير يُعرض مع مصدره وتاريخ سحبه؛ "
+                 "القيمة غير المتاحة تُعرض «—».")
+    suff = (view.get("decision") or {}).get("sufficiency")
+    if suff:
+        lines.append(translate_gaps([suff])[0])
+    lines.append("هذه قراءة أولية مبنية على البيانات العامة المتاحة "
+                 "وقت الإعداد.")
     return lines
 
 
@@ -298,34 +288,49 @@ def _entry_decision_of(m: dict) -> tuple[dict | None, str]:
 
 
 def render_brief(view: dict, dashboard_url: str = "/") -> str:
-    """المختصر (§10.4) — صفحة واحدة بتصميم "رسالة جوال"، من القالب حصراً."""
+    """المختصر (§10.4) — صفحة واحدة بتصميم "رسالة جوال"، من القالب حصراً.
+
+    P1 (طبقة السرد): أسماء المقاييس الداخلية (market_size) ورمز الحكم الآلي
+    وشعارات النزاهة أُزيلت من الوجه — سطر المصدر مع كل رقم حاضر هو إشارة
+    النزاهة الوحيدة، والقيم نفسها بلا أي تغيير.
+    """
+    from silk_narrative import (GAP_WORD, competition_phrase, country_ar,
+                                fmt_money, fmt_pct, internal_ar)
     _assert_production_clean(view)
     d = view.get("decision") or {}
     cp = view.get("competitive_position") or {}
     top = (view.get("markets") or [{}])[0]
     numbers = []
     for c in (top.get("components_detail") or []):
-        if c.get("value") is not None:
-            numbers.append(f"• {c['name']}: {_fmt(c['value'])} "
-                           f"[{c.get('source', '؟')}]")
+        if c.get("value") is None:
+            continue
+        name = c.get("name")
+        # كل مقياس بصيغته البشرية — مؤشر HHI الخام لا يصل وجه المستخدم أبداً.
+        val = (fmt_money(c["value"]) if name in ("market_size",
+                                                 "demand_capacity")
+               else fmt_pct(c["value"]) if name == "saudi_position"
+               else competition_phrase(c["value"]) if name == "competition"
+               else _fmt(c["value"]))
+        numbers.append(f"• {internal_ar(name)}: {val} "
+                       f"[{c.get('source', '؟')}]")
         if len(numbers) == 3:
             break
     if not numbers:
-        numbers = ["• لا أرقام مرصودة — الفجوات معلنة بالتقرير الكامل"]
+        numbers = [f"• {GAP_WORD}"]
     L = ([] if not view.get("test_run") else
          ["⚠ TEST RUN — تشغيل برهاني ببدائل موسومة، ليس تقريراً إنتاجياً"])
-    L += [f"سِلك | {view.get('product')} (HS {view.get('hs_code')}) — "
-         f"{view.get('year')} | مبدئي",
+    market_ar = country_ar(top.get("iso3"), d.get("market"))
+    L += [f"سِلك | {view.get('product')} — سوق {market_ar} | "
+          f"قراءة أولية {view.get('year')}",
          "",
          view.get("brief", [""])[0] if view.get("brief") else
-         f"القرار: {d.get('verdict') or 'تعذّر الحكم'}",
-         "", "أرقام حاسمة (بمصادرها):", *numbers, ""]
+         f"التوصية: {d.get('verdict') or 'تعذّر إصدار توصية'}",
+         "", "أبرز الأرقام:", *numbers, ""]
     if len(view.get("brief") or []) > 1:
         L += view["brief"][1:3]
     else:
         L.append(cp.get("note", ""))
-    L += ["", f"التفاصيل الكاملة باللوحة: {dashboard_url}",
-          "كل رقم بمصدره؛ النواقص معلنة لا مخمّنة — قرار أوّلي لا نهائي."]
+    L += ["", f"التفاصيل الكاملة باللوحة: {dashboard_url}"]
     return "\n".join(L)
 
 
@@ -698,15 +703,10 @@ def render_docx(view: dict, path: str) -> str:
         f"{h.get('coverage_pct')}%")
     d = view.get("decision") or {}
     doc.add_heading("الخلاصة التنفيذية", level=1)
+    # P1: ثلاث فقرات بشرية فقط — سطر كفاية البيانات وتحفّظ «قراءة أولية»
+    # انتقلا إلى قسم المنهجية (مرة واحدة، بلا تكرار في كل قسم).
     for para in _narrative_exec_summary(view):
         doc.add_paragraph(para)
-    # حكم واحد لا حكمان: عند حكم المحرك §8 تُطبع الجورية سطرَ كفاية بيانات فقط.
-    if d.get("sufficiency"):
-        doc.add_paragraph(d["sufficiency"])
-    doc.add_paragraph(f"رمز HS: {view.get('hs_code')} "
-                      f"(ثقة التصنيف {view.get('hs_confidence')}) | "
-                      f"سنة البيانات: {_data_year_label(view)} | "
-                      "النتيجة أوّلية لا نهائية.")
 
     # ٢) منهجية البحث — قسم مستقل ظاهر (مواصفة تقرير عالمي §2: أقوى ما لدى
     # المنصة، كان مشتتاً بين الأقسام بدل أن يُعرض صراحةً).
@@ -917,12 +917,11 @@ def render_markdown(view: dict) -> str:
           f"| تغطية البيانات الإجمالية | {h.get('coverage_pct')}% |", ""]
 
     # ── ١. الخلاصة التنفيذية — narrative executive summary (حكم واحد لا حكمان) ─
+    # P1: ثلاث فقرات بشرية فقط — كفاية البيانات و«قراءة أولية» في المنهجية.
     d = view.get("decision") or {}
     L += ["## الخلاصة التنفيذية", ""]
     L += [f"{para}" for para in _narrative_exec_summary(view)]
-    if d.get("sufficiency"):
-        L.append(f"- {d['sufficiency']}")
-    L += ["- النتيجة أوّلية لا نهائية.", ""]
+    L.append("")
 
     # ── ٢. منهجية البحث — قسم مستقل ظاهر (§2) ────────────────────────────────
     L += ["## منهجية البحث", ""]
