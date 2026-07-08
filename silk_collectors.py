@@ -212,14 +212,120 @@ def collect_comtrade(hs6: str, targets: list[dict], year: int,
             "skipped_budget": skipped, "budget_left": left}
 
 
-def refresh() -> dict:
-    """التحديث المُجدول — the worker entrypoint: top up World Bank facts.
+def _priority_targets() -> list[dict]:
+    """أسواق الأولوية للتسخين المسبق — priority markets for pre-warming.
 
-    (تدفقات Comtrade تُجلب حسب الطلب عبر write-through + collect_comtrade الموجَّه؛
-    الجلب الشامل الدوري يُقرَّر مع الميزانية في الإنتاج.)"""
+    من `SILK_PRIORITY_MARKETS` (رموز ISO3 مفصولة بفواصل) إن ضُبط، وإلا أول
+    أسواق قائمة المنصّة (الخليج + الجوار — الأكثر طلباً). رموز غير معروفة
+    تُتجاهل — لا اختلاق سوق. Env-driven list, else the platform's top markets.
+    """
+    from silk_market_ranker import COUNTRIES
+    raw = os.environ.get("SILK_PRIORITY_MARKETS", "").strip()
+    if raw:
+        by = {c["iso3"]: c for c in COUNTRIES}
+        wanted = [s.strip().upper() for s in raw.split(",") if s.strip()]
+        return [{"iso3": w, "m49": by[w]["m49"]} for w in wanted if w in by]
+    return [dict(c) for c in COUNTRIES[:12]]
+
+
+def _recent_hs_codes(limit: int = 8) -> list[str]:
+    """رموز HS المطلوبة مؤخراً — recently analyzed HS codes, newest first.
+
+    من سجل التحليلات (silk_storage — الأحدث أولاً)؛ فشل القراءة = قائمة فارغة
+    (التحديث تحسين لا شرط). Reads the analyses log; empty on any failure.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    try:
+        import silk_storage
+        for row in silk_storage.list_analyses():
+            hs = (row.get("hs_code") or "").strip()
+            if hs and hs not in seen:
+                seen.add(hs)
+                out.append(hs)
+            if len(out) >= limit:
+                break
+    except Exception as e:  # noqa: BLE001 — سجل غائب/تالف لا يوقف التحديث
+        log.debug("recent-hs read skipped: %s", e)
+    return out
+
+
+def refresh() -> dict:
+    """التحديث المُجدول — the worker entrypoint.
+
+    ١) مؤشرات البنك الدولي جماعياً (مجاني).
+    ٢) تسخين مسبق لتدفقات Comtrade: رموز HS المطلوبة مؤخراً × أسواق الأولوية،
+       للسنة المغلقة الأخيرة — عبر collect_comtrade نفسه (ميزانية يومية صلبة،
+       إيقاع + backoff يحترم Retry-After؛ لا اندفاع على المصادر أبداً). يُترك
+       احتياطي ميزانية للطلبات الحية (`SILK_REFRESH_BUDGET_RESERVE`، افتراضي
+       150 نداء) — التسخين لا يجوّع تحليلات المستخدمين.
+    التحليل الحي التالي لنفس hs+سوق+سنة يُخدم من المخزن بصفر نداء مدفوع.
+    Pre-warms recent HS × priority markets within the existing hard budget.
+    """
     silk_store.migrate()
     wb = collect_worldbank()
-    return {"worldbank": wb, "comtrade_budget_left": comtrade_budget_left()}
+    reserve = int(os.environ.get("SILK_REFRESH_BUDGET_RESERVE", "150") or 150)
+    year = _today_year() - 1  # السنة المغلقة الأخيرة — بيانات سنوية مستقرة
+    targets = _priority_targets()
+    comtrade_runs: list[dict] = []
+    for hs in _recent_hs_codes():
+        left = comtrade_budget_left()
+        if left <= reserve:
+            log.info("refresh: stopping pre-warm — budget reserve reached "
+                     "(%d left ≤ %d reserve)", left, reserve)
+            break
+        got = collect_comtrade(hs, targets, year)
+        comtrade_runs.append({"hs6": hs, "year": year, **got})
+    return {"worldbank": wb, "comtrade": comtrade_runs,
+            "comtrade_budget_left": comtrade_budget_left()}
+
+
+# ── المُجدول داخل العملية · in-process scheduler ─────────────────────────────
+# قرص Railway الدائم يُركَّب على خدمة واحدة فقط — خدمة cron منفصلة لا ترى
+# `/data` نفسه، فيتغذّى مخزنٌ لا يقرأه أحد. لذا يعمل التحديث الدوري خيطاً
+# خلفياً داخل خدمة الويب نفسها (نفس القرص، نفس الميزانية).
+# A Railway volume mounts to ONE service, so a separate cron service could
+# not share /data; the periodic refresh runs as a daemon thread in-process.
+
+_scheduler_started = False
+
+
+def start_scheduler():
+    """ابدأ التحديث الدوري — start the periodic refresh thread (idempotent).
+
+    يُفعَّل بـ `SILK_REFRESH_HOURS` (عدد ساعات بين التشغيلات؛ غير مضبوط/0 =
+    معطّل — لا خيط إطلاقاً، فالاختبارات والتطوير لا تتأثر). أول تشغيلة بعد
+    `SILK_REFRESH_INITIAL_S` (افتراضي 120ث) كي لا يزاحم الإقلاع. فشل تشغيلة
+    يُسجَّل ولا يقتل الخيط. Returns the Thread, or None when disabled.
+    """
+    global _scheduler_started
+    try:
+        hours = float(os.environ.get("SILK_REFRESH_HOURS", "0") or 0)
+    except ValueError:
+        log.warning("SILK_REFRESH_HOURS is not a number — scheduler disabled")
+        return None
+    if hours <= 0 or _scheduler_started:
+        return None
+
+    import threading
+
+    initial = float(os.environ.get("SILK_REFRESH_INITIAL_S", "120") or 120)
+
+    def _loop() -> None:
+        delay = initial
+        while True:
+            time.sleep(delay)
+            try:
+                got = refresh()
+                log.info("scheduled refresh done: %s", got)
+            except Exception as e:  # noqa: BLE001 — تشغيلة تفشل، الخيط يبقى
+                log.warning("scheduled refresh failed: %s", e)
+            delay = hours * 3600
+
+    t = threading.Thread(target=_loop, daemon=True, name="silk-refresh")
+    t.start()
+    _scheduler_started = True
+    return t
 
 
 if __name__ == "__main__":

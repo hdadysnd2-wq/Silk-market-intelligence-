@@ -92,3 +92,30 @@ def agent_prefs_context(prefs: dict | None):
         yield
     finally:
         _agent_prefs.reset(token)
+
+
+# اقتصاد البيانات (persist-5): عدّاد لكل تحليل — كم قراءة خُدمت من المخزن/
+# ذاكرة الطلبات مقابل كم جلبة حية. contextvar فيعزل الطلبات المتزامنة؛
+# غياب العدّاد (نداء مكتبي خارج analyze) = لا عدّ، صفر أثر على أي مسار.
+# Per-analysis data-economics counter: store/cache hits vs live fetches.
+_data_counter: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "silk_data_counter", default=None)
+
+
+def begin_data_counter() -> dict:
+    """ابدأ عدّاداً جديداً — fresh counter for this analysis run (contextvar)."""
+    c = {"store_hits": 0, "cache_hits": 0, "live_fetches": 0}
+    _data_counter.set(c)
+    return c
+
+
+def count_data(kind: str, n: int = 1) -> None:
+    """سجّل حدث بيانات — increment a counter kind; silent no-op without one."""
+    c = _data_counter.get()
+    if c is not None and kind in c:
+        c[kind] += n
+
+
+def data_counter() -> dict | None:
+    """العدّاد الحالي — the active counter dict, or None outside an analysis."""
+    return _data_counter.get()

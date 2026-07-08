@@ -104,11 +104,55 @@ class TradeFlowAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__("TradeFlowAgent")
 
+    @staticmethod
+    def _world_row_from_store(hs: str, iso3: str, year: int, flow: str):
+        """صف العالم من المخزن — the stored World-total row, or None on miss.
+
+        قراءة من مخزن الحقائق أولاً (صفر نداء خارجي) — أي فشل في طبقة المخزن
+        يسقط بأمان للمسار الحي؛ المخزن تحسين لا شرط. Store-first read.
+        """
+        if not iso3:
+            return None
+        try:
+            import silk_store
+            row = silk_store.get_trade_flow(hs, iso3, "WLD", int(year), flow)
+        except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط
+            log.debug("world-row store read unavailable (%s %s %s %s): %s",
+                      hs, iso3, year, flow, e)
+            return None
+        return row if (row and row.get("value_usd") is not None) else None
+
     def _execute(self, task: dict) -> AgentReport:
-        """حجم استيراد/تصدير سلعة في سوق — total trade value from World partner."""
+        """حجم استيراد/تصدير سلعة في سوق — total trade value from World partner.
+
+        مخزن الحقائق أولاً (صف WLD للتدفق) — إصابة = صفر نداء خارجي، والقيمة
+        تحمل مصدرها الأصلي وتاريخ جلبها («من المخزن»، لا تُعرض كجلب حي).
+        الغياب = المسار الحي القائم، وعند نجاحه تُكتب النتيجة للمخزن فيستفيد
+        التحليل التالي. Store-first; live+write-through on miss.
+        """
         hs, market, year = task["hs_code"], task["market_m49"], task["year"]
+        iso3 = task.get("iso3") or ""
         findings: list[DataPoint] = []
         for flow, label in (("M", "imports"), ("X", "exports")):
+            row = self._world_row_from_store(hs, iso3, year, flow)
+            if row is not None:
+                import silk_store
+                import silk_context
+                silk_context.count_data("store_hits")
+                day = (row.get("retrieved_at") or "")[:10]
+                stale = silk_store.freshness(row.get("retrieved_at"),
+                                             "trade") != "fresh"
+                findings.append(DataPoint(
+                    row["value_usd"], "UN Comtrade (مخزن الحقائق)", 0.9,
+                    f"HS{hs} total {label} (World) to market {market} {year}, "
+                    f"USD — من المخزن"
+                    + (f"، جُلبت أصلاً {day}" if day else "")
+                    + (" — أقدم من نافذة الحداثة (يحدّثها التحديث الدوري)"
+                       if stale else ""),
+                    row.get("retrieved_at") or
+                    datetime.date.today().isoformat(),
+                    status="stale" if stale else ""))
+                continue
             recs = comtrade_trade(hs, market, year, flow=flow, partner=0)
             # 1b: None = تعذّر الجلب (429/شبكة — أعد المحاولة)؛ [] = ردّ ناجح
             # بلا سجلات (غياب حقيقي). كانا يُعرضان معاً «لا بيانات» فيوهم
@@ -143,7 +187,23 @@ class TradeFlowAgent(BaseAgent):
                     conf = 0.7  # مجموع جزئي: سجلات بلا قيمة أُسقطت — partial sum
                     note += (f"؛ {dropped} سجل بلا قيمة رقمية أُسقط من الجمع — "
                              f"{dropped} record(s) lacked primaryValue, excluded")
-                findings.append(DataPoint(sum(vals), "UN Comtrade", conf, note))
+                total = sum(vals)
+                findings.append(DataPoint(total, "UN Comtrade", conf, note))
+                # كتابة عابرة لصف X فقط (مجموع كامل، لا جزئي). صف M العالمي
+                # يُكتب حصراً مع صفوف شركائه (write-through المُرتِّب/الجامع) —
+                # كتابة WLD-M وحده كانت ستجعل قراءة المخزن «إصابة» بإجمالي بلا
+                # شركاء فيتخطى وكيل المنافسة جلبه الحي (بيانات موجودة تُعرض غائبة).
+                if iso3 and flow == "X" and not dropped:
+                    try:
+                        import silk_store
+                        silk_store.migrate()
+                        silk_store.upsert_trade_flows([{
+                            "hs6": hs, "reporter_iso3": iso3,
+                            "partner_iso3": "WLD", "year": int(year),
+                            "flow": flow, "value_usd": total}])
+                    except Exception as e:  # noqa: BLE001 — لا يكسر المسار الحي
+                        log.warning("world-row write-through failed "
+                                    "(%s %s %s %s): %s", hs, iso3, year, flow, e)
         real = _real(findings)
         failed = not real
         summary = ("لا توجد بيانات تجارة — no trade data available"
@@ -184,10 +244,61 @@ class CompetitionAgent(BaseAgent):
         super().__init__("CompetitionAgent")
         self.top_n = top_n
 
+    @staticmethod
+    def _competitors_from_store(hs: str, iso3: str, year: int):
+        """شركاء من المخزن — stored partner rows as competitor DataPoints,
+        or None on miss/unavailable (المخزن تحسين لا شرط — safe fallthrough).
+
+        القيم تحمل إسنادها الأصلي: مصدر «مخزن الحقائق» وتاريخ الجلب الأصلي
+        («من المخزن») — قراءة مخزّنة لا تُعرض كجلب حي.
+        """
+        if not iso3:
+            return None
+        try:
+            import silk_store
+            from silk_data_layer import ISO3_TO_M49
+            from silk_data_layer_v2 import _competitor_dp
+            got = silk_store.market_imports_from_store(hs, iso3, int(year))
+            valued = [p for p in got["partners"]
+                      if p.get("value_usd") is not None]
+            grand = sum(p["value_usd"] for p in valued)
+            if not valued or not grand:
+                return None
+            comps = []
+            for p in valued:
+                day = (p.get("retrieved_at") or "")[:10]
+                stale = silk_store.freshness(p.get("retrieved_at"),
+                                             "trade") != "fresh"
+                comps.append(_competitor_dp(
+                    ISO3_TO_M49.get(p["iso3"], p["iso3"]), p["value_usd"],
+                    grand, hs_code=hs, market_label=iso3, year=int(year),
+                    source="UN Comtrade (مخزن الحقائق)",
+                    note_suffix=(" — من المخزن"
+                                 + (f"، جُلبت أصلاً {day}" if day else "")
+                                 + (" — أقدم من نافذة الحداثة" if stale else "")),
+                    retrieved_at=p.get("retrieved_at")))
+                if stale:
+                    comps[-1].status = "stale"
+            import silk_context
+            silk_context.count_data("store_hits")
+            return comps
+        except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط
+            log.debug("competitor store read unavailable (%s %s %s): %s",
+                      hs, iso3, year, e)
+            return None
+
     def _execute(self, task: dict) -> AgentReport:
-        """من يورّد للسوق وبأي حصة — ranked suppliers of the HS code to the market."""
+        """من يورّد للسوق وبأي حصة — ranked suppliers of the HS code to the market.
+
+        المخزن أولاً: صفوف الشركاء المخزّنة تُخدم بصفر نداء خارجي وبإسنادها
+        الأصلي («من المخزن» + تاريخ الجلب)؛ الغياب = المسار الحي القائم
+        (market_competitors) كما كان. Store-first; live path unchanged on miss.
+        """
         hs, market, year = task["hs_code"], task["market_m49"], task["year"]
-        comps = market_competitors(hs, market, year)
+        iso3 = task.get("iso3") or ""
+        comps = self._competitors_from_store(hs, iso3, year)
+        if comps is None:  # المخزن بارد/غير متاح — المسار الحي القائم كما كان
+            comps = market_competitors(hs, market, year)
         if not comps:
             return AgentReport(
                 self.name,

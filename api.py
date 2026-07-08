@@ -131,6 +131,27 @@ def create_app():
     except Exception as _e:  # noqa: BLE001
         log.debug("settings bootstrap skipped: %s", _e)
 
+    # القرص الدائم: هيّئ قاعدة التحليلات ومجلد ذاكرة الطلبات على مساراتهما
+    # الموجَّهة (SILK_DB/SILK_CACHE_DIR أو SILK_DATA_DIR على Railway volume)
+    # عند الإقلاع — إنشاء المجلدات إن غابت، فلا يفاجأ أول طلب بكتابة فاشلة.
+    # Persistent volume: init the analyses DB and cache dir at startup so the
+    # first request never trips over a missing directory. Best-effort.
+    try:
+        silk_storage.init_db()
+        import silk_cache as _cache
+        os.makedirs(_cache._cache_dir(), exist_ok=True)
+    except Exception as _e:  # noqa: BLE001
+        log.warning("storage bootstrap failed (continuing): %s", _e)
+
+    # التحديث الدوري داخل العملية (SILK_REFRESH_HOURS) — قرص Railway يُركَّب
+    # على خدمة واحدة، فالمُجدول خيط خلفي هنا لا خدمة cron منفصلة. معطّل بلا
+    # المتغير — الاختبارات والتطوير لا تتأثر. In-process scheduled refresh.
+    try:
+        import silk_collectors
+        silk_collectors.start_scheduler()
+    except Exception as _e:  # noqa: BLE001
+        log.warning("refresh scheduler not started: %s", _e)
+
     # CORS (الموجة ٠): الافتراضي صار **نفس الأصل فقط** (الواجهة تُقدَّم من نفس
     # الخدمة فلا تحتاج CORS). للواجهات المنفصلة (Netlify) اضبط CORS_ORIGINS
     # بقائمة أصول مفصولة بفواصل؛ "*" لم يعد افتراضياً ويتطلب ضبطاً صريحاً.
@@ -272,6 +293,23 @@ def create_app():
                 else "off — GOOGLE_MAPS_API_KEY غائب"),
             "claude": _claude,
         }
+        # القرص الدائم: المسارات المحلولة فعلاً لكل مخزن — للتحقق بعد النشر أن
+        # كل شيء يكتب للقرص (persistent=true عندما يقع المسار تحت SILK_DATA_DIR
+        # أو وُجّه بمتغير صريح). Resolved storage paths for volume verification.
+        try:
+            import silk_cache as _cache
+            import silk_store as _fact_store
+            import silk_usage as _usage
+            _base = os.environ.get("SILK_DATA_DIR", "").strip()
+            health["storage"] = {
+                "data_dir": _base or None,
+                "analyses_db": silk_storage._db_path(),
+                "fact_store_db": _fact_store._db_path(),
+                "usage_db": _usage._db_path(),
+                "cache_dir": _cache._cache_dir(),
+            }
+        except Exception as _e:  # noqa: BLE001 — تشخيص لا شرط
+            log.debug("storage health section skipped: %s", _e)
         unprotected = _unprotected_paid_keys()
         if unprotected:
             health["warnings"] = [

@@ -32,7 +32,16 @@ def _now() -> str:
 
 
 def _db_path() -> str:
-    return os.environ.get("SILK_STORE_DB", _DEFAULT_PATH)
+    """مسار المخزن الموحّد — `SILK_STORE_DB` أولاً، ثم اشتقاق من `SILK_DATA_DIR`
+    (القرص الدائم في النشر)، ثم الافتراضي المحلي. Explicit var wins;
+    SILK_DATA_DIR derives the volume path; local default otherwise."""
+    explicit = os.environ.get("SILK_STORE_DB", "").strip()
+    if explicit:
+        return explicit
+    base = os.environ.get("SILK_DATA_DIR", "").strip()
+    if base:
+        return os.path.join(base, "silk_store.db")
+    return _DEFAULT_PATH
 
 
 def _is_postgres() -> bool:
@@ -93,6 +102,50 @@ def migrate() -> list[str]:
     return applied
 
 
+# ── سياسة الحداثة · freshness policy ────────────────────────────────────────
+# نافذة حداثة لكل نوع بيانات: التجارة سنوية وتتغير نادراً (90 يوماً)، مؤشرات
+# البنك الدولي (30)، الأسعار متقلبة (7). قابلة للضبط بالبيئة SILK_FRESH_*_DAYS.
+# القيمة العتيقة تُخدم فوراً معلَّمة «stale» ويُطلَق تحديث بالخلفية — لا تُعرض
+# أبداً كحديثة (قاعدة الإسناد)، ولا تُحجب (القيمة المرصودة خير من فجوة).
+
+_FRESH_DAYS_DEFAULT = {"trade": 90, "indicator": 30, "price": 7}
+
+
+def fresh_days(kind: str = "trade") -> int:
+    """نافذة الحداثة بالأيام لنوع بيانات — env override or per-kind default."""
+    default = _FRESH_DAYS_DEFAULT.get(kind, 90)
+    raw = os.environ.get(f"SILK_FRESH_{kind.upper()}_DAYS", "").strip()
+    try:
+        return int(raw) if raw else default
+    except ValueError:
+        log.warning("SILK_FRESH_%s_DAYS=%r not an integer — using %d",
+                    kind.upper(), raw, default)
+        return default
+
+
+def freshness(retrieved_at: str | None, kind: str = "trade") -> str:
+    """حالة حداثة قيمة مخزّنة — 'fresh' | 'stale' | 'unknown'.
+
+    'unknown' لتاريخ غائب/غير قابل للتفسير — يُعامل معاملة العتيق (تحديث)
+    لكنه يُميَّز في الإسناد؛ لا تخمين لتاريخ لم يُسجَّل. Never guesses a date.
+    """
+    if not retrieved_at:
+        return "unknown"
+    raw = str(retrieved_at).strip()
+    try:
+        if len(raw) == 10:  # تاريخ يوم فقط — date-only stamps (_today())
+            dt = datetime.datetime.fromisoformat(raw).replace(
+                tzinfo=datetime.timezone.utc)
+        else:
+            dt = datetime.datetime.fromisoformat(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return "unknown"
+    age = datetime.datetime.now(datetime.timezone.utc) - dt
+    return "fresh" if age.days < fresh_days(kind) else "stale"
+
+
 # ── مخزن الحقائق · fact store ────────────────────────────────────────────────
 
 def upsert_indicator(iso3: str, indicator: str, year: int, value,
@@ -146,19 +199,24 @@ def upsert_trade_flows(rows: list[dict]) -> int:
 
 
 def market_imports_from_store(hs6: str, reporter_iso3: str, year: int) -> dict:
-    """استيراد سوق من المخزن — {total_usd, partners:[{iso3,value_usd}]}; لا اختلاق:
-    غياب الصفوف = total_usd None وقائمة فارغة."""
+    """استيراد سوق من المخزن — {total_usd, partners:[{iso3,value_usd,
+    retrieved_at}], retrieved_at}; لا اختلاق: غياب الصفوف = total_usd None
+    وقائمة فارغة. `retrieved_at` هو تاريخ **الجلب الأصلي** (أحدث صف) — يُحمل
+    مع القيمة كي لا تُعرض قراءة من المخزن كأنها جلب حي اليوم (قاعدة الإسناد).
+    Carries the ORIGINAL fetch date so store reads are never presented as live.
+    """
     with connect() as conn:
         rows = conn.execute(_q(
-            "SELECT partner_iso3, value_usd FROM trade_flows "
+            "SELECT partner_iso3, value_usd, retrieved_at FROM trade_flows "
             "WHERE hs6=? AND reporter_iso3=? AND year=? AND flow='M' "
             "ORDER BY value_usd DESC"), (hs6, reporter_iso3, int(year))).fetchall()
-    partners = [{"iso3": r[0], "value_usd": r[1]} for r in rows
-                if r[0] != "WLD" and r[1] is not None]
+    partners = [{"iso3": r[0], "value_usd": r[1], "retrieved_at": r[2]}
+                for r in rows if r[0] != "WLD" and r[1] is not None]
     world = [r[1] for r in rows if r[0] == "WLD" and r[1] is not None]
     total = world[0] if world else (sum(p["value_usd"] for p in partners)
                                     if partners else None)
-    return {"total_usd": total, "partners": partners}
+    fetched = max((r[2] for r in rows if r[2]), default=None)
+    return {"total_usd": total, "partners": partners, "retrieved_at": fetched}
 
 
 # ── التحليلات والمخرجات · analyses & outputs ─────────────────────────────────

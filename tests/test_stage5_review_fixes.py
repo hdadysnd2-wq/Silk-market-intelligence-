@@ -33,8 +33,10 @@ def _seed_store():
 
 
 def test_single_authoritative_verdict_everywhere():
-    """الجورية تقول NO-GO (بلا بيانات) والمحرك §8 يقول CONDITIONAL — التقرير
-    يجب أن يحمل حكم §8 وحده في الخلاصة والخاتمة والنص، والجورية سطر كفاية فقط."""
+    """حكم الجورية يخالف حكم §8 والتقرير يحمل حكم §8 وحده في الخلاصة والخاتمة
+    والنص، والجورية سطر كفاية فقط. (كانت الجورية NO-GO لأن الوكلاء الأساسيين
+    عميان عن المخزن؛ منذ التوجيه عبر المخزن أولاً يقرؤون البذرة فتصير
+    PRELIMINARY/ناقصة — الثابت المُختبَر أن حكمها ليس الحكم المنشور.)"""
     _seed_store()
     import silk_engine
     from silk_render import build_view, render_text
@@ -45,7 +47,8 @@ def test_single_authoritative_verdict_everywhere():
                                   year=2023, with_research=True)
     jury = res["markets"][0]["jury"]
     ed = res["markets"][0]["decision"]
-    assert "NO-GO" in jury["verdict"] and ed["verdict"] == "CONDITIONAL-GO"
+    assert ("NO-GO" in jury["verdict"] or "INCONCLUSIVE" in jury["verdict"])
+    assert jury["verdict"] != ed["verdict"] and ed["verdict"] == "CONDITIONAL-GO"
     view = build_view(res)
     # الحكم الموحّد في النموذج نفسه — كل المشتقات ترثه بنيوياً.
     assert view["decision"]["verdict"] == ed["verdict"]

@@ -35,11 +35,33 @@ def mirror_saudi_export(hs_code: str, target_m49: object, target_iso3: str,
     جديد — Comtrade نفسه، منظور إبلاغ مختلف فقط؛ فشل/غياب => DataPoint(None)
     موسوم (المبدأ التأسيسي: لا اختلاق).
     """
+    src = "UN Comtrade (تقرير سعودي مباشر — مرآة)"
+    try:  # المخزن أولاً — صف X (reporter=SAU) مخزّن = صفر نداء خارجي.
+        import silk_store
+        row = silk_store.get_trade_flow(hs_code, "SAU", target_iso3,
+                                        int(year), flow="X")
+        if row and row.get("value_usd") is not None:
+            try:
+                import silk_context
+                silk_context.count_data("store_hits")
+            except Exception:  # noqa: BLE001
+                pass
+            day = (row.get("retrieved_at") or "")[:10]
+            return DataPoint(
+                {"value_usd": row["value_usd"], "qty_kg": row.get("qty_kg")},
+                src + " — من المخزن", 0.9,
+                f"صادرات سعودية مُعلنة مباشرة (reporter=SAU) HS{hs_code}→"
+                f"{target_iso3} {year} — من المخزن"
+                + (f"، جُلبت أصلاً {day}" if day else ""),
+                row.get("retrieved_at") or _today())
+    except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط
+        log.debug("mirror store read unavailable (%s %s %s): %s",
+                  hs_code, target_iso3, year, e)
+
     recs = comtrade_trade(hs_code, _SAUDI_M49, year, flow="X",
                           partner=target_m49) or []
     pairs = [(primary_value(r), r.get("netWgt")) for r in recs]
     pairs = [(v, q) for v, q in pairs if v is not None]
-    src = "UN Comtrade (تقرير سعودي مباشر — مرآة)"
     if not pairs:
         return DataPoint(
             None, src, 0.0,
@@ -47,6 +69,16 @@ def mirror_saudi_export(hs_code: str, target_m49: object, target_iso3: str,
             f"{year} — مرآة غير متاحة", _today())
     total_usd = sum(v for v, _ in pairs)
     qtys = [float(q) for _, q in pairs if q]
+    try:  # كتابة عابرة — التحليل التالي لنفس الثلاثية يقرأ من المخزن مجاناً.
+        import silk_store
+        silk_store.migrate()
+        silk_store.upsert_trade_flows([{
+            "hs6": hs_code, "reporter_iso3": "SAU",
+            "partner_iso3": target_iso3, "year": int(year), "flow": "X",
+            "value_usd": total_usd, "qty_kg": sum(qtys) if qtys else None}])
+    except Exception as e:  # noqa: BLE001 — never break the live path
+        log.warning("mirror write-through failed (%s %s %s): %s",
+                    hs_code, target_iso3, year, e)
     return DataPoint(
         {"value_usd": total_usd, "qty_kg": sum(qtys) if qtys else None}, src, 0.9,
         f"صادرات سعودية مُعلنة مباشرة (reporter=SAU) HS{hs_code}→{target_iso3} "
@@ -61,11 +93,14 @@ def ppp_per_capita(iso3: str, year: int | None = None) -> DataPoint:
 def _competitor_dp(code: object, value_usd: float, grand: float, *,
                    hs_code: str, market_label: object, year: int,
                    source: str = "UN Comtrade",
-                   confidence: float = 0.9, note_suffix: str = "") -> DataPoint:
+                   confidence: float = 0.9, note_suffix: str = "",
+                   retrieved_at: str | None = None) -> DataPoint:
     """نقطة مورّدٍ موحّدة — the ONE competitor-DataPoint constructor.
 
     كان الشكل {partner, code, value_usd, share} يُبنى في ثلاثة مواضع
     (market_imports، مسار المخزن، والمُرتِّب يستهلكه) — توحيدُه يمنع انحرافها.
+    `retrieved_at` يُمرَّر لقراءات المخزن بتاريخ **الجلب الأصلي** — قراءة
+    مخزّنة لا تُختم بتاريخ اليوم كأنها حية (قاعدة الإسناد).
     """
     share = round(100 * value_usd / grand, 2)
     return DataPoint(
@@ -74,7 +109,7 @@ def _competitor_dp(code: object, value_usd: float, grand: float, *,
         source=source, confidence=confidence,
         note=(f"HS{hs_code} imports to {market_label} {year}; "
               f"share {share}%{note_suffix}"),
-        retrieved_at=_today())
+        retrieved_at=retrieved_at or _today())
 
 
 def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
@@ -179,44 +214,13 @@ if __name__ == "__main__":
 
 # ── M2: قراءة من مخزن الحقائق أولاً + كتابة عابرة — store-first + write-through ──
 
-def market_imports_cached(hs_code: str, market_m49: object, market_iso3: str,
-                          year: int, live=None) -> dict:
-    """واردات سوق عبر مخزن الحقائق أولاً — fact-store first, live+write-through miss.
+def _write_through_market(mi: dict, hs_code: str, market_iso3: str,
+                          year: int) -> None:
+    """كتابة عابرة لنتيجة حية ناجحة — write a successful live result through.
 
-    نفس عقد market_imports تماماً. وجود صفوف للسنة/الرمز في المخزن = إصابة (صفر
-    نداء خارجي)؛ الغياب = المسار الحي القائم، وعند نجاحه تُكتب الصفوف للمخزن
-    فيستفيد كل تحليل لاحق. أي فشل في طبقة المخزن يسقط بأمان للمسار الحي — المخزن
-    تحسين، ليس شرطاً. لا اختلاق: مخزن فارغ لا يُنتج صفوفاً.
+    يستعمله المسار الرئيسي وتحديثُ الخلفية معاً. فشلها لا يكسر شيئاً —
+    المخزن تحسين لا شرط. Shared by the main path and the SWR background job.
     """
-    try:  # 1) المخزن أولاً — the warm store
-        import silk_store
-        got = silk_store.market_imports_from_store(hs_code, market_iso3, int(year))
-        if got["total_usd"] is not None or got["partners"]:
-            # صفٌّ مخزّن بقيمة None لا يُجمَع (كان يرمي TypeError فيُهدر
-            # المخزنُ الدافئ كلُّه صامتاً إلى المسار الحي) ولا يُعدّ صفراً.
-            valued = [p for p in got["partners"]
-                      if p.get("value_usd") is not None]
-            grand = sum(p["value_usd"] for p in valued) or None
-            competitors = []
-            if grand:
-                for p in valued:
-                    m49 = ISO3_TO_M49.get(p["iso3"], p["iso3"])
-                    competitors.append(_competitor_dp(
-                        m49, p["value_usd"], grand, hs_code=hs_code,
-                        market_label=market_iso3, year=year,
-                        source="UN Comtrade (مخزن الحقائق)",
-                        note_suffix=" (fact store)"))
-            return {"total_usd": got["total_usd"], "competitors": competitors,
-                    "xval_note": ""}
-    except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط (هدوء: debug)
-        log.debug("fact-store read unavailable (%s %s %s): %s",
-                  hs_code, market_iso3, year, e)
-
-    # 2) المسار الحي القائم — the existing live path. `live` يُمرَّر من المُرتِّب
-    # ليبقى قابلاً للترقيع في اختباراته (wave8 seam) — default: هذا الملف.
-    mi = (live or market_imports)(hs_code, market_m49, year)
-
-    # 3) كتابة عابرة عند النجاح — write-through so the NEXT run is store-warm.
     try:
         if mi["total_usd"] is not None or mi["competitors"]:
             import silk_store
@@ -237,4 +241,106 @@ def market_imports_cached(hs_code: str, market_m49: object, market_iso3: str,
     except Exception as e:  # noqa: BLE001 — never break the live path
         log.warning("fact-store write-through failed (%s %s %s): %s",
                     hs_code, market_iso3, year, e)
+
+
+def _swr_refresh(hs_code: str, market_m49: object, market_iso3: str,
+                 year: int, live=None) -> None:
+    """جسم تحديث الخلفية — the synchronous stale-while-revalidate job.
+
+    جلب حي + كتابة عابرة؛ فشل الجلب يترك القيمة العتيقة كما هي (تبقى معلَّمة
+    stale — لا حجب ولا اختلاق). Live fetch + write-through; failure keeps the
+    stale value declared as such.
+    """
+    try:
+        mi = (live or market_imports)(hs_code, market_m49, year)
+        if not mi.get("fetch_failed"):
+            _write_through_market(mi, hs_code, market_iso3, year)
+    except Exception as e:  # noqa: BLE001 — تحديث الخلفية لا يُسقط شيئاً
+        log.debug("SWR refresh failed (%s %s %s): %s",
+                  hs_code, market_iso3, year, e)
+
+
+def _refresh_in_background(hs_code: str, market_m49: object, market_iso3: str,
+                           year: int, live=None) -> None:
+    """أطلق تحديث الخلفية — spawn the SWR daemon thread (SILK_SWR=0 disables)."""
+    import os
+    if os.environ.get("SILK_SWR", "").strip() == "0":
+        return
+    import threading
+    threading.Thread(target=_swr_refresh, name="silk-swr", daemon=True,
+                     args=(hs_code, market_m49, market_iso3, year, live)).start()
+
+
+def market_imports_cached(hs_code: str, market_m49: object, market_iso3: str,
+                          year: int, live=None) -> dict:
+    """واردات سوق عبر مخزن الحقائق أولاً — fact-store first, live+write-through miss.
+
+    نفس عقد market_imports تماماً. وجود صفوف للسنة/الرمز في المخزن = إصابة (صفر
+    نداء خارجي)؛ الغياب = المسار الحي القائم، وعند نجاحه تُكتب الصفوف للمخزن
+    فيستفيد كل تحليل لاحق. أي فشل في طبقة المخزن يسقط بأمان للمسار الحي — المخزن
+    تحسين، ليس شرطاً. لا اختلاق: مخزن فارغ لا يُنتج صفوفاً.
+
+    سياسة الحداثة (persist-4): إصابة داخل النافذة تُخدم كما هي (freshness=
+    "fresh")؛ العتيقة تُخدم **فوراً** معلَّمة stale (في الإسناد وstatus كل
+    نقطة) ويُطلَق تحديث بالخلفية — لا تُعرض قيمة مخزّنة كجلب حي أبداً.
+    الحالات الأربع متمايزة للمستهلك: fresh / stale (معروضة معلَّمة) /
+    fetch_failed (حي تعذّر — أعد المحاولة) / no_record (غياب حقيقي).
+    """
+    try:  # 1) المخزن أولاً — the warm store
+        import silk_store
+        got = silk_store.market_imports_from_store(hs_code, market_iso3, int(year))
+        if got["total_usd"] is not None or got["partners"]:
+            # صفٌّ مخزّن بقيمة None لا يُجمَع (كان يرمي TypeError فيُهدر
+            # المخزنُ الدافئ كلُّه صامتاً إلى المسار الحي) ولا يُعدّ صفراً.
+            valued = [p for p in got["partners"]
+                      if p.get("value_usd") is not None]
+            grand = sum(p["value_usd"] for p in valued) or None
+            fetched = got.get("retrieved_at")
+            fetched_day = (fetched or "")[:10]
+            state = silk_store.freshness(fetched, "trade")
+            stale = state != "fresh"
+            stale_note = (" — أقدم من نافذة الحداثة؛ يجري تحديثها بالخلفية"
+                          if stale else "")
+            competitors = []
+            if grand:
+                for p in valued:
+                    m49 = ISO3_TO_M49.get(p["iso3"], p["iso3"])
+                    p_day = (p.get("retrieved_at") or fetched or "")[:10]
+                    competitors.append(_competitor_dp(
+                        m49, p["value_usd"], grand, hs_code=hs_code,
+                        market_label=market_iso3, year=year,
+                        source="UN Comtrade (مخزن الحقائق)",
+                        note_suffix=(" — من المخزن"
+                                     + (f"، جُلبت أصلاً {p_day}" if p_day else "")
+                                     + stale_note),
+                        retrieved_at=p.get("retrieved_at") or fetched))
+                    if stale:
+                        competitors[-1].status = "stale"
+            if stale:  # تُخدم فوراً وتُحدَّث بالخلفية — serve now, refresh behind
+                _refresh_in_background(hs_code, market_m49, market_iso3,
+                                       int(year), live)
+            try:  # عدّاد اقتصاد البيانات — إصابة مخزن (شفافية لا شرط)
+                import silk_context
+                silk_context.count_data("store_hits")
+            except Exception:  # noqa: BLE001
+                pass
+            return {"total_usd": got["total_usd"], "competitors": competitors,
+                    "xval_note": "", "served_from": "store",
+                    "freshness": "stale" if stale else "fresh",
+                    "retrieved_at": fetched,
+                    "provenance_note": ("من المخزن"
+                                        + (f" — جُلبت أصلاً {fetched_day}"
+                                           if fetched_day else "")
+                                        + stale_note)}
+    except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط (هدوء: debug)
+        log.debug("fact-store read unavailable (%s %s %s): %s",
+                  hs_code, market_iso3, year, e)
+
+    # 2) المسار الحي القائم — the existing live path. `live` يُمرَّر من المُرتِّب
+    # ليبقى قابلاً للترقيع في اختباراته (wave8 seam) — default: هذا الملف.
+    mi = (live or market_imports)(hs_code, market_m49, year)
+    mi.setdefault("served_from", "live")
+
+    # 3) كتابة عابرة عند النجاح — write-through so the NEXT run is store-warm.
+    _write_through_market(mi, hs_code, market_iso3, year)
     return mi

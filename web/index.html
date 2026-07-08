@@ -468,6 +468,11 @@ function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class
   // فهرس الأقسام الـ14
   var toc=["الخلاصة","المنهجية","تعريف السوق","نظرة عامة","الديناميكيات","حجم السوق","التقسيم","التجارة","الإقليمي","المنافسة","استخبارات العميل","التنظيم والمخاطر (الاشتراطات)","الاتجاهات","التوصيات"];
   html+='<div class="toc"><div class="h">أقسام التقرير الكامل — ١٤ قسماً (Word)</div><div class="tocg">'+toc.map(function(t,i){return '<div class="ti"><b>'+String(i+1).padStart(2,"0")+'</b> '+t+'</div>'}).join("")+'</div></div>';
+  // اقتصاد البيانات — عدّاد مرصود: مخزن/ذاكرة مقابل جلب حي (persist-5)
+  var de=v.data_economics;
+  if(de&&de.note){html+='<div class="bcard" style="margin:18px 0"><h3>اقتصاد البيانات</h3><div class="note">المنهجية — كم وفّر المخزن في هذا التحليل</div>'
+    +'<p style="font-size:14px">'+esc(de.note)+'</p>'
+    +'<p style="font-size:11.5px;color:var(--muted)">من المخزن: '+(de.store_hits||0)+' · من ذاكرة الطلبات: '+(de.cache_hits||0)+' · جلب حي: '+(de.live_fetches||0)+'</p></div>'}
   html+='<div class="bcard" style="margin:18px 0 50px"><h3>اسأل عن هذا التحليل</h3>'
     +'<div class="note">إجابات من النتائج المحسوبة أعلاه حصراً — بمصادرها؛ ما لم يُسحب يُقال صراحةً</div>'
     +'<div id="askThread"></div>'

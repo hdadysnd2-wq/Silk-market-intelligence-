@@ -25,8 +25,18 @@ _DEFAULT_PATH = os.path.join("data", "usage.db")
 
 
 def _db_path() -> str:
-    """مسار قاعدة العدّاد — usage DB path (env-overridable)."""
-    return os.environ.get("SILK_USAGE_DB", "").strip() or _DEFAULT_PATH
+    """مسار قاعدة العدّاد — usage DB path (env-overridable).
+
+    `SILK_USAGE_DB` أولاً، ثم اشتقاق من `SILK_DATA_DIR` (القرص الدائم)،
+    ثم الافتراضي المحلي. Explicit var wins; SILK_DATA_DIR derives; local default.
+    """
+    explicit = os.environ.get("SILK_USAGE_DB", "").strip()
+    if explicit:
+        return explicit
+    base = os.environ.get("SILK_DATA_DIR", "").strip()
+    if base:
+        return os.path.join(base, "usage.db")
+    return _DEFAULT_PATH
 
 
 def daily_cap() -> int | None:
