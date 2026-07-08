@@ -662,28 +662,53 @@ def _entities_and_references(web_queries: list[str], maps_query: str,
                     "business_hint": None,
                     "via": "Google Maps", "retrieved_at": e.get("retrieved_at")})
         refs.append(_src("Google Maps", 0.4, retrieved_at=e.get("retrieved_at")))
+    # عناوينُ الويب تُجمَع مرّةً واحدة (كان يُكرَّر الحلقةُ فيتضاعف السرد)، بلا تكرار.
+    web_raw, seen_urls = [], set()
     for q in web_queries:
         for dp in web_search(q, num):
-            if dp.value:
-                out.append({"kind": "reference",
-                            "title": dp.value.get("title", ""),
-                            "url": dp.value.get("link", ""),
-                            "via": "Serper", "retrieved_at": dp.retrieved_at,
-                            "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"})
-                refs.append(_src("Web Search (Serper)", 0.3,
-                                 url=dp.value.get("link"),
-                                 retrieved_at=dp.retrieved_at))
-    for q in web_queries:
-        for dp in web_search(q, num):
-            if dp.value:
-                out.append({"kind": "reference",
-                            "title": dp.value.get("title", ""),
-                            "url": dp.value.get("link", ""),
-                            "via": "Serper", "retrieved_at": dp.retrieved_at,
-                            "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"})
-                refs.append(_src("Web Search (Serper)", 0.3,
-                                 url=dp.value.get("link"),
-                                 retrieved_at=dp.retrieved_at))
+            if not dp.value:
+                continue
+            link = dp.value.get("link", "")
+            key = link or dp.value.get("title", "")
+            if key in seen_urls:
+                continue
+            seen_urls.add(key)
+            web_raw.append(dp)
+    # الطبقة ٣: الوكيلُ (كلود) يستخلص أسماءَ الشركات من العناوين بدل سردِ روابطَ خام
+    # (بلاغ المالك «ترسل روابط = أنت قوقل»). المُستخلَص يظهر كأسماءٍ غير موثَّقة؛
+    # الروابطُ الخامُ تنزوي كاستشهادٍ محدود. بلا مفتاح: تبقى الروابطُ كمراجع كالسابق.
+    extracted = None
+    try:
+        import silk_ai_judge as aij
+        if aij.available() and web_raw:
+            extracted = aij.extract_companies(
+                [dp.value for dp in web_raw], product, market, role)
+    except Exception as e:  # noqa: BLE001 — الاستخلاص اختياري لا يُعطِّل الوكيل
+        log.warning("company extraction skipped: %s", e)
+        extracted = None
+    if extracted:
+        for c in extracted:
+            out.append({"kind": "entity", "name": c.get("name", ""),
+                        "address": None, "rating": None, "business_hint": None,
+                        "via": "Web → Claude", "url": c.get("url", ""),
+                        "retrieved_at": _today(), "note": c.get("note", "")})
+            refs.append(_src("Web Search → Claude", 0.4, url=c.get("url", "")))
+        # استشهادٌ محدود: أوّل ٣ روابطَ خام تحت الأسماء المُستخلَصة (لا سردٌ طويل).
+        for dp in web_raw[:3]:
+            out.append({"kind": "reference", "title": dp.value.get("title", ""),
+                        "url": dp.value.get("link", ""), "via": "Serper",
+                        "retrieved_at": dp.retrieved_at,
+                        "note": "مصدرُ الاستخلاص — للاستشهاد"})
+    else:
+        # تراجُع بلا مفتاح: الروابطُ الخامُ كمراجع (منزوعةُ التكرار الآن).
+        for dp in web_raw:
+            out.append({"kind": "reference", "title": dp.value.get("title", ""),
+                        "url": dp.value.get("link", ""), "via": "Serper",
+                        "retrieved_at": dp.retrieved_at,
+                        "note": "مرجع للمراجعة اليدوية — ليس اسم كيان"})
+            refs.append(_src("Web Search (Serper)", 0.3,
+                             url=dp.value.get("link"),
+                             retrieved_at=dp.retrieved_at))
     return out, refs, dropped_retail
 
 
@@ -832,20 +857,36 @@ class PricingAgent(ResearchAgent):
                 gaps.append(f"retail_prices: {paid_why}؛ ولا نتائج Google "
                             f"Shopping مرصودة ({shop_why})")
 
-        # مراجع أسعار حرة — روابط مؤرّخة فقط؛ الأرقام لا تُستخرج آلياً من مقتطفات.
+        # مراجع أسعار — الطبقة ٣ تستخرج الأسعارَ المذكورةَ صراحةً في العناوين
+        # (بلاغ المالك «ترسل روابط»)؛ بلا مفتاح تبقى روابطَ مؤرّخةً للمراجعة.
         from silk_websearch_agent import web_search
-        refs = [dp for dp in web_search(f"{product} retail price in {market}", 3)
+        refs = [dp for dp in web_search(f"{product} retail price in {market}", 4)
                 if dp.value]
         if refs:
+            points = None
+            try:
+                import silk_ai_judge as aij
+                if aij.available():
+                    points = aij.extract_prices([d.value for d in refs],
+                                                product, market)
+            except Exception as e:  # noqa: BLE001 — الاستخلاص اختياري
+                log.warning("price extraction skipped: %s", e)
+                points = None
+            if points:
+                F.append(_f("retail_price_points", points,
+                            [_src("Web Search → Claude", 0.4)],
+                            note="أسعارٌ مذكورةٌ صراحةً في عناوين الويب واستخلصها "
+                                 "كلود — مؤشِّرٌ لا سعرَ رفٍّ مؤكَّد (ذاك في /deepen)"))
             F.append(_f("retail_references",
                         [{"title": d.value.get("title", ""),
                           "url": d.value.get("link", ""),
-                          "retrieved_at": d.retrieved_at} for d in refs],
+                          "retrieved_at": d.retrieved_at} for d in refs[:3]],
                         [_src("Web Search (Serper)", 0.3,
                               url=d.value.get("link"),
-                              retrieved_at=d.retrieved_at) for d in refs],
-                        note="مراجع سعرية للمراجعة اليدوية — لا استخراج أرقام آلي "
-                             "من المقتطفات (لا اختلاق)"))
+                              retrieved_at=d.retrieved_at) for d in refs[:3]],
+                        note=("مصادرُ الاستخلاص — للاستشهاد" if points
+                              else "مراجع سعرية للمراجعة اليدوية — لا استخراج أرقام "
+                                   "آلي (مفتاح كلود غائب)")))
         else:
             gaps.append("retail_references: بحث الويب غير متاح "
                         "(SEARCH_API_KEY / الشبكة)")

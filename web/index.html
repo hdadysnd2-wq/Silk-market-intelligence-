@@ -525,7 +525,7 @@
     hhiL:{ar:"تركّز المنافسة HHI",en:"Competition HHI"},topShareL:{ar:"حصة المورّد الأكبر",en:"Top supplier share"},saudiShareL:{ar:"الحصة السعودية",en:"Saudi share"},colValueL:{ar:"القيمة",en:"Value"},
     borderLayer:{ar:"الطبقة الحدودية — قيم الوحدة",en:"Border layer — unit values"},
     uvL:{ar:"قيمة الوحدة الحدودية $/kg",en:"Border unit value $/kg"},suvL:{ar:"قيمة الوحدة السعودية $/kg",en:"Saudi border unit value $/kg"},marginBL:{ar:"الهامش عند الحدود",en:"Margin at border"},
-    retailLayer:{ar:"أسعار التجزئة",en:"Retail prices"},retailRefs:{ar:"مراجع سعرية (روابط مؤرّخة)",en:"Retail references (dated links)"},storeL:{ar:"المتجر",en:"Store"},
+    retailLayer:{ar:"أسعار التجزئة",en:"Retail prices"},retailRefs:{ar:"مصادر الأسعار (للاستشهاد)",en:"Price sources (citations)"},storeL:{ar:"المتجر",en:"Store"},pricePointsL:{ar:"أسعار مُستخلَصة (كلود)",en:"Extracted prices (Claude)"},
     reqList:{ar:"قائمة الاشتراطات (بند + جهة + رابط)",en:"Requirements checklist (item + authority + link)"},
     tariffL:{ar:"التعريفة المطبّقة",en:"Applied tariff"},reqCount:{ar:"عدد البنود",en:"Items count"},
     eligGateL:{ar:"بوابة أهلية أمامية: منشأة معتمدة (EU 2017/625) قبل أي بند لاحق — لا بند يُعد قابلاً للاستيفاء قبل عبورها",en:"Front eligibility gate: EU 2017/625 listed establishment required before any later item"},
@@ -1116,12 +1116,16 @@
     if(listings.length){retail='<div style="overflow-x:auto"><table class="ladder"><thead><tr><th>'+esc(t("colBrand"))+'</th><th>'+esc(t("colPrice"))+'</th><th>'+esc(t("storeL"))+'</th></tr></thead><tbody>'+
       listings.slice(0,10).map(function(p){p=p||{};return '<tr><td>'+esc(String(p.title||"—").slice(0,60))+'</td><td class="num">'+(p.price!=null?esc(String(p.price))+(p.currency?' '+esc(p.currency):''):gapT())+'</td><td>'+esc(p.store||"—")+'</td></tr>';}).join("")+'</tbody></table></div>'+(rpF&&srcLine(rpF)?'<div class="prov">'+esc(srcLine(rpF))+'</div>':'');}
     else retail='<div class="callout warn">'+esc(t("needDeepen"))+'</div>';
+    // نقاطُ أسعارٍ مُستخلَصة (كلود) — أرقامٌ مذكورةٌ صراحةً، تتصدّر الروابط.
+    var ppF=rFind(ag,"retail_price_points"),pts=(ppF&&ppF.value)||[];
+    var ptsHtml=pts.length?'<div class="ins-list">'+pts.slice(0,8).map(function(p){p=p||{};var lbl=esc(String(p.price))+' '+esc(p.currency||"")+(p.unit?'/'+esc(p.unit):'');return '<div class="ins"><div class="ins-p num">'+lbl+'</div>'+(p.url?'<div class="ins-e"><a href="'+esc(p.url)+'" target="_blank" rel="noopener noreferrer">'+esc(t("cultureSources"))+'</a></div>':'')+'</div>';}).join("")+'</div>'+(ppF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start;margin-top:8px">'+esc(ppF.note)+'</div>':''):'';
     var rfF=rFind(ag,"retail_references"),refs=(rfF&&rfF.value)||[];
     var refsHtml=refs.length?'<ul class="list">'+refs.slice(0,8).map(function(x){x=x||{};var ttl=esc(String(x.title||x.url||""));return '<li>'+(x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+ttl+'</a>':ttl)+(x.retrieved_at?' <span class="prov" style="display:inline">'+esc(x.retrieved_at)+'</span>':'')+'</li>';}).join("")+'</ul>'+
-      (rfF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(rfF.note)+'</div>':''):'<div class="callout">'+esc(t("notObserved"))+'</div>';
+      (rfF.note?'<div class="prov" style="font-family:var(--ar);direction:rtl;text-align:start">'+esc(rfF.note)+'</div>':''):(pts.length?'':'<div class="callout">'+esc(t("notObserved"))+'</div>');
     return scrShell("nav5",researchBanner(m)+
       '<section class="card panel"><div class="pipe-head"><h3>'+esc(t("borderLayer"))+'</h3>'+agentChip(ag)+'</div>'+cards+gapsBlock(ag)+'</section>'+
       '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("retailLayer"))+'</h3>'+retail+'</section>'+
+      (pts.length?'<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("pricePointsL"))+'</h3>'+ptsHtml+'</section>':'')+
       '<section class="card panel" style="margin-top:var(--s4)"><h3>'+esc(t("retailRefs"))+'</h3>'+refsHtml+'</section>');
   }
   // ٦) الاشتراطات — القائمة + بوابة الأهلية + التعريفة

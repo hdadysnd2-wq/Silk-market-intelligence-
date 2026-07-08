@@ -193,6 +193,139 @@ def consumer_culture(product: str, market: str, headlines: list) -> dict | None:
             "grounded": True, "source": "Web Search → Claude extraction"}
 
 
+def _ref_lines(references: list) -> list[dict]:
+    """مراجعُ الويب نصًّا مرقّمًا — normalize web references to {title, snippet, url}."""
+    out: list[dict] = []
+    for r in references or []:
+        val = getattr(r, "value", r)
+        if not isinstance(val, dict):
+            continue
+        title = str(val.get("title") or "").strip()
+        if not title:
+            continue
+        out.append({"title": title, "snippet": str(val.get("snippet") or ""),
+                    "url": str(val.get("url") or val.get("link") or "")})
+    return out
+
+
+def extract_companies(references: list, product: str, market: str,
+                      role: str) -> list[dict] | None:
+    """يستخلص الوكيلُ أسماءَ الشركات من عناوين الويب — Layer-3 extraction, NOT links.
+
+    بلاغ المالك «ترسل روابط = أنت قوقل»: بدل سرد روابطِ Serper خامًا، تقرأ الطبقةُ ٣
+    العناوينَ وتستخرج أسماءَ الشركاتِ التي يبدو أنها **{role}** فعليٌّ لهذا المنتج في
+    هذا السوق — وتستبعد الأدلّةَ والمجمّعات (Lusha، go4WorldBusiness، tradekey، PDF،
+    منشورات تواصل) لأنها ليست شركاتٍ بذاتها. لا اختلاق: الاسمُ يجب أن يَرِدَ في العنوان،
+    وإن لم يوجد اسمٌ واضح يُترَك. تبقى غيرَ موثَّقة (تُؤكَّد عبر السجلّات الجمركية).
+
+    يعيد [{name, note, url}] أو None (بلا مفتاح / بلا مراجع / فشل).
+    """
+    if not available():
+        return None
+    refs = _ref_lines(references)
+    if not refs:
+        return None
+    numbered = "\n".join(
+        f"{i}. {r['title']}" + (f" — {r['snippet']}" if r['snippet'] else "")
+        for i, r in enumerate(refs[:15], 1))
+    user = (
+        f"المنتج: {_isolate(str(product))}. السوق: {_isolate(str(market))}. "
+        f"الدور المطلوب: {_isolate(str(role))}.\n"
+        "عناوينُ نتائجِ بحثٍ خام (قد تكون أدلّةً/مجمّعات/إعلانات — استند إليها فقط):\n"
+        + _isolate(numbered) + "\n\n"
+        f"استخرِج أسماءَ **الشركاتِ المحدَّدة** التي يبدو أنها {role} لهذا المنتج في "
+        "هذا السوق. استبعِد: مواقعَ الأدلّة والمجمّعات (Lusha، go4WorldBusiness، "
+        "tradekey، trademo، dnb…)، ملفّاتِ PDF، المقالاتِ العامة، ومنشوراتِ التواصل "
+        "ما لم تُسمِّ شركةً بعينها. الاسمُ يجب أن يَرِدَ في العنوان — لا تخترع. لكلِّ "
+        "شركةٍ اذكر رقمَ العنوان الذي استُخرجت منه. "
+        'أعِد JSON فقط: {"companies":[{"name":"...", "evidence":N}], "note":"..."}. '
+        "قائمةٌ فارغةٌ إن لم يوجد اسمُ شركةٍ حقيقي.")
+    raw = _call(_PRINCIPLE, user, max_tokens=600, model=_FAST_MODEL, timeout=15)
+    if not raw:
+        return None
+    try:
+        start, end = raw.find("{"), raw.rfind("}")
+        obj = json.loads(raw[start:end + 1]) if start >= 0 else {}
+    except Exception:  # noqa: BLE001 — رد غير-JSON = لا استخلاص، لا اختلاق
+        return None
+    items = obj.get("companies")
+    if not isinstance(items, list):
+        return None
+    out: list[dict] = []
+    for it in items[:10]:
+        if not isinstance(it, dict):
+            continue
+        name = str(it.get("name") or "").strip()
+        if not name:
+            continue
+        url = ""
+        try:
+            j = int(it.get("evidence")) - 1
+            if 0 <= j < len(refs):
+                url = refs[j]["url"]
+        except (TypeError, ValueError):
+            url = ""
+        out.append({"name": name, "url": url,
+                    "note": "مُستخلَص من عناوين الويب (كلود) — غير موثَّق، أكّده"})
+    return out or None
+
+
+def extract_prices(references: list, product: str, market: str) -> list[dict] | None:
+    """يستخلص الوكيلُ نقاطَ الأسعار المصرَّح بها في العناوين — explicit prices only.
+
+    بلاغ المالك «ترسل روابط»: بدل سردِ روابطِ الأسعار خامًا، يستخرج كلود الأسعارَ
+    **المذكورةَ صراحةً** في العنوان/المقتطف (مثل «كيلو الليمون يقترب من الـ4 دنانير»)
+    — رقمٌ وعملةٌ ووحدة، مع دليله. لا استخراجَ ضمنيًّا ولا اختلاق: إن لم يُذكر رقمٌ
+    صريحٌ يُترَك السطر. يبقى مؤشِّرًا (لا سعرَ رفٍّ مؤكَّد؛ ذاك في الطبقة المدفوعة).
+
+    يعيد [{price, currency, unit, evidence, url}] أو None.
+    """
+    if not available():
+        return None
+    refs = _ref_lines(references)
+    if not refs:
+        return None
+    numbered = "\n".join(
+        f"{i}. {r['title']}" + (f" — {r['snippet']}" if r['snippet'] else "")
+        for i, r in enumerate(refs[:15], 1))
+    user = (
+        f"المنتج: {_isolate(str(product))}. السوق: {_isolate(str(market))}.\n"
+        "عناوين/مقتطفاتُ بحثٍ خام (قد تحوي أسعارًا مذكورة):\n"
+        + _isolate(numbered) + "\n\n"
+        "استخرِج **الأسعارَ المذكورةَ صراحةً فقط** لهذا المنتج في هذا السوق: الرقمُ "
+        "والعملةُ والوحدةُ (كجم/قطعة…) كما وردت. لا تستنتج سعرًا غيرَ مذكور، ولا "
+        "تُحوِّل عملاتٍ، ولا تخترع. لكلِّ سعرٍ اذكر رقمَ العنوان الذي ورد فيه. "
+        'أعِد JSON فقط: {"prices":[{"price":4,"currency":"JOD","unit":"kg",'
+        '"evidence":N}], "note":"حدود ما استُخرج"}. قائمةٌ فارغةٌ إن لم يُذكر رقمٌ صريح.')
+    raw = _call(_PRINCIPLE, user, max_tokens=500, model=_FAST_MODEL, timeout=15)
+    if not raw:
+        return None
+    try:
+        start, end = raw.find("{"), raw.rfind("}")
+        obj = json.loads(raw[start:end + 1]) if start >= 0 else {}
+    except Exception:  # noqa: BLE001
+        return None
+    items = obj.get("prices")
+    if not isinstance(items, list):
+        return None
+    out: list[dict] = []
+    for it in items[:10]:
+        if not isinstance(it, dict) or it.get("price") is None:
+            continue
+        url = ""
+        try:
+            j = int(it.get("evidence")) - 1
+            if 0 <= j < len(refs):
+                url = refs[j]["url"]
+        except (TypeError, ValueError):
+            url = ""
+        out.append({"price": it.get("price"),
+                    "currency": str(it.get("currency") or ""),
+                    "unit": str(it.get("unit") or ""), "url": url,
+                    "note": "مذكورٌ في عنوان ويب (كلود) — مؤشِّر لا سعرَ رفٍّ مؤكَّد"})
+    return out or None
+
+
 def ai_report(result: dict) -> str | None:
     """تقرير تصدير مبدئي — a written market-entry report over the full analysis.
 

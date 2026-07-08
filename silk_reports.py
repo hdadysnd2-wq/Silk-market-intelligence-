@@ -158,6 +158,9 @@ def _entry_text(e: object) -> str:
         bits.append(f"عبر {e['via']}")
     if e.get("retrieved_at"):
         bits.append(f"سُحب: {e['retrieved_at']}")
+    # كياناتٌ مُستخلَصة (كلود) تحمل ملاحظةَ «غير موثَّق، أكّده» — تُظهَر لا تُخفى.
+    if not is_ref and e.get("note") and "مُستخلَص" in str(e.get("note")):
+        bits.append(str(e["note"]))
     return " — ".join(bits)
 
 
@@ -381,14 +384,25 @@ def _docx_pricing_layers(doc, m: dict) -> None:
         gap = next((g for g in (ag.get("gaps") or []) if "retail_prices" in g),
                    "retail_prices: غير مرصود — فجوة معلنة")
         doc.add_paragraph(gap, style="List Bullet")
+    # نقاطُ الأسعار المُستخلَصة (كلود) — أرقامٌ مذكورةٌ صراحةً، لا روابط.
+    points = (_rfind(ag, "retail_price_points") or {}).get("value") or []
+    if points:
+        doc.add_paragraph("أسعار مُستخلَصة (مذكورة صراحةً في عناوين الويب — مؤشِّر "
+                          "لا سعرَ رفٍّ مؤكَّد):")
+        for p in points[:8]:
+            p = p or {}
+            doc.add_paragraph(
+                f"{p.get('price')} {p.get('currency')}/{p.get('unit')}".rstrip("/")
+                + (f" — {p.get('url')}" if p.get("url") else ""),
+                style="List Bullet")
     refs = (_rfind(ag, "retail_references") or {}).get("value") or []
     if refs:
-        doc.add_paragraph("مراجع الأسعار (للمراجعة اليدوية — لا استخراج أرقام آلي):")
-        for ref in refs[:6]:
+        doc.add_paragraph("مصادر الأسعار (للاستشهاد):")
+        for ref in refs[:3]:
             doc.add_paragraph(f"{(ref or {}).get('title')} — {(ref or {}).get('url')}"
                               f" — سُحب: {(ref or {}).get('retrieved_at')}",
                               style="List Bullet")
-    else:
+    elif not points:
         doc.add_paragraph("مراجع الأسعار: غير مرصودة")
 
 
@@ -876,14 +890,22 @@ def render_markdown(view: dict) -> str:
                             if "retail_prices" in g),
                            "retail_prices: غير مرصود — فجوة معلنة")
                 L.append(f"- {gap}")
+        points = (_rfind(pr, "retail_price_points") or {}).get("value") or []
+        if points:
+            L += ["", "**أسعار مُستخلَصة (مذكورة صراحةً في عناوين الويب — مؤشِّر لا "
+                      "سعرَ رفٍّ مؤكَّد):**"]
+            for p in points[:8]:
+                p = p or {}
+                L.append(f"- {p.get('price')} {p.get('currency')}/{p.get('unit')}"
+                         .rstrip("/")
+                         + (f" — {p.get('url')}" if p.get("url") else ""))
         refs = (_rfind(pr, "retail_references") or {}).get("value") or []
         if refs:
-            L += ["", "**مراجع الأسعار (للمراجعة اليدوية — لا استخراج أرقام "
-                      "آلي):**"]
-            for ref in refs[:6]:
+            L += ["", "**مصادر الأسعار (للاستشهاد):**"]
+            for ref in refs[:3]:
                 L.append(f"- {(ref or {}).get('title')} — {(ref or {}).get('url')}"
                          f" — سُحب: {(ref or {}).get('retrieved_at')}")
-        else:
+        elif not points:
             L.append("- مراجع الأسعار: غير مرصودة")
         L.append("")
 

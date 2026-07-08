@@ -5757,13 +5757,13 @@
   },
   "analysis_id": 6,
   "view": {
-    "test_run": false,
+    "test_run": true,
     "header": {
       "product": "تمور",
       "hs_code": "080410",
       "origin": "SAU",
       "target_market": "China",
-      "date": "2026-07-07",
+      "date": "2026-07-08",
       "coverage_pct": 64.0
     },
     "product": "تمور",
@@ -5771,6 +5771,8 @@
     "hs_confidence": 1.0,
     "year": 2023,
     "preliminary": true,
+    "data_year": 2023,
+    "year_fell_back": false,
     "classified": true,
     "decision": {
       "verdict": "CONDITIONAL-GO",

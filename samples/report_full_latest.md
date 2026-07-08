@@ -8,7 +8,7 @@
 | رمز HS | 080410 (ثقة التصنيف 1.0) |
 | المنشأ | السعودية (SAU) |
 | السوق المستهدف | China |
-| التاريخ | 2026-07-06 |
+| التاريخ | 2026-07-08 |
 | سنة البيانات | 2023 |
 | تغطية البيانات الإجمالية | 64.0% |
 
@@ -104,7 +104,7 @@
 بيانات غير كافية لقسم «الأسعار» (0/1 حقائق سوقية) — المصادر المُحاوَلة: لا مصادر مُحاوَلة
 - فجوة معلنة: retail_prices: LocalPriceAgent: paid agent outside /deepen — skipped (structural guard, no call attempted)
 
-**مراجع الأسعار (للمراجعة اليدوية — لا استخراج أرقام آلي):**
+**مصادر الأسعار (للاستشهاد):**
 - تمور retail price in China — تقرير سوق 2024 — https://example.org/a — سُحب: 2026-07-06
 - دليل قنوات تمور retail price in China — https://example.org/b — سُحب: 2026-07-06
 - مستوردون: تمور retail price in China — https://example.org/c — سُحب: 2026-07-06
@@ -184,19 +184,22 @@
 
 ## ملحق: أثر المصادر (المحاولات والإسهام)
 
-- Web Search (Serper): أسهم 39 من 39 محاولة
-- Silk L1 requirements reference (official portals / EUR-Lex): أسهم 16 من 17 محاولة
+- Web Search (Serper): أسهم 84 من 84 محاولة
+- Silk L1 requirements reference (official portals / EUR-Lex): أسهم 25 من 26 محاولة
   - فشل مُسجَّل: سوق CHN (موثّق جزئياً) غير مغطى بالمرجع الثابت بعد — تحقق محلياً (verify locally)
-- Google Maps: أسهم 6 من 6 محاولة
-- World Bank: أسهم 4 من 50 محاولة
-  - فشل مُسجَّل: no income data for CHN 2023
-  - فشل مُسجَّل: no income data for ARE 2023
-  - فشل مُسجَّل: الاستقرار السياسي (WGI) — PV.EST fetch failed for ARE: hermetic: live comtrade off
-- UN Comtrade: أسهم 3 من 114 محاولة
+- Google Maps: أسهم 24 من 24 محاولة
+- UN Comtrade: أسهم 11 من 122 محاولة
   - فشل مُسجَّل: no import total HS080410 -> 784 2023
   - فشل مُسجَّل: no competitor data
   - فشل مُسجَّل: no competitor data
-- Google Trends: أسهم 3 من 3 محاولة
+- World Bank: أسهم 9 من 55 محاولة
+  - فشل مُسجَّل: no income data for CHN 2023
+  - فشل مُسجَّل: no income data for ARE 2023
+  - فشل مُسجَّل: الاستقرار السياسي (WGI) — PV.EST fetch failed for ARE: hermetic: live comtrade off
+- Google Trends: أسهم 6 من 6 محاولة
+- Pew Research Center (لقطة ساكنة مقرّبة): أسهم 6 من 6 محاولة
+- UN Comtrade (مخزن الحقائق): أسهم 5 من 5 محاولة
+- World Bank (لقطة مضمّنة): أسهم 2 من 2 محاولة
 - World Bank WITS: أسهم 0 من 3 محاولة
   - فشل مُسجَّل: WITS unavailable: OSError for HS080410 SAU->CHN 2023: hermetic: WITS not doubled — فجوة معلنة
   - فشل مُسجَّل: WITS unavailable: OSError for HS080410 SAU->ARE 2023: hermetic: WITS not doubled — فجوة معلنة
