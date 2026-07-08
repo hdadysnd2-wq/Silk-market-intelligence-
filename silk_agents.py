@@ -110,6 +110,16 @@ class TradeFlowAgent(BaseAgent):
         findings: list[DataPoint] = []
         for flow, label in (("M", "imports"), ("X", "exports")):
             recs = comtrade_trade(hs, market, year, flow=flow, partner=0)
+            # 1b: None = تعذّر الجلب (429/شبكة — أعد المحاولة)؛ [] = ردّ ناجح
+            # بلا سجلات (غياب حقيقي). كانا يُعرضان معاً «لا بيانات» فيوهم
+            # المستخدم أن السوق فارغ بينما المنصة هي التي عجزت عن الجلب.
+            if recs is None:
+                findings.append(DataPoint(
+                    None, "UN Comtrade", 0.0,
+                    f"HS{hs} {label} سوق {market} {year}: تعذّر الجلب "
+                    "(حد معدل/شبكة) — أعد المحاولة",
+                    status="fetch_failed"))
+                continue
             # سجل بلا primaryValue رقمية لا يُجمع كصفر — لا اختلاق (المبدأ التأسيسي).
             # Records lacking a numeric primaryValue are dropped, never summed as 0.
             vals = [v for v in (primary_value(r) for r in recs) if v is not None]
@@ -117,7 +127,9 @@ class TradeFlowAgent(BaseAgent):
             if not recs:
                 findings.append(DataPoint(
                     None, "UN Comtrade", 0.0,
-                    f"HS{hs} {label} for market {market} {year}: no data / fetch failed"))
+                    f"HS{hs} {label} for market {market} {year}: "
+                    "لا سجل في كومتريد لهذه السنة",
+                    status="no_record"))
             elif not vals:
                 findings.append(DataPoint(
                     None, "UN Comtrade", 0.0,

@@ -34,7 +34,7 @@ def _year_total(hs_code: str, market_m49: object, year: int,
     صفرٌ مختلق هنا يولّد نسبة نمو مختلقة في الحساب التالي. لا سجلات أو لا قيم
     رقمية => `None` (فجوة معلنة، لا صفر). Never sums a missing record as 0.
     """
-    recs = comtrade_trade(hs_code, market_m49, year, flow=flow, partner=0)
+    recs = comtrade_trade(hs_code, market_m49, year, flow=flow, partner=0) or []
     vals = [v for v in (primary_value(r) for r in recs) if v is not None]
     return sum(vals) if vals else None
 

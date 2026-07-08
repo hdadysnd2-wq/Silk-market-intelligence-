@@ -426,7 +426,7 @@ function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class
     +'<h2>'+esc(brief||"—")+'</h2><p>'+esc((v.brief||[])[1]||"")+'</p></div>'
     +'<div class="conf"><div class="lvl">'+esc((brief.match(/ثقة ([^)]*)\(/)||[])[1]||"الثقة")+'</div><div class="cap">تغطية البيانات '+(h.coverage_pct!=null?h.coverage_pct+"%":"—")+'</div></div></div>';
   html+='<div class="kpis">'
-    +kpi("حجم السوق",money(ms.value),ms.value!=null?"s-good":"s-mut",ms.value!=null?"مرصود":"غير متوفر",ms.source)
+    +kpi("حجم السوق",ms.value!=null?money(ms.value):(ms.status==="fetch_failed"?"تعذّر الجلب":"—"),ms.value!=null?"s-good":(ms.status==="fetch_failed"?"s-warn":"s-mut"),ms.value!=null?"مرصود":(ms.status==="fetch_failed"?"أعد المحاولة":"غير متوفر"),ms.source)
     +kpi("النمو",growth,tr.growth_pct!=null?(tr.growth_pct>=0?"s-good":"s-warn"):"s-mut",tr.cagr_pct!=null?("نمو مركّب "+tr.cagr_pct+"%"):"—",tr.source||"UN Comtrade")
     +kpi("حصة السعودية",sp.value!=null?sp.value+"%":"—",sp.value!=null?(sp.value>=20?"s-good":"s-warn"):"s-mut",sp.value!=null?(sp.value>=20?"قوية":"قابلة للنمو"):"غير متوفر",sp.source)
     +kpi("النقاط",m.score!=null?Math.round(m.score*100)+"/100":"—","s-good","الترتيب "+((v.markets||[]).indexOf(m)+1),"محرّك سِلك")+'</div>';

@@ -777,7 +777,8 @@ class PricingAgent(ResearchAgent):
         uv_src = _src("UN Comtrade (مخزن الحقائق)")
         if uv is None:
             from silk_data_layer import comtrade_trade, primary_value
-            recs = comtrade_trade(hs, task.get("m49"), year, flow="M", partner=0)
+            recs = comtrade_trade(hs, task.get("m49"), year,
+                                  flow="M", partner=0) or []
             rec = next((r for r in recs
                         if primary_value(r) and (r.get("netWgt") or 0) > 0), None)
             if rec:

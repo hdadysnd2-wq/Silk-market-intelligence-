@@ -35,7 +35,8 @@ def mirror_saudi_export(hs_code: str, target_m49: object, target_iso3: str,
     جديد — Comtrade نفسه، منظور إبلاغ مختلف فقط؛ فشل/غياب => DataPoint(None)
     موسوم (المبدأ التأسيسي: لا اختلاق).
     """
-    recs = comtrade_trade(hs_code, _SAUDI_M49, year, flow="X", partner=target_m49)
+    recs = comtrade_trade(hs_code, _SAUDI_M49, year, flow="X",
+                          partner=target_m49) or []
     pairs = [(primary_value(r), r.get("netWgt")) for r in recs]
     pairs = [(v, q) for v, q in pairs if v is not None]
     src = "UN Comtrade (تقرير سعودي مباشر — مرآة)"
@@ -88,6 +89,12 @@ def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
     total. Empty/failed -> {"total_usd": None, "competitors": []}. Never fabricates.
     """
     recs = comtrade_trade(hs_code, market_m49, year, flow="M", partner="all")
+    if recs is None:
+        # 1b: تعذّر الجلب (429/شبكة) — يميَّز عن الغياب الحقيقي حتى لا يُعرض
+        # سوق موجودة بياناته فعلاً كأنه فارغ (بلاغ سنغافورة 17.4M$).
+        log.warning("market_imports: fetch FAILED (%s -> market %s, %s)",
+                    hs_code, market_m49, year)
+        return {"total_usd": None, "competitors": [], "fetch_failed": True}
     if not recs:
         log.warning("market_imports: no data (%s -> market %s, %s)",
                     hs_code, market_m49, year)

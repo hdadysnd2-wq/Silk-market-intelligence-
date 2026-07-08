@@ -831,7 +831,11 @@ def render_docx(view: dict, path: str) -> str:
         doc.add_heading(f"٩.{i} {m.get('country')}", level=2)
         for c in m.get("components_detail") or []:
             from silk_narrative import internal_ar
-            doc.add_paragraph(f"{internal_ar(c['name'])}: {_fmt(c['value'])}")
+            # 1b: تعذّر الجلب ≠ غياب السجل — «أعد المحاولة» بدل «—» الموهمة.
+            shown = ("تعذّر الجلب — أعد المحاولة"
+                     if c.get("status") == "fetch_failed" and c.get("value")
+                     is None else _fmt(c["value"]))
+            doc.add_paragraph(f"{internal_ar(c['name'])}: {shown}")
             src_line = (f"المصدر: {c.get('source') or '—'}"
                         + (f" | سُحب: {c['retrieved_at']}"
                            if c.get("retrieved_at") else "")
