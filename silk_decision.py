@@ -265,8 +265,18 @@ def decide(bundle: dict, weights_option: str | None = None) -> dict:
         why = f"score {score} < {_NOGO}"
     else:
         verdict = "CONDITIONAL-GO"
-        why = (f"score {score} في النطاق الشرطي أو الثقة {confidence} دون "
-               f"{_MIN_CONF_GO} أو شروط مفتوحة ({len(conditions)})")
+        # أسباب فعلية فقط (إصلاح P0-1): القالب القديم "X أو Y أو Z" كان يطبع
+        # الأسباب الثلاثة دوماً — فظهر «الثقة 0.91 دون 0.6» وهي ليست دونها،
+        # وقرأه المالك تناقضاً في أرقام الثقة بين المشتقات. الآن تُسرد
+        # الأسباب المتحقّقة حصراً.
+        reasons = []
+        if score < _GO:
+            reasons.append(f"score {score} في النطاق الشرطي")
+        if confidence < _MIN_CONF_GO:
+            reasons.append(f"الثقة {confidence} دون {_MIN_CONF_GO}")
+        if conditions:
+            reasons.append(f"شروط مفتوحة ({len(conditions)})")
+        why = " و".join(reasons)
 
     first_steps = _first_steps(verdict, pillars, conditions, risks)
     return {

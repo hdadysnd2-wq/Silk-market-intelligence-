@@ -54,6 +54,21 @@ COUNTRIES: list[dict] = [
     {"iso3": "USA", "m49": "840"}, {"iso3": "CAN", "m49": "124"},
 ]
 
+# ISO3 → ISO2 لأسواق سِلك — كان غائباً من طبقة بايثون كلياً (موجوداً في JS
+# الواجهة فقط)، فكل صف مرتَّب خرج بلا iso2: وكيل Trends قاس الاهتمام
+# **عالمياً** بدل السوق المستهدف (geo=None تراجع صامت)، وبحث التسوّق في
+# طبقة التسعير فقد نطاق الدولة (gl=None). إصلاح P0-3 — تجويع مفاتيح صامت.
+ISO2: dict[str, str] = {
+    "SAU": "SA", "ARE": "AE", "QAT": "QA", "KWT": "KW", "OMN": "OM",
+    "BHR": "BH", "JOR": "JO", "LBN": "LB", "EGY": "EG", "MAR": "MA",
+    "TUN": "TN", "DZA": "DZ", "IRQ": "IQ", "TUR": "TR", "YEM": "YE",
+    "ZAF": "ZA", "NGA": "NG", "KEN": "KE", "ETH": "ET", "GHA": "GH",
+    "IND": "IN", "PAK": "PK", "BGD": "BD", "IDN": "ID", "MYS": "MY",
+    "SGP": "SG", "THA": "TH", "VNM": "VN", "CHN": "CN", "JPN": "JP",
+    "KOR": "KR", "GBR": "GB", "DEU": "DE", "FRA": "FR", "ITA": "IT",
+    "ESP": "ES", "NLD": "NL", "USA": "US", "CAN": "CA",
+}
+
 # أوزان المكوّنات — tunable component weights (sum ~1.0). Audit/tune here.
 WEIGHTS: dict[str, float] = {
     "market_size": 0.40,      # how much the market imports of this HS
@@ -202,7 +217,11 @@ def _gather_row(hs_code: str, c: dict, year: int) -> dict:
         "competition": _competition_component(comps),
     }
     return {
-        "iso3": iso3, "m49": m49, "components": comp_dps,
+        "iso3": iso3, "m49": m49,
+        # iso2 من خريطة سِلك أولاً ثم ما مرّره المستخدم — يغذي Trends (geo)
+        # وبحث التسوّق (gl) اللذين كانا يتراجعان لعالمي بصمت (P0-3).
+        "iso2": ISO2.get(iso3) or c.get("iso2"),
+        "components": comp_dps,
         "income_ppp": inc.value,                 # يُعاد استعمال نفس الجلب
         "population": pop.value,
         "year_used": eff_year, "year_fell_back": fell_back,
@@ -310,6 +329,7 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
         out.append({
             "country": _name(iso3, row["m49"]),
             "iso3": iso3, "m49": row["m49"],
+            "iso2": row.get("iso2"),   # يغذي Trends geo وبحث التسوّق gl (P0-3)
             "total_score": total, "confidence": confidence,
             "components": row["components"],
             "income_ppp": row["income_ppp"],
