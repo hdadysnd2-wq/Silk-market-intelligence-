@@ -155,19 +155,24 @@ def upsert_trade_flows(rows: list[dict]) -> int:
 
 
 def market_imports_from_store(hs6: str, reporter_iso3: str, year: int) -> dict:
-    """استيراد سوق من المخزن — {total_usd, partners:[{iso3,value_usd}]}; لا اختلاق:
-    غياب الصفوف = total_usd None وقائمة فارغة."""
+    """استيراد سوق من المخزن — {total_usd, partners:[{iso3,value_usd,
+    retrieved_at}], retrieved_at}; لا اختلاق: غياب الصفوف = total_usd None
+    وقائمة فارغة. `retrieved_at` هو تاريخ **الجلب الأصلي** (أحدث صف) — يُحمل
+    مع القيمة كي لا تُعرض قراءة من المخزن كأنها جلب حي اليوم (قاعدة الإسناد).
+    Carries the ORIGINAL fetch date so store reads are never presented as live.
+    """
     with connect() as conn:
         rows = conn.execute(_q(
-            "SELECT partner_iso3, value_usd FROM trade_flows "
+            "SELECT partner_iso3, value_usd, retrieved_at FROM trade_flows "
             "WHERE hs6=? AND reporter_iso3=? AND year=? AND flow='M' "
             "ORDER BY value_usd DESC"), (hs6, reporter_iso3, int(year))).fetchall()
-    partners = [{"iso3": r[0], "value_usd": r[1]} for r in rows
-                if r[0] != "WLD" and r[1] is not None]
+    partners = [{"iso3": r[0], "value_usd": r[1], "retrieved_at": r[2]}
+                for r in rows if r[0] != "WLD" and r[1] is not None]
     world = [r[1] for r in rows if r[0] == "WLD" and r[1] is not None]
     total = world[0] if world else (sum(p["value_usd"] for p in partners)
                                     if partners else None)
-    return {"total_usd": total, "partners": partners}
+    fetched = max((r[2] for r in rows if r[2]), default=None)
+    return {"total_usd": total, "partners": partners, "retrieved_at": fetched}
 
 
 # ── التحليلات والمخرجات · analyses & outputs ─────────────────────────────────
