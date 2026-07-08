@@ -52,7 +52,21 @@
 | `VOLZA_API_KEY`, `EXPLEE_API_KEY`, `ANTHROPIC_API_KEY` | اختياري (مدفوع) | طبقات `/deepen` والحكم الذكي — **لا تضبطها دون `SILK_API_KEY`** |
 | `CORS_ORIGINS` | اختياري | فقط إن نُشرت الواجهة على دومين منفصل (Netlify) |
 
-## ٤ · التحقق — Verify
+## ٤ · التحديث الدوري — Scheduled refresh (اختياري · optional)
+
+أضف متغيّرًا واحدًا لتفعيل تحديث المخزن الدوري داخل الخدمة نفسها:
+*One variable turns on the periodic store refresh, in-process:*
+
+| المتغير | القيمة | الأثر |
+|---|---|---|
+| `SILK_REFRESH_HOURS` | `24` | كل ٢٤ ساعة: مؤشرات البنك الدولي جماعيًا + تسخين مسبق لتدفقات Comtrade (رموز HS المطلوبة مؤخرًا × أسواق الأولوية، السنة المغلقة الأخيرة) |
+
+- التسخين يعمل بميزانية Comtrade اليومية الصلبة نفسها (`COMTRADE_DAILY_BUDGET`) مع backoff يحترم `Retry-After`، ويترك احتياطيًا للطلبات الحية (`SILK_REFRESH_BUDGET_RESERVE`، افتراضي 150) — لا اندفاع على المصادر أبدًا.
+- التحليل الحي التالي لنفس `hs+سوق+سنة` يُخدم من المخزن بصفر نداء — وهذا يعالج مباشرة مشكلة التقارير الفارغة بسبب حدّ المعدل.
+- **لماذا ليس خدمة cron منفصلة؟** قرص Railway الدائم يُركَّب على **خدمة واحدة فقط** — خدمة منفصلة لا ترى `/data` نفسه فتملأ مخزنًا لا يقرأه أحد. لذا يعمل التحديث خيطًا خلفيًا داخل خدمة الويب. (للتشغيل اليدوي: `railway ssh` ثم `python3 silk_collectors.py`.)
+- *Why not a separate cron service? A Railway volume mounts to ONE service; a separate job could not share `/data`. The refresh therefore runs as a daemon thread inside the web service. Manual run: `railway ssh` → `python3 silk_collectors.py`.*
+
+## ٥ · التحقق — Verify
 
 ```
 https://<domain>/health   → {"status":"ok"}   (+ تحذير إن وُجد مفتاح مدفوع بلا SILK_API_KEY)

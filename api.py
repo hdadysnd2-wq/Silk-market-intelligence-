@@ -143,6 +143,15 @@ def create_app():
     except Exception as _e:  # noqa: BLE001
         log.warning("storage bootstrap failed (continuing): %s", _e)
 
+    # التحديث الدوري داخل العملية (SILK_REFRESH_HOURS) — قرص Railway يُركَّب
+    # على خدمة واحدة، فالمُجدول خيط خلفي هنا لا خدمة cron منفصلة. معطّل بلا
+    # المتغير — الاختبارات والتطوير لا تتأثر. In-process scheduled refresh.
+    try:
+        import silk_collectors
+        silk_collectors.start_scheduler()
+    except Exception as _e:  # noqa: BLE001
+        log.warning("refresh scheduler not started: %s", _e)
+
     # CORS (الموجة ٠): الافتراضي صار **نفس الأصل فقط** (الواجهة تُقدَّم من نفس
     # الخدمة فلا تحتاج CORS). للواجهات المنفصلة (Netlify) اضبط CORS_ORIGINS
     # بقائمة أصول مفصولة بفواصل؛ "*" لم يعد افتراضياً ويتطلب ضبطاً صريحاً.
