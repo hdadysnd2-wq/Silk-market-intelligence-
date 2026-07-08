@@ -246,6 +246,18 @@ def _section_dps(row: dict, sec: str) -> list[dict]:
                         "value": pt.get("value"),
                         "note": f"سنة {pt.get('year')} من خط الاتجاه"})
         _walk_dps(row.get("trends"), dps)      # إشارة Google Trends
+    elif sec == "pricing":
+        for f in _SECTION_FIELDS.get(sec, ()):
+            _walk_dps(row.get(f), dps)
+        # إصلاح مراجعة المالك («هل الوكلاء يعملون؟»): الطبقة الحدودية المجانية
+        # لوكيل pricing (border_unit_value_usd_kg من كومتريد، §4b) كانت تُحسب
+        # فعلاً لكن لا تُقرأ هنا أبداً — فتُعرض «تسعير 0/0» رغم نجاح الوكيل،
+        # بنفس علّة قسم trend المُصلَحة أعلاه (تعليق سطر ٢٢٢). "prices"/
+        # "localprice" وحدهما (طبقة التجزئة المدفوعة) لا يكفيان على المسار
+        # المجاني إذ يبقيان فارغَين بنيوياً خارج /deepen.
+        research = row.get("research") or {}
+        pricing_agent = (research.get("agents") or {}).get("pricing") or {}
+        _walk_dps(pricing_agent.get("findings"), dps)
     else:
         for f in _SECTION_FIELDS.get(sec, ()):
             _walk_dps(row.get(f), dps)

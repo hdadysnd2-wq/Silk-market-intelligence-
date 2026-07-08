@@ -293,3 +293,23 @@ def test_engine_attaches_full_bundle_and_server_policy_enables_research():
             assert client.post("/analyze",
                                json={"product": "تمور"}).status_code == 200
         assert captured.get("with_research") is True
+
+
+def test_pricing_section_coverage_reads_from_research_bundle():
+    """بلاغ المالك («هل الوكلاء يعملون؟»): section_coverage.pricing كانت
+    تعرض 0/0 دوماً على المسار المجاني رغم أن PricingAgent يحسب فعلاً قيمة
+    الوحدة الحدودية من كومتريد (بلا حاجة لمفتاح مدفوع) — لأن silk_render لم
+    يكن يقرأ من حزمة البحث row['research']['agents']['pricing'] لهذا
+    القسم، بل من حقلَي prices/localprice وحدهما (طبقة التجزئة المدفوعة،
+    فارغة بنيوياً خارج /deepen). يقفل هذا الاختبار إصلاح silk_render.py."""
+    import silk_engine
+    import silk_render
+    _seed_store()
+    with _env(SEARCH_API_KEY=None, GOOGLE_MAPS_API_KEY=None):
+        with block_network():
+            res = silk_engine.analyze(
+                "تمور", countries=[{"iso3": "CHN", "m49": "156"}], year=2023,
+                with_research=True)
+    view = silk_render.build_view(res)
+    cov = view["markets"][0]["section_coverage"]["pricing"]
+    assert cov["attempted"] >= 1 and cov["contributed"] >= 1
