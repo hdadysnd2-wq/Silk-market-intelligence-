@@ -117,11 +117,12 @@ def test_ui_renders_retail_hint_warning():
 
 # ── ٢) سنة البيانات الافتراضية محسوبة لا ثابتة ───────────────────────────────
 
-def test_engine_default_year_is_data_realistic_not_too_recent():
-    """بلاغ أناناس→عُمان: today-1 كان حديثاً جداً فرجع Comtrade فارغاً (التجارة
-    السنوية تتأخّر سنة–سنتين). الافتراضي الآن today-2 — أحدث سنة موثوقة."""
+def test_engine_default_year_is_latest_with_declared_fallback():
+    """P5 (طلب المالك: تغطية أحدث سنة): الافتراضي today-1 — التراجع السنوي
+    المعلن (_imports_with_fallback + data_year) يلتقط أحدث سنة منشورة فعلاً
+    سوقاً-بسوق، فطلب سنة حديثة لم يعد يفرّغ التقرير (بلاغ أناناس→عُمان)."""
     import silk_engine
-    assert silk_engine._default_year() == datetime.date.today().year - 2
+    assert silk_engine._default_year() == datetime.date.today().year - 1
     assert silk_engine._default_year() != 2022   # ليس رقماً ثابتاً عالقاً
 
 
@@ -137,8 +138,8 @@ def test_ui_year_dropdown_defaults_computed_from_today():
         os.path.abspath(__file__))), "web", "index.html"),
         encoding="utf-8").read()
     assert "new Date().getFullYear()" in html
-    # الافتراضي today-2 (بيانات تجارة واقعية) لا today-1 الحديث جداً.
-    # الواجهة الجديدة (النموذج الملزم): to = CURY-2 داخل years() — نفس العقد.
-    assert "CURY-2" in html or "CUR_Y-2" in html
+    # P5: الافتراضي today-1 (أحدث سنة) — التراجع المعلن خادمياً يغطي ما لم
+    # يُنشر بعد؛ الواجهة: to = CURY-1 داخل years() — نفس العقد.
+    assert "CURY-1" in html
     # لا قائمة سنوات ثابتة عالقة بعد الآن.
     assert "[2024,2023,2022,2021,2020,2019,2018,2017]" not in html

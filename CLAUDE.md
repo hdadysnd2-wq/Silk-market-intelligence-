@@ -62,7 +62,7 @@ Configured via env vars (`.env.example` documents all of them); unset = open dev
 - `CORS_ORIGINS` → default is same-origin only; wildcard requires explicit opt-in.
 - Prompt injection: every external text reaching Claude goes through `silk_ai_judge._isolate()` (`[RAW_FINDINGS_START/END]` delimiters, with the delimiters themselves sanitized out of the content).
 - `GET /diagnostics` is auth+rate-limit guarded (it fires live probes with the server's keys), and probe error details are secret-redacted (`silk_diagnostics._redact`) before leaving the server.
-- Free-path Claude extras (consumer-culture extraction, entity qualification) are context-gated: blocked when `ANTHROPIC_API_KEY` is set without `SILK_API_KEY`, otherwise one activation is reserved from the same `SILK_PAID_DAILY_CAP` counter per `/analyze`; exhaustion degrades with a declared `ai_extras_note`, never a 429 on the free path (`silk_context.block_ai_extras()` → `silk_ai_judge.available()`).
+- Free-path Claude extras (consumer-culture extraction, entity qualification, and — since P5 — the stage-2 synthesis judge + `ai_report` via `policy["with_ai"]`) are context-gated: blocked when `ANTHROPIC_API_KEY` is set without `SILK_API_KEY`, otherwise one activation is reserved from the same `SILK_PAID_DAILY_CAP` counter per `/analyze`; exhaustion degrades with a declared `ai_extras_note`, never a 429 on the free path (`silk_context.block_ai_extras()` → `silk_ai_judge.available()`).
 
 ## Testing conventions
 

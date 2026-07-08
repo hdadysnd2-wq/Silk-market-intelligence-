@@ -247,6 +247,31 @@ def create_app():
             except Exception:  # noqa: BLE001
                 deps[name] = False
         health = {"status": "ok", "deps": deps}
+        # P5: شفافية المصادر — أي طبقة قوقل/كلود فعّالة الآن ولماذا لا.
+        # وجود/غياب فقط، لا قيم مفاتيح ولا نداءات حية (التحقيق العميق في
+        # /diagnostics المحروس).
+        from silk_websearch_agent import search_key as _sk
+        _claude_key = bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+        if not _claude_key:
+            _claude = "off — ANTHROPIC_API_KEY غير مضبوط"
+        elif _unprotected_paid_keys():
+            _claude = ("blocked — ANTHROPIC_API_KEY بلا SILK_API_KEY؛ "
+                       "اضبط SILK_API_KEY لتفعيل حكم كلود وطبقاته")
+        else:
+            _claude = "on"
+        health["sources"] = {
+            "comtrade": ("key" if os.environ.get("COMTRADE_API_KEY", "").strip()
+                         else "preview — بلا COMTRADE_API_KEY (حدّ معدل منخفض؛ "
+                              "أضِف المفتاح المجاني)"),
+            "world_bank": "on — بلا مفتاح",
+            "google_trends": "on — pytrends بلا مفتاح (حصة قوقل محدودة)",
+            "google_search_serper": ("on" if _sk() else
+                                     "off — SEARCH_API_KEY/SERPER_API_KEY غائب"),
+            "google_maps": ("on" if os.environ.get(
+                "GOOGLE_MAPS_API_KEY", "").strip()
+                else "off — GOOGLE_MAPS_API_KEY غائب"),
+            "claude": _claude,
+        }
         unprotected = _unprotected_paid_keys()
         if unprotected:
             health["warnings"] = [
@@ -401,7 +426,8 @@ def create_app():
             "with_competitors": False, "with_channels": False,
             "with_importers": False, "with_risk": True, "with_research": True,
             "with_dynamics": True,
-            "with_websearch": bool(os.environ.get("SEARCH_API_KEY", "").strip()),
+            "with_websearch": bool(__import__("silk_websearch_agent")
+                                   .search_key()),
             "with_maps": bool(os.environ.get("GOOGLE_MAPS_API_KEY", "").strip()),
         }
 
@@ -440,6 +466,12 @@ def create_app():
         _rate_limit(request)
         policy = _source_policy()
         ai_ok, ai_note = _free_ai_extras_allowed()
+        # P5 (بلاغ المالك: «كلود العادي يتفوق على المنصة»): حكم كلود
+        # (المرحلة ٢ من التوليف) وتقريره يعملان على المسار الرئيسي متى كان
+        # المفتاح مضبوطاً ومحمياً — نفس بوابة H2 ونفس الحجز من السقف؛ لا
+        # مسار حكم موازٍ (التوليف يبقى نقطة الدخول الوحيدة، §9.3).
+        policy["with_ai"] = ai_ok and bool(
+            os.environ.get("ANTHROPIC_API_KEY", "").strip())
         import contextlib
         import silk_context
         ctx = (contextlib.nullcontext() if ai_ok

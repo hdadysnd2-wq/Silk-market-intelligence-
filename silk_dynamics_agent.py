@@ -32,7 +32,8 @@ class DynamicsAgent(BaseAgent):
     def _execute(self, task: dict) -> AgentReport:
         product = str(task.get("product") or "").strip()
         market = str(task.get("market") or task.get("market_name") or "").strip()
-        if not os.environ.get("SEARCH_API_KEY", "").strip():
+        from silk_websearch_agent import search_key
+        if not search_key():
             dp = DataPoint(None, self.SOURCE, 0.0,
                            "يتطلب مفتاح بحث الويب (SEARCH_API_KEY) — "
                            "لم يُحاوَل أي نداء", _today())

@@ -386,7 +386,7 @@ $("#allMarkets").addEventListener("click",function(){$$(".mrow").forEach(functio
 
 /* ── السنوات ── */
 $$(".preset").forEach(function(p){p.addEventListener("click",function(){$$(".preset").forEach(function(x){x.classList.remove("on")});this.classList.add("on");S.span=+this.dataset.span;sync()})});
-function years(){var to=CURY-2,from=to-S.span+1;return[from,to]}
+function years(){var to=CURY-1,from=to-S.span+1;return[from,to]}
 function sync(){var y=years();$("#yearLabel").textContent=y[0]+" – "+y[1];$("#yearSpanLbl").textContent=S.span+" "+(S.span>2?t("yearsWord"):t("yearWord"));
   $("#runBtn").disabled=!S.product||S.busy;
   $("#runSum").innerHTML=S.product?(t("readyFor")+" <b>"+esc(S.product)+"</b> "+t("inM")+" <b>"+esc(S.market?S.market.name:t("allM"))+"</b> "+t("over")+" <b>"+y[0]+"–"+y[1]+"</b>"):t("pickFirst")}

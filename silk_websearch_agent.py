@@ -25,6 +25,17 @@ _SERPER_URL = "https://google.serper.dev/search"
 _TIMEOUT = 30
 
 
+def search_key() -> str:
+    """مفتاح بحث الويب — SEARCH_API_KEY أو الاسم الشائع SERPER_API_KEY.
+
+    P5: مفتاح مضبوط تحت الاسم الشائع (SERPER_API_KEY) كان يُهمَل بصمت
+    فتظلم طبقة قوقل كلها رغم وجود المفتاح — القبول بالاسمين يغلق الفخ.
+    SEARCH_API_KEY يبقى الأعلى سلطة عند وجود الاثنين.
+    """
+    return (os.environ.get("SEARCH_API_KEY", "").strip()
+            or os.environ.get("SERPER_API_KEY", "").strip())
+
+
 def web_search(query: str, num: int = 5) -> list[DataPoint]:
     """بحث ويب — organic web results as DataPoints (consumer/market signals).
 
@@ -45,11 +56,11 @@ def web_search(query: str, num: int = 5) -> list[DataPoint]:
                           f"provider '{provider}' not implemented (TODO); set SEARCH_PROVIDER=serper",
                           _today())]
 
-    key = os.environ.get("SEARCH_API_KEY", "").strip()
+    key = search_key()
     if not key:
         log.warning("SEARCH_API_KEY not set — web search unavailable")
         return [DataPoint(None, "Web Search (Serper)", 0.0,
-                          "requires SEARCH_API_KEY", _today())]
+                          "requires SEARCH_API_KEY (or SERPER_API_KEY)", _today())]
 
     try:
         import requests  # lazy: import works offline/keyless
@@ -125,10 +136,10 @@ def web_search_shopping(query: str, gl: str | None = None,
     if not q:
         return [DataPoint(None, "Web Search (Serper Shopping)", 0.0,
                           "empty query — no search", _today())]
-    key = os.environ.get("SEARCH_API_KEY", "").strip()
+    key = search_key()
     if not key:
         return [DataPoint(None, "Web Search (Serper Shopping)", 0.0,
-                          "requires SEARCH_API_KEY", _today())]
+                          "requires SEARCH_API_KEY (or SERPER_API_KEY)", _today())]
     try:
         import requests  # lazy: import works offline/keyless
         body = {"q": q, "num": int(num)}
