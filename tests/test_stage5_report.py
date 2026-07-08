@@ -102,6 +102,27 @@ def test_docx_includes_decision_and_tam_sections():
     assert "مُقدَّر" in texts
 
 
+def test_exec_summary_is_narrative_and_methodology_scope_sections_exist():
+    """مواصفة تقرير عالمي (بلاغ المالك): الخلاصة سرد بشري لا شروط كودية،
+    ومنهجية البحث ونطاق السوق قسمان ظاهران — من حقول محسوبة فعلاً، لا رقم
+    جديد ولا ادعاء غير مسنود."""
+    pytest.importorskip("docx")
+    _seed_store()
+    from conftest import docx_all_text
+    from silk_render import build_view
+    from silk_reports import render_docx, render_markdown
+    view = build_view(_analyzed())
+    path = render_docx(view, os.path.join(tempfile.mkdtemp(), "r.docx"))
+    texts = docx_all_text(path)
+    assert "منهجية البحث" in texts and "تعريف السوق ونطاقه" in texts
+    assert "التوصية: " in texts                    # سرد لا "القرار: X (ثقة"
+    assert "080410" in texts                        # نطاق السوق يذكر رمز HS الفعلي
+    assert "بحثاً أولياً" in texts                  # الفجوة النوعية معلنة صراحة
+    md = render_markdown(view)
+    assert "## منهجية البحث" in md and "## تعريف السوق ونطاقه" in md
+    assert "التوصية: " in md
+
+
 def test_report_md_endpoint_guarded_and_derived_from_template():
     pytest.importorskip("fastapi"); pytest.importorskip("httpx")
     import importlib
