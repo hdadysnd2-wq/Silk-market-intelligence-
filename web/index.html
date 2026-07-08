@@ -740,6 +740,45 @@
     var hdrs={"Content-Type":"application/json"};if(S.adminKey)hdrs["X-API-Key"]=S.adminKey;
     return fetch(base()+path,{method:"POST",headers:hdrs,body:JSON.stringify(body)}).then(function(r){return r.text().then(function(tx){var d=null;try{d=JSON.parse(tx);}catch(_){}if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?tx:(typeof de==="string"?de:JSON.stringify(de))));}return d;});});
   }
+  // تحميل/فتح ملفات التقرير المحمية — plain <a href> لا يرسل X-API-Key أبداً
+  // (المتصفح لا يرفق ترويسات مخصّصة عند التنقّل)، فكان الرابط يفشل 401 حين
+  // تُفعَّل المصادقة (بلاغ مالك حقيقي: «File wasn't available on site» على
+  // زر تقرير Word). الحل: نجلب الملف بـ fetch يحمل الترويسة، ثم نُنزّله/نعرضه
+  // من blob محلي — لا تسريب مفتاح في الرابط أو سجلات الخادم.
+  function authedFetch(path){
+    var hdrs=S.adminKey?{"X-API-Key":S.adminKey}:{};
+    return fetch(base()+path,{headers:hdrs}).then(function(r){
+      return r.text().then(function(tx){
+        if(!r.ok)throw new Error("HTTP "+r.status+" — "+tx.slice(0,300));
+        return {text:tx,type:r.headers.get("Content-Type")||""};
+      });
+    });
+  }
+  function downloadReport(kind){
+    var id=S.result&&S.result.analysis_id;if(id==null)return;
+    if(kind==="docx"){
+      var hdrs=S.adminKey?{"X-API-Key":S.adminKey}:{};
+      fetch(base()+"/analyses/"+id+"/report.docx",{headers:hdrs}).then(function(r){
+        if(!r.ok)return r.text().then(function(tx){throw new Error("HTTP "+r.status+" — "+tx.slice(0,300));});
+        return r.blob();
+      }).then(function(blob){
+        var url=URL.createObjectURL(blob),a=document.createElement("a");
+        a.href=url;a.download="silk_report_"+id+".docx";document.body.appendChild(a);a.click();a.remove();
+        setTimeout(function(){URL.revokeObjectURL(url);},4000);
+      }).catch(function(e){toast(t("reqFail")+": "+e.message);});
+      return;
+    }
+    var path=kind==="md"?"/analyses/"+id+"/report.md":"/analyses/"+id+"/brief";
+    authedFetch(path).then(function(res){
+      var w=window.open("","_blank");
+      if(!w)return;
+      var pre=w.document.createElement("pre");
+      pre.style.cssText="white-space:pre-wrap;font-family:'IBM Plex Mono',monospace;padding:28px;line-height:1.6;max-width:900px;margin:0 auto";
+      pre.textContent=res.text;
+      w.document.title="silk_"+kind+"_"+id;
+      w.document.body.appendChild(pre);
+    }).catch(function(e){toast(t("reqFail")+": "+e.message);});
+  }
   function runAnalysis(){
     if(!S.product){$("#search").focus();return;}
     S.running=true;S.sentFlags=buildBody(false);applyLang();$("#runBtn").disabled=true;
@@ -842,6 +881,7 @@
     var d=$("#deepBtn");if(d)d.addEventListener("click",runDeepen);
     var j=$("#jsonBtn");if(j)j.addEventListener("click",exportJson);
     var cs=$("#csvBtn");if(cs)cs.addEventListener("click",exportCsv);
+    $$("#resultArea [data-dl]").forEach(function(b){b.addEventListener("click",function(){downloadReport(this.getAttribute("data-dl"));});});
   }
   function tone(v){v=String(v||"").toUpperCase();if(v.indexOf("NO-GO")>=0)return "no";if(v.indexOf("INSUFFICIENT")>=0||v.indexOf("WATCH")>=0)return "watch";if(v.indexOf("GO")>=0)return "go";return "watch";}
   function heroBlock(){
@@ -855,7 +895,7 @@
     var brief=(v.brief||[]).map(function(l){return '<li>'+esc(l)+'</li>';}).join("");
     var conf=d.confidence!=null?d.confidence:0,p=Math.round((conf||0)*100);
     var acts='<div class="d-actions"><button class="btn btn-primary" id="deepBtn">'+esc(t("deepen"))+'</button>'+
-      (S.result.analysis_id!=null?'<a class="btn btn-secondary" href="'+esc(base()+"/analyses/"+S.result.analysis_id+"/report.docx")+'" download>'+esc(t("wordReport"))+'</a><a class="btn btn-ghost" href="'+esc(base()+"/analyses/"+S.result.analysis_id+"/report.md")+'" target="_blank" rel="noopener">'+esc(t("mdReport"))+'</a><a class="btn btn-ghost" href="'+esc(base()+"/analyses/"+S.result.analysis_id+"/brief")+'" target="_blank" rel="noopener">'+esc(t("brief"))+'</a>':'')+
+      (S.result.analysis_id!=null?'<button class="btn btn-secondary" data-dl="docx">'+esc(t("wordReport"))+'</button><button class="btn btn-ghost" data-dl="md">'+esc(t("mdReport"))+'</button><button class="btn btn-ghost" data-dl="brief">'+esc(t("brief"))+'</button>':'')+
       '<button class="btn btn-ghost" id="csvBtn">'+esc(t("exportCsv"))+'</button><button class="btn btn-ghost" id="jsonBtn">'+esc(t("exportJson"))+'</button></div>';
     return '<section class="card decision '+tn+'"><div class="d-head">'+chips+'</div><div class="d-grid"><div>'+
       '<div class="eyebrow">'+esc(t("decision"))+'</div><h1 class="d-verdict">'+esc(d.verdict||t("noVerdict"))+'</h1>'+
