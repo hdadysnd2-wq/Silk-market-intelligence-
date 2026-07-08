@@ -116,8 +116,12 @@ def _f_text(f: dict) -> str:
     return txt
 
 
-def _f_srcline(f: dict | None) -> str:
-    """سطر المصدر لاكتشاف — source line (source | retrieved_at | confidence | url)."""
+def _f_src_bare(f: dict | None) -> str:
+    """نص المصدر بلا بادئة — source text without the "المصدر: " label.
+
+    لخلايا الجداول (`_add_table`) التي تحمل عمود "المصدر" بذاتها — البادئة
+    هناك تتكرر ("المصدر: المصدر: ..."). `_f_srcline` تبقى للاستخدام السردي.
+    """
     parts = []
     for s in (f or {}).get("sources") or []:
         seg = str(s.get("source") or "غير مرصود")
@@ -128,7 +132,12 @@ def _f_srcline(f: dict | None) -> str:
         if s.get("url"):
             seg += f" | {s['url']}"
         parts.append(seg)
-    return "المصدر: " + ("؛ ".join(parts) if parts else "غير مرصود")
+    return "؛ ".join(parts) if parts else "غير مرصود"
+
+
+def _f_srcline(f: dict | None) -> str:
+    """سطر المصدر لاكتشاف — source line (source | retrieved_at | confidence | url)."""
+    return "المصدر: " + _f_src_bare(f)
 
 
 def _entry_text(e: object) -> str:
@@ -254,6 +263,82 @@ def render_brief(view: dict, dashboard_url: str = "/") -> str:
 
 # ── بناة أقسام Word الجديدة (§7) — new docx section builders (pure display) ──
 
+def _add_table(doc, headers: list[str], rows: list[list]) -> None:
+    """جدول Word موحّد — bordered table, bold header row; no rows => no-op.
+
+    مراجعة المشروع: النسخة الحية من التقرير (docx، ما يُرسله المستخدم فعلياً)
+    كانت نقاطاً سردية بحتة بينما نظيرتها Markdown تستخدم جداول فعلية لنفس
+    البيانات (قرار الدخول مثلاً) — تناقضٌ بين الصيغتين، وواحدة من أوضح علامات
+    "تقرير غير احترافي" بمقارنة أي منصة أبحاث سوق مرجعية (Country Commercial
+    Guides وITC Trade Map وEuromonitor). لا بيانات جديدة، عرضٌ صرفٌ فقط —
+    "Table Grid" نمطٌ مدمج في python-docx (بلا قالب خارجي).
+    """
+    if not rows:
+        return
+    table = doc.add_table(rows=1, cols=len(headers))
+    table.style = "Table Grid"
+    hdr = table.rows[0].cells
+    for i, h in enumerate(headers):
+        hdr[i].text = str(h)
+        if hdr[i].paragraphs[0].runs:
+            hdr[i].paragraphs[0].runs[0].bold = True
+    for vals in rows:
+        cells = table.add_row().cells
+        for i, v in enumerate(vals):
+            cells[i].text = str(v) if v is not None else "—"
+
+
+def _docx_entry_strategy(doc, m: dict) -> None:
+    """استراتيجية دخول السوق — فصلٌ مستقل يركّب توصية الدخول من أرقامٍ مرصودة.
+
+    مراجعة المشروع: التوصية («ادخل عبر موزّع قائم») كانت مدفونة كسطرٍ واحد
+    داخل «الخطوات الأولى» — أي منصة مرجعية (Country Commercial Guides) تُفرد
+    لها فصلاً. يُركِّب هنا فقط ما هو مرصود فعلاً (تركّز الموردين + بوابة
+    الأهلية + عدد المرشّحين بالاسم) في فقرة واحدة مسبَّبة؛ لا رقم جديد، لا
+    اختلاق — تجميعٌ لحقائق موجودة أصلاً في أقسام أخرى من نفس التقرير.
+    """
+    doc.add_heading("استراتيجية دخول السوق", level=1)
+    comp = _ragent(m, "competitor")
+    reg = _ragent(m, "regulatory")
+    if not comp and not reg:
+        doc.add_paragraph("بيانات غير كافية لتركيب استراتيجية دخول — "
+                          "يتطلب with_research")
+        return
+    hhi_f = _rfind(comp, "hhi")
+    top_f = _rfind(comp, "top_supplier_share_pct")
+    gate_f = _rfind(reg, "eligibility_gate")
+    sd = m.get("supplier_directory") or {}
+    n_target = len(sd.get("target") or [])
+    n_saudi = len(sd.get("saudi") or [])
+    hhi = hhi_f.get("value") if hhi_f else None
+    top_share = top_f.get("value") if top_f else None
+    concentrated = hhi is not None and hhi > 0.25
+    model = ("عبر موزّع/مستورد محلي قائم" if (concentrated or n_target)
+             else "مباشر أو عبر موزّع محلي — لا تفضيل واضح من بيانات التركّز")
+    reasons = []
+    if hhi is not None:
+        reasons.append(f"مؤشر تركّز الموردين HHI={hhi} "
+                       + ("(سوق مركّز)" if concentrated else "(سوق مفتّت)"))
+    if top_share is not None:
+        reasons.append(f"أكبر حصة مورّد واحد {top_share}%")
+    if n_target:
+        reasons.append(f"{n_target} موزّعاً/مستورداً محتملاً مرصوداً بالاسم "
+                       "بالسوق المستهدف")
+    if n_saudi:
+        reasons.append(f"{n_saudi} مورّداً سعودياً مرصوداً بالاسم كمرشّح تعاقد")
+    if gate_f and gate_f.get("value"):
+        reasons.append("بوابة أهلية أمامية مفتوحة — لا خطوة لاحقة تُعتبر "
+                       "سالكة قبل اجتيازها")
+    doc.add_paragraph(f"النموذج الموصى به: {model}")
+    if reasons:
+        doc.add_paragraph("الأساس (من الأقسام أعلاه، لا رقم جديد):")
+        for r in reasons:
+            doc.add_paragraph(r, style="List Bullet")
+    else:
+        doc.add_paragraph("لا مؤشرات تركّز أو مرشّحين مرصودة — التوصية أعلاه "
+                          "افتراضية حتى تتوفر بيانات المنافسة/الموردين")
+
+
 def _docx_entry_decision(doc, m: dict) -> None:
     """قرار الدخول (المحرك الموزون §8) — verdict/score/pillars/conditions/risks."""
     doc.add_heading("قرار الدخول (المحرك الموزون §8)", level=1)
@@ -270,14 +355,12 @@ def _docx_entry_decision(doc, m: dict) -> None:
                       f"B = {_fmt(sbo.get('B'))}")
     if ed.get("weights_note"):
         doc.add_paragraph(f"ملاحظة الأوزان: {ed['weights_note']}")
-    # الأعمدة الأربعة: قيمة + سطر أساس + المكوّنات الغائبة (فجوة معلنة).
-    for key, p in (ed.get("pillars") or {}).items():
-        doc.add_paragraph(f"عمود {_PILLAR_AR.get(key, key)}: {_fmt(p.get('value'))}")
-        doc.add_paragraph(f"الأساس: {p.get('basis')}", style="Intense Quote")
-        if p.get("missing"):
-            doc.add_paragraph("مكوّنات غائبة (فجوة معلنة): "
-                              + "، ".join(map(str, p["missing"])),
-                              style="Intense Quote")
+    # الأعمدة الأربعة كجدول (توازي render_markdown) — لا نقاط سردية مبعثرة.
+    _add_table(
+        doc, ["العمود", "القيمة", "الأساس", "مكوّنات غائبة"],
+        [[_PILLAR_AR.get(key, key), _fmt(p.get("value")), p.get("basis"),
+          "، ".join(map(str, p.get("missing") or [])) or "—"]
+         for key, p in (ed.get("pillars") or {}).items()])
     if ed.get("missing_pillars"):
         doc.add_paragraph("أعمدة غائبة كلياً: " + "، ".join(
             _PILLAR_AR.get(k, k) for k in ed["missing_pillars"]))
@@ -308,14 +391,20 @@ def _docx_market_size(doc, m: dict) -> None:
         doc.add_paragraph(absent)
         return
     ag = _ragent(m, "market_size")
-    shown = False
-    for f in ag.get("findings") or []:
-        if f.get("value") is None:
-            continue
-        doc.add_paragraph(_f_text(f))
-        doc.add_paragraph(_f_srcline(f), style="Intense Quote")
-        shown = True
-    if not shown:
+    valued = [f for f in (ag.get("findings") or []) if f.get("value") is not None]
+    if valued:
+        _add_table(
+            doc, ["المؤشر", "القيمة", "النوع", "المصدر"],
+            [[f.get("metric"),
+              f"{_fmt(f.get('value'))}{(' ' + f['unit']) if f.get('unit') else ''}",
+              (_MODELED_TAG if f.get("modeled") else "رصد مباشر"),
+              _f_src_bare(f)]
+             for f in valued])
+        for f in valued:
+            if f.get("modeled") and f.get("formula"):
+                doc.add_paragraph(f"معادلة «{f.get('metric')}»: {f['formula']}",
+                                  style="Intense Quote")
+    else:
         doc.add_paragraph("لا اكتشافات مرصودة لحجم السوق")
     for g in ag.get("gaps") or []:
         doc.add_paragraph(f"فجوة معلنة: {g}", style="List Bullet")
@@ -330,8 +419,13 @@ def _docx_competition_research(doc, m: dict) -> None:
     named = (_rfind(ag, "named_companies") or {}).get("value") or []
     ents, refs = _split_candidates(named)
     if ents:
-        for n in ents[:10]:
-            doc.add_paragraph(_entry_text(n), style="List Bullet")
+        _add_table(
+            doc, ["الاسم", "العنوان", "المصدر", "ملاحظة"],
+            [[e.get("name") or e.get("title") or "؟", e.get("address"),
+              e.get("via"),
+              ("مُستخلَص، غير موثَّق" if "مُستخلَص" in str(e.get("note") or "")
+               else "غير موثَّق")]
+             for e in ents[:10]])
         doc.add_paragraph("كيانات غير موثَّقة (ثقة 0.4) — أكّدها قبل أي تعاقد.")
     else:
         doc.add_paragraph("لا كيانات مرصودة بالاسم — فجوة معلنة "
@@ -342,15 +436,21 @@ def _docx_competition_research(doc, m: dict) -> None:
         for n in refs[:8]:
             doc.add_paragraph(_entry_text(n), style="List Bullet")
     doc.add_paragraph("الطبقة الدولية (تركّز الموردين — UN Comtrade):")
+    metrics_rows = []
     for metric in ("hhi", "top_supplier_share_pct", "saudi_share_pct"):
         f = _rfind(ag, metric)
         if f and f.get("value") is not None:
-            doc.add_paragraph(_f_text(f), style="List Bullet")
-            doc.add_paragraph(_f_srcline(f), style="Intense Quote")
+            metrics_rows.append([metric, _fmt(f.get("value")), _f_src_bare(f)])
             if f.get("note"):
-                doc.add_paragraph(str(f["note"]))
+                metrics_rows[-1].append(str(f["note"]))
         else:
-            doc.add_paragraph(f"{metric}: غير مرصود", style="List Bullet")
+            metrics_rows.append([metric, "غير مرصود", "—"])
+    max_cols = max(len(r) for r in metrics_rows)
+    for r in metrics_rows:
+        while len(r) < max_cols:
+            r.append("")
+    _add_table(doc, ["المؤشر", "القيمة", "المصدر", "ملاحظة"][:max_cols],
+              metrics_rows)
 
 
 def _docx_pricing_layers(doc, m: dict) -> None:
@@ -362,16 +462,23 @@ def _docx_pricing_layers(doc, m: dict) -> None:
         return
     ag = _ragent(m, "pricing")
     doc.add_paragraph("الطبقة الحدودية (قيم وحدة كومتريد):")
+    border_rows, border_formulas = [], []
     for metric in ("border_unit_value_usd_kg", "saudi_border_unit_value_usd_kg",
                    "margin_at_border_pct"):
         f = _rfind(ag, metric)
         if f and f.get("value") is not None:
-            doc.add_paragraph(_f_text(f), style="List Bullet")
-            doc.add_paragraph(_f_srcline(f), style="Intense Quote")
-            if f.get("note"):
-                doc.add_paragraph(str(f["note"]))
+            unit = f" {f['unit']}" if f.get("unit") else ""
+            border_rows.append([
+                metric, f"{_fmt(f.get('value'))}{unit}",
+                (_MODELED_TAG if f.get("modeled") else "رصد مباشر"),
+                _f_src_bare(f)])
+            if f.get("modeled") and f.get("formula"):
+                border_formulas.append(f"معادلة «{metric}»: {f['formula']}")
         else:
-            doc.add_paragraph(f"{metric}: غير مرصود", style="List Bullet")
+            border_rows.append([metric, "غير مرصود", "—", "—"])
+    _add_table(doc, ["المؤشر", "القيمة", "النوع", "المصدر"], border_rows)
+    for line in border_formulas:
+        doc.add_paragraph(line, style="Intense Quote")
     doc.add_paragraph("طبقة التجزئة:")
     rp = _rfind(ag, "retail_prices")
     vals = (rp or {}).get("value") or []
@@ -407,18 +514,28 @@ def _docx_pricing_layers(doc, m: dict) -> None:
 
 
 def _docx_swot(doc, m: dict) -> None:
-    """SWOT قاعدي — كل خلية بنصها ودليلها؛ الربع الفارغ «لا بند مرصوداً»."""
+    """SWOT قاعدي — شبكة ٢×٢ حقيقية (لا أربع عناوين متتالية)؛ كل خلية بدليلها.
+
+    مراجعة المشروع: شكل SWOT كأربعة عناوين متسلسلة لا يُقرأ كمصفوفة عند
+    الطباعة، بينما كل مرجعية بحث سوق (IBISWorld، Euromonitor) تعرضه شبكةً
+    ٢×٢ فعلية — نفس المحتوى، عرضٌ مطابق للتعارف الصناعي.
+    """
     doc.add_heading("تحليل SWOT (قاعدي من حقائق مرصودة)", level=1)
     sw = m.get("swot") or {}
-    for key, title in (("S", "القوة"), ("W", "الضعف"),
-                       ("O", "الفرص"), ("T", "التهديدات")):
-        doc.add_heading(title, level=2)
-        items = sw.get(key) or []
-        if not items:
-            doc.add_paragraph("لا بند مرصوداً")
-        for it in items:
-            doc.add_paragraph(f"{it.get('text')} — الدليل: {it.get('evidence')}",
-                              style="List Bullet")
+    table = doc.add_table(rows=2, cols=2)
+    table.style = "Table Grid"
+    layout = [(("S", "القوة"), ("W", "الضعف")),
+             (("O", "الفرص"), ("T", "التهديدات"))]
+    for row_idx, pair in enumerate(layout):
+        for col_idx, (key, title) in enumerate(pair):
+            cell = table.rows[row_idx].cells[col_idx]
+            cell.paragraphs[0].add_run(title).bold = True
+            items = sw.get(key) or []
+            if not items:
+                cell.add_paragraph("لا بند مرصوداً")
+            for it in items:
+                cell.add_paragraph(f"{it.get('text')} — الدليل: "
+                                   f"{it.get('evidence')}", style="List Bullet")
     if sw.get("note"):
         doc.add_paragraph(str(sw["note"]))
 
@@ -468,8 +585,11 @@ def _docx_regulatory(doc, m: dict) -> None:
     checklist_f = _rfind(ag, "requirements_checklist")
     checklist = (checklist_f or {}).get("value") or []
     if checklist:
-        for it in checklist:
-            doc.add_paragraph(_req_text(it), style="List Bullet")
+        _add_table(
+            doc, ["البند", "الجهة", "الاتجاه", "الرابط"],
+            [[it.get("item") or it.get("requirement"), it.get("authority"),
+              it.get("direction"), it.get("source_url")]
+             for it in checklist if isinstance(it, dict)])
         doc.add_paragraph(_f_srcline(checklist_f), style="Intense Quote")
     else:
         doc.add_paragraph("لا بنود اشتراطات مرصودة في مرجع L1 لهذا السوق "
@@ -551,6 +671,7 @@ def render_docx(view: dict, path: str) -> str:
     # §7-1/§7-2: قرار الدخول (§8) ثم TAM/SAM/SOM — بعد الموقع التنافسي مباشرة
     # وقبل مشهد السوق؛ الغائب يُعلن بفقرة صريحة لا يُخترع.
     _docx_entry_decision(doc, top_m)
+    _docx_entry_strategy(doc, top_m)
     _docx_market_size(doc, top_m)
 
     st_all = top_m.get("section_status") or {}
