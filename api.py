@@ -740,6 +740,38 @@ def create_app():
         return PlainTextResponse(render_markdown(build_view(found)),
                                  media_type="text/markdown; charset=utf-8")
 
+    class AskRequest(BaseModel):
+        """سؤال فوق تحليل قائم (10b) — question over a stored analysis."""
+        question: str
+
+    @app.post("/analyses/{analysis_id}/ask")
+    def ask_analysis(analysis_id: int, req: AskRequest, request: Request):
+        """دردشة سياقية فوق تحليل مخزّن (10b) — من الذاكرة حصراً.
+
+        لا إعادة تشغيل وكلاء، لا نداء خارجي سوى نداء كلود الواحد؛ الأرضية
+        سياق التحليل المحسوب (analysis_context) والسؤال داخل العزل. ما ليس
+        في السياق يُعلن «غير متوفر في هذا التحليل» — لا اختلاق. نفس حارس
+        إضافات كلود المجانية (H2): نشر غير محمي يحجبها، والمحمي يحجز من
+        السقف اليومي.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        found = silk_storage.get_analysis(analysis_id)
+        if found is None:
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        ai_ok, ai_note = _free_ai_extras_allowed()
+        if not ai_ok:
+            return _json({"answer": None, "note": ai_note})
+        from silk_ai_judge import answer_about_analysis
+        from silk_render import analysis_context
+        out = answer_about_analysis(req.question, analysis_context(found))
+        if out is None:
+            return _json({"answer": None,
+                          "note": "يتطلب مفتاح كلود (ANTHROPIC_API_KEY) — "
+                                  "غير مفعّل على هذا الخادم"})
+        return _json(out)
+
     class OutcomeRequest(BaseModel):
         """جسم تسجيل النتيجة الفعلية — actual-outcome body (wave 1)."""
         outcome: str

@@ -658,3 +658,52 @@ def render_text(view: dict) -> str:
         L += [f"  - {x}" for x in view["limits"][:6]]
     L += ["المختصر:", *(f"  {x}" for x in view["brief"]), "═" * 60]
     return "\n".join(L)
+
+
+def analysis_context(result: dict, max_chars: int = 6000) -> str:
+    """سياق نصي مضغوط لتحليل قائم (10b) — للدردشة السياقية فوق النتيجة.
+
+    يقرأ نتيجة المحرّك المخزّنة حصراً — صفر شبكة، صفر إعادة تشغيل وكلاء.
+    كل رقم يُذكر بمصدره؛ الفجوات تُذكر كما هي كي يجيب كلود «غير متوفر في
+    هذا التحليل» بدل الاختلاق.
+    """
+    view = result.get("view") if isinstance(result.get("view"), dict) else None
+    view = view or build_view(result)
+    L: list[str] = []
+    h = view.get("header") or {}
+    L.append(f"المنتج: {h.get('product')} (HS {h.get('hs_code')}) — "
+             f"السوق الأول: {h.get('target_market')} — سنة البيانات: "
+             f"{view.get('data_year', view.get('year'))}")
+    for b in view.get("brief") or []:
+        L.append(f"الخلاصة: {b}")
+    top = (view.get("markets") or [{}])[0]
+    for c in top.get("components_detail") or []:
+        if c.get("value") is not None:
+            L.append(f"{c['name']} = {c['value']} [المصدر: {c.get('source')}]")
+        else:
+            why = ("تعذّر الجلب — أعد المحاولة"
+                   if c.get("status") == "fetch_failed" else "غير متوفر")
+            L.append(f"{c['name']}: {why}")
+    for sc in (top.get("supplier_countries") or [])[:6]:
+        L.append(f"مورّد: {sc.get('partner')} — حصة {sc.get('share')}% "
+                 f"({sc.get('value_usd')}$) [UN Comtrade]")
+    ag = ((top.get("research") or {}).get("agents")) or {}
+    for k, a in ag.items():
+        for f in (a.get("findings") or [])[:4]:
+            if f.get("value") is None or isinstance(f.get("value"),
+                                                    (list, dict)):
+                continue
+            srcs = "، ".join(str(x.get("source")) for x in
+                             (f.get("sources") or []) if isinstance(x, dict))
+            L.append(f"{k}.{f.get('metric')} = {f['value']}"
+                     f"{(' ' + f['unit']) if f.get('unit') else ''}"
+                     f" [المصدر: {srcs or '؟'}]")
+        for g in (a.get("gaps") or [])[:2]:
+            L.append(f"فجوة {k}: {g}")
+    ed = top.get("entry_decision") or {}
+    for cnd in (ed.get("conditions") or [])[:4]:
+        L.append(f"شرط مفتوح: {cnd}")
+    for x in (view.get("limits") or [])[:6]:
+        L.append(f"حدّ معلن: {x}")
+    out = "\n".join(L)
+    return out[:max_chars]
