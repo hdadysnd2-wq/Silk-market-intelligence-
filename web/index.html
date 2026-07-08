@@ -187,58 +187,59 @@
 <body>
 <div class="app">
   <div class="rail">
-    <div class="brand"><b>سِلك</b><span>ذكاء الأسواق</span></div>
-    <div class="navbtn on" data-go="input">＋ تحليل جديد</div>
-    <div class="navbtn" data-go="board">▦ اللوحة الأخيرة</div>
-    <div class="navbtn" data-go="chat">✎ دردشة</div>
-    <div class="rail-lbl">التحليلات الأخيرة</div>
+    <div class="brand"><b>سِلك</b><span data-t="tag">ذكاء الأسواق</span></div>
+    <div class="modes" id="langSeg" style="margin:0 4px 12px;align-self:flex-start"><span class="mode on" data-lang="ar">العربية</span><span class="mode" data-lang="en">EN</span></div>
+    <div class="navbtn on" data-go="input">＋ <span data-t="navNew">تحليل جديد</span></div>
+    <div class="navbtn" data-go="board">▦ <span data-t="navBoard">اللوحة الأخيرة</span></div>
+    <div class="navbtn" data-go="chat">✎ <span data-t="navChat">دردشة</span></div>
+    <div class="rail-lbl" data-t="recent">التحليلات الأخيرة</div>
     <div id="histList"></div>
-    <div class="rail-foot"><div class="gear" id="gearBtn">⚙ إعدادات الوكلاء</div></div>
+    <div class="rail-foot"><div class="gear" id="gearBtn">⚙ <span data-t="agentSettings">إعدادات الوكلاء</span></div></div>
   </div>
 
   <div class="stage">
     <!-- ===== INPUT ===== -->
     <div class="view on" id="v-input">
-      <div class="topbar"><span class="ttl">تحليل جديد</span>
-        <div class="modes"><span class="mode on">إدخال</span><span class="mode" data-go="chat">دردشة</span></div></div>
+      <div class="topbar"><span class="ttl" data-t="navNew">تحليل جديد</span>
+        <div class="modes"><span class="mode on" data-t="modeInput">إدخال</span><span class="mode" data-go="chat" data-t="navChat">دردشة</span></div></div>
       <div class="wrap">
-        <div class="band"><div class="eyebrow">ابدأ بمنتجك</div><h1>حلّل سوق تصدير</h1>
-          <div class="sub">اكتب المنتج، اختر السوق، وحدّد سنوات الدراسة — والمنصة تسحب البيانات الحقيقية.</div></div>
+        <div class="band"><div class="eyebrow" data-t="eyebrow">ابدأ بمنتجك</div><h1 data-t="h1">حلّل سوق تصدير</h1>
+          <div class="sub" data-t="h1sub">اكتب المنتج، اختر السوق، وحدّد سنوات الدراسة — والمنصة تسحب البيانات الحقيقية.</div></div>
         <div class="card">
-          <label class="flabel">١ · ما المنتج؟</label>
+          <label class="flabel" data-t="q1">١ · ما المنتج؟</label>
           <div class="search"><input id="pSearch" placeholder="تمر، زعفران، عسل، رطب…" autocomplete="off">
             <div class="drop" id="pDrop"></div></div>
           <div class="resolved" id="pResolved"></div>
         </div>
         <div class="row2">
           <div class="card">
-            <label class="flabel">٢ · السوق المستهدف</label>
-            <div class="allm sel" id="allMarkets">قارن كل الأسواق — دع المنصة ترتّبها</div>
+            <label class="flabel" data-t="q2">٢ · السوق المستهدف</label>
+            <div class="allm sel" id="allMarkets" data-t="allMarkets">قارن كل الأسواق — الافتراضي يرتّب أكبر مستوردي منتجك عالمياً</div>
             <div class="marketbox" id="marketBox"></div>
           </div>
           <div class="card">
-            <label class="flabel">٣ · سنوات الدراسة</label>
+            <label class="flabel" data-t="q3">٣ · سنوات الدراسة</label>
             <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
               <span class="yval" id="yearLabel"></span><span style="font-size:13px;color:var(--ink-soft)" id="yearSpanLbl"></span></div>
             <div class="presets">
-              <span class="preset on" data-span="5">آخر ٥ سنوات</span>
-              <span class="preset" data-span="3">٣ سنوات</span>
-              <span class="preset" data-span="1">سنة واحدة</span></div>
+              <span class="preset on" data-span="5" data-t="p5">آخر ٥ سنوات</span>
+              <span class="preset" data-span="3" data-t="p3">٣ سنوات</span>
+              <span class="preset" data-span="1" data-t="p1">سنة واحدة</span></div>
           </div>
         </div>
         <div class="card dash">
-          <div class="opthead"><b>٤ · بطاقة منتجك</b><span class="opttag">اختياري</span></div>
-          <div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px">أدخل تكلفتك لتفعيل «موقعك التنافسي» واقتراح التسعير.</div>
+          <div class="opthead"><b data-t="q4">٤ · بطاقة منتجك</b><span class="opttag" data-t="optional">اختياري</span></div>
+          <div style="font-size:13px;color:var(--ink-soft);margin-bottom:16px" data-t="q4sub">أدخل تكلفتك لتفعيل «موقعك التنافسي» واقتراح التسعير.</div>
           <div class="fourcol">
-            <div class="mini"><label>تكلفتك / وحدة</label><input class="num" id="cCost" type="number" step="0.01"></div>
-            <div class="mini"><label>سعرك المستهدف</label><input class="num" id="cPrice" type="number" step="0.01"></div>
-            <div class="mini"><label>الفئة</label><select id="cTier"><option value="premium">فاخر</option><option value="standard">قياسي</option><option value="economy">اقتصادي</option></select></div>
-            <div class="mini"><label>الطاقة الشهرية</label><input class="num" id="cCap" type="number"></div>
+            <div class="mini"><label data-t="cost">تكلفتك / وحدة</label><input class="num" id="cCost" type="number" step="0.01"></div>
+            <div class="mini"><label data-t="price">سعرك المستهدف</label><input class="num" id="cPrice" type="number" step="0.01"></div>
+            <div class="mini"><label data-t="tier">الفئة</label><select id="cTier"><option value="premium">فاخر</option><option value="standard">قياسي</option><option value="economy">اقتصادي</option></select></div>
+            <div class="mini"><label data-t="cap">الطاقة الشهرية</label><input class="num" id="cCap" type="number"></div>
           </div>
         </div>
         <div class="runbar">
           <div class="rsum" id="runSum">اختر منتجاً للبدء</div>
-          <button class="runbtn" id="runBtn" disabled>حلّل السوق ←</button>
+          <button class="runbtn" id="runBtn" disabled data-t="run">حلّل السوق ←</button>
         </div>
       </div>
     </div>
@@ -247,24 +248,24 @@
     <div class="view" id="v-board">
       <div class="topbar"><span class="ttl" id="bTitle">اللوحة</span>
         <div style="display:flex;gap:8px">
-          <button class="expbtn" id="pdfBtn">⇩ تصدير التقرير (Word/PDF)</button>
+          <button class="expbtn" id="pdfBtn" data-t="export">⇩ تصدير التقرير (Word/PDF)</button>
           <button class="abtn" id="mdBtn">Markdown</button>
         </div></div>
-      <div class="wrap" id="boardBody"><div class="empty">شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.</div></div>
+      <div class="wrap" id="boardBody"><div class="empty" data-t="boardEmpty">شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.</div></div>
     </div>
 
     <!-- ===== CHAT ===== -->
     <div class="view" id="v-chat" style="flex-direction:column;height:100vh">
-      <div class="topbar"><span class="ttl">دردشة</span>
-        <div class="modes"><span class="mode" data-go="input">إدخال</span><span class="mode on">دردشة</span></div></div>
+      <div class="topbar"><span class="ttl" data-t="navChat">دردشة</span>
+        <div class="modes"><span class="mode" data-go="input" data-t="modeInput">إدخال</span><span class="mode on" data-t="navChat">دردشة</span></div></div>
       <div class="cstream" id="cStream">
         <div class="turn"><div class="ai"><div class="ava">س</div><div class="aibody">
-          <p>اسأل عن أي منتج وسوق — مثال: «حلّل التمور في الصين لآخر ٥ سنوات». أستخدم نفس الوكلاء ونفس إعداداتهم في المسار الأساسي.</p>
+          <p data-t="chatIntro">اسأل عن أي منتج وسوق — مثال: «حلّل التمور في الصين لآخر ٥ سنوات». أستخدم نفس الوكلاء ونفس إعداداتهم في المسار الأساسي.</p>
         </div></div></div>
       </div>
       <div class="composer"><div class="cbox"><textarea id="chatBox" placeholder="اسأل عن أي منتج أو سوق…" rows="1"></textarea>
         <button class="sendb" id="sendBtn">↑</button></div>
-        <div class="fnote">كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي</div></div>
+        <div class="fnote" data-t="chatNote">كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي</div></div>
     </div>
   </div>
 </div>
@@ -272,11 +273,11 @@
 <!-- shared settings drawer — إعدادات الوكلاء المشتركة بين الإدخال والدردشة -->
 <div class="overlay" id="ov"></div>
 <div class="drawer" id="dr">
-  <div class="dhead"><h3>إعدادات الوكلاء</h3>
-    <div class="shared">✓ مشتركة بين الإدخال والدردشة</div>
+  <div class="dhead"><h3 data-t="agentSettings">إعدادات الوكلاء</h3>
+    <div class="shared" data-t="sharedNote">✓ مشتركة بين الإدخال والدردشة — وكلاء الأساس لا يُطفَؤون</div>
     <div class="keyrow"><input id="adminKey" placeholder="مفتاح الخدمة X-API-Key (إن كانت المصادقة مفعّلة)"></div></div>
   <div class="dbody" id="drawerBody"></div>
-  <div class="dfoot"><button class="saveb" id="savePrefs">حفظ التوجيهات</button><button class="resetb" id="resetPrefs">استعادة الافتراضي</button></div>
+  <div class="dfoot"><button class="saveb" id="savePrefs" data-t="save">حفظ التوجيهات</button><button class="resetb" id="resetPrefs" data-t="reset">استعادة الافتراضي</button></div>
 </div>
 
 <script>
@@ -286,6 +287,48 @@ var $=function(s){return document.querySelector(s)},$$=function(s){return Array.
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function base(){return (localStorage.getItem("silk_api")||"").trim().replace(/\/+$/,"")}
 var CURY=new Date().getFullYear();
+/* i18n (P3 — بلاغ المالك: «لا يوجد لغة إنجليزي») — نصوص الهيكل بالاتجاهين؛
+   محتوى التقرير نفسه يصل من الخادم بالعربية (ترجمته الكاملة طبقة خادم لاحقة). */
+var T={
+ tag:{ar:"ذكاء الأسواق",en:"Market Intelligence"},
+ navNew:{ar:"تحليل جديد",en:"New analysis"},navBoard:{ar:"اللوحة الأخيرة",en:"Latest board"},navChat:{ar:"دردشة",en:"Chat"},
+ recent:{ar:"التحليلات الأخيرة",en:"RECENT ANALYSES"},agentSettings:{ar:"إعدادات الوكلاء",en:"Agent settings"},
+ modeInput:{ar:"إدخال",en:"Form"},eyebrow:{ar:"ابدأ بمنتجك",en:"START WITH YOUR PRODUCT"},
+ h1:{ar:"حلّل سوق تصدير",en:"Analyze an export market"},
+ h1sub:{ar:"اكتب المنتج، اختر السوق، وحدّد سنوات الدراسة — والمنصة تسحب البيانات الحقيقية.",en:"Type the product, pick a market, set the study years — the platform pulls real data."},
+ q1:{ar:"١ · ما المنتج؟",en:"1 · What product?"},q2:{ar:"٢ · السوق المستهدف",en:"2 · Target market"},
+ allMarkets:{ar:"قارن كل الأسواق — الافتراضي يرتّب أكبر مستوردي منتجك عالمياً",en:"Compare all markets — default ranks your product's top global importers"},
+ q3:{ar:"٣ · سنوات الدراسة",en:"3 · Study years"},p5:{ar:"آخر ٥ سنوات",en:"Last 5 years"},p3:{ar:"٣ سنوات",en:"3 years"},p1:{ar:"سنة واحدة",en:"1 year"},
+ q4:{ar:"٤ · بطاقة منتجك",en:"4 · Your product card"},optional:{ar:"اختياري",en:"optional"},
+ q4sub:{ar:"أدخل تكلفتك لتفعيل «موقعك التنافسي» واقتراح التسعير.",en:"Enter your cost to unlock competitive position and price suggestion."},
+ cost:{ar:"تكلفتك / وحدة",en:"Cost / unit"},price:{ar:"سعرك المستهدف",en:"Your target price"},tier:{ar:"الفئة",en:"Tier"},cap:{ar:"الطاقة الشهرية",en:"Monthly capacity"},
+ run:{ar:"حلّل السوق ←",en:"Analyze market →"},running:{ar:"جارٍ التحليل…",en:"Analyzing…"},
+ export:{ar:"⇩ تصدير التقرير (Word/PDF)",en:"⇩ Export report (Word/PDF)"},
+ boardEmpty:{ar:"شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.",en:"Run an analysis from “New analysis” or chat — the board is built from real results."},
+ chatIntro:{ar:"اسأل عن أي منتج وسوق — مثال: «حلّل التمور في الصين لآخر ٥ سنوات». أستخدم نفس الوكلاء ونفس إعداداتهم في المسار الأساسي.",en:"Ask about any product and market — e.g. “analyze dates in China for the last 5 years”. Same agents, same settings as the main flow."},
+ chatNote:{ar:"كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي",en:"Every question runs the enabled agents · same settings as the main flow"},
+ sharedNote:{ar:"✓ مشتركة بين الإدخال والدردشة — وكلاء الأساس لا يُطفَؤون",en:"✓ Shared between form and chat — core agents can't be turned off"},
+ save:{ar:"حفظ التوجيهات",en:"Save directives"},reset:{ar:"استعادة الافتراضي",en:"Restore defaults"},
+ marketsCount:{ar:"سوقاً في القائمة — و«قارن كل الأسواق» قد يتجاوزها ديناميكياً",en:"markets listed — “compare all” may extend beyond them dynamically"},
+ readyFor:{ar:"جاهز لتحليل",en:"Ready to analyze"},inM:{ar:"في",en:"in"},over:{ar:"عبر",en:"over"},allM:{ar:"كل الأسواق",en:"all markets"},pickFirst:{ar:"اختر منتجاً للبدء",en:"Pick a product to start"},
+ yearsWord:{ar:"سنوات",en:"years"},yearWord:{ar:"سنة",en:"year"},resolvedAs:{ar:"✓ صُنّف تلقائياً — رمز HS ",en:"✓ Auto-classified — HS code "},
+ searchPh:{ar:"تمر، زعفران، عسل، رطب…",en:"dates, saffron, honey…"},chatPh:{ar:"اسأل عن أي منتج أو سوق…",en:"Ask about any product or market…"},
+ keyPh:{ar:"مفتاح الخدمة X-API-Key (إن كانت المصادقة مفعّلة)",en:"Service key X-API-Key (if auth is enabled)"}
+};
+var LANG=localStorage.getItem("silk_lang")||"ar";
+function t(k){var e=T[k];return e?(e[LANG]||e.ar):k}
+function applyLang(){
+  document.documentElement.lang=LANG;document.documentElement.dir=(LANG==="ar")?"rtl":"ltr";
+  document.querySelectorAll("[data-t]").forEach(function(el){el.textContent=t(el.dataset.t)});
+  var ps=document.getElementById("pSearch");if(ps)ps.placeholder=t("searchPh");
+  var cb=document.getElementById("chatBox");if(cb)cb.placeholder=t("chatPh");
+  var ak=document.getElementById("adminKey");if(ak)ak.placeholder=t("keyPh");
+  document.querySelectorAll("#langSeg .mode").forEach(function(m){m.classList.toggle("on",m.dataset.lang===LANG)});
+}
+/* أسماء الأسواق بالعربية (مرآة silk_narrative.COUNTRY_AR) + الوكلاء الثمانية */
+var CAR={SAU:"السعودية",ARE:"الإمارات",QAT:"قطر",KWT:"الكويت",OMN:"عُمان",BHR:"البحرين",JOR:"الأردن",LBN:"لبنان",EGY:"مصر",MAR:"المغرب",TUN:"تونس",DZA:"الجزائر",IRQ:"العراق",TUR:"تركيا",YEM:"اليمن",ZAF:"جنوب أفريقيا",NGA:"نيجيريا",KEN:"كينيا",ETH:"إثيوبيا",GHA:"غانا",IND:"الهند",PAK:"باكستان",BGD:"بنغلاديش",IDN:"إندونيسيا",MYS:"ماليزيا",SGP:"سنغافورة",THA:"تايلند",VNM:"فيتنام",CHN:"الصين",JPN:"اليابان",KOR:"كوريا الجنوبية",GBR:"بريطانيا",DEU:"ألمانيا",FRA:"فرنسا",ITA:"إيطاليا",ESP:"إسبانيا",NLD:"هولندا",USA:"الولايات المتحدة",CAN:"كندا"};
+var AGENT_AR={market_size:{ar:"حجم السوق",en:"Market size"},competitor:{ar:"المنافسة",en:"Competition"},regulatory:{ar:"الاشتراطات",en:"Regulatory"},pricing:{ar:"التسعير",en:"Pricing"},risk:{ar:"المخاطر",en:"Risk"},consumer_demand:{ar:"ثقافة المستهلك",en:"Consumer demand"},supplier:{ar:"المورّدون",en:"Suppliers"},logistics:{ar:"اللوجستيات",en:"Logistics"}};
+function agentName(k){var e=AGENT_AR[k];return e?(e[LANG]||e.ar):k}
 var S={product:"",hs:"",market:null,span:5,raw:null,view:null,busy:false,
   adminKey:localStorage.getItem("silk_admin_key")||"",
   prefs:JSON.parse(localStorage.getItem("silk_agent_prefs")||"null"),
@@ -310,6 +353,7 @@ function nav(v){$$(".view").forEach(function(x){x.classList.remove("on");x.style
   var t=$("#v-"+v);t.classList.add("on");t.style.display=(v==="chat")?"flex":"block";
   $$(".navbtn").forEach(function(b){b.classList.toggle("on",b.dataset.go===v)})}
 $$(".navbtn,[data-go]").forEach(function(b){if(b.dataset.go)b.addEventListener("click",function(){nav(this.dataset.go)})});
+$$("#langSeg .mode").forEach(function(m){m.addEventListener("click",function(){LANG=this.dataset.lang;localStorage.setItem("silk_lang",LANG);applyLang();sync();if(S.view)renderBoard();if(S.marketsCache)drawMarkets(S.marketsCache)})});
 
 /* ── الشبكة ── */
 function hdrs(json){var h=json?{"Content-Type":"application/json"}:{};if(S.adminKey)h["X-API-Key"]=S.adminKey;return h}
@@ -324,12 +368,17 @@ var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim()
     $("#pDrop").classList.add("open")}).catch(function(){})},200)});
 $("#pDrop").addEventListener("click",function(e){var r=e.target.closest(".drow");if(!r)return;
   S.product=r.dataset.n;S.hs=r.dataset.hs;$("#pSearch").value=S.product;$("#pDrop").classList.remove("open");
-  $("#pResolved").classList.add("on");$("#pResolved").textContent="✓ صُنّف تلقائياً — رمز HS "+S.hs;sync()});
+  $("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+S.hs;sync()});
 
 /* ── الأسواق ── */
+function drawMarkets(list){
+  S.marketsCache=list;
+  var mname=function(m){return (LANG==="ar")?(m.name_ar||CAR[m.iso3]||m.name):m.name};
+  $("#marketBox").innerHTML=list.map(function(m){return '<div class="mrow" data-iso3="'+esc(m.iso3)+'" data-name="'+esc(mname(m))+'" data-en="'+esc(m.name)+'">'+esc(mname(m))+'<span class="iso">'+esc(m.iso3)+'</span></div>'}).join("")
+    +'<div style="font-size:11.5px;color:var(--muted);padding:9px 10px 4px" class="num-count">'+list.length+' '+t("marketsCount")+'</div>';
+  if(S.market){var sel=$("#marketBox .mrow[data-iso3=\'"+S.market.iso3+"\']");if(sel)sel.classList.add("sel")}}
 fetch(base()+"/markets").then(function(r){return r.json()}).then(function(list){
-  if(!Array.isArray(list))return;
-  $("#marketBox").innerHTML=list.map(function(m){return '<div class="mrow" data-iso3="'+esc(m.iso3)+'" data-name="'+esc(m.name)+'">'+esc(m.name)+'<span class="iso">'+esc(m.iso3)+'</span></div>'}).join("")}).catch(function(){});
+  if(Array.isArray(list))drawMarkets(list)}).catch(function(){});
 $("#marketBox").addEventListener("click",function(e){var r=e.target.closest(".mrow");if(!r)return;
   var was=r.classList.contains("sel");$$(".mrow").forEach(function(x){x.classList.remove("sel")});$("#allMarkets").classList.remove("sel");
   if(was){$("#allMarkets").classList.add("sel");S.market=null}else{r.classList.add("sel");S.market={iso3:r.dataset.iso3,name:r.dataset.name}}sync()});
@@ -338,10 +387,10 @@ $("#allMarkets").addEventListener("click",function(){$$(".mrow").forEach(functio
 /* ── السنوات ── */
 $$(".preset").forEach(function(p){p.addEventListener("click",function(){$$(".preset").forEach(function(x){x.classList.remove("on")});this.classList.add("on");S.span=+this.dataset.span;sync()})});
 function years(){var to=CURY-2,from=to-S.span+1;return[from,to]}
-function sync(){var y=years();$("#yearLabel").textContent=y[0]+" – "+y[1];$("#yearSpanLbl").textContent=S.span+(S.span>2?" سنوات":" سنة");
+function sync(){var y=years();$("#yearLabel").textContent=y[0]+" – "+y[1];$("#yearSpanLbl").textContent=S.span+" "+(S.span>2?t("yearsWord"):t("yearWord"));
   $("#runBtn").disabled=!S.product||S.busy;
-  $("#runSum").innerHTML=S.product?("جاهز لتحليل <b>"+esc(S.product)+"</b> في <b>"+esc(S.market?S.market.name:"كل الأسواق")+"</b> عبر <b>"+y[0]+"–"+y[1]+"</b>"):"اختر منتجاً للبدء"}
-sync();
+  $("#runSum").innerHTML=S.product?(t("readyFor")+" <b>"+esc(S.product)+"</b> "+t("inM")+" <b>"+esc(S.market?S.market.name:t("allM"))+"</b> "+t("over")+" <b>"+y[0]+"–"+y[1]+"</b>"):t("pickFirst")}
+applyLang();sync();
 
 /* ── التحليل ── */
 function buildBody(){var y=years();
@@ -350,10 +399,10 @@ function buildBody(){var y=years();
   var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value);
   if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null};
   if(!isNaN(price))b.own_price=price;return b}
-function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#runBtn").textContent="جارٍ التحليل…";
-  post("/analyze",buildBody()).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#runBtn").textContent="حلّل السوق ←";sync();
+function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#runBtn").textContent=t("running");
+  post("/analyze",buildBody()).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#runBtn").textContent=t("run");sync();
     pushHist();renderBoard();if(then)then(res);else nav("board")})
-  .catch(function(e){S.busy=false;$("#runBtn").textContent="حلّل السوق ←";sync();toast("فشل الطلب: "+e.message)})}
+  .catch(function(e){S.busy=false;$("#runBtn").textContent=t("run");sync();toast("فشل الطلب: "+e.message)})}
 $("#runBtn").addEventListener("click",function(){runAnalysis()});
 function pushHist(){var label=S.product+" · "+((S.view&&S.view.header&&S.view.header.target_market)||"—");
   S.hist=[{label:label}].concat(S.hist.filter(function(h){return h.label!==label})).slice(0,5);
@@ -436,28 +485,48 @@ $("#mdBtn").addEventListener("click",function(){dlReport("md")});
 function chatAdd(html,me){var t=document.createElement("div");t.className="turn"+(me?" me":"");
   t.innerHTML=me?('<div class="txt">'+esc(html)+'</div>'):('<div class="ai"><div class="ava">س</div><div class="aibody">'+html+'</div></div>');
   $("#cStream").appendChild(t);$("#cStream").scrollTop=1e9;return t}
-function parseChat(msg){ // استخراج المنتج/السوق/المدى من النص — عبر /index و/markets الحقيقيين
+var STOP={"حلل":1,"حلّل":1,"سوق":1,"في":1,"الى":1,"إلى":1,"لآخر":1,"لاخر":1,"اخر":1,"آخر":1,"سنوات":1,"سنة":1,"عبر":1,"عن":1,"من":1,"analyze":1,"market":1,"in":1,"for":1,"the":1,"last":1,"years":1,"year":1,"of":1};
+function parseChat(msg){ // P3: تقسيم الرسالة — الجملة الكاملة كانت لا تطابق أي منتج فيفشل كل شيء
   var span=/٥|5/.test(msg)?5:(/٣|3/.test(msg)?3:S.span);
-  return fetch(base()+"/index?q="+encodeURIComponent(msg)+"&limit=1").then(function(r){return r.json()}).then(function(list){
-    var prod=(Array.isArray(list)&&list[0])||null;
+  var words=msg.replace(/[؟?!.،,]/g," ").split(/\s+/).filter(function(w){return w&&!STOP[w]&&!/^[٠-٩0-9–-]+$/.test(w)});
+  var cands=[];
+  function push(w){if(w&&cands.indexOf(w)<0)cands.push(w)}
+  for(var i=0;i<words.length&&i<8;i++){
+    var w=words[i];
+    // «التمور» → «تمور»: أداة التعريف تُسقط أولاً — مرجع HS بلا "ال" غالباً.
+    if(/^ال./.test(w))push(w.slice(2));
+    push(w);
+    if(i+1<words.length)push(w+" "+words[i+1])}
+  function tryNext(idx){
+    if(idx>=cands.length)return Promise.resolve(null);
+    return fetch(base()+"/index?q="+encodeURIComponent(cands[idx])+"&limit=1").then(function(r){return r.json()})
+      .then(function(list){var hit=(Array.isArray(list)&&list[0])||null;return hit||tryNext(idx+1)}).catch(function(){return tryNext(idx+1)})}
+  return tryNext(0).then(function(prod){
     return fetch(base()+"/markets").then(function(r){return r.json()}).then(function(mk){
-      var market=null;(Array.isArray(mk)?mk:[]).forEach(function(m){if(msg.indexOf(m.name)>=0)market=m});
+      var market=null;
+      (Array.isArray(mk)?mk:[]).forEach(function(m){
+        var ar=m.name_ar||CAR[m.iso3]||"";
+        if((ar&&msg.indexOf(ar)>=0)||msg.toLowerCase().indexOf(String(m.name||"").toLowerCase())>=0)market=m});
       return{product:prod,market:market,span:span}})})}
 $("#sendBtn").addEventListener("click",send);
 $("#chatBox").addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
 function send(){var msg=$("#chatBox").value.trim();if(!msg||S.busy)return;$("#chatBox").value="";chatAdd(msg,true);
   var wait=chatAdd("<p>أطلق الوكلاء المفعّلين على طلبك…</p>");
   parseChat(msg).then(function(p){
-    if(!p.product){wait.remove();chatAdd("<p>لم أتعرّف على منتج في رسالتك — جرّب اسماً أوضح مثل «تمور» أو «عسل».</p>");return}
+    if(!p.product){wait.remove();chatAdd("<p>لم أتعرّف على منتج في رسالتك. جرّب صيغة مثل: <b>حلّل التمور في الصين</b> أو <b>عسل في ألمانيا</b> — أي منتج غير نفطي يعمل.</p>");return}
     S.product=p.product.name;S.hs=p.product.hs;if(p.market)S.market={iso3:p.market.iso3,name:p.market.name};S.span=p.span;sync();
     runAnalysis(function(res){wait.remove();
       var v=res.view||{},m=(v.markets||[{}])[0],brief=(v.brief||[])[0]||"—";
       var ag=((m.research||{}).agents)||{},done=0,total=0,rows="";
       Object.keys(ag).forEach(function(k){total++;var a=ag[k]||{};var ok=a.status&&a.status!=="failed";if(ok)done++;
-        rows+='<div class="arow"><span class="abadge '+(ok?"b-done":"b-off")+'"></span><span class="aname">'+esc(k)+'</span><span class="aout'+(ok?"":" off")+'">'+(ok?"✓":"—")+'</span></div>'});
+        var f=(a.findings||[]).filter(function(x){return x&&x.value!=null})[0];
+        var out=ok?(f?(typeof f.value==="number"?(f.metric&&/usd/.test(f.metric)?money(f.value):(""+f.value)+(f.unit?" "+f.unit:"")):"✓"):"✓"):"—";
+        rows+='<div class="arow"><span class="abadge '+(ok?"b-done":"b-off")+'"></span><span class="aname">'+esc(agentName(k))+'</span><span class="aout'+(ok?"":" off")+'">'+esc(out)+'</span></div>'});
       var agHtml=total?('<div class="agents"><div class="ahead">الوكلاء<span class="p">'+done+' / '+total+' أسهموا</span></div><div class="alist">'+rows+'</div></div>'):"";
-      chatAdd('<p>حلّلت <b>'+esc(v.product||"")+'</b>'+(v.header&&v.header.target_market?(' في <b>'+esc(v.header.target_market)+'</b>'):'')+'.</p>'+agHtml
-        +'<div class="rescard"><h4>'+esc(brief)+'</h4><p>'+esc((v.decision||{}).why||"")+'</p>'
+      var mIso=(v.markets&&v.markets[0]&&v.markets[0].iso3)||"";
+      var mName=(LANG==="ar"&&CAR[mIso])?CAR[mIso]:((v.header||{}).target_market||"");
+      chatAdd('<p>حلّلت <b>'+esc(v.product||"")+'</b>'+(mName?(' في <b>'+esc(mName)+'</b>'):'')+'.</p>'+agHtml
+        +'<div class="rescard"><h4>'+esc(brief)+'</h4><p>'+esc((v.brief||[])[1]||"")+'</p>'
         +'<div class="acts"><button class="abtn main" data-act="board">افتح اللوحة الكاملة</button><button class="abtn" data-act="docx">تصدير التقرير</button></div></div>');
       $$("#cStream [data-act]").forEach(function(b){b.onclick=function(){this.dataset.act==="board"?nav("board"):dlReport("docx")}})})
   }).catch(function(e){wait.remove();chatAdd("<p>تعذّر التحليل: "+esc(e.message)+"</p>")})}
