@@ -45,6 +45,28 @@ except Exception:  # pragma: no cover - fallback when data layer absent
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _SOURCE = "Silk curated HS6 seed (HS Nomenclature / UN Comtrade)"
 
+# نطاق سِلك: تصدير غير نفطي — الفصل 27 (وقود معدنية: نفط خام 2709، مكرر
+# 2710، غازات 2711، قار ومشتقات 2712–2715، زيوت قطران 2707، فحم وكوك
+# 2701–2706، كهرباء 2716) خارج النطاق بتعريف «الصادرات غير النفطية»
+# الرسمي. ثابت واحد مسمّى ليضبطه المالك — فلترة نطاق لا حذف صفوف: المرجع
+# الكامل يبقى في CSV، والمُحلَّل الواقع في فصل مستبعد يُعلن خارج النطاق.
+EXCLUDED_HS_CHAPTERS: frozenset[str] = frozenset({"27"})
+
+_EXCLUSION_MSG = ("منتج بترولي/وقود معدني — خارج نطاق سِلك للتصدير "
+                  "غير النفطي (فصل HS {chapter})")
+
+
+def exclusion_note(hs_code: object) -> str | None:
+    """سبب الاستبعاد النطاقي لرمز HS، أو None إن كان داخل النطاق.
+
+    نقطة الحقيقة الواحدة لفلترة النطاق — يستعملها المصنّف (أدناه)،
+    والمحرّك لمسار hs_code الصريح، والاكتشاف العكسي لفلترة الفرص.
+    """
+    chapter = str(hs_code or "").strip()[:2]
+    if chapter in EXCLUDED_HS_CHAPTERS:
+        return _EXCLUSION_MSG.format(chapter=chapter)
+    return None
+
 
 def _abspath(path: str) -> str:
     """حوّل المسار النسبي إلى مطلق نسبةً لهذا الملف — resolve path relative to this file."""
@@ -122,11 +144,21 @@ def resolve_all(product_name: str, top_n: int = 3,
                                  note=f"weak match for {product_name!r} "
                                       f"(best='{r.get('name_en')}', score={sc:.2f})",
                                  retrieved_at=today))
-        else:
-            out.append(DataPoint(
-                r["hs_code"], _SOURCE, round(sc, 2),
-                note=f"{r.get('name_en')} / {r.get('name_ar')}",
-                retrieved_at=today))
+            continue
+        # بوابة النطاق غير النفطي (8d): تطابق قوي في فصل مستبعد يُعلن خارج
+        # النطاق برسالة واضحة — لا يُحلَّل ولا يُخفى سبب الرفض.
+        excl = exclusion_note(r["hs_code"])
+        if excl:
+            out.append(DataPoint(None, _SOURCE, 0.0,
+                                 note=f"{excl} — أقرب تطابق: "
+                                      f"{r.get('name_ar') or r.get('name_en')} "
+                                      f"({r['hs_code']})",
+                                 retrieved_at=today))
+            continue
+        out.append(DataPoint(
+            r["hs_code"], _SOURCE, round(sc, 2),
+            note=f"{r.get('name_en')} / {r.get('name_ar')}",
+            retrieved_at=today))
     return out
 
 

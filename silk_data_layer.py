@@ -180,11 +180,15 @@ def comtrade_trade(
     '_provenance' tag). On any failure returns [] and logs a warning.
     """
     params = {
-        "reporterCode": str(reporter_m49),
         "period": str(year),
         "cmdCode": str(hs_code),
         "flowCode": flow,
     }
+    # نفس عرف الحذف للطرفين: None/"all" => حذف المعامل فيعيد كومتريد كل
+    # الدول (الواجهة ترفض قيمة all الصريحة). reporter=all يخدم «أكبر
+    # المستوردين عالمياً» (8c) — صف لكل دولة مبلّغة مع partner=0 (العالم).
+    if reporter_m49 not in (None, "all", "ALL"):
+        params["reporterCode"] = str(reporter_m49)
     # partner=0 => World total (one row). "all"/None => OMIT partnerCode so Comtrade
     # returns every partner (the API rejects partnerCode=all as invalid).
     if partner not in (None, "all", "ALL"):

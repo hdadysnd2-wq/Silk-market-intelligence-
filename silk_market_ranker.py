@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 from silk_data_layer import (
@@ -68,6 +69,48 @@ ISO2: dict[str, str] = {
     "KOR": "KR", "GBR": "GB", "DEU": "DE", "FRA": "FR", "ITA": "IT",
     "ESP": "ES", "NLD": "NL", "USA": "US", "CAN": "CA",
 }
+
+def top_import_markets(hs_code: str, year: int, n: int = 38) -> list[dict]:
+    """أكبر مستوردي هذا الرمز عالمياً — dynamic candidates from Comtrade (8c).
+
+    نداء واحد (كل الدول المبلّغة، partner=0=العالم، flow=M) ثم ترتيب تنازلي
+    بقيمة الاستيراد. مواصفة المالك: تغطية شاملة ذاتية الصيانة بدل قائمة
+    يدوية. صف بلا قيمة رقمية يُسقط؛ رمز m49 بلا ترجمة iso3 في خريطتنا
+    يُسقط مع تسجيل (تدهور معلن لا صامت). فشل كومتريد/غياب الشبكة => []
+    والمستدعي يتراجع للقائمة المنسّقة COUNTRIES — سلوك اليوم بلا انحدار.
+    """
+    from silk_data_layer import M49_TO_ISO3, comtrade_trade, primary_value
+    recs = comtrade_trade(hs_code, None, year, flow="M", partner=0)
+    rows: list[tuple[float, str, str]] = []
+    skipped = 0
+    for rec in recs or []:
+        m49 = str(rec.get("reporterCode") or "").strip()
+        if not m49 or m49 == _SAUDI_M49:      # السعودية منشأ لا سوق مستهدف
+            continue
+        val = primary_value(rec)
+        if val is None:
+            continue
+        iso3 = (str(rec.get("reporterISO") or "").strip().upper()
+                or M49_TO_ISO3.get(m49, ""))
+        if len(iso3) != 3:
+            skipped += 1
+            continue
+        rows.append((val, iso3, m49))
+    if skipped:
+        log.info("top_import_markets: %d reporter(s) skipped — no ISO3 "
+                 "mapping (declared degradation)", skipped)
+    rows.sort(reverse=True)
+    seen: set[str] = set()
+    out: list[dict] = []
+    for _val, iso3, m49 in rows:
+        if iso3 in seen:
+            continue
+        seen.add(iso3)
+        out.append({"iso3": iso3, "m49": m49})
+        if len(out) >= n:
+            break
+    return out
+
 
 # أوزان المكوّنات — tunable component weights (sum ~1.0). Audit/tune here.
 WEIGHTS: dict[str, float] = {
@@ -291,7 +334,19 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
     سوق مستقل فالتطبيع يقع بعد اكتمال الجمع؛ `ex.map` يحفظ الترتيب فالنتيجة
     مطابقة للتسلسلي. الجلسة المجمّعة (silk_data_layer._session) تعيد استعمال
     الاتصالات عبر الخيوط. Markets are gathered concurrently; identical output.
+
+    8c (مواصفة المالك): بلا countries صريحة يُجرَّب أولاً «أكبر المستوردين
+    عالمياً» ديناميكياً من كومتريد (تغطية ذاتية الصيانة)؛ فشله/غياب الشبكة
+    => تراجع معلن للقائمة المنسّقة COUNTRIES — سلوك اليوم حرفياً.
+    SILK_DYNAMIC_MARKETS=0 يعطّل الديناميكي (صمام مالك).
     """
+    if countries is None and os.environ.get(
+            "SILK_DYNAMIC_MARKETS", "1").strip() != "0":
+        dyn = top_import_markets(hs_code, year)
+        if dyn:
+            log.info("rank_markets: dynamic candidates from Comtrade (%d)",
+                     len(dyn))
+            countries = dyn
     countries = countries or COUNTRIES
 
     # 1) اجمع المكوّنات الخام لكل دولة بالتوازي — gather raw components concurrently.
