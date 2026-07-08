@@ -468,7 +468,14 @@ function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class
   // فهرس الأقسام الـ14
   var toc=["الخلاصة","المنهجية","تعريف السوق","نظرة عامة","الديناميكيات","حجم السوق","التقسيم","التجارة","الإقليمي","المنافسة","استخبارات العميل","التنظيم والمخاطر (الاشتراطات)","الاتجاهات","التوصيات"];
   html+='<div class="toc"><div class="h">أقسام التقرير الكامل — ١٤ قسماً (Word)</div><div class="tocg">'+toc.map(function(t,i){return '<div class="ti"><b>'+String(i+1).padStart(2,"0")+'</b> '+t+'</div>'}).join("")+'</div></div>';
+  html+='<div class="bcard" style="margin:18px 0 50px"><h3>اسأل عن هذا التحليل</h3>'
+    +'<div class="note">إجابات من النتائج المحسوبة أعلاه حصراً — بمصادرها؛ ما لم يُسحب يُقال صراحةً</div>'
+    +'<div id="askThread"></div>'
+    +'<div class="cbox" style="margin-top:10px"><textarea id="askBox" rows="1" placeholder="مثال: ليش حصة السعودية منخفضة؟ وش أكبر عائق للدخول؟"></textarea>'
+    +'<button class="sendb" id="askBtn">↑</button></div></div>';
   $("#boardBody").innerHTML=html;
+  var ab=$("#askBtn");if(ab)ab.addEventListener("click",askAnalysis);
+  var ax=$("#askBox");if(ax)ax.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();askAnalysis()}});
   var dq=$("#deepBtn");if(dq)dq.addEventListener("click",function(){toast("الدراسة العميقة تتطلب مفاتيح المصادر المدفوعة — فعّلها من الإعدادات")});
 }
 /* تنزيل التقرير — fetch يحمل X-API-Key ثم blob (الرابط العادي لا يرسل الترويسة) */
@@ -530,6 +537,21 @@ function send(){var msg=$("#chatBox").value.trim();if(!msg||S.busy)return;$("#ch
         +'<div class="acts"><button class="abtn main" data-act="board">افتح اللوحة الكاملة</button><button class="abtn" data-act="docx">تصدير التقرير</button></div></div>');
       $$("#cStream [data-act]").forEach(function(b){b.onclick=function(){this.dataset.act==="board"?nav("board"):dlReport("docx")}})})
   }).catch(function(e){wait.remove();chatAdd("<p>تعذّر التحليل: "+esc(e.message)+"</p>")})}
+
+/* ── الدردشة السياقية فوق اللوحة (10b) — من الذاكرة حصراً ── */
+function askAnalysis(){
+  var id=S.raw&&S.raw.analysis_id,q=($("#askBox")&&$("#askBox").value.trim())||"";
+  if(!q)return;
+  if(id==null){toast("شغّل تحليلاً محفوظاً أولاً");return}
+  var th=$("#askThread");
+  th.innerHTML+='<p style="font-size:14px;font-weight:600;margin:10px 0 4px">'+esc(q)+'</p><p class="gap" data-wait="1">…</p>';
+  $("#askBox").value="";
+  post("/analyses/"+id+"/ask",{question:q}).then(function(d){
+    var w=th.querySelector("[data-wait]");if(w)w.remove();
+    th.innerHTML+='<p style="font-size:14px;color:var(--ink-soft);white-space:pre-wrap;border-inline-start:3px solid var(--gold);padding-inline-start:12px;margin-bottom:8px">'
+      +esc((d&&(d.answer||d.note))||"—")+'</p>'})
+  .catch(function(e){var w=th.querySelector("[data-wait]");if(w)w.remove();
+    th.innerHTML+='<p class="gap">تعذّر: '+esc(e.message)+'</p>'})}
 
 /* ── درج إعدادات الوكلاء المشترك ── */
 function drawDrawer(){var free=AGENTS.filter(function(a){return!a.paid}),paid=AGENTS.filter(function(a){return a.paid});

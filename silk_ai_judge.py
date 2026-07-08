@@ -427,6 +427,36 @@ def classify_dynamics(product: str, market: str, headlines: list) -> dict | None
     return result
 
 
+def answer_about_analysis(question: str, context: str) -> dict | None:
+    """أجب عن سؤال فوق تحليل قائم (10b) — من الذاكرة حصراً، لا وكلاء ولا شبكة.
+
+    الأرضية: سياق التحليل المحسوب مسبقاً (analysis_context) — كلود يجيب
+    حصراً منه ويذكر المصدر لكل رقم؛ ما ليس في السياق يقال عنه صراحةً
+    «غير متوفر في هذا التحليل» مع عرض تشغيل تحليل جديد — لا اختلاق أبداً.
+    السؤال والسياق كلاهما داخل عزل _isolate (سؤال المستخدم نص خارجي).
+    يعيد {"answer": str, "grounded": True} أو None (بلا مفتاح/فشل).
+    """
+    if not available():
+        return None
+    q = str(question or "").strip()[:500]
+    if not q:
+        return None
+    user = (
+        "سياق تحليل سوق محسوب مسبقاً (أجب حصراً منه — كل رقم فيه يحمل "
+        "مصدره):\n" + _isolate(str(context)[:6000]) + "\n\n"
+        "سؤال المستخدم: " + _isolate(q) + "\n\n"
+        "القواعد: أجب بالعربية بإيجاز عملي؛ اذكر المصدر بين قوسين لكل "
+        "رقم تستشهد به من السياق؛ إن كان الجواب يتطلب بيانات ليست في "
+        "السياق (سوق آخر، قيمة غير مسحوبة، سنة أخرى) فقل صراحةً: "
+        "«غير متوفر في هذا التحليل — يتطلب تحليلاً جديداً» واقترح تشغيله؛ "
+        "لا تُقدّر ولا تخترع رقماً ليس في السياق أبداً.")
+    raw = _call(_PRINCIPLE, user, max_tokens=700, model=_FAST_MODEL,
+                timeout=25)
+    if not raw:
+        return None
+    return {"answer": raw.strip()[:4000], "grounded": True}
+
+
 def ai_report(result: dict) -> str | None:
     """تقرير تصدير مبدئي — a written market-entry report over the full analysis.
 
