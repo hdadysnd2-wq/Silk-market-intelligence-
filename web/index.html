@@ -731,7 +731,8 @@
     return b;
   }
   function postJSON(path,body){
-    return fetch(base()+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.text().then(function(tx){var d=null;try{d=JSON.parse(tx);}catch(_){}if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?tx:(typeof de==="string"?de:JSON.stringify(de))));}return d;});});
+    var hdrs={"Content-Type":"application/json"};if(S.adminKey)hdrs["X-API-Key"]=S.adminKey;
+    return fetch(base()+path,{method:"POST",headers:hdrs,body:JSON.stringify(body)}).then(function(r){return r.text().then(function(tx){var d=null;try{d=JSON.parse(tx);}catch(_){}if(!r.ok){var de=d&&d.detail;throw new Error("HTTP "+r.status+" — "+(de==null?tx:(typeof de==="string"?de:JSON.stringify(de))));}return d;});});
   }
   function runAnalysis(){
     if(!S.product){$("#search").focus();return;}
@@ -1247,7 +1248,7 @@
   }
   function runDiagnostics(){
     var btn=$("#diagBtn"),out=$("#diagOut");if(!btn)return;btn.disabled=true;btn.textContent=t("diagRunning");
-    fetch(base()+"/diagnostics").then(function(r){return r.json();}).then(function(d){
+    fetch(base()+"/diagnostics",{headers:S.adminKey?{"X-API-Key":S.adminKey}:{}}).then(function(r){return r.json();}).then(function(d){
       btn.disabled=false;btn.textContent=t("diagRun");
       var ST={ok:["diag-ok",t("diagOk")],reachable_empty:["diag-warn",t("diagEmpty")],unreachable:["diag-bad",t("diagUnreach")],no_key:["diag-gap",t("diagNoKey")]};
       var banner=d.agents_can_work?'<div class="diag-banner diag-ok">'+esc(t("diagAgentsOk"))+'</div>':'<div class="diag-banner diag-bad">'+esc(t("diagAgentsNo"))+'</div>';
