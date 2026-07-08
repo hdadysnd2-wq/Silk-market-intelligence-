@@ -164,9 +164,10 @@ def create_app():
     # CSP خطّ أساس يسمح بأنماط/سكربتات الصفحة المضمّنة وخطوط Google (الواجهة
     # ملف واحد بأنماط وسكربت مضمّنين)؛ التشديد (nonces / خط ذاتي الاستضافة =
     # L-3) لاحقاً. nosniff يمنع تخمين نوع المحتوى؛ Referrer-Policy يحدّ التسريب.
+    # الخطوط صارت مستضافة ذاتياً (task 12) — لا مضيف خطوط خارجي في السياسة.
     _CSP = ("default-src 'self'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com; "
+            "style-src 'self' 'unsafe-inline'; "
+            "font-src 'self'; "
             "script-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; connect-src 'self'; "
             "base-uri 'self'; frame-ancestors 'none'")
