@@ -47,7 +47,7 @@ def _assert_production_clean(view: dict) -> None:
 def _fmt(v: object) -> str:
     """تنسيق قيمة للعرض — display formatting (None = فجوة معلنة)."""
     if v is None:
-        return "— (لا بيانات)"
+        return "—"
     if isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) >= 1000:
         return f"{v:,.0f}"
     return str(v)
@@ -109,6 +109,18 @@ def _methodology_lines(view: dict) -> list[str]:
     lines.append("هذه قراءة أولية مبنية على البيانات العامة المتاحة "
                  "وقت الإعداد.")
     return lines
+
+
+def _gap_ar(g: object) -> str:
+    """فجوة داخلية → عربية هادئة للعرض — display-only translation (5b)."""
+    from silk_narrative import translate_gaps
+    return translate_gaps([g])[0]
+
+
+def _gap_list_ar(gaps: list) -> list[str]:
+    """قائمة فجوات مترجمة للعرض — display-only batch translation (5b)."""
+    from silk_narrative import translate_gaps
+    return translate_gaps(gaps)
 
 
 def _data_year_label(view: dict) -> str:
@@ -370,7 +382,7 @@ def _docx_entry_strategy(doc, m: dict) -> None:
     الأهلية + عدد المرشّحين بالاسم) في فقرة واحدة مسبَّبة؛ لا رقم جديد، لا
     اختلاق — تجميعٌ لحقائق موجودة أصلاً في أقسام أخرى من نفس التقرير.
     """
-    doc.add_heading("استراتيجية دخول السوق", level=1)
+    doc.add_heading("استراتيجية دخول السوق", level=2)
     comp = _ragent(m, "competitor")
     reg = _ragent(m, "regulatory")
     if not comp and not reg:
@@ -414,7 +426,7 @@ def _docx_entry_strategy(doc, m: dict) -> None:
 
 def _docx_entry_decision(doc, m: dict) -> None:
     """قرار الدخول (المحرك الموزون §8) — verdict/score/pillars/conditions/risks."""
-    doc.add_heading("قرار الدخول (المحرك الموزون §8)", level=1)
+    doc.add_heading("قرار الدخول (المحرك الموزون §8)", level=2)
     ed, absent = _entry_decision_of(m)
     if ed is None:
         doc.add_paragraph(absent)
@@ -458,7 +470,7 @@ def _docx_entry_decision(doc, m: dict) -> None:
 
 def _docx_market_size(doc, m: dict) -> None:
     """حجم السوق TAM/SAM/SOM — كل اكتشاف بمصدره؛ المنمذج موسوم بمعادلته."""
-    doc.add_heading("حجم السوق — TAM/SAM/SOM", level=1)
+    doc.add_heading("حجم السوق — TAM/SAM/SOM", level=2)
     r, absent = _research_bundle(m)
     if r is None:
         doc.add_paragraph(absent)
@@ -480,7 +492,7 @@ def _docx_market_size(doc, m: dict) -> None:
     else:
         doc.add_paragraph("لا اكتشافات مرصودة لحجم السوق")
     for g in ag.get("gaps") or []:
-        doc.add_paragraph(f"فجوة معلنة: {g}", style="List Bullet")
+        doc.add_paragraph(f"غير متوفر: {_gap_ar(g)}", style="List Bullet")
 
 
 def _docx_competition_research(doc, m: dict) -> None:
@@ -488,7 +500,7 @@ def _docx_competition_research(doc, m: dict) -> None:
     ag = _ragent(m, "competitor")
     if not ag:
         return
-    doc.add_heading("شركات بالاسم (مرشّحون غير موثَّقين)", level=2)
+    doc.add_heading("شركات بالاسم (مرشّحون غير موثَّقين)", level=3)
     named = (_rfind(ag, "named_companies") or {}).get("value") or []
     ents, refs = _split_candidates(named)
     if ents:
@@ -501,11 +513,11 @@ def _docx_competition_research(doc, m: dict) -> None:
              for e in ents[:10]])
         doc.add_paragraph("كيانات غير موثَّقة (ثقة 0.4) — أكّدها قبل أي تعاقد.")
     else:
-        doc.add_paragraph("لا كيانات مرصودة بالاسم — فجوة معلنة "
+        doc.add_paragraph("لا شركات مرصودة بالاسم في هذا التشغيل "
                           "(أسماء الأعمال تأتي من Google Places حصراً)")
     if refs:
         doc.add_heading("مراجع ويب للمراجعة اليدوية (ليست أسماء منافسين)",
-                        level=2)
+                        level=3)
         for n in refs[:8]:
             doc.add_paragraph(_entry_text(n), style="List Bullet")
     doc.add_paragraph("الطبقة الدولية (تركّز الموردين — UN Comtrade):")
@@ -517,7 +529,7 @@ def _docx_competition_research(doc, m: dict) -> None:
             if f.get("note"):
                 metrics_rows[-1].append(str(f["note"]))
         else:
-            metrics_rows.append([metric, "غير مرصود", "—"])
+            metrics_rows.append([metric, "—", "—"])
     max_cols = max(len(r) for r in metrics_rows)
     for r in metrics_rows:
         while len(r) < max_cols:
@@ -528,7 +540,7 @@ def _docx_competition_research(doc, m: dict) -> None:
 
 def _docx_pricing_layers(doc, m: dict) -> None:
     """التسعير بطبقتيه — الحدودية (نماذج موسومة بمعادلاتها) ثم التجزئة ومراجعها."""
-    doc.add_heading("التسعير بطبقتيه", level=1)
+    doc.add_heading("التسعير بطبقتيه", level=2)
     r, absent = _research_bundle(m)
     if r is None:
         doc.add_paragraph(absent)
@@ -548,7 +560,7 @@ def _docx_pricing_layers(doc, m: dict) -> None:
             if f.get("modeled") and f.get("formula"):
                 border_formulas.append(f"معادلة «{metric}»: {f['formula']}")
         else:
-            border_rows.append([metric, "غير مرصود", "—", "—"])
+            border_rows.append([metric, "—", "—", "—"])
     _add_table(doc, ["المؤشر", "القيمة", "النوع", "المصدر"], border_rows)
     for line in border_formulas:
         doc.add_paragraph(line, style="Intense Quote")
@@ -562,7 +574,7 @@ def _docx_pricing_layers(doc, m: dict) -> None:
     else:
         # فجوة القسم المعلنة تُطبع بنصّها — the section's declared gap, verbatim.
         gap = next((g for g in (ag.get("gaps") or []) if "retail_prices" in g),
-                   "retail_prices: غير مرصود — فجوة معلنة")
+                   "أسعار التجزئة: غير متوفرة في هذا التشغيل")
         doc.add_paragraph(gap, style="List Bullet")
     # نقاطُ الأسعار المُستخلَصة (كلود) — أرقامٌ مذكورةٌ صراحةً، لا روابط.
     points = (_rfind(ag, "retail_price_points") or {}).get("value") or []
@@ -593,7 +605,7 @@ def _docx_swot(doc, m: dict) -> None:
     الطباعة، بينما كل مرجعية بحث سوق (IBISWorld، Euromonitor) تعرضه شبكةً
     ٢×٢ فعلية — نفس المحتوى، عرضٌ مطابق للتعارف الصناعي.
     """
-    doc.add_heading("تحليل SWOT (قاعدي من حقائق مرصودة)", level=1)
+    doc.add_heading("تحليل SWOT (قاعدي من حقائق مرصودة)", level=2)
     sw = m.get("swot") or {}
     table = doc.add_table(rows=2, cols=2)
     table.style = "Table Grid"
@@ -605,7 +617,7 @@ def _docx_swot(doc, m: dict) -> None:
             cell.paragraphs[0].add_run(title).bold = True
             items = sw.get(key) or []
             if not items:
-                cell.add_paragraph("لا بند مرصوداً")
+                cell.add_paragraph("—")
             for it in items:
                 cell.add_paragraph(f"{it.get('text')} — الدليل: "
                                    f"{it.get('evidence')}", style="List Bullet")
@@ -615,7 +627,7 @@ def _docx_swot(doc, m: dict) -> None:
 
 def _docx_segments(doc, m: dict) -> None:
     """شرائح العملاء — segment + basis؛ الفارغ يُعلن لا يُخترع."""
-    doc.add_heading("شرائح العملاء", level=1)
+    doc.add_heading("شرائح العملاء", level=2)
     segs = m.get("segments") or []
     if not segs:
         doc.add_paragraph("بيانات غير كافية للشرائح — التقسيم السلوكي/"
@@ -629,14 +641,14 @@ def _docx_segments(doc, m: dict) -> None:
 
 def _docx_supplier_directory(doc, m: dict) -> None:
     """دليل المورّدين والمصنّعين — قائمتا السعودية والسوق المستهدف + الملاحظة."""
-    doc.add_heading("دليل المورّدين والمصنّعين", level=1)
+    doc.add_heading("دليل المورّدين والمصنّعين", level=2)
     sd = m.get("supplier_directory") or {}
     for key, title in (("saudi", "مورّدون ومصنّعون سعوديون:"),
                        ("target", "موزّعون ومستوردون في السوق المستهدف:")):
         doc.add_paragraph(title)
         items = sd.get(key) or []
         if not items:
-            doc.add_paragraph("لا مرشّحين مرصودين — فجوة معلنة",
+            doc.add_paragraph("—",
                               style="List Bullet")
         for e in items[:10]:
             doc.add_paragraph(_entry_text(e), style="List Bullet")
@@ -646,7 +658,7 @@ def _docx_supplier_directory(doc, m: dict) -> None:
 
 def _docx_regulatory(doc, m: dict) -> None:
     """الاشتراطات التنظيمية — بوابة الأهلية أولاً ثم بنود L1 بجهاتها وروابطها."""
-    doc.add_heading("الاشتراطات التنظيمية", level=1)
+    doc.add_heading("الاشتراطات التنظيمية", level=2)
     r, absent = _research_bundle(m)
     ag = _ragent(m, "regulatory")
     if r is None or not ag:
@@ -667,14 +679,13 @@ def _docx_regulatory(doc, m: dict) -> None:
              for it in checklist if isinstance(it, dict)])
         doc.add_paragraph(_f_srcline(checklist_f), style="Intense Quote")
     else:
-        doc.add_paragraph("لا بنود اشتراطات مرصودة في مرجع L1 لهذا السوق "
-                          "— فجوة معلنة")
+        doc.add_paragraph("لا بنود اشتراطات في مرجع سِلك لهذا السوق — غير متوفر")
     tf = _rfind(ag, "tariff_applied_pct")
     if tf and tf.get("value") is not None:
         doc.add_paragraph(_f_text(tf))
         doc.add_paragraph(_f_srcline(tf), style="Intense Quote")
     for g in ag.get("gaps") or []:
-        doc.add_paragraph(f"فجوة معلنة: {g}", style="List Bullet")
+        doc.add_paragraph(f"غير متوفر: {_gap_ar(g)}", style="List Bullet")
 
 
 def render_docx(view: dict, path: str) -> str:
@@ -689,38 +700,133 @@ def render_docx(view: dict, path: str) -> str:
 
     _assert_production_clean(view)
     doc = Document()
-    # ١) الخلاصة التنفيذية أولاً (نجحت باختبار الخمس ثوانٍ — تُثبَّت).
-    doc.add_heading(f"سِلك — تقرير سوق: {view.get('product')}", 0)
+    top_m = (view.get("markets") or [{}])[0]
+
+    # ═══ 0) الغلاف وبطاقة التعريف — cover + report card ═══
+    doc.add_heading(f"سِلك — تقرير بحث سوق: {view.get('product')}", 0)
     if view.get("test_run"):
         doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة "
                           "(SILK_HERMETIC)، ليس تقريراً إنتاجياً")
-    # ترويسة 2B-د: منتج/HS/سوق مستهدف/تاريخ/تغطية إجمالية % — في الصدارة دائماً.
     h = view.get("header") or {}
-    doc.add_paragraph(
-        f"المنتج: {h.get('product')} | HS: {h.get('hs_code')} | "
-        f"المنشأ: السعودية | السوق المستهدف: {h.get('target_market')} | "
-        f"التاريخ: {h.get('date')} | تغطية البيانات الإجمالية: "
-        f"{h.get('coverage_pct')}%")
-    d = view.get("decision") or {}
-    doc.add_heading("الخلاصة التنفيذية", level=1)
-    # P1: ثلاث فقرات بشرية فقط — سطر كفاية البيانات وتحفّظ «قراءة أولية»
-    # انتقلا إلى قسم المنهجية (مرة واحدة، بلا تكرار في كل قسم).
+    _add_table(doc, ["البند", "القيمة"], [
+        ["المنتج", h.get("product")],
+        ["رمز HS", h.get("hs_code")],
+        ["المنشأ", "المملكة العربية السعودية"],
+        ["السوق المستهدف", h.get("target_market")],
+        ["تاريخ الإعداد", h.get("date")],
+        ["سنة البيانات", _data_year_label(view)],
+        ["تغطية البيانات", f"{h.get('coverage_pct')}%"]])
+
+    # جدول المحتويات الثابت — الأقسام الأربعة عشر بالترتيب.
+    doc.add_heading("المحتويات", level=1)
+    for i, ttl in enumerate((
+            "الخلاصة التنفيذية", "منهجية البحث", "تعريف السوق ونطاقه",
+            "نظرة عامة على السوق", "ديناميكيات السوق",
+            "حجم السوق والتوقعات", "تحليل التقسيم",
+            "تحليل التجارة (استيراد/تصدير)", "التحليل الإقليمي",
+            "المشهد التنافسي", "استخبارات العميل والطلب",
+            "المشهد التنظيمي والمخاطر", "الاتجاهات والتوقع المستقبلي",
+            "التوصيات الاستراتيجية"), 1):
+        doc.add_paragraph(f"{i}. {ttl}", style="List Number" if False
+                          else None)
+    doc.add_paragraph("الملحق (تغطية المصادر وأثرها)")
+
+    # ═══ ١) الخلاصة التنفيذية — ٣ فقرات بشرية (P1) ═══
+    doc.add_heading("١. الخلاصة التنفيذية", level=1)
     for para in _narrative_exec_summary(view):
         doc.add_paragraph(para)
 
-    # ٢) منهجية البحث — قسم مستقل ظاهر (مواصفة تقرير عالمي §2: أقوى ما لدى
-    # المنصة، كان مشتتاً بين الأقسام بدل أن يُعرض صراحةً).
-    doc.add_heading("منهجية البحث", level=1)
+    # ═══ ٢) منهجية البحث ═══
+    doc.add_heading("٢. منهجية البحث", level=1)
     for line in _methodology_lines(view):
         doc.add_paragraph(line, style="List Bullet")
 
-    # ٣) تعريف السوق ونطاقه — جملة نطاق صريحة (مواصفة تقرير عالمي §3).
-    doc.add_heading("تعريف السوق ونطاقه", level=1)
+    # ═══ ٣) تعريف السوق ونطاقه ═══
+    doc.add_heading("٣. تعريف السوق ونطاقه", level=1)
     doc.add_paragraph(_market_scope_paragraph(view))
 
-    # ٤) موقعك التنافسي (محرّك التقاطع) بعد الخلاصة مباشرة.
+    # ═══ ٤) نظرة عامة على السوق — إشارات نوعية مرصودة أو غياب هادئ ═══
+    doc.add_heading("٤. نظرة عامة على السوق", level=1)
+    cc = view.get("consumer_culture") or {}
+    overview_ins = (cc.get("insights") or [])[:3]
+    if overview_ins:
+        for o in overview_ins:
+            doc.add_paragraph(str(o.get("point") or ""), style="List Bullet")
+            ev = "؛ ".join(map(str, (o.get("evidence") or [])[:2]))
+            if ev:
+                doc.add_paragraph(f"الدليل: {ev}", style="Intense Quote")
+    else:
+        doc.add_paragraph("لم تُجمع إشارات نوعية عن حالة الصناعة في هذا "
+                          "التشغيل — يتطلب مفتاح بحث الويب.")
+
+    # ═══ ٥) ديناميكيات السوق — يتغذى من وكيل الديناميكيات (قادم) ═══
+    doc.add_heading("٥. ديناميكيات السوق", level=1)
+    doc.add_paragraph("تحليل الدوافع والكوابح والفرص والتحديات (مع أطر "
+                      "بورتر وPESTEL) لم يُشغَّل في هذا التحليل — يتطلب "
+                      "وكيل الديناميكيات النوعي.")
+
+    # ═══ ٦) حجم السوق والتوقعات — TAM/SAM/SOM + النمو ═══
+    doc.add_heading("٦. حجم السوق والتوقعات", level=1)
+    _docx_market_size(doc, top_m)
+    tr = top_m.get("trend") or {}
+    if tr.get("growth_pct") is not None or tr.get("cagr_pct") is not None:
+        from silk_narrative import growth_phrase
+        doc.add_paragraph(growth_phrase(tr.get("cagr_pct"),
+                                        tr.get("growth_pct"),
+                                        years="سنوات الدراسة"))
+        doc.add_paragraph(f"المصدر: {tr.get('source') or 'UN Comtrade'}",
+                          style="Intense Quote")
+
+    # ═══ ٧) تحليل التقسيم ═══
+    doc.add_heading("٧. تحليل التقسيم", level=1)
+    _docx_segments(doc, top_m)
+
+    # ═══ ٨) تحليل التجارة — قوّة كومتريد الفريدة ═══
+    doc.add_heading("٨. تحليل التجارة (استيراد/تصدير)", level=1)
+    countries = top_m.get("supplier_countries") or []
+    if countries:
+        _add_table(doc, ["الدولة المورّدة", "الحصة %", "القيمة (دولار)"],
+                   [[c.get("partner"), c.get("share"),
+                     _fmt(c.get("value_usd"))] for c in countries[:8]])
+        doc.add_paragraph("المصدر: UN Comtrade", style="Intense Quote")
+    else:
+        doc.add_paragraph("—")
+
+    # ═══ ٩) التحليل الإقليمي — كل سوق بمكوّناته ومصادرها ═══
+    doc.add_heading("٩. التحليل الإقليمي (الأسواق المرشّحة)", level=1)
+    for i, m in enumerate((view.get("markets") or [])[:8], 1):
+        doc.add_heading(f"٩.{i} {m.get('country')}", level=2)
+        for c in m.get("components_detail") or []:
+            from silk_narrative import internal_ar
+            doc.add_paragraph(f"{internal_ar(c['name'])}: {_fmt(c['value'])}")
+            src_line = (f"المصدر: {c.get('source') or '—'}"
+                        + (f" | سُحب: {c['retrieved_at']}"
+                           if c.get("retrieved_at") else "")
+                        + f" | ثقة: {c.get('confidence')}")
+            doc.add_paragraph(src_line, style="Intense Quote")
+
+    # ═══ ١٠) المشهد التنافسي ═══
+    doc.add_heading("١٠. المشهد التنافسي", level=1)
+    _docx_competition_research(doc, top_m)
+    _docx_swot(doc, top_m)
+    _docx_pricing_layers(doc, top_m)
+    prices = top_m.get("prices") or []
+    if prices:
+        doc.add_heading("أسعار المنتجات في السوق", level=2)
+        for pr in prices[:8]:
+            doc.add_paragraph(
+                f"{pr.get('title') or 'قائمة'}: {_fmt(pr.get('price'))}"
+                + (f" {pr['currency']}" if pr.get("currency") else "")
+                + (f" — {pr['store']}" if pr.get("store") else ""),
+                style="List Bullet")
+    named = top_m.get("named_competitors") or []
+    if named:
+        doc.add_heading("مراجع ويب للمراجعة اليدوية (ليست أسماء منافسين)",
+                        level=2)
+        for n in named[:8]:
+            doc.add_paragraph(str(n), style="List Bullet")
     cp = view.get("competitive_position") or {}
-    doc.add_heading("موقعك التنافسي", level=1)
+    doc.add_heading("موقعك التنافسي", level=2)
     if cp.get("available"):
         doc.add_paragraph(cp.get("coverage") or "")
         for f in cp.get("feasibility_threads") or []:
@@ -733,149 +839,119 @@ def render_docx(view: dict, path: str) -> str:
                 doc.add_paragraph(gap, style="List Bullet")
         for t in cp.get("competitor_threads") or []:
             if not t.get("observed_price"):
-                # خيوط بحث الويب مراجع لا كيانات (ثغرة ٢) — لا توحي باسم منافس.
-                doc.add_paragraph(f"مرجع ويب للمراجعة: {t['name']} — "
-                                  f"{t['price_flag']} "
-                                  f"(اكتمال الخيط {t['thread_completeness']})",
+                doc.add_paragraph(f"مرجع ويب للمراجعة: {t['name']}",
                                   style="List Bullet")
     else:
-        doc.add_paragraph(cp.get("note") or "")
+        doc.add_paragraph(cp.get("note") or "—")
 
-    # ٢ب) مشهد السوق الأول — أسعار/منافسون/موردون/اتجاه/ثقافة (الموجة ٩).
-    #     يُعرض المرصود، ويُعلن الغائب «غير مرصود» بمصدره/مفتاحه المطلوب — لا
-    #     اختلاق، وتقرير لا يعود «ناقصاً» بل صريحاً بما لديه وما ينقصه.
-    top_m = (view.get("markets") or [{}])[0]
-
-    # §7-1/§7-2: قرار الدخول (§8) ثم TAM/SAM/SOM — بعد الموقع التنافسي مباشرة
-    # وقبل مشهد السوق؛ الغائب يُعلن بفقرة صريحة لا يُخترع.
-    _docx_entry_decision(doc, top_m)
-    _docx_entry_strategy(doc, top_m)
-    _docx_market_size(doc, top_m)
-
-    st_all = top_m.get("section_status") or {}
-
-    def _gate(sec_key: str, title: str) -> bool:
-        """بوابة 2B: دون العتبة يُطبع سطر النقص الصريح فقط — لا نثر عام أبداً."""
-        st = st_all.get(sec_key)
-        if st and st.get("status") == "insufficient":
-            doc.add_heading(title, level=1)
-            doc.add_paragraph("بيانات غير كافية — INSUFFICIENT DATA")
-            from silk_render import insufficient_line
-            doc.add_paragraph(insufficient_line(title, st))
-            return False
-        return True
-
-    def _sec(title: str, items: list, sec_key: str, fmt) -> None:
-        if not _gate(sec_key, title):
-            return
-        doc.add_heading(title, level=1)
-        for it in items or []:
-            doc.add_paragraph(fmt(it), style="List Bullet")
-
-    _sec("أسعار المنتجات في السوق", top_m.get("prices"), "pricing",
-         lambda p: f"{p.get('title') or 'قائمة'}: {_fmt(p.get('price'))}"
-                   + (f" {p['currency']}" if p.get("currency") else "")
-                   + (f" — {p['store']}" if p.get("store") else ""))
-
-    countries = top_m.get("supplier_countries") or []
-    named = top_m.get("named_competitors") or []
-    if not _gate("competitors", "المنافسون"):
-        countries, named = [], None
-    else:
-        doc.add_heading("المنافسون", level=1)
-    if countries:
-        doc.add_paragraph("الدول المورّدة وحصصها:")
-        for c in countries[:6]:
-            doc.add_paragraph(f"{c.get('partner')}: {c.get('share')}% "
-                              f"({_fmt(c.get('value_usd'))}$)", style="List Bullet")
-    if named:
-        # عناوين بحث ويب (الطبقة القديمة) — مراجع للمراجعة اليدوية لا أسماء (ثغرة ٢).
-        doc.add_paragraph("مراجع ويب عن المنافسة (للمراجعة اليدوية — "
-                          "ليست أسماء منافسين):")
-        for n in named[:8]:
-            doc.add_paragraph(str(n), style="List Bullet")
-
-    # §7-3: طبقتا المنافسة من حزمة البحث — بعد قسم «المنافسون» القائم مباشرة.
-    _docx_competition_research(doc, top_m)
-    # §7-4: التسعير بطبقتيه (الحدودية المنمذجة الموسومة + التجزئة ومراجعها).
-    _docx_pricing_layers(doc, top_m)
-
-    if top_m.get("suppliers"):
-        _sec("الموردون والأعمال بالاسم", top_m.get("suppliers"), "competitors",
-             lambda s: f"{s.get('name')} — {s.get('source')}")
-
-    # §7-5..8: SWOT، الشرائح، دليل المورّدين، الاشتراطات — كلها من view.markets[0].
-    _docx_swot(doc, top_m)
-    _docx_segments(doc, top_m)
-    _docx_supplier_directory(doc, top_m)
-    _docx_regulatory(doc, top_m)
-
-    tr = top_m.get("trend") or {}
-    if _gate("trend", "اتجاه الاستيراد متعدد السنوات"):
-        doc.add_heading("اتجاه الاستيراد متعدد السنوات", level=1)
-        doc.add_paragraph(f"النمو {tr.get('growth_pct')}% "
-                          f"(CAGR {tr.get('cagr_pct')}%) — {tr.get('note')}")
-
-    culture = view.get("culture") or []
-    if culture:
-        doc.add_heading("ثقافة المستهلك ونبض السوق", level=1)
-        for c in culture[:6]:
+    # ═══ ١١) استخبارات العميل والطلب ═══
+    doc.add_heading("١١. استخبارات العميل والطلب", level=1)
+    ins = (cc.get("insights") or [])
+    raw_culture = view.get("culture") or []
+    if ins:
+        for o in ins[:5]:
+            doc.add_paragraph(str(o.get("point") or ""), style="List Bullet")
+            ev = "؛ ".join(map(str, (o.get("evidence") or [])[:3]))
+            if ev:
+                doc.add_paragraph(f"الدليل: {ev}", style="Intense Quote")
+    elif raw_culture:
+        doc.add_paragraph("عناوين مرصودة من بحث الويب (لم تُحلَّل بعد):")
+        for c in raw_culture[:6]:
             doc.add_paragraph(str(c.get("title"))[:200], style="List Bullet")
     else:
-        doc.add_heading("ثقافة المستهلك ونبض السوق", level=1)
-        doc.add_paragraph("بيانات غير كافية — INSUFFICIENT DATA")
-        doc.add_paragraph("بيانات غير كافية لقسم «الثقافة» (0/1) — المصادر "
-                          "المُحاوَلة: Web Search (Serper)")
+        doc.add_paragraph("—")
+    doc.add_paragraph("صوت العميل المباشر (ما الذي يقدّره المشترون وكيف "
+                      "يقيّمون المورّدين) يتطلب بحثاً أولياً — مقابلات أو "
+                      "استبيانات — لم يُجرَ بعد؛ هذا القسم يعرض إشارات "
+                      "ثانوية فقط.")
 
-    # ٥) الأسواق — سطر مصدر تحت كل رقم (§10.3، من components_detail).
-    doc.add_heading("الأسواق المرشّحة (الأفضل أولاً)", level=1)
-    for i, m in enumerate((view.get("markets") or [])[:8], 1):
-        doc.add_heading(f"{i}. {m.get('country')} — نقاط "
-                        f"{m.get('score')} (ثقة {m.get('confidence')})",
-                        level=2)
-        for c in m.get("components_detail") or []:
-            doc.add_paragraph(f"{c['name']}: {_fmt(c['value'])}")
-            src_line = (f"المصدر: {c.get('source') or 'غير مرصود'}"
-                        + (f" | سُحب: {c['retrieved_at']}"
-                           if c.get("retrieved_at") else "")
-                        + f" | ثقة: {c.get('confidence')}")
-            doc.add_paragraph(src_line, style="Intense Quote")
+    # ═══ ١٢) المشهد التنظيمي والمخاطر ═══
+    doc.add_heading("١٢. المشهد التنظيمي والمخاطر", level=1)
+    _docx_regulatory(doc, top_m)
+    ed_top = top_m.get("entry_decision") or {}
+    risks = ed_top.get("risks") or []
+    if risks:
+        doc.add_heading("سجل المخاطر", level=2)
+        _add_table(doc, ["الخطر", "الشدة", "الدليل"],
+                   [[r.get("risk"), r.get("severity"), r.get("evidence")]
+                    for r in risks if isinstance(r, dict)])
 
-    # Stage 2A-١) تغطية المصادر لكل قسم (السوق الأعلى) — coverage per section.
-    top_m = (view.get("markets") or [{}])[0]
+    # ═══ ١٣) الاتجاهات والتوقع المستقبلي ═══
+    doc.add_heading("١٣. الاتجاهات والتوقع المستقبلي", level=1)
+    series = [p for p in (tr.get("series") or []) if p.get("value") is not None]
+    if len(series) >= 2:
+        _add_table(doc, ["السنة", "قيمة الاستيراد (دولار)"],
+                   [[p.get("year"), _fmt(p.get("value"))] for p in series])
+        doc.add_paragraph(f"المصدر: {tr.get('source') or 'UN Comtrade'}",
+                          style="Intense Quote")
+        # سيناريوهات من المدى التاريخي المرصود حصراً — لا توقع مخترع:
+        # التغيّرات السنوية الفعلية => أدنى/وسيط/أقصى نمو ملحوظ.
+        changes = []
+        for a, b in zip(series, series[1:]):
+            va, vb = float(a["value"]), float(b["value"])
+            if va > 0:
+                changes.append((vb - va) / va * 100.0)
+        if changes:
+            changes.sort()
+            lo, hi = changes[0], changes[-1]
+            mid = changes[len(changes) // 2]
+            doc.add_paragraph(
+                "سيناريوهات مشتقة من المدى التاريخي المرصود (أدنى/أوسط/"
+                "أعلى تغيّر سنوي فعلي خلال سنوات الدراسة — ليست تنبؤاً): "
+                f"متحفّظ {lo:.1f}% | أساسي {mid:.1f}% | متفائل {hi:.1f}% "
+                "سنوياً.")
+    else:
+        doc.add_paragraph("بيانات الاتجاه غير كافية لهذه السنوات.")
+
+    # ═══ حدود هذا التقرير — قبل التوصيات (§10.3) ═══
+    doc.add_heading("حدود هذا التقرير", level=1)
+    limits = view.get("limits") or []
+    if limits:
+        for x in _gap_list_ar(limits[:12]):
+            doc.add_paragraph(str(x), style="List Bullet")
+    else:
+        doc.add_paragraph("لا حدود مسجّلة لهذا التحليل.")
+
+    # ═══ ١٤) التوصيات الاستراتيجية ═══
+    doc.add_heading("١٤. التوصيات الاستراتيجية", level=1)
+    _docx_entry_decision(doc, top_m)
+    _docx_entry_strategy(doc, top_m)
+    if top_m.get("suppliers"):
+        doc.add_heading("الموردون والأعمال بالاسم", level=2)
+        for sup in top_m["suppliers"][:10]:
+            doc.add_paragraph(f"{sup.get('name')} — {sup.get('source')}",
+                              style="List Bullet")
+    _docx_supplier_directory(doc, top_m)
+    for line in view.get("brief") or []:
+        doc.add_paragraph(line)
+
+    # ═══ الملحق: تغطية المصادر وأثرها (للمحلّل) ═══
+    doc.add_heading("الملحق: تغطية المصادر وأثرها", level=1)
     cov = top_m.get("section_coverage") or {}
     if cov:
-        doc.add_heading("تغطية المصادر حسب القسم", level=1)
-        _AR = {"market_size": "حجم السوق والمنافسة", "demand": "الطلب والقدرة",
-               "regulatory": "الاشتراطات والتعريفة", "competitors": "المنافسون بالاسم",
-               "pricing": "الأسعار", "risk": "المخاطر", "trend": "الاتجاه"}
-        for sec, c in cov.items():
-            flag = " ⚠ مصدر واحد — ثقة منخفضة" if c.get("low_confidence") else ""
-            doc.add_paragraph(
-                f"{_AR.get(sec, sec)}: {c['contributed']}/{c['attempted']} "
-                f"(درجة {c['score']}){flag}")
-
-    # Stage 2A-٢) ملحق الأثر — provenance appendix: لا فشل صامتاً.
+        _add_table(doc, ["القسم", "المُسهم/المُحاوَل", "الدرجة"],
+                   [[_SEC_AR.get(sec, sec),
+                     f"{c['contributed']}/{c['attempted']}", c["score"]]
+                    for sec, c in cov.items()])
+    # 2B في الملحق: الأقسام دون عتبة الكفاية تُسرد هنا بجملة النقص الوحيدة
+    # المسموح بها (مصادر مُحاوَلة) — شفافية المحلّل، لا صياح على وجه التقرير.
+    st_all = top_m.get("section_status") or {}
+    insuff = [(sec, st) for sec, st in st_all.items()
+              if st.get("status") == "insufficient"]
+    if insuff:
+        doc.add_heading("أقسام دون عتبة الكفاية", level=2)
+        from silk_render import insufficient_line
+        for sec, st in insuff:
+            doc.add_paragraph(insufficient_line(_SEC_AR.get(sec, sec), st))
     prov = view.get("provenance") or []
     if prov:
-        doc.add_heading("ملحق: أثر المصادر (المحاولات والإسهام)", level=1)
+        doc.add_heading("أثر المصادر (المحاولات والإسهام)", level=2)
         for b in prov:
             doc.add_paragraph(f"{b['source']}: أسهم {b['contributed']} من "
                               f"{b['attempted']} محاولة")
             for f in b.get("failures") or []:
-                doc.add_paragraph(f"    فشل مُسجَّل: {f}", style="Intense Quote")
-
-    # ٦) حدود هذا التقرير — قبل التوصيات (§10.3).
-    doc.add_heading("حدود هذا التقرير", level=1)
-    limits = view.get("limits") or ["لا فجوات مرصودة في الأسواق العليا"]
-    for x in limits[:12]:
-        doc.add_paragraph(str(x), style="List Bullet")
-
-    # ٧) التوصية (سطور المختصر نفسها — نفس القالب، لا صياغة موازية).
-    doc.add_heading("التوصية الأوّلية", level=1)
-    for line in view.get("brief") or []:
-        doc.add_paragraph(line)
-    doc.add_paragraph(view.get("note") or "")
+                doc.add_paragraph(f"    فشل مُسجَّل: {f}",
+                                  style="Intense Quote")
 
     doc.save(path)
     return path

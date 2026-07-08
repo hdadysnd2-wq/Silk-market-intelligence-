@@ -68,6 +68,10 @@ def test_docx_gated_section_contains_only_the_insufficiency_sentence():
     path = render_docx(_starved_view(),
                        os.path.join(tempfile.mkdtemp(), "g.docx"))
     joined = "\n".join(p.text for p in Document(path).paragraphs)
-    assert "INSUFFICIENT DATA" in joined
+    # 5b + P2-7: وجه التقرير هادئ (بلا صياح INSUFFICIENT DATA)؛ شفافية 2B
+    # (جملة النقص + المصادر المُحاوَلة) انتقلت إلى ملحق المحلّل — مرة واحدة.
+    assert "INSUFFICIENT DATA" not in joined
+    assert "أقسام دون عتبة الكفاية" in joined
+    assert "بيانات غير كافية" in joined
     assert "المصادر المُحاوَلة" in joined
     assert "LOCALPRICE_API_KEY" not in joined      # النثر الإرشادي القديم زال
