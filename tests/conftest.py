@@ -30,6 +30,21 @@ def block_network():
         socket.socket = real
 
 
+def docx_all_text(path: str) -> str:
+    """كل نص مستند Word — فقرات + خلايا جداول (مراجعة المشروع: بعض أقسام
+    render_docx صارت جداولاً حقيقية بدل نقاط سردية؛ `doc.paragraphs` وحدها
+    لا تصل خلايا الجداول، فتفوّت اختباراتٌ محتوًى انتقل إليها بلا انحدار فعلي).
+    """
+    from docx import Document
+    doc = Document(path)
+    parts = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                parts.append(cell.text)
+    return "\n".join(parts)
+
+
 import tempfile
 
 import pytest

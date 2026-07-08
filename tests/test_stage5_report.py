@@ -90,12 +90,12 @@ def test_render_markdown_full_report_every_number_sourced():
 def test_docx_includes_decision_and_tam_sections():
     pytest.importorskip("docx")
     _seed_store()
-    from docx import Document
+    from conftest import docx_all_text
     from silk_render import build_view
     from silk_reports import render_docx
     path = render_docx(build_view(_analyzed()),
                        os.path.join(tempfile.mkdtemp(), "r.docx"))
-    texts = "\n".join(p.text for p in Document(path).paragraphs)
+    texts = docx_all_text(path)  # فقرات + خلايا جداول (بعض الأقسام صارت جداول)
     assert "قرار الدخول" in texts
     assert "TAM" in texts
     assert "SWOT" in texts or "سوات" in texts
