@@ -105,8 +105,19 @@ def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
             continue
         totals[code] = totals.get(code, 0.0) + val
     grand = sum(totals.values())
-    # حجم السوق: صفّ العالم إن وُجد، وإلا مجموع الشركاء (لا اختلاق) — market size.
-    total_usd = world if (world and world > 0) else (grand if grand > 0 else None)
+    # حجم السوق: الأكبر رياضياً بين صف العالم ومجموع الشركاء (مراجعة المشروع).
+    # ثابت رياضي لا يقبل النقاش: الإجمالي لا يمكن أن يصغر عن مجموع جزءٍ منه —
+    # فحين world < grand يكون صف العالم خاطئاً/غير مكتمل يقيناً (لا نخمّن أيّهما
+    # أصحّ، بل نستبعد المستحيل حسابياً). كان الكود يفضّل صف العالم دائماً ولو
+    # كان أصغر بعشرات الأضعاف من مجموع شركاء مرصودين بالاسم في نفس الردّ —
+    # تناقضٌ داخل التقرير نفسه (TAM يخالف جدول المنافسين وخط الاتجاه) يفقد
+    # الثقة فوراً. الحالة world>=grand (الأشيع: مجموع شركاء ناقص لصغار الدول)
+    # سلوكها كالسابق تماماً؛ لا انحدار.
+    total_usd = None
+    if world and world > 0:
+        total_usd = world
+    if grand > 0 and (total_usd is None or grand > total_usd):
+        total_usd = grand
     # تحقق تقاطعي (Stage 2A): مشتقّتان لنفس الحقيقة — صف العالم ومجموع الشركاء.
     # تباين >20% يُعلَّم (سوء تبويب/نقص شركاء محتمل) ولا يُخفى ولا يُسوّى.
     xval_note = ""
@@ -115,6 +126,8 @@ def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
         if div > 0.20:
             xval_note = (f" | تباين مصادر {round(100 * div)}%: صف العالم "
                          f"{round(world):,}$ مقابل مجموع الشركاء {round(grand):,}$")
+            if grand > world:
+                xval_note += " — استُخدم مجموع الشركاء (الأكبر؛ صف العالم أصغر من مجموع جزءٍ منه، مستحيل حسابياً)"
     competitors: list[DataPoint] = []
     if grand > 0:
         # ثقة واعية بالبَتر (مراجعة المشروع): الحصص تُقسم على مجموع الشركاء

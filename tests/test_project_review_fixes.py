@@ -197,6 +197,27 @@ def test_truncated_denominator_lowers_competitor_confidence():
     assert all(c.confidence == 0.9 for c in mi2["competitors"])
 
 
+def test_world_row_smaller_than_partner_sum_uses_the_larger_total():
+    # بلاغ المالك: تقرير عسل/الكويت أظهر market_size=789,206$ بينما خط
+    # الاتجاه ومجموع جدول المنافسين في نفس المستند = 48,537,942$ — تناقضٌ
+    # ٦١ ضعفاً أفقد التقرير مصداقيته. صف عالمٍ أصغر من مجموع جزءٍ منه
+    # مستحيل حسابياً؛ يجب استبعاده لصالح مجموع الشركاء الأكبر والمُفصَّل.
+    import silk_data_layer_v2 as v2
+    recs = [{"partnerCode": "0", "primaryValue": 789206.0},
+            {"partnerCode": "682", "primaryValue": 8102937.0},
+            {"partnerCode": "554", "primaryValue": 5968873.0}]
+    with mock.patch.object(v2, "comtrade_trade", return_value=recs):
+        mi = v2.market_imports("040900", "414", 2025)
+    assert mi["total_usd"] == 8102937.0 + 5968873.0
+    assert "استُخدم مجموع الشركاء" in mi["xval_note"]
+    # الحالة الشائعة (world >= grand) لا تتغيّر — لا انحدار.
+    recs2 = [{"partnerCode": "0", "primaryValue": 100.0},
+             {"partnerCode": "682", "primaryValue": 60.0}]
+    with mock.patch.object(v2, "comtrade_trade", return_value=recs2):
+        mi2 = v2.market_imports("080410", "784", 2023)
+    assert mi2["total_usd"] == 100.0
+
+
 def test_saudi_absence_is_inferred_zero_with_lower_confidence():
     from silk_data_layer import DataPoint
     from silk_market_ranker import _saudi_position_component
