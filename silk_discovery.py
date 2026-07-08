@@ -68,6 +68,11 @@ def _totals_by_hs(records: list[dict]) -> dict[str, float]:
         code = str(rec.get("cmdCode") or "").strip()
         if not code or code == "TOTAL":
             continue
+        # بوابة النطاق غير النفطي (8d): رموز الفصول المستبعدة (وقود معدنية)
+        # لا تدخل حسابات الفرص أصلاً — سِلك منصة تصدير غير نفطي.
+        from silk_hs_resolver import exclusion_note
+        if exclusion_note(code):
+            continue
         val = primary_value(rec)
         if val is None:
             continue

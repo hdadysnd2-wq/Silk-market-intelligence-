@@ -15,7 +15,7 @@ import logging
 
 from silk_data_layer import DataPoint, _today
 from silk_hs_resolver import resolve
-from silk_market_ranker import rank_markets, COUNTRIES, WEIGHTS
+from silk_market_ranker import rank_markets, WEIGHTS
 from silk_agents import ResearchManager
 from silk_synthesis import synthesize
 
@@ -92,7 +92,9 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     All optional layers degrade gracefully offline (provenance-tagged None, no fabrication).
     """
     year = year or _default_year()
-    countries = countries or COUNTRIES
+    # 8c: بلا countries صريحة نمرّر None — rank_markets يجرّب «أكبر المستوردين
+    # عالمياً» ديناميكياً أولاً ثم يتراجع للقائمة المنسّقة COUNTRIES بنفسه.
+    # الفرض المبكر هنا كان يمنع المسار الديناميكي من العمل إطلاقاً.
 
     # 1) صنّف المنتج إلى رمز HS — resolve product -> HS6 (carry its confidence).
     #    hs_code ممرَّر (من زر "حلّل هذه الفرصة" بالاكتشاف، §11.5-3) يتجاوز
@@ -101,6 +103,12 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         hs = DataPoint(str(hs_code), "Silk discovery hand-off", 1.0,
                        "HS ممرَّر مباشرة من اكتشاف الفرص — لا إعادة تصنيف",
                        _today())
+        # بوابة النطاق غير النفطي (8d) على المسار الصريح أيضاً — نفس نقطة
+        # الحقيقة الواحدة في المصنّف؛ رمز فصلٍ مستبعد يُعلن خارج النطاق.
+        from silk_hs_resolver import exclusion_note
+        excl = exclusion_note(hs.value)
+        if excl:
+            hs = DataPoint(None, hs.source, 0.0, excl, _today())
     else:
         hs = resolve(product_name)
     if hs.value is None:
