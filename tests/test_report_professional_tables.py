@@ -115,13 +115,17 @@ def test_docx_tables_do_not_break_existing_gap_declarations():
                                     "components": {}}]})
     path = render_docx(view, os.path.join(tempfile.mkdtemp(), "r3.docx"))
     doc = Document(path)
-    # لا حزمة بحث => أقسام الجداول (قرار الدخول/حجم السوق/التسعير/الاشتراطات)
-    # تتدهور لفقرة غياب قبل بناء أي جدول؛ SWOT وحدها تبقى شبكة ٢×٢ فارغة —
-    # نفس سلوكها القديم (كانت تطبع ٤ عناوين "لا بند مرصوداً" بلا حزمة بحث
-    # أيضاً)، فقط بشكل شبكة بدل عناوين متتالية.
-    assert len(doc.tables) == 1
-    grid = doc.tables[0]
-    assert all("لا بند مرصوداً" in c.text for row in grid.rows for c in row.cells)
+    # P2-7: بطاقة الغلاف + جدول تغطية الملحق يظهران دوماً؛ بلا حزمة بحث تبقى
+    # شبكة SWOT ٢×٢ وحدها بين جداول البيانات — خلاياها «—» هادئة (5b) لا
+    # عناوين وعظية، وأقسام الجداول الأخرى تتدهور لفقرة غياب قبل بناء أي جدول.
+    swot_grids = [t for t in doc.tables
+                  if len(t.rows) == 2 and len(t.rows[0].cells) == 2
+                  and "القوة" in t.rows[0].cells[0].text]
+    assert len(swot_grids) == 1
+    grid = swot_grids[0]
+    assert all("—" in c.text for row in grid.rows for c in row.cells)
+    assert not any("لا بند مرصوداً" in c.text
+                   for row in grid.rows for c in row.cells)
     joined = docx_all_text(path)
     assert "استراتيجية دخول السوق" in joined
     assert "بيانات غير كافية لتركيب استراتيجية دخول" in joined

@@ -443,8 +443,8 @@ def _swot(research: dict | None) -> dict:
         T.append({"text": "خطر سياسي حرج (WGI دون −1.5)",
                   "evidence": "World Bank — PV.EST"})
     return {"S": S, "W": W, "O": O, "T": T,
-            "note": "خلايا قاعدية من حقائق مرصودة حصراً — الخلية الفارغة تعني "
-                    "لا بند مرصوداً، لا أنها سليمة"}
+            "note": "خلايا مشتقة من الحقائق المتاحة — الخلية الفارغة تعني "
+                    "غياب البيانات، لا سلامة الجانب"}
 
 
 def _segments(research: dict | None) -> list[dict]:

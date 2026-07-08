@@ -81,13 +81,18 @@ def test_docx_full_report_structure():
     assert os.path.exists(out)
     texts = [p.text for p in docx.Document(out).paragraphs]
     joined = "\n".join(texts)
-    heads = [t for t in texts if t in ("الخلاصة التنفيذية", "موقعك التنافسي",
-                                       "حدود هذا التقرير", "التوصية الأوّلية")]
-    assert heads[0] == "الخلاصة التنفيذية"                    # الخلاصة أولاً
-    assert heads.index("حدود هذا التقرير") < heads.index("التوصية الأوّلية")
+    # هيكل الأقسام الـ14 المرقّم (P2-7): الخلاصة أول الأقسام، والحدود قبل
+    # التوصيات الاستراتيجية؛ الفجوات تُعرض «—» هادئة ومترجمة (5b).
+    heads = [t for t in texts if t in ("١. الخلاصة التنفيذية",
+                                       "١٠. المشهد التنافسي",
+                                       "حدود هذا التقرير",
+                                       "١٤. التوصيات الاستراتيجية")]
+    assert heads[0] == "١. الخلاصة التنفيذية"                  # الخلاصة أولاً
+    assert heads.index("حدود هذا التقرير") \
+        < heads.index("١٤. التوصيات الاستراتيجية")
     assert "المصدر: UN Comtrade" in joined                     # سطر المصدر
-    assert "demand_capacity missing" in joined                 # الفجوة مسرودة
-    assert "— (لا بيانات)" in joined                           # رقم غائب معلن
+    assert "دخل الفرد غير متوفر" in joined     # الفجوة مسرودة — مترجمة (5b)
+    assert "demand_capacity missing" not in joined  # لا نص داخلي على الوجه
 
 
 def test_docx_missing_dependency_clear_error():

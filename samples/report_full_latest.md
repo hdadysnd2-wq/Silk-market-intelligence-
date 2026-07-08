@@ -44,7 +44,7 @@
 | المنافسة | 0.63 | متوسط المتاح من: HHI/0.5، حصة الأكبر/100، عدد المرشّحين بالاسم/10 — الدرجة المستهلكة في المجموع هي (1 − الشدة) | named_density |
 | التنظيم | 0.375 | متوسط المتاح من: (1 − تعريفة/30%)، وضوح القائمة (بنود/8) | tariff |
 | الربحية | 0.75 | متوسط المتاح من: الهامش/40%، الموقع السعري (1.5 − سعرك/متوسط السوق) | margin |
-| أمان السوق (المخاطر) | — (لا بيانات) | متوسط المتاح من: (استقرار سياسي WGI+2.5)/5، (جودة تنظيم WGI+2.5)/5، (LPI−1)/4، (1 − تقلّب الصرف/20%) — أعلى=أأمن | political_stability، regulatory_quality، logistics، fx_stability |
+| أمان السوق (المخاطر) | — | متوسط المتاح من: (استقرار سياسي WGI+2.5)/5، (جودة تنظيم WGI+2.5)/5، (LPI−1)/4، (1 − تقلّب الصرف/20%) — أعلى=أأمن | political_stability، regulatory_quality، logistics، fx_stability |
 
 - أعمدة غائبة كلياً: أمان السوق (المخاطر)
 
@@ -118,7 +118,7 @@
 ### التهديدات Threats
 - لا بند مرصوداً
 
-> خلايا قاعدية من حقائق مرصودة حصراً — الخلية الفارغة تعني لا بند مرصوداً، لا أنها سليمة
+> خلايا مشتقة من الحقائق المتاحة — الخلية الفارغة تعني غياب البيانات، لا سلامة الجانب
 
 ## شرائح العملاء
 
@@ -140,7 +140,7 @@
 - متطلبات SFDA لتصدير الفئات الخاضعة (منشآت مرخّصة وشهادات صحية عند طلب سوق الوجهة) — الجهة: الهيئة العامة للغذاء والدواء SFDA — الاتجاه: exit — https://www.sfda.gov.sa
 - التسجيل في بوابة هيئة تنمية الصادرات السعودية (خدمات وبرامج دعم المصدرين) — الجهة: هيئة تنمية الصادرات السعودية — الاتجاه: exit — https://saudiexports.sa
 - (المصدر: Silk L1 requirements reference (official portals / EUR-Lex) | سُحب: 2026-07-08 | ثقة: 0.8)
-- فجوة معلنة: tariff_applied_pct: WITS unavailable: ProxyError for HS080410 SAU->CHN 2023: HTTPSConnectionPool(host='wits.worldbank.org', port=443): Max retries exceeded with url: /API/V1/SDMX/V21/datasource/TRN/reporter/CHN/partner/SAU/product/080410/year/2023/datatype/AHS?format=JSON (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=38299): Failed to establish a new connection: network disabled for offline test")))
+- فجوة معلنة: tariff_applied_pct: WITS unavailable: ProxyError for HS080410 SAU->CHN 2023: HTTPSConnectionPool(host='wits.worldbank.org', port=443): Max retries exceeded with url: /API/V1/SDMX/V21/datasource/TRN/reporter/CHN/partner/SAU/product/080410/year/2023/datatype/AHS?format=JSON (Caused by ProxyError('Unable to connect to proxy', NewConnectionError("HTTPSConnection(host='127.0.0.1', port=43475): Failed to establish a new connection: network disabled for offline test")))
 
 ## سجل المخاطر
 

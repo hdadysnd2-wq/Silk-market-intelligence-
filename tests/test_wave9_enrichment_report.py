@@ -69,12 +69,16 @@ def test_render_docx_includes_new_sections():
     view = build_view(_result_with_enrichment())
     path = render_docx(view, os.path.join(tempfile.mkdtemp(), "r.docx"))
     from docx import Document
+    from conftest import docx_all_text
     texts = [p.text for p in Document(path).paragraphs]
-    joined = "\n".join(texts)
+    joined = docx_all_text(path)      # فقرات + خلايا جداول (P2-7: أقسام جدولية)
     # الأقسام الجديدة حاضرة كعناوين
-    for heading in ("أسعار المنتجات في السوق", "المنافسون",
-                    "الموردون والأعمال بالاسم", "اتجاه الاستيراد متعدد السنوات",
-                    "ثقافة المستهلك ونبض السوق"):
+    # الهيكل الـ14 (P2-7): الأقسام القديمة صارت بنوداً تحت الأقسام المرقّمة.
+    for heading in ("أسعار المنتجات في السوق",
+                    "الموردون والأعمال بالاسم",
+                    "٨. تحليل التجارة (استيراد/تصدير)",
+                    "١٣. الاتجاهات والتوقع المستقبلي",
+                    "١١. استخبارات العميل والطلب"):
         assert heading in texts, heading
     # وبياناتها المرصودة ظهرت
     assert "Bateel" in joined and "إيران" in joined and "رمضان" in joined
@@ -92,8 +96,10 @@ def test_render_docx_declares_gaps_when_enrichment_missing():
                                     "components": {}}]})
     path = render_docx(view, os.path.join(tempfile.mkdtemp(), "r2.docx"))
     joined = "\n".join(p.text for p in Document(path).paragraphs)
-    assert "أسعار المنتجات في السوق" in joined      # القسم موجود
-    # عقد 2B الجديد: دون العتبة يُعلن «بيانات غير كافية» + المصادر المُحاوَلة —
-    # جملة النقص الوحيدة المسموح بها، لا نثر حشو (بديل «غير مرصود» القديم).
-    assert "بيانات غير كافية" in joined
-    assert "المصادر المُحاوَلة" in joined
+    # 5b + P2-7: بلا إثراء، الأقسام تعرض «—»/غياباً هادئاً — لا نثر حشو،
+    # ولا صياح INSUFFICIENT DATA على وجه التقرير؛ وقسم التسعير (الطبقة
+    # المدفوعة) لا يظهر أصلاً بلا قوائم بدل عنوان فارغ.
+    assert "١٠. المشهد التنافسي" in joined
+    assert "أسعار المنتجات في السوق" not in joined   # لا قوائم => لا قسم فارغ
+    assert "INSUFFICIENT DATA" not in joined
+    assert "بيانات غير كافية" in joined              # غياب حزمة البحث معلن بهدوء
