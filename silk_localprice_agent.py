@@ -190,6 +190,109 @@ def compare_own_price(own_price: float | None, findings: list[DataPoint]) -> dic
                     "السوق — preliminary, over observed listings only."}
 
 
+def suggest_price(findings: list[DataPoint], cost_per_unit: float | None = None,
+                  tariff_pct: float | None = None,
+                  shipping_per_unit: float | None = None) -> dict:
+    """اقترح نطاق تسعير من القوائم المرصودة — recommended price band (P1-6).
+
+    مواصفة المالك: compare_own_price تُموضِع سعراً يُدخله المستخدم لكنها لا
+    توصي بسعر أبداً — هذه تسدّ الفجوة. النطاق مشتق حصراً من إحصاءات القوائم
+    المرصودة (الربيع الأول → الوسيط: منافس دون أغلب السوق) مرفوعاً عند
+    الحاجة إلى أرضية التكلفة بعد الرسوم والشحن (إن أدخلها المستخدم) —
+    معادلات معلنة في rationale، لا رقم من خارج المرصود والمدخلات.
+    بلا قوائم => كل الحقول الرقمية None مع note يشرح السبب (لا اختلاق).
+
+    Returns {suggested_min, suggested_max, landed_cost_floor,
+    margin_at_min_pct, margin_at_max_pct, basis{...}, rationale, note}.
+    """
+    prices: list[float] = []
+    for dp in findings or []:
+        v = dp.value
+        raw = v.get("price") if isinstance(v, dict) else None
+        try:
+            p = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if p > 0:
+            prices.append(p)
+
+    empty = {"suggested_min": None, "suggested_max": None,
+             "landed_cost_floor": None, "margin_at_min_pct": None,
+             "margin_at_max_pct": None, "basis": None, "rationale": None}
+    if not prices:
+        return {**empty,
+                "note": "لا قوائم أسعار مرصودة يُشتق منها نطاق — التوصية "
+                        "السعرية تتطلب أسعار رفّ فعلية (الدراسة العميقة)"}
+
+    prices.sort()
+    n = len(prices)
+
+    def _pct(q: float) -> float:
+        """المئين بالاستيفاء الخطي — linear-interpolated percentile."""
+        idx = q * (n - 1)
+        lo, hi = int(idx), min(int(idx) + 1, n - 1)
+        return round(prices[lo] + (prices[hi] - prices[lo]) * (idx - lo), 2)
+
+    q1, median = _pct(0.25), _pct(0.5)
+    market_avg = round(sum(prices) / n, 2)
+    basis = {"listings_count": n, "market_min": prices[0],
+             "market_max": prices[-1], "market_avg": market_avg,
+             "q1": q1, "median": median}
+
+    # أرضية التكلفة حتى الوصول — من مدخلات المستخدم فقط؛ غيابها = لا أرضية.
+    floor = None
+    if cost_per_unit is not None:
+        floor = float(cost_per_unit) * (1.0 + float(tariff_pct or 0) / 100.0) \
+            + float(shipping_per_unit or 0)
+        floor = round(floor, 2)
+
+    lo_band, hi_band = q1, median
+    rationale_bits = [
+        f"النطاق المقترح مشتق من {n} سعراً مرصوداً: من الربيع الأول "
+        f"({q1}) إلى الوسيط ({median}) — تسعير منافس دون متوسط السوق "
+        f"({market_avg})"]
+
+    note = ("نطاق مشتق من القوائم المرصودة فقط — راجعه مقابل تكاليفك "
+            "الفعلية قبل الاعتماد" if floor is None else None)
+    if floor is not None:
+        rationale_bits.append(
+            f"أرضية التكلفة حتى الوصول: {floor} "
+            "(التكلفة × (1 + التعريفة%) + الشحن — من مدخلاتك)")
+        if floor >= prices[-1]:
+            return {**empty, "landed_cost_floor": floor, "basis": basis,
+                    "rationale": "؛ ".join(rationale_bits),
+                    "note": "تكلفتك بعد الرسوم والشحن أعلى من كل الأسعار "
+                            "المرصودة في السوق — لا نطاق ربحي عند هذه "
+                            "التكلفة؛ أعد النظر في التكلفة أو السوق"}
+        if floor > lo_band:
+            lo_band = floor
+            rationale_bits.append("رُفع الحد الأدنى إلى أرضية التكلفة "
+                                  "للحفاظ على هامش موجب")
+        if hi_band < lo_band:
+            hi_band = min(market_avg, prices[-1])
+            rationale_bits.append("وُسّع الحد الأعلى إلى متوسط السوق لأن "
+                                  "الأرضية تجاوزت الوسيط")
+        if hi_band < lo_band:
+            return {**empty, "landed_cost_floor": floor, "basis": basis,
+                    "rationale": "؛ ".join(rationale_bits),
+                    "note": "الأرضية تجاوزت متوسط السوق — الهامش الموجب "
+                            "غير قابل للتحقيق ضمن الأسعار المرصودة"}
+
+    def _margin(sell: float) -> float | None:
+        if floor is None:
+            return None
+        return round((sell - floor) / sell * 100, 1) if sell > 0 else None
+
+    return {"suggested_min": round(lo_band, 2),
+            "suggested_max": round(hi_band, 2),
+            "landed_cost_floor": floor,
+            "margin_at_min_pct": _margin(lo_band),
+            "margin_at_max_pct": _margin(hi_band),
+            "basis": basis, "rationale": "؛ ".join(rationale_bits),
+            "note": note or "توصية مبدئية على القوائم المرصودة فقط — "
+                            "ليست شاملة كل السوق"}
+
+
 class LocalPriceAgent(BaseAgent):
     """وكيل أسعار السوق المحلي — actual retail prices/best-sellers in-market."""
 
