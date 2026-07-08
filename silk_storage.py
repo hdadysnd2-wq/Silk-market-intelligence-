@@ -21,9 +21,17 @@ def _db_path() -> str:
     """مسار قاعدة التحليلات وقت النداء — resolve at call time (env or default).
 
     `SILK_DB` يوجّه الملف لقرص دائم في النشر (Railway volume على /data مثلًا)
-    دون حجب ملفات data/ المرجعية. Env override for persistent-disk deploys.
+    دون حجب ملفات data/ المرجعية؛ يليه اشتقاق من `SILK_DATA_DIR` (متغير واحد
+    يوجّه كل المخازن للقرص). Env override for persistent-disk deploys;
+    SILK_DATA_DIR derives the path when SILK_DB itself is unset.
     """
-    return os.environ.get("SILK_DB", "").strip() or _DEFAULT_PATH
+    explicit = os.environ.get("SILK_DB", "").strip()
+    if explicit:
+        return explicit
+    base = os.environ.get("SILK_DATA_DIR", "").strip()
+    if base:
+        return os.path.join(base, "silk.db")
+    return _DEFAULT_PATH
 
 
 def _connect(path: str) -> sqlite3.Connection:

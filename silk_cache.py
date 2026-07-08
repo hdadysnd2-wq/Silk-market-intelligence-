@@ -20,6 +20,23 @@ _CACHE_DIR = os.path.join("data", "cache")
 _TIMEOUT = 30
 
 
+def _cache_dir() -> str:
+    """مجلد التخزين وقت النداء — resolve at call time (env or default).
+
+    `SILK_CACHE_DIR` يوجّه الملفات لقرص دائم في النشر (Railway volume على
+    /data/cache مثلًا) فتنجو ذاكرة الطلبات من إعادة النشر؛ يليه اشتقاق من
+    `SILK_DATA_DIR` (متغير واحد يوجّه كل المخازن)، ثم الافتراضي المحلي.
+    Env override so the request cache survives redeploys on a mounted volume.
+    """
+    explicit = os.environ.get("SILK_CACHE_DIR", "").strip()
+    if explicit:
+        return explicit
+    base = os.environ.get("SILK_DATA_DIR", "").strip()
+    if base:
+        return os.path.join(base, "cache")
+    return _CACHE_DIR
+
+
 def _key(url: str, params: dict | None) -> str:
     """مفتاح التخزين — sha1 of url + sorted params."""
     raw = url + "?" + urlencode(sorted((params or {}).items()))
@@ -37,7 +54,8 @@ def cached_get(
     (keep-alive)؛ بدونه يسقط إلى requests.get (تشغيل مستقل). Injected pooled
     getter for connection reuse; falls back to requests.get standalone.
     """
-    path = os.path.join(_CACHE_DIR, _key(url, params) + ".json")
+    cache_dir = _cache_dir()
+    path = os.path.join(cache_dir, _key(url, params) + ".json")
     try:  # سباق exists/getmtime — ملف يُحذف بينهما لا يُسقط الطلب
         fresh = (time.time() - os.path.getmtime(path)) < ttl_seconds
     except OSError:
@@ -65,7 +83,7 @@ def cached_get(
         return None
 
     try:
-        os.makedirs(_CACHE_DIR, exist_ok=True)
+        os.makedirs(cache_dir, exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(data, fh)
     except OSError as exc:  # caching is best-effort

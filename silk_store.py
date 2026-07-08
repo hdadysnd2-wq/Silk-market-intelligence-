@@ -32,7 +32,16 @@ def _now() -> str:
 
 
 def _db_path() -> str:
-    return os.environ.get("SILK_STORE_DB", _DEFAULT_PATH)
+    """مسار المخزن الموحّد — `SILK_STORE_DB` أولاً، ثم اشتقاق من `SILK_DATA_DIR`
+    (القرص الدائم في النشر)، ثم الافتراضي المحلي. Explicit var wins;
+    SILK_DATA_DIR derives the volume path; local default otherwise."""
+    explicit = os.environ.get("SILK_STORE_DB", "").strip()
+    if explicit:
+        return explicit
+    base = os.environ.get("SILK_DATA_DIR", "").strip()
+    if base:
+        return os.path.join(base, "silk_store.db")
+    return _DEFAULT_PATH
 
 
 def _is_postgres() -> bool:
