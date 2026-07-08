@@ -57,3 +57,6 @@ def _isolated_fact_store(monkeypatch):
     بعد تشغيلات تدقيق Stage 1). Every test gets its own store unless it overrides."""
     monkeypatch.setenv("SILK_STORE_DB",
                        os.path.join(tempfile.mkdtemp(), "store.db"))
+    # 1b: عطّل مباعدة النداءات في الاختبارات — الشبكة مقطوعة أصلاً، والمباعدة
+    # 250ms × مئات النداءات الفاشلة كانت ستبطئ الحزمة بلا فائدة.
+    monkeypatch.setenv("SILK_HTTP_MIN_GAP_MS", "0")

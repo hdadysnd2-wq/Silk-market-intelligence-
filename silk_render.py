@@ -28,7 +28,8 @@ def _dp(obj: object) -> dict:
             "source": getattr(obj, "source", ""),
             "confidence": getattr(obj, "confidence", 0.0),
             "note": getattr(obj, "note", ""),
-            "retrieved_at": getattr(obj, "retrieved_at", "")}
+            "retrieved_at": getattr(obj, "retrieved_at", ""),
+            "status": getattr(obj, "status", "")}
 
 
 def _decision(top: dict | None) -> dict:
@@ -521,7 +522,8 @@ def build_view(result: dict) -> dict:
                  "source": _dp(c).get("source"),
                  "confidence": _dp(c).get("confidence"),
                  "retrieved_at": _dp(c).get("retrieved_at", ""),
-                 "note": _dp(c).get("note", "")}
+                 "note": _dp(c).get("note", ""),
+                 "status": _dp(c).get("status", "")}
                 for name, c in comps.items()],
             "recommendation": row.get("recommendation"),
             "quality_flags": row.get("quality_flags") or [],

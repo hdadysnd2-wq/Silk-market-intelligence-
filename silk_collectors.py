@@ -178,7 +178,8 @@ def collect_comtrade(hs6: str, targets: list[dict], year: int,
             break
         ok = False
         for attempt in range(3):  # محاولة + إعادتان بتراجع أُسّي
-            recs = comtrade_trade(hs6, t["m49"], year, flow="M", partner="all")
+            recs = comtrade_trade(hs6, t["m49"], year,
+                                  flow="M", partner="all") or []
             calls += 1
             if recs:
                 rows = []

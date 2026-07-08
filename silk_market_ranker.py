@@ -80,7 +80,7 @@ def top_import_markets(hs_code: str, year: int, n: int = 38) -> list[dict]:
     والمستدعي يتراجع للقائمة المنسّقة COUNTRIES — سلوك اليوم بلا انحدار.
     """
     from silk_data_layer import M49_TO_ISO3, comtrade_trade, primary_value
-    recs = comtrade_trade(hs_code, None, year, flow="M", partner=0)
+    recs = comtrade_trade(hs_code, None, year, flow="M", partner=0) or []
     rows: list[tuple[float, str, str]] = []
     skipped = 0
     for rec in recs or []:
@@ -122,13 +122,19 @@ WEIGHTS: dict[str, float] = {
 
 
 def _market_size_component(total_usd: object, hs_code: str, m49: str,
-                           year: int, xval: str = "") -> DataPoint:
+                           year: int, xval: str = "",
+                           fetch_failed: bool = False) -> DataPoint:
     """حجم السوق — total imports of this HS by the market, derived from the SAME
     Comtrade call as the competitors (no extra request). None => no data."""
     if total_usd is None:
+        if fetch_failed:   # 1b: عجز جلب ≠ سوق فارغ — «أعد المحاولة» لا «—»
+            return DataPoint(None, "UN Comtrade", 0.0,
+                             note="تعذّر الجلب من كومتريد (حد معدل/شبكة) — "
+                                  "أعد المحاولة",
+                             retrieved_at=_today(), status="fetch_failed")
         return DataPoint(None, "UN Comtrade", 0.0,
                          note=f"no import total HS{hs_code} -> {m49} {year}",
-                         retrieved_at=_today())
+                         retrieved_at=_today(), status="no_record")
     conf = 0.7 if xval else 0.9      # تباين مصادر >20% => ثقة أدنى (Stage 2A)
     return DataPoint(float(total_usd), "UN Comtrade", conf,
                      note=f"total imports HS{hs_code} {year} (USD){xval}",
@@ -254,7 +260,9 @@ def _gather_row(hs_code: str, c: dict, year: int) -> dict:
     comp_dps = {
         "market_size": _market_size_component(mi["total_usd"], hs_code, m49,
                                               eff_year,
-                                              xval=mi.get("xval_note", "") + fb),
+                                              xval=mi.get("xval_note", "") + fb,
+                                              fetch_failed=bool(
+                                                  mi.get("fetch_failed"))),
         "saudi_position": _saudi_position_component(comps),
         "demand_capacity": _demand_capacity_component(inc, iso3, eff_year),
         "competition": _competition_component(comps),

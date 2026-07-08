@@ -65,9 +65,45 @@ _session.mount("https://", requests.adapters.HTTPAdapter(
     pool_connections=16, pool_maxsize=16, max_retries=0))
 
 
+# 1b: مباعدة النداءات لكل مضيف (تحليل واحد يطلق ~150 نداء دفعة واحدة فيضرب
+# حدود المعدل) + إعادة محاولة بتراجع أسّي على 429/5xx مع احترام Retry-After.
+# الإعادة على أكواد HTTP فقط (الردّ الحقيقي الموثَّق) — أخطاء الاتصال تمرّ
+# كما كانت (الاختبارات الهيرمتية تقطع الشبكة فلا حلقات نوم فيها).
+import threading as _threading
+import time as _time
+
+_host_lock = _threading.Lock()
+_last_hit: dict[str, float] = {}
+_RETRYABLE = (429, 500, 502, 503, 504)
+
+
+def _throttle(host: str) -> None:
+    gap = float(os.environ.get("SILK_HTTP_MIN_GAP_MS", "250")) / 1000.0
+    if gap <= 0:
+        return
+    with _host_lock:
+        wait = _last_hit.get(host, 0.0) + gap - _time.monotonic()
+        _last_hit[host] = max(_time.monotonic(), _last_hit.get(host, 0.0) + gap)
+    if wait > 0:
+        _time.sleep(min(wait, 5.0))
+
+
 def _http_get(url: str, params: dict | None = None):
-    """جلب عبر الجلسة المجمّعة — pooled keep-alive GET (P2)."""
-    return _session.get(url, params=params, timeout=_TIMEOUT)
+    """جلب مرن عبر الجلسة المجمّعة — throttled GET with 429/5xx backoff (1b)."""
+    host = url.split("/")[2] if "://" in url else url
+    retries = int(os.environ.get("SILK_HTTP_RETRIES", "3"))
+    resp = None
+    for attempt in range(retries + 1):
+        _throttle(host)
+        resp = _session.get(url, params=params, timeout=_TIMEOUT)
+        if resp.status_code not in _RETRYABLE or attempt >= retries:
+            return resp
+        ra = str(resp.headers.get("Retry-After") or "").strip()
+        delay = float(ra) if ra.replace(".", "", 1).isdigit() else 1.0 * (2 ** attempt)
+        log.warning("HTTP %s from %s — retry %d/%d in %.1fs",
+                    resp.status_code, host, attempt + 1, retries, min(delay, 30))
+        _time.sleep(min(delay, 30.0))
+    return resp
 
 
 @dataclass
@@ -79,6 +115,10 @@ class DataPoint:
     confidence: float        # 0.0–1.0
     note: str = ""           # units / year / caveat / failure reason
     retrieved_at: str = ""   # ISO date string
+    # 1b (بلاغ مالك: تقرير سنغافورة فارغ بسبب 429 عُرض «لا بيانات»):
+    # تمييز بنيوي — "fetch_failed" (تعذّر الجلب: حد معدل/شبكة، أعد المحاولة)
+    # مقابل "no_record" (ردّ ناجح بلا سجل فعلاً). "" = غير محدد (سلوك قديم).
+    status: str = ""
 
 
 def _today() -> str:
@@ -177,7 +217,9 @@ def comtrade_trade(
     """تجارة كومتريد — Comtrade preview records, partner codes mapped to names.
 
     Returns a list of record dicts (each with a 'partnerName' added and
-    '_provenance' tag). On any failure returns [] and logs a warning.
+    '_provenance' tag). 1b: fetch failure (429/شبكة) returns **None** —
+    ردّ ناجح بلا سجلات يعيد [] — فيميّز المستهلك «تعذّر الجلب» من
+    «لا سجل فعلاً» بدل عرض كليهما «لا بيانات».
     """
     params = {
         "period": str(year),
@@ -209,7 +251,7 @@ def comtrade_trade(
     except Exception as e:  # noqa: BLE001 — never raise to caller
         log.warning("Comtrade fetch failed (%s, reporter=%s, %s): %s",
                     hs_code, reporter_m49, year, e)
-        return []
+        return None  # 1b: تعذّر الجلب ≠ لا سجل — المستهلك يميّز
     prov = {"source": "UN Comtrade", "confidence": 0.9, "retrieved_at": _today()}
     for rec in data:
         rec["partnerName"] = partner_name(rec.get("partnerCode"))

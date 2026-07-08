@@ -187,13 +187,13 @@ def discover(market_iso3: str, year: int | None = None, *,
 
     gaps: list[str] = ["إشارة القرب اللوجستي غير محسوبة في هذه النسخة — "
                        "تتطلب إسناد شحن غير متاح بمصادرنا (فجوة معلنة، §11.4)"]
-    newer = _totals_by_hs(comtrade_trade("AG6", m49, year, flow="M", partner=0))
+    newer = _totals_by_hs(comtrade_trade("AG6", m49, year, flow="M", partner=0) or [])
     older = _totals_by_hs(comtrade_trade("AG6", m49, year - 2, flow="M",
-                                         partner=0))
+                                         partner=0) or [])
     saudi_in = _totals_by_hs(comtrade_trade("AG6", m49, year, flow="M",
-                                            partner=int(_SAUDI_M49)))
+                                            partner=int(_SAUDI_M49)) or [])
     saudi_x = _totals_by_hs(comtrade_trade("AG6", int(_SAUDI_M49), year,
-                                           flow="X", partner=0))
+                                           flow="X", partner=0) or [])
     for label, data in (("استيراد السوق (السنة الأحدث)", newer),
                         ("استيراد السوق (قبل سنتين)", older),
                         ("استيراد السوق من السعودية", saudi_in),
