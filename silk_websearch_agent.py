@@ -187,6 +187,7 @@ class WebSearchAgent(BaseAgent):
     """
 
     PAID = False
+    PREF_KEY = "consumer"
     SOURCE = "Web Search (Serper)"
 
     def __init__(self) -> None:

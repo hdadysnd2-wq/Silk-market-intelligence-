@@ -382,6 +382,43 @@ def load_settings_into_env(overwrite: bool = False) -> int:
     return n
 
 
+# ── إعدادات الوكلاء · agent settings (لوحة «إعدادات الوكلاء») ────────────────
+# {agent_key: {"on": bool, "cmd": str}} — تفعيل/تعطيل + توجيه نصي لكل وكيل.
+# تُحفظ JSONاً واحداً في جدول settings بمفتاح مخصص **خارج** قائمة مفاتيح
+# المصادر المسموحة — فلا يمكن تهريب مفتاح مصدر عبر هذه اللوحة، والعكس:
+# load_settings_into_env لا يلمس هذا الصف (ليس في القائمة المسموحة).
+
+_AGENT_SETTINGS_KEY = "AGENT_SETTINGS_JSON"
+
+
+def save_agent_settings(settings: dict) -> None:
+    """احفظ إعدادات الوكلاء — persist the whole per-agent settings dict."""
+    with connect() as conn:
+        conn.execute(_q(
+            "INSERT INTO settings (key, value, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT (key) DO UPDATE SET value=excluded.value, "
+            "updated_at=excluded.updated_at"),
+            (_AGENT_SETTINGS_KEY,
+             json.dumps(settings or {}, ensure_ascii=False), _now()))
+        conn.commit()
+
+
+def load_agent_settings() -> dict | None:
+    """حمّل إعدادات الوكلاء المحفوظة — the saved dict, or None (لا حفظ بعد).
+
+    أي فشل (قاعدة غائبة/JSON تالف) = None بهدوء — الإعدادات تحسين لا شرط.
+    """
+    try:
+        with connect() as conn:
+            row = conn.execute(_q("SELECT value FROM settings WHERE key=?"),
+                               (_AGENT_SETTINGS_KEY,)).fetchone()
+        got = json.loads(row[0]) if row and row[0] else None
+        return got if isinstance(got, dict) and got else None
+    except Exception as e:  # noqa: BLE001
+        log.debug("agent settings load skipped: %s", e)
+        return None
+
+
 def get_trade_flow(hs6: str, reporter_iso3: str, partner_iso3: str,
                    year: int, flow: str = "M") -> dict | None:
     """صف تدفق واحد بكامل أعمدته — one flow row (incl. qty_kg) or None. لا اختلاق:

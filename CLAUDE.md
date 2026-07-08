@@ -52,6 +52,8 @@ All 15 agents inherit `BaseAgent` (`silk_agents.py`), which enforces the protoco
 
 `POST /analyze` (free path) structurally cannot trigger paid layers — its pydantic model has no paid fields, so they're dropped from any request body. `POST /deepen` is the only paid path.
 
+Agent settings panel («إعدادات الوكلاء»): `silk_agents.AGENT_CATALOG` is the ONE catalog (key/name/role/paid) served via `GET /settings/agents`; each agent class carries a `PREF_KEY` pointing at a catalog row. `BaseAgent.run(task, instruction="")` enforces the panel structurally: a disabled row (`silk_context.agent_enabled`) returns a tagged skipped report with zero calls (same pattern as the PAID guard), and the effective command (explicit `instruction` arg wins over the saved one) is passed as `task["instruction"]` and declared in the report summary. Commands steer presentation/focus ONLY — a data agent's numbers are never altered (CompetitionAgent top-N is row-count only) and Claude agents receive the command inside `_isolate` via `silk_ai_judge._user_steer(key, extra)`. Settings persist server-side as one JSON row (`silk_store.save/load_agent_settings` — outside the env-key allowlist, so the panel can never smuggle a source key; keys stay in Railway env). `/analyze` requests without `agent_prefs` inherit the saved settings; `/deepen` is not gated by the panel (an explicit paid request wins). Disabling the `synthesis` row stops synthesis stage 2 only — stage 1 (deterministic jury) can never be turned off.
+
 ## Security guards (all run BEFORE any agent)
 
 Configured via env vars (`.env.example` documents all of them); unset = open dev mode, which is legitimate **only when no paid keys are present**:

@@ -194,7 +194,8 @@
     <div class="navbtn" data-go="chat">✎ <span data-t="navChat">دردشة</span></div>
     <div class="rail-lbl" data-t="recent">التحليلات الأخيرة</div>
     <div id="histList"></div>
-    <div class="rail-foot"><div class="gear" id="gearBtn">⚙ <span data-t="agentSettings">إعدادات الوكلاء</span></div></div>
+    <div class="rail-foot"><div class="gear" id="gearBtn">⚙ <span data-t="agentSettings">إعدادات الوكلاء</span></div>
+      <div class="gear" id="svcKeyBtn" title="مفتاح الخدمة X-API-Key — خارج لوحة الوكلاء">🔑 <span data-t="svcKey">مفتاح الخدمة</span></div></div>
   </div>
 
   <div class="stage">
@@ -274,8 +275,7 @@
 <div class="overlay" id="ov"></div>
 <div class="drawer" id="dr">
   <div class="dhead"><h3 data-t="agentSettings">إعدادات الوكلاء</h3>
-    <div class="shared" data-t="sharedNote">✓ مشتركة بين الإدخال والدردشة — وكلاء الأساس لا يُطفَؤون</div>
-    <div class="keyrow"><input id="adminKey" placeholder="مفتاح الخدمة X-API-Key (إن كانت المصادقة مفعّلة)"></div></div>
+    <div class="shared" data-t="sharedNote">✓ مشتركة بين الإدخال والدردشة — التوجيه يوجّه التركيز فقط ولا يخترع بيانات · مفاتيح المصادر تُضبط في بيئة الخادم (Railway) لا هنا</div></div>
   <div class="dbody" id="drawerBody"></div>
   <div class="dfoot"><button class="saveb" id="savePrefs" data-t="save">حفظ التوجيهات</button><button class="resetb" id="resetPrefs" data-t="reset">استعادة الافتراضي</button></div>
 </div>
@@ -307,7 +307,8 @@ var T={
  boardEmpty:{ar:"شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.",en:"Run an analysis from “New analysis” or chat — the board is built from real results."},
  chatIntro:{ar:"اسأل عن أي منتج وسوق — مثال: «حلّل التمور في الصين لآخر ٥ سنوات». أستخدم نفس الوكلاء ونفس إعداداتهم في المسار الأساسي.",en:"Ask about any product and market — e.g. “analyze dates in China for the last 5 years”. Same agents, same settings as the main flow."},
  chatNote:{ar:"كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي",en:"Every question runs the enabled agents · same settings as the main flow"},
- sharedNote:{ar:"✓ مشتركة بين الإدخال والدردشة — وكلاء الأساس لا يُطفَؤون",en:"✓ Shared between form and chat — core agents can't be turned off"},
+ sharedNote:{ar:"✓ مشتركة بين الإدخال والدردشة — التوجيه يوجّه التركيز فقط ولا يخترع بيانات · مفاتيح المصادر تُضبط في بيئة الخادم (Railway) لا هنا",en:"✓ Shared between form and chat — a directive steers focus only, it never fabricates data · source API keys live in server env (Railway), never here"},
+ svcKey:{ar:"مفتاح الخدمة",en:"Service key"},
  save:{ar:"حفظ التوجيهات",en:"Save directives"},reset:{ar:"استعادة الافتراضي",en:"Restore defaults"},
  marketsCount:{ar:"سوقاً في القائمة — و«قارن كل الأسواق» قد يتجاوزها ديناميكياً",en:"markets listed — “compare all” may extend beyond them dynamically"},
  readyFor:{ar:"جاهز لتحليل",en:"Ready to analyze"},inM:{ar:"في",en:"in"},over:{ar:"عبر",en:"over"},allM:{ar:"كل الأسواق",en:"all markets"},pickFirst:{ar:"اختر منتجاً للبدء",en:"Pick a product to start"},
@@ -334,19 +335,35 @@ var S={product:"",hs:"",market:null,span:5,raw:null,view:null,busy:false,
   prefs:JSON.parse(localStorage.getItem("silk_agent_prefs")||"null"),
   hist:JSON.parse(localStorage.getItem("silk_hist")||"[]")};
 
-/* الوكلاء المعروضون في الدرج — أسماء بشرية، المدفوع مفصول ومطفأ افتراضياً.
-   التوجيهات تُخزَّن محلياً وتُرسل agent_prefs مع كل تحليل (حقن الخادم لاحقاً). */
+/* الوكلاء المعروضون في الدرج — مرآة سجل الخادم (silk_agents.AGENT_CATALOG).
+   القائمة القانونية تُجلب من GET /settings/agents عند فتح الدرج؛ هذه نسخة
+   احتياط للعمل دون خادم فقط. المدفوع مطفأ افتراضياً. لا حقول مفاتيح هنا. */
 var AGENTS=[
- {k:"trade",n:"وكيل التجارة",d:"حجم استيراد السوق · الأمم المتحدة",paid:false},
- {k:"competition",n:"وكيل المنافسة",d:"الدول المورّدة وحصصها · الأمم المتحدة",paid:false},
- {k:"regulatory",n:"وكيل الاشتراطات",d:"اشتراطات الدخول والتعريفة",paid:false},
+ {k:"trade",n:"وكيل التجارة",d:"حجم استيراد/تصدير السوق وحجم الفرصة · UN Comtrade",paid:false},
+ {k:"economic",n:"الوكيل الاقتصادي",d:"دخل الفرد والسكان · World Bank",paid:false},
+ {k:"competition",n:"وكيل المنافسة",d:"الدول المورّدة وحصصها ومنافسون بالاسم · UN Comtrade",paid:false},
+ {k:"regulatory",n:"وكيل الاشتراطات",d:"اشتراطات الدخول والتعريفة · مرجع L1 + WITS",paid:false},
  {k:"risk",n:"وكيل المخاطر",d:"استقرار ولوجستيات وعملة · البنك الدولي",paid:false},
+ {k:"trends",n:"وكيل الاتجاهات",d:"اهتمام البحث والموسمية · Google Trends",paid:false},
+ {k:"maps",n:"وكيل الأعمال بالاسم",d:"مصانع وموزّعون بالاسم · Google Maps",paid:false},
+ {k:"channels",n:"وكيل قنوات التوزيع",d:"أبواب الدخول ومستوردون مرشّحون (الطبقة الحرة)",paid:false},
  {k:"consumer",n:"وكيل ثقافة المستهلك",d:"هل المنتج مرغوب؟ · بحث + كلود",paid:false},
  {k:"dynamics",n:"وكيل الديناميكيات",d:"دوافع وكوابح وفرص · بحث + كلود",paid:false},
- {k:"pricing",n:"وكيل التسعير",d:"أسعار التجزئة الفعلية",paid:true},
- {k:"importers",n:"وكيل المستوردين",d:"مستوردون بالاسم · Volza",paid:true}];
+ {k:"synthesis",n:"حكم التوليف",d:"حكم كلود فوق حقائق الوكلاء المعزولة",paid:false},
+ {k:"pricing",n:"وكيل التسعير",d:"أسعار التجزئة الفعلية · تعميق مدفوع",paid:true},
+ {k:"importers",n:"وكيل المستوردين",d:"مستوردون بالاسم · Volza (تعميق)",paid:true},
+ {k:"contacts",n:"وكيل جهات الاتصال",d:"مشترون B2B · Explee (تعميق)",paid:true}];
 function defaultPrefs(){var p={};AGENTS.forEach(function(a){p[a.k]={on:!a.paid,cmd:""}});return p}
 if(!S.prefs)S.prefs=defaultPrefs();
+/* سجل الخادم القانوني — يحدّث AGENTS والإعدادات المحفوظة خادمياً عند التوفر */
+function loadAgentCatalog(){return fetch(base()+"/settings/agents",{headers:hdrs(false)})
+  .then(function(r){if(!r.ok)throw 0;return r.json()})
+  .then(function(d){
+    if(d&&Array.isArray(d.agents)&&d.agents.length)
+      AGENTS=d.agents.map(function(a){return{k:a.key,n:a.name,d:a.role,paid:!!a.paid}});
+    if(d&&d.saved&&d.settings){S.prefs=d.settings;localStorage.setItem("silk_agent_prefs",JSON.stringify(S.prefs))}
+    AGENTS.forEach(function(a){if(!S.prefs[a.k])S.prefs[a.k]={on:!a.paid,cmd:""}})})
+  .catch(function(){AGENTS.forEach(function(a){if(!S.prefs[a.k])S.prefs[a.k]={on:!a.paid,cmd:""}})})}
 
 /* ── تنقّل ── */
 function nav(v){$$(".view").forEach(function(x){x.classList.remove("on");x.style.display="none"});
@@ -565,15 +582,25 @@ function drawDrawer(){var free=AGENTS.filter(function(a){return!a.paid}),paid=AG
       +'<div class="cmd"><label>توجيه الوكيل (نص حر)</label><textarea placeholder="مثال: ركّز على الطلب في رمضان وأهمية الحلال">'+esc(p.cmd)+'</textarea></div></div>'}
   $("#drawerBody").innerHTML='<div class="slbl">الوكلاء المجانيون</div>'+free.map(card).join("")+'<div class="slbl">الوكلاء المدفوعون</div>'+paid.map(card).join("");
   $$("#drawerBody .tg").forEach(function(t){t.addEventListener("click",function(){this.classList.toggle("off")})})}
-$("#gearBtn").addEventListener("click",function(){$("#adminKey").value=S.adminKey;drawDrawer();$("#ov").classList.add("open");$("#dr").classList.add("open")});
+$("#gearBtn").addEventListener("click",function(){drawDrawer();loadAgentCatalog().then(drawDrawer);$("#ov").classList.add("open");$("#dr").classList.add("open")});
+/* مفتاح الخدمة X-API-Key — مصادقة المنصّة، خارج لوحة الوكلاء عمداً (اللوحة بلا حقول مفاتيح) */
+$("#svcKeyBtn").addEventListener("click",function(){
+  var k=window.prompt(t("keyPh"),S.adminKey||"");
+  if(k===null)return;S.adminKey=k.trim();localStorage.setItem("silk_admin_key",S.adminKey);
+  toast(S.adminKey?"حُفظ مفتاح الخدمة":"أُزيل مفتاح الخدمة")});
 $("#ov").addEventListener("click",function(){$("#ov").classList.remove("open");$("#dr").classList.remove("open")});
+function collectPrefs(){$$("#drawerBody .acard").forEach(function(c){var k=c.dataset.k;
+  S.prefs[k]={on:!c.querySelector(".tg").classList.contains("off"),cmd:c.querySelector("textarea").value.trim()}});
+  localStorage.setItem("silk_agent_prefs",JSON.stringify(S.prefs))}
 $("#savePrefs").addEventListener("click",function(){
-  S.adminKey=$("#adminKey").value.trim();localStorage.setItem("silk_admin_key",S.adminKey);
-  $$("#drawerBody .acard").forEach(function(c){var k=c.dataset.k;
-    S.prefs[k]={on:!c.querySelector(".tg").classList.contains("off"),cmd:c.querySelector("textarea").value.trim()}});
-  localStorage.setItem("silk_agent_prefs",JSON.stringify(S.prefs));
-  $("#ov").classList.remove("open");$("#dr").classList.remove("open");toast("حُفظت التوجيهات — تسري على الإدخال والدردشة معاً")});
-$("#resetPrefs").addEventListener("click",function(){S.prefs=defaultPrefs();drawDrawer()});
+  collectPrefs();
+  post("/settings/agents",{settings:S.prefs})
+    .then(function(){toast("حُفظت التوجيهات في الخادم — تسري على الإدخال والدردشة معاً")})
+    .catch(function(e){toast("حُفظت محلياً فقط — تعذّر حفظ الخادم: "+e.message)});
+  $("#ov").classList.remove("open");$("#dr").classList.remove("open")});
+$("#resetPrefs").addEventListener("click",function(){
+  S.prefs=defaultPrefs();localStorage.setItem("silk_agent_prefs",JSON.stringify(S.prefs));
+  post("/settings/agents",{settings:{}}).catch(function(){});drawDrawer()});
 /* روابط تحليلية للمحلّل: report.md متاح من زر Markdown في اللوحة */
 })();
 </script>

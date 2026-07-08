@@ -157,6 +157,7 @@ class RequirementsAgent(BaseAgent):
     """وكيل الاشتراطات — dual-direction compliance checklist (L1 + L2)."""
 
     PAID = False
+    PREF_KEY = "regulatory"
     SOURCE = _SOURCE
 
     def __init__(self) -> None:

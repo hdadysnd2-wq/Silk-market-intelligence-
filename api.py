@@ -514,8 +514,12 @@ def create_app():
         import silk_context
         ctx = (contextlib.nullcontext() if ai_ok
                else silk_context.block_ai_extras())
-        with ctx, silk_context.agent_prefs_context(
-                _clean_agent_prefs(req.agent_prefs)):
+        # لوحة إعدادات الوكلاء: طلبٌ بلا agent_prefs يرث الإعدادات المحفوظة
+        # خادمياً — فتسري على الإدخال والدردشة معاً حتى من عميل لا يرسلها.
+        prefs = _clean_agent_prefs(req.agent_prefs)
+        if prefs is None:
+            prefs = _saved_agent_settings()
+        with ctx, silk_context.agent_prefs_context(prefs):
             result = silk_engine.analyze(
                 req.product, year=req.year,
                 countries=_target_countries(req.markets),
@@ -558,6 +562,56 @@ def create_app():
         wanted = {s.strip().upper() for s in iso3s if s and s.strip()}
         filtered = [c for c in COUNTRIES if c["iso3"] in wanted]
         return filtered or None
+
+    def _saved_agent_settings() -> dict | None:
+        """إعدادات الوكلاء المحفوظة خادمياً — sanitized, or None (لا حفظ)."""
+        try:
+            import silk_store
+            return _clean_agent_prefs(silk_store.load_agent_settings())
+        except Exception as e:  # noqa: BLE001 — الإعدادات تحسين لا شرط
+            log.debug("saved agent settings unavailable: %s", e)
+            return None
+
+    class AgentSettingsBody(BaseModel):
+        """جسم إعدادات الوكلاء — {agent_key: {on: bool, cmd: str}} فقط.
+
+        **لا مفاتيح مصادر هنا** — pydantic يسقط أي حقل آخر، والقاموس يمرّ
+        على _clean_agent_prefs (on/cmd حصراً) فلا يمكن تهريب مفتاح عبر
+        هذه اللوحة؛ مفاتيح المصادر تُضبط في بيئة النشر (Railway env).
+        """
+        settings: dict | None = None
+
+    @app.get("/settings/agents")
+    def get_agent_settings(request: Request):
+        """سجل الوكلاء + الإعدادات السارية — the catalog and effective settings.
+
+        الواجهة تبني اللوحة من هذا الرد (سجل واحد قانوني في silk_agents —
+        لا قائمة موازية في الواجهة تنحرف عنه).
+        """
+        _require_key(request)
+        _rate_limit(request)
+        from silk_agents import AGENT_CATALOG, default_agent_settings
+        merged = default_agent_settings()
+        saved = _saved_agent_settings() or {}
+        for k, v in saved.items():
+            if k in merged:
+                merged[k] = v
+        return {"agents": AGENT_CATALOG, "settings": merged,
+                "saved": bool(saved)}
+
+    @app.post("/settings/agents")
+    def set_agent_settings(body: AgentSettingsBody, request: Request):
+        """احفظ إعدادات الوكلاء خادمياً — persist per-agent {on, cmd}.
+
+        جسم فارغ = استعادة الافتراضي (يمحو المحفوظ فتسري الافتراضيات).
+        """
+        _require_key(request)
+        _rate_limit(request)
+        clean = _clean_agent_prefs(body.settings) or {}
+        import silk_store
+        silk_store.migrate()
+        silk_store.save_agent_settings(clean)
+        return {"saved": True, "count": len(clean)}
 
     class KeysBody(BaseModel):
         """جسم حفظ مفاتيح المصادر — allow-listed server-side key settings."""

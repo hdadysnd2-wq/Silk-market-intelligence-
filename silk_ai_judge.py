@@ -145,21 +145,24 @@ def _headline_lines(headlines: list) -> list[str]:
     return out
 
 
-def _user_steer(agent_key: str) -> str:
+def _user_steer(agent_key: str, extra: str = "") -> str:
     """سطر توجيه المستخدم لوكيل كلود (P3) — من درج «إعدادات الوكلاء».
 
     يُلحق داخل العزل القائم (_isolate) — إعداد مستخدم موثوق لكنه يُعقَّم
     كأي نص خارجي؛ يوجّه التركيز حصراً ولا يستطيع توليد رقم (الثابت محفوظ).
+    `extra`: توجيه صريح ممرَّر برمجياً (معامل `instruction`) — يفوز على
+    الأمر المحفوظ في السياق عند وجوده.
     """
     from silk_context import agent_command
-    cmd = agent_command(agent_key)
+    cmd = (extra or "").strip()[:500] or agent_command(agent_key)
     if not cmd:
         return ""
     return ("\nتوجيه المستخدم (وجّه التركيز فقط — لا تخترع بيانات ولا "
             "أرقاماً): " + _isolate(cmd))
 
 
-def consumer_culture(product: str, market: str, headlines: list) -> dict | None:
+def consumer_culture(product: str, market: str, headlines: list,
+                     instruction: str = "") -> dict | None:
     """يستخلص الوكيلُ ثقافةَ المستهلك من عناوين الويب — Layer-3 extraction, NOT links.
 
     بلاغ المالك المتكرّر: «ترسل روابط = أنت قوقل». المنصة لا تعرض عناوينَ بحثٍ خامًا؛
@@ -185,7 +188,7 @@ def consumer_culture(product: str, market: str, headlines: list) -> dict | None:
         "لكلِّ رؤيةٍ اذكر أرقامَ العناوين التي بُنيت عليها. إن كانت العناوين ضعيفةً أو "
         "غيرَ متّصلةٍ بالسوق فقُل ذلك صراحةً في note ولا تُلفّق. "
         'أعِد JSON فقط بالشكل: {"insights":[{"point":"...", "evidence":[1,3]}], '
-        '"note":"حدود ما استُنتِج"}.') + _user_steer("consumer")
+        '"note":"حدود ما استُنتِج"}.') + _user_steer("consumer", instruction)
     raw = _call(_PRINCIPLE, user, max_tokens=700, model=_FAST_MODEL, timeout=20)
     if not raw:
         return None
@@ -353,7 +356,8 @@ def extract_prices(references: list, product: str, market: str) -> list[dict] | 
     return out or None
 
 
-def classify_dynamics(product: str, market: str, headlines: list) -> dict | None:
+def classify_dynamics(product: str, market: str, headlines: list,
+                      instruction: str = "") -> dict | None:
     """صنّف إشارات الويب في أطر الديناميكيات (P2-8) — Drivers/Restraints/
     Opportunities/Threats + خلاصة بورتر وPESTEL، كل نقطة بمؤشر مصدرها.
 
@@ -380,7 +384,8 @@ def classify_dynamics(product: str, market: str, headlines: list) -> dict | None
         '{"drivers":[{"point":"...","evidence":[1]}],"restraints":[...],'
         '"opportunities":[...],"threats":[...],"porter":[{"force":"...",'
         '"point":"...","evidence":[2]}],"pestel":[{"dimension":"...",'
-        '"point":"...","evidence":[3]}],"note":"..."}') + _user_steer("dynamics")
+        '"point":"...","evidence":[3]}],"note":"..."}') + _user_steer(
+            "dynamics", instruction)
     raw = _call(_PRINCIPLE, user, max_tokens=1200, model=_FAST_MODEL,
                 timeout=25)
     if not raw:

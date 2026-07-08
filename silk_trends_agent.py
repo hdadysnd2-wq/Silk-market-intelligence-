@@ -135,6 +135,7 @@ class TrendsAgent(BaseAgent):
     """وكيل الاتجاهات — Google Trends demand signal for a product keyword."""
 
     PAID = False
+    PREF_KEY = "trends"
 
     def __init__(self) -> None:
         super().__init__("TrendsAgent")

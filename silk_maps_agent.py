@@ -91,6 +91,7 @@ class MapsAgent(BaseAgent):
     """وكيل الخرائط — named factories/distributors/competitors + ratings."""
 
     PAID = False
+    PREF_KEY = "maps"
 
     def __init__(self) -> None:
         super().__init__("MapsAgent")
