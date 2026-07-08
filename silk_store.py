@@ -288,6 +288,7 @@ if __name__ == "__main__":
 
 _ALLOWED_KEY_SETTINGS = (
     "COMTRADE_API_KEY", "GOOGLE_MAPS_API_KEY", "SEARCH_API_KEY",
+    "SERPER_API_KEY",   # P5: الاسم الشائع لمفتاح Serper — مرادف SEARCH_API_KEY
     "LOCALPRICE_API_KEY", "VOLZA_API_KEY", "EXPLEE_API_KEY", "ANTHROPIC_API_KEY",
 )
 

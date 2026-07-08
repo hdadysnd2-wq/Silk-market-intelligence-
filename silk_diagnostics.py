@@ -110,7 +110,8 @@ def _probe_worldbank(year: int) -> dict:
 
 
 def _probe_serper() -> dict:
-    key = os.environ.get("SEARCH_API_KEY", "").strip()
+    from silk_websearch_agent import search_key
+    key = search_key()
     if not key:
         return {"name": "بحث الويب (Serper)", "state": NO_KEY, "key_set": False,
                 "ms": 0, "detail": "بلا مفتاح",
