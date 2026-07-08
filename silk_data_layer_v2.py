@@ -41,6 +41,11 @@ def mirror_saudi_export(hs_code: str, target_m49: object, target_iso3: str,
         row = silk_store.get_trade_flow(hs_code, "SAU", target_iso3,
                                         int(year), flow="X")
         if row and row.get("value_usd") is not None:
+            try:
+                import silk_context
+                silk_context.count_data("store_hits")
+            except Exception:  # noqa: BLE001
+                pass
             day = (row.get("retrieved_at") or "")[:10]
             return DataPoint(
                 {"value_usd": row["value_usd"], "qty_kg": row.get("qty_kg")},
@@ -314,6 +319,11 @@ def market_imports_cached(hs_code: str, market_m49: object, market_iso3: str,
             if stale:  # تُخدم فوراً وتُحدَّث بالخلفية — serve now, refresh behind
                 _refresh_in_background(hs_code, market_m49, market_iso3,
                                        int(year), live)
+            try:  # عدّاد اقتصاد البيانات — إصابة مخزن (شفافية لا شرط)
+                import silk_context
+                silk_context.count_data("store_hits")
+            except Exception:  # noqa: BLE001
+                pass
             return {"total_usd": got["total_usd"], "competitors": competitors,
                     "xval_note": "", "served_from": "store",
                     "freshness": "stale" if stale else "fresh",

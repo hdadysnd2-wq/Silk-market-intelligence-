@@ -5764,7 +5764,7 @@
       "origin": "SAU",
       "target_market": "China",
       "date": "2026-07-08",
-      "coverage_pct": 64.0
+      "coverage_pct": 71.0
     },
     "product": "تمور",
     "hs_code": "080410",
@@ -5783,6 +5783,7 @@
       "stage": "silk.decision/v1 — المحرك الموزون §8 (الحكم الوحيد)",
       "sufficiency": "بوابة كفاية البيانات: 0/3 وكلاء أساسيون لديهم بيانات؛ فجوات: TradeFlowAgent، EconomicAgent، CompetitionAgent"
     },
+    "dynamics": null,
     "competitive_position": {
       "available": true,
       "market": "China",
@@ -5944,7 +5945,8 @@
             "source": "UN Comtrade",
             "confidence": 0.9,
             "retrieved_at": "2026-07-06",
-            "note": "total imports HS080410 2023 (USD)"
+            "note": "total imports HS080410 2023 (USD)",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -5952,7 +5954,8 @@
             "source": "UN Comtrade",
             "confidence": 0.9,
             "retrieved_at": "2026-07-06",
-            "note": "Saudi share 40.0%"
+            "note": "Saudi share 40.0%",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -5960,7 +5963,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for CHN 2023"
+            "note": "no income data for CHN 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -5968,7 +5972,8 @@
             "source": "UN Comtrade",
             "confidence": 0.9,
             "retrieved_at": "2026-07-06",
-            "note": "supplier HHI over 4 suppliers"
+            "note": "supplier HHI over 4 suppliers",
+            "status": ""
           }
         ],
         "recommendation": "China: score=0.800 conf=0.75 (3/4 comps) [NO-GO (insufficient data)] — preliminary.",
@@ -6122,11 +6127,11 @@
             "low_confidence": false
           },
           "pricing": {
-            "attempted": 0,
-            "contributed": 0,
-            "score": 0.0,
+            "attempted": 6,
+            "contributed": 6,
+            "score": 1.0,
             "single_source": false,
-            "low_confidence": true
+            "low_confidence": false
           },
           "demand": {
             "attempted": 2,
@@ -6178,10 +6183,13 @@
             ]
           },
           "pricing": {
-            "status": "insufficient",
-            "contributed": 0,
+            "status": "ok",
+            "contributed": 6,
             "threshold": 1,
-            "sources_attempted": []
+            "sources_attempted": [
+              "UN Comtrade (مخزن الحقائق)",
+              "Web Search (Serper)"
+            ]
           },
           "demand": {
             "status": "insufficient",
@@ -7262,7 +7270,7 @@
             }
           ],
           "T": [],
-          "note": "خلايا قاعدية من حقائق مرصودة حصراً — الخلية الفارغة تعني لا بند مرصوداً، لا أنها سليمة"
+          "note": "خلايا مشتقة من الحقائق المتاحة — الخلية الفارغة تعني غياب البيانات، لا سلامة الجانب"
         },
         "segments": [
           {
@@ -7403,7 +7411,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 784 2023"
+            "note": "no import total HS080410 -> 784 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -7411,7 +7420,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -7419,7 +7429,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for ARE 2023"
+            "note": "no income data for ARE 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -7427,7 +7438,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "United Arab Emirates: لا بيانات كافية — insufficient data (preliminary).",
@@ -7556,10 +7568,10 @@
             "low_confidence": false
           },
           "pricing": {
-            "attempted": 0,
-            "contributed": 0,
-            "score": 0.0,
-            "single_source": false,
+            "attempted": 3,
+            "contributed": 3,
+            "score": 1.0,
+            "single_source": true,
             "low_confidence": true
           },
           "demand": {
@@ -7612,10 +7624,12 @@
             ]
           },
           "pricing": {
-            "status": "insufficient",
-            "contributed": 0,
+            "status": "ok",
+            "contributed": 3,
             "threshold": 1,
-            "sources_attempted": []
+            "sources_attempted": [
+              "Web Search (Serper)"
+            ]
           },
           "demand": {
             "status": "insufficient",
@@ -8407,7 +8421,7 @@
             }
           ],
           "T": [],
-          "note": "خلايا قاعدية من حقائق مرصودة حصراً — الخلية الفارغة تعني لا بند مرصوداً، لا أنها سليمة"
+          "note": "خلايا مشتقة من الحقائق المتاحة — الخلية الفارغة تعني غياب البيانات، لا سلامة الجانب"
         },
         "segments": [
           {
@@ -8544,7 +8558,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 634 2023"
+            "note": "no import total HS080410 -> 634 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -8552,7 +8567,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -8560,7 +8576,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for QAT 2023"
+            "note": "no income data for QAT 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -8568,7 +8585,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Qatar: لا بيانات كافية — insufficient data (preliminary).",
@@ -8697,10 +8715,10 @@
             "low_confidence": false
           },
           "pricing": {
-            "attempted": 0,
-            "contributed": 0,
-            "score": 0.0,
-            "single_source": false,
+            "attempted": 3,
+            "contributed": 3,
+            "score": 1.0,
+            "single_source": true,
             "low_confidence": true
           },
           "demand": {
@@ -8753,10 +8771,12 @@
             ]
           },
           "pricing": {
-            "status": "insufficient",
-            "contributed": 0,
+            "status": "ok",
+            "contributed": 3,
             "threshold": 1,
-            "sources_attempted": []
+            "sources_attempted": [
+              "Web Search (Serper)"
+            ]
           },
           "demand": {
             "status": "insufficient",
@@ -9541,7 +9561,7 @@
             }
           ],
           "T": [],
-          "note": "خلايا قاعدية من حقائق مرصودة حصراً — الخلية الفارغة تعني لا بند مرصوداً، لا أنها سليمة"
+          "note": "خلايا مشتقة من الحقائق المتاحة — الخلية الفارغة تعني غياب البيانات، لا سلامة الجانب"
         },
         "segments": [
           {
@@ -9678,7 +9698,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 414 2023"
+            "note": "no import total HS080410 -> 414 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -9686,7 +9707,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -9694,7 +9716,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for KWT 2023"
+            "note": "no income data for KWT 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -9702,7 +9725,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Kuwait: لا بيانات كافية — insufficient data (preliminary).",
@@ -9844,7 +9868,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 512 2023"
+            "note": "no import total HS080410 -> 512 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -9852,7 +9877,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -9860,7 +9886,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for OMN 2023"
+            "note": "no income data for OMN 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -9868,7 +9895,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Oman: لا بيانات كافية — insufficient data (preliminary).",
@@ -10010,7 +10038,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 048 2023"
+            "note": "no import total HS080410 -> 048 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -10018,7 +10047,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -10026,7 +10056,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for BHR 2023"
+            "note": "no income data for BHR 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -10034,7 +10065,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Bahrain: لا بيانات كافية — insufficient data (preliminary).",
@@ -10176,7 +10208,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 400 2023"
+            "note": "no import total HS080410 -> 400 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -10184,7 +10217,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -10192,7 +10226,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for JOR 2023"
+            "note": "no income data for JOR 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -10200,7 +10235,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Jordan: لا بيانات كافية — insufficient data (preliminary).",
@@ -10342,7 +10378,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 422 2023"
+            "note": "no import total HS080410 -> 422 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -10350,7 +10387,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -10358,7 +10396,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for LBN 2023"
+            "note": "no income data for LBN 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -10366,7 +10405,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Lebanon: لا بيانات كافية — insufficient data (preliminary).",
@@ -10508,7 +10548,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 818 2023"
+            "note": "no import total HS080410 -> 818 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -10516,7 +10557,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -10524,7 +10566,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for EGY 2023"
+            "note": "no income data for EGY 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -10532,7 +10575,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Egypt: لا بيانات كافية — insufficient data (preliminary).",
@@ -10674,7 +10718,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 504 2023"
+            "note": "no import total HS080410 -> 504 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -10682,7 +10727,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -10690,7 +10736,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for MAR 2023"
+            "note": "no income data for MAR 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -10698,7 +10745,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Morocco: لا بيانات كافية — insufficient data (preliminary).",
@@ -10840,7 +10888,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 788 2023"
+            "note": "no import total HS080410 -> 788 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -10848,7 +10897,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -10856,7 +10906,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for TUN 2023"
+            "note": "no income data for TUN 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -10864,7 +10915,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Tunisia: لا بيانات كافية — insufficient data (preliminary).",
@@ -11006,7 +11058,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 012 2023"
+            "note": "no import total HS080410 -> 012 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -11014,7 +11067,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -11022,7 +11076,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for DZA 2023"
+            "note": "no income data for DZA 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -11030,7 +11085,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Algeria: لا بيانات كافية — insufficient data (preliminary).",
@@ -11172,7 +11228,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 368 2023"
+            "note": "no import total HS080410 -> 368 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -11180,7 +11237,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -11188,7 +11246,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for IRQ 2023"
+            "note": "no income data for IRQ 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -11196,7 +11255,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Iraq: لا بيانات كافية — insufficient data (preliminary).",
@@ -11338,7 +11398,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 792 2023"
+            "note": "no import total HS080410 -> 792 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -11346,7 +11407,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -11354,7 +11416,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for TUR 2023"
+            "note": "no income data for TUR 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -11362,7 +11425,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Turkey: لا بيانات كافية — insufficient data (preliminary).",
@@ -11504,7 +11568,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 887 2023"
+            "note": "no import total HS080410 -> 887 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -11512,7 +11577,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -11520,7 +11586,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for YEM 2023"
+            "note": "no income data for YEM 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -11528,7 +11595,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Yemen: لا بيانات كافية — insufficient data (preliminary).",
@@ -11670,7 +11738,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 710 2023"
+            "note": "no import total HS080410 -> 710 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -11678,7 +11747,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -11686,7 +11756,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for ZAF 2023"
+            "note": "no income data for ZAF 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -11694,7 +11765,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "South Africa: لا بيانات كافية — insufficient data (preliminary).",
@@ -11836,7 +11908,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 566 2023"
+            "note": "no import total HS080410 -> 566 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -11844,7 +11917,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -11852,7 +11926,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for NGA 2023"
+            "note": "no income data for NGA 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -11860,7 +11935,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Nigeria: لا بيانات كافية — insufficient data (preliminary).",
@@ -12002,7 +12078,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 404 2023"
+            "note": "no import total HS080410 -> 404 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -12010,7 +12087,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -12018,7 +12096,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for KEN 2023"
+            "note": "no income data for KEN 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -12026,7 +12105,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Kenya: لا بيانات كافية — insufficient data (preliminary).",
@@ -12168,7 +12248,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 231 2023"
+            "note": "no import total HS080410 -> 231 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -12176,7 +12257,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -12184,7 +12266,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for ETH 2023"
+            "note": "no income data for ETH 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -12192,7 +12275,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Ethiopia: لا بيانات كافية — insufficient data (preliminary).",
@@ -12334,7 +12418,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 288 2023"
+            "note": "no import total HS080410 -> 288 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -12342,7 +12427,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -12350,7 +12436,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for GHA 2023"
+            "note": "no income data for GHA 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -12358,7 +12445,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Ghana: لا بيانات كافية — insufficient data (preliminary).",
@@ -12500,7 +12588,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 356 2023"
+            "note": "no import total HS080410 -> 356 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -12508,7 +12597,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -12516,7 +12606,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for IND 2023"
+            "note": "no income data for IND 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -12524,7 +12615,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "India: لا بيانات كافية — insufficient data (preliminary).",
@@ -12666,7 +12758,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 586 2023"
+            "note": "no import total HS080410 -> 586 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -12674,7 +12767,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -12682,7 +12776,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for PAK 2023"
+            "note": "no income data for PAK 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -12690,7 +12785,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Pakistan: لا بيانات كافية — insufficient data (preliminary).",
@@ -12832,7 +12928,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 050 2023"
+            "note": "no import total HS080410 -> 050 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -12840,7 +12937,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -12848,7 +12946,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for BGD 2023"
+            "note": "no income data for BGD 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -12856,7 +12955,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Bangladesh: لا بيانات كافية — insufficient data (preliminary).",
@@ -12998,7 +13098,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 360 2023"
+            "note": "no import total HS080410 -> 360 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -13006,7 +13107,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -13014,7 +13116,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for IDN 2023"
+            "note": "no income data for IDN 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -13022,7 +13125,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Indonesia: لا بيانات كافية — insufficient data (preliminary).",
@@ -13164,7 +13268,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 458 2023"
+            "note": "no import total HS080410 -> 458 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -13172,7 +13277,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -13180,7 +13286,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for MYS 2023"
+            "note": "no income data for MYS 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -13188,7 +13295,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Malaysia: لا بيانات كافية — insufficient data (preliminary).",
@@ -13330,7 +13438,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 702 2023"
+            "note": "no import total HS080410 -> 702 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -13338,7 +13447,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -13346,7 +13456,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for SGP 2023"
+            "note": "no income data for SGP 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -13354,7 +13465,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Singapore: لا بيانات كافية — insufficient data (preliminary).",
@@ -13496,7 +13608,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 764 2023"
+            "note": "no import total HS080410 -> 764 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -13504,7 +13617,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -13512,7 +13626,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for THA 2023"
+            "note": "no income data for THA 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -13520,7 +13635,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Thailand: لا بيانات كافية — insufficient data (preliminary).",
@@ -13662,7 +13778,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 704 2023"
+            "note": "no import total HS080410 -> 704 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -13670,7 +13787,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -13678,7 +13796,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for VNM 2023"
+            "note": "no income data for VNM 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -13686,7 +13805,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Viet Nam: لا بيانات كافية — insufficient data (preliminary).",
@@ -13828,7 +13948,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 392 2023"
+            "note": "no import total HS080410 -> 392 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -13836,7 +13957,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -13844,7 +13966,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for JPN 2023"
+            "note": "no income data for JPN 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -13852,7 +13975,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Japan: لا بيانات كافية — insufficient data (preliminary).",
@@ -13994,7 +14118,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 410 2023"
+            "note": "no import total HS080410 -> 410 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -14002,7 +14127,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -14010,7 +14136,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for KOR 2023"
+            "note": "no income data for KOR 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -14018,7 +14145,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "South Korea: لا بيانات كافية — insufficient data (preliminary).",
@@ -14160,7 +14288,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 826 2023"
+            "note": "no import total HS080410 -> 826 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -14168,7 +14297,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -14176,7 +14306,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for GBR 2023"
+            "note": "no income data for GBR 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -14184,7 +14315,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "United Kingdom: لا بيانات كافية — insufficient data (preliminary).",
@@ -14326,7 +14458,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 276 2023"
+            "note": "no import total HS080410 -> 276 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -14334,7 +14467,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -14342,7 +14476,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for DEU 2023"
+            "note": "no income data for DEU 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -14350,7 +14485,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Germany: لا بيانات كافية — insufficient data (preliminary).",
@@ -14492,7 +14628,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 250 2023"
+            "note": "no import total HS080410 -> 250 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -14500,7 +14637,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -14508,7 +14646,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for FRA 2023"
+            "note": "no income data for FRA 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -14516,7 +14655,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "France: لا بيانات كافية — insufficient data (preliminary).",
@@ -14658,7 +14798,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 380 2023"
+            "note": "no import total HS080410 -> 380 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -14666,7 +14807,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -14674,7 +14816,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for ITA 2023"
+            "note": "no income data for ITA 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -14682,7 +14825,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Italy: لا بيانات كافية — insufficient data (preliminary).",
@@ -14824,7 +14968,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 724 2023"
+            "note": "no import total HS080410 -> 724 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -14832,7 +14977,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -14840,7 +14986,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for ESP 2023"
+            "note": "no income data for ESP 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -14848,7 +14995,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Spain: لا بيانات كافية — insufficient data (preliminary).",
@@ -14990,7 +15138,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 528 2023"
+            "note": "no import total HS080410 -> 528 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -14998,7 +15147,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -15006,7 +15156,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for NLD 2023"
+            "note": "no income data for NLD 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -15014,7 +15165,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Netherlands: لا بيانات كافية — insufficient data (preliminary).",
@@ -15156,7 +15308,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 840 2023"
+            "note": "no import total HS080410 -> 840 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -15164,7 +15317,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -15172,7 +15326,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for USA 2023"
+            "note": "no income data for USA 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -15180,7 +15335,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "United States: لا بيانات كافية — insufficient data (preliminary).",
@@ -15322,7 +15478,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no import total HS080410 -> 124 2023"
+            "note": "no import total HS080410 -> 124 2023",
+            "status": ""
           },
           {
             "name": "saudi_position",
@@ -15330,7 +15487,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           },
           {
             "name": "demand_capacity",
@@ -15338,7 +15496,8 @@
             "source": "World Bank",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no income data for CAN 2023"
+            "note": "no income data for CAN 2023",
+            "status": ""
           },
           {
             "name": "competition",
@@ -15346,7 +15505,8 @@
             "source": "UN Comtrade",
             "confidence": 0.0,
             "retrieved_at": "2026-07-06",
-            "note": "no competitor data"
+            "note": "no competitor data",
+            "status": ""
           }
         ],
         "recommendation": "Canada: لا بيانات كافية — insufficient data (preliminary).",
@@ -15510,8 +15670,8 @@
       ]
     },
     "brief": [
-      "القرار: CONDITIONAL-GO (ثقة 0.91) — China",
-      "لا منافس بسعر مرصود بعد — فعّل with_localprice/deepen",
+      "التوصية: دخول مشروط — سوق الصين (ثقة عالية (91%))",
+      "أسعار المنافسين على الرفّ لم تُجمع بعد — تتوافر مع الدراسة العميقة",
       "أفضل باب دخول مرصود: online marketplaces e-commerce sites sel — تقرير سوق 2024 (واقعية — قناة إلكترونية مفتوحة)"
     ],
     "limits": [
@@ -15607,6 +15767,7 @@
         ]
       }
     ],
+    "data_economics": null,
     "note": "نتيجة مبدئية مبنية على بيانات عامة حقيقية؛ النواقص معلّمة لا مُخمّنة. Preliminary, real public data only; gaps flagged, not estimated."
   }
 }

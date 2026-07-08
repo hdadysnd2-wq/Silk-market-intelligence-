@@ -137,6 +137,8 @@ class TradeFlowAgent(BaseAgent):
             row = self._world_row_from_store(hs, iso3, year, flow)
             if row is not None:
                 import silk_store
+                import silk_context
+                silk_context.count_data("store_hits")
                 day = (row.get("retrieved_at") or "")[:10]
                 stale = silk_store.freshness(row.get("retrieved_at"),
                                              "trade") != "fresh"
@@ -277,6 +279,8 @@ class CompetitionAgent(BaseAgent):
                     retrieved_at=p.get("retrieved_at")))
                 if stale:
                     comps[-1].status = "stale"
+            import silk_context
+            silk_context.count_data("store_hits")
             return comps
         except Exception as e:  # noqa: BLE001 — المخزن تحسين لا شرط
             log.debug("competitor store read unavailable (%s %s %s): %s",

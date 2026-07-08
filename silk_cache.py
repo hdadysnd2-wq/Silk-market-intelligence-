@@ -37,6 +37,15 @@ def _cache_dir() -> str:
     return _CACHE_DIR
 
 
+def _count(kind: str) -> None:
+    """سجّل حدثاً في عدّاد اقتصاد البيانات — best-effort, never breaks a fetch."""
+    try:
+        import silk_context  # lazy: keep this module's pure-stdlib import
+        silk_context.count_data(kind)
+    except Exception:  # noqa: BLE001 — العدّ شفافية لا شرط
+        pass
+
+
 def _key(url: str, params: dict | None) -> str:
     """مفتاح التخزين — sha1 of url + sorted params."""
     raw = url + "?" + urlencode(sorted((params or {}).items()))
@@ -63,7 +72,9 @@ def cached_get(
     if fresh:
         try:
             with open(path, "r", encoding="utf-8") as fh:
-                return json.load(fh)
+                data = json.load(fh)
+            _count("cache_hits")
+            return data
         except (OSError, ValueError) as exc:  # corrupt cache → refetch
             log.warning("cache read failed (%s); refetching", exc)
 
@@ -73,6 +84,7 @@ def cached_get(
         log.warning("requests not installed — cannot fetch %s", url)
         return None
 
+    _count("live_fetches")  # محاولة حية — تُحسب ولو فشلت (كلفة نداء فعلية)
     try:
         resp = (fetcher(url, params) if fetcher is not None
                 else requests.get(url, params=params, timeout=_TIMEOUT))

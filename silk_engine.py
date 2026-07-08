@@ -95,6 +95,11 @@ def analyze(product_name: str, countries: list[dict] | None = None,
     All optional layers degrade gracefully offline (provenance-tagged None, no fabrication).
     """
     year = year or _default_year()
+    # اقتصاد البيانات (persist-5): عدّاد لهذه التشغيلة — كم قراءة خُدمت من
+    # المخزن/ذاكرة الطلبات مقابل كم جلبة حية؛ يُرفَق في النتيجة ليرى المالك
+    # ما يوفّره المخزن. عدّ مرصود فقط — لا يغيّر أي مسار ولا أي رقم.
+    from silk_context import begin_data_counter
+    _data_counter = begin_data_counter()
     # 8c: بلا countries صريحة نمرّر None — rank_markets يجرّب «أكبر المستوردين
     # عالمياً» ديناميكياً أولاً ثم يتراجع للقائمة المنسّقة COUNTRIES بنفسه.
     # الفرض المبكر هنا كان يمنع المسار الديناميكي من العمل إطلاقاً.
@@ -122,6 +127,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             "note": "تعذّر تصنيف المنتج إلى رمز HS — could not classify product; "
                     "no HS code guessed.",
         }
+        result["data_economics"] = _economics(_data_counter)
         if check_quality:
             _annotate_quality(result)
         if persist:
@@ -256,11 +262,27 @@ def analyze(product_name: str, countries: list[dict] | None = None,
         if rep is None:
             result["report_note"] = ("تعذّر توليد تقرير كلود (مفتاح غائب أو فشل "
                                      "النداء) — AI report unavailable, not hidden.")
+    result["data_economics"] = _economics(_data_counter)
     if check_quality:
         _annotate_quality(result)
     if persist:
         _persist(result, db_path)
     return result
+
+
+def _economics(counter: dict) -> dict:
+    """لقطة اقتصاد البيانات — the observed counter plus a one-line summary.
+
+    أرقام مرصودة فقط (عدّ أحداث فعلية) — النسبة قسمة معلنة لا تقدير.
+    Observed counts only; the percentage is declared arithmetic, no estimate.
+    """
+    served = counter["store_hits"] + counter["cache_hits"]
+    total = served + counter["live_fetches"]
+    note = (f"{served} قراءة خُدمت من المخزن/ذاكرة الطلبات مقابل "
+            f"{counter['live_fetches']} جلبة حية")
+    if total:
+        note += f" — {round(100 * served / total)}% من النداءات وفّرها التخزين"
+    return {**counter, "note": note}
 
 
 def _ai_report(result: dict):

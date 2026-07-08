@@ -586,6 +586,8 @@ def build_view(result: dict) -> dict:
         "brief": _brief(decision, cp),
         "limits": limits,
         "provenance": _provenance(result),   # Stage 2A: لا فشل صامتاً
+        # اقتصاد البيانات (persist-5): عدّاد مرصود — مخزن/ذاكرة مقابل جلب حي.
+        "data_economics": result.get("data_economics"),
         "note": result.get("note"),
     }
     return view
@@ -656,6 +658,8 @@ def render_text(view: dict) -> str:
     if view.get("limits"):
         L.append("حدود هذا التقرير:")
         L += [f"  - {x}" for x in view["limits"][:6]]
+    if (view.get("data_economics") or {}).get("note"):
+        L.append(f"اقتصاد البيانات: {view['data_economics']['note']}")
     L += ["المختصر:", *(f"  {x}" for x in view["brief"]), "═" * 60]
     return "\n".join(L)
 
