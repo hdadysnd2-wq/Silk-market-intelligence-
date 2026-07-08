@@ -53,6 +53,74 @@ def _fmt(v: object) -> str:
     return str(v)
 
 
+def _narrative_exec_summary(view: dict) -> list[str]:
+    """خلاصة تنفيذية سردية (مواصفة تقرير عالمي §1) — ٣ فقرات كاملة من حقول
+    محسوبة فعلاً في decision/markets[0]/limits، لا صياغة كودية («score في
+    النطاق الشرطي») ولا استدعاء ذكاء اصطناعي ولا رقم جديد — قابلة للاختبار
+    الحتمي وتحافظ على مبدأ «لا اختلاق» لأنها تُعيد صياغة أرقام موجودة فقط.
+    """
+    d = view.get("decision") or {}
+    top = (view.get("markets") or [{}])[0]
+    verdict = d.get("verdict") or "تعذّر الحكم"
+    market = d.get("market") or top.get("country") or "السوق المدروس"
+    conf = d.get("confidence")
+    conf_txt = f"{round(conf * 100)}%" if isinstance(conf, (int, float)) else "غير محسوبة"
+    score = top.get("score")
+    p1 = (f"التوصية: {verdict} في سوق {market}، بثقة {conf_txt}"
+          + (f" استناداً إلى {score} نقطة من 100 في تقييم الجاذبية المرجّح."
+             if score is not None else " — تقييم الجاذبية غير مكتمل بعد."))
+    why = d.get("why")
+    p2 = (f"السبب التجاري: {why}." if why else
+          "السبب التجاري: لم يُحسب — بيانات غير كافية لحكم مرجّح.")
+    limits = view.get("limits") or []
+    if limits:
+        rest = len(limits) - 1
+        p3 = ("أهم ما ينقص للتأكّد من هذه التوصية: " + str(limits[0])
+              + (f" (و{rest} بنداً إضافياً في قسم «حدود هذا التقرير» أدناه)."
+                 if rest > 0 else "."))
+    else:
+        p3 = ("لا فجوات جوهرية مرصودة في مكوّنات السوق الأول — التوصية "
+              "مبنية على تغطية بيانات كاملة لكل عمود مرجّح.")
+    return [p1, p2, p3]
+
+
+def _market_scope_paragraph(view: dict) -> str:
+    """فقرة تعريف السوق ونطاقه (مواصفة تقرير عالمي §3) — ما يشمله التقرير
+    وما يستثنيه بجملة واحدة، من حقول محسوبة — لا حكم جديد يُضاف."""
+    h = view.get("header") or {}
+    product = h.get("product") or view.get("product") or "—"
+    hs = view.get("hs_code") or h.get("hs_code") or "—"
+    n_markets = len(view.get("markets") or [])
+    top_market = h.get("target_market") or "—"
+    scope_txt = ("سوق واحد مرشّح" if n_markets == 1
+                else f"{n_markets} أسواق مرشّحة")
+    return (f"يشمل هذا التقرير: صادرات {product} (رمز HS {hs}) من المملكة "
+            f"العربية السعودية، مُقيَّمة عبر {scope_txt}، "
+            f"ومفصَّلة بعمق للسوق الأعلى ترتيباً ({top_market}). يستثني "
+            "هذا التقرير: التسعير التفصيلي بالتجزئة والملفات المالية "
+            "للمنافسين (تتطلبان تعميقاً مدفوعاً عبر /deepen)، وتحليل "
+            "الشرائح السلوكية للعملاء واستخبارات الطلب المباشرة (تتطلبان "
+            "بحثاً أولياً — مقابلات أو استبيانات — لم يُجرَ بعد).")
+
+
+def _methodology_lines(view: dict) -> list[str]:
+    """أسطر قسم المنهجية (مواصفة تقرير عالمي §2) — من حقول محسوبة فعلاً
+    (سنة البيانات، التغطية، المصادر التي أسهمت هذا التشغيل تحديداً)."""
+    h = view.get("header") or {}
+    prov = view.get("provenance") or []
+    sources = sorted({str(b.get("source")) for b in prov
+                      if b.get("contributed")})
+    lines = [f"سنة البيانات المعتمدة: {_data_year_label(view)}.",
+             f"تغطية البيانات الإجمالية لهذا التحليل: {h.get('coverage_pct')}%."]
+    if sources:
+        lines.append("المصادر التي أسهمت فعلياً في هذا التشغيل: "
+                     + "، ".join(sources) + ".")
+    lines.append("منهج الثقة: كل رقم في هذا التقرير يحمل مصدره وتاريخ سحبه "
+                 "ودرجة ثقة صريحة (DataPoint) — الفجوة تُعلن بسببها ولا "
+                 "تُقدَّر أو تُخفى أبداً.")
+    return lines
+
+
 def _data_year_label(view: dict) -> str:
     """سنة البيانات الفعلية — the year actually used, flagging the declared fallback.
 
@@ -545,7 +613,9 @@ def _docx_segments(doc, m: dict) -> None:
     doc.add_heading("شرائح العملاء", level=1)
     segs = m.get("segments") or []
     if not segs:
-        doc.add_paragraph("بيانات غير كافية للشرائح — يتطلب وكيل المستهلك")
+        doc.add_paragraph("بيانات غير كافية للشرائح — التقسيم السلوكي/"
+                          "الديموغرافي يتطلب بحثاً أولياً (مقابلات أو "
+                          "استبيانات) لم يُجرَ بعد؛ لا يُشتق من بيانات ثانوية")
         return
     for s in segs:
         doc.add_paragraph(f"{s.get('segment')} — الأساس: {s.get('basis')}",
@@ -628,10 +698,8 @@ def render_docx(view: dict, path: str) -> str:
         f"{h.get('coverage_pct')}%")
     d = view.get("decision") or {}
     doc.add_heading("الخلاصة التنفيذية", level=1)
-    doc.add_paragraph(f"القرار: {d.get('verdict') or 'تعذّر الحكم'} "
-                      f"(ثقة {d.get('confidence')}) — السوق الأول: "
-                      f"{d.get('market') or '؟'}")
-    doc.add_paragraph(f"لماذا: {d.get('why') or ''}")
+    for para in _narrative_exec_summary(view):
+        doc.add_paragraph(para)
     # حكم واحد لا حكمان: عند حكم المحرك §8 تُطبع الجورية سطرَ كفاية بيانات فقط.
     if d.get("sufficiency"):
         doc.add_paragraph(d["sufficiency"])
@@ -640,7 +708,17 @@ def render_docx(view: dict, path: str) -> str:
                       f"سنة البيانات: {_data_year_label(view)} | "
                       "النتيجة أوّلية لا نهائية.")
 
-    # ٢) موقعك التنافسي (محرّك التقاطع) بعد الخلاصة مباشرة.
+    # ٢) منهجية البحث — قسم مستقل ظاهر (مواصفة تقرير عالمي §2: أقوى ما لدى
+    # المنصة، كان مشتتاً بين الأقسام بدل أن يُعرض صراحةً).
+    doc.add_heading("منهجية البحث", level=1)
+    for line in _methodology_lines(view):
+        doc.add_paragraph(line, style="List Bullet")
+
+    # ٣) تعريف السوق ونطاقه — جملة نطاق صريحة (مواصفة تقرير عالمي §3).
+    doc.add_heading("تعريف السوق ونطاقه", level=1)
+    doc.add_paragraph(_market_scope_paragraph(view))
+
+    # ٤) موقعك التنافسي (محرّك التقاطع) بعد الخلاصة مباشرة.
     cp = view.get("competitive_position") or {}
     doc.add_heading("موقعك التنافسي", level=1)
     if cp.get("available"):
@@ -749,7 +827,7 @@ def render_docx(view: dict, path: str) -> str:
         doc.add_paragraph("بيانات غير كافية لقسم «الثقافة» (0/1) — المصادر "
                           "المُحاوَلة: Web Search (Serper)")
 
-    # ٣) الأسواق — سطر مصدر تحت كل رقم (§10.3، من components_detail).
+    # ٥) الأسواق — سطر مصدر تحت كل رقم (§10.3، من components_detail).
     doc.add_heading("الأسواق المرشّحة (الأفضل أولاً)", level=1)
     for i, m in enumerate((view.get("markets") or [])[:8], 1):
         doc.add_heading(f"{i}. {m.get('country')} — نقاط "
@@ -787,13 +865,13 @@ def render_docx(view: dict, path: str) -> str:
             for f in b.get("failures") or []:
                 doc.add_paragraph(f"    فشل مُسجَّل: {f}", style="Intense Quote")
 
-    # ٤) حدود هذا التقرير — قبل التوصيات (§10.3).
+    # ٦) حدود هذا التقرير — قبل التوصيات (§10.3).
     doc.add_heading("حدود هذا التقرير", level=1)
     limits = view.get("limits") or ["لا فجوات مرصودة في الأسواق العليا"]
     for x in limits[:12]:
         doc.add_paragraph(str(x), style="List Bullet")
 
-    # ٥) التوصية (سطور المختصر نفسها — نفس القالب، لا صياغة موازية).
+    # ٧) التوصية (سطور المختصر نفسها — نفس القالب، لا صياغة موازية).
     doc.add_heading("التوصية الأوّلية", level=1)
     for line in view.get("brief") or []:
         doc.add_paragraph(line)
@@ -838,15 +916,21 @@ def render_markdown(view: dict) -> str:
           f"| سنة البيانات | {_md_cell(_data_year_label(view))} |",
           f"| تغطية البيانات الإجمالية | {h.get('coverage_pct')}% |", ""]
 
-    # ── الخلاصة التنفيذية — executive summary (حكم واحد لا حكمان) ───────────
+    # ── ١. الخلاصة التنفيذية — narrative executive summary (حكم واحد لا حكمان) ─
     d = view.get("decision") or {}
-    L += ["## الخلاصة التنفيذية", "",
-          f"- القرار: **{d.get('verdict') or 'تعذّر الحكم'}** "
-          f"(ثقة {d.get('confidence')}) — السوق الأول: {d.get('market') or '؟'}",
-          f"- لماذا: {d.get('why') or ''}"]
+    L += ["## الخلاصة التنفيذية", ""]
+    L += [f"{para}" for para in _narrative_exec_summary(view)]
     if d.get("sufficiency"):
         L.append(f"- {d['sufficiency']}")
     L += ["- النتيجة أوّلية لا نهائية.", ""]
+
+    # ── ٢. منهجية البحث — قسم مستقل ظاهر (§2) ────────────────────────────────
+    L += ["## منهجية البحث", ""]
+    L += [f"- {line}" for line in _methodology_lines(view)]
+    L.append("")
+
+    # ── ٣. تعريف السوق ونطاقه — جملة نطاق صريحة (§3) ─────────────────────────
+    L += ["## تعريف السوق ونطاقه", "", _market_scope_paragraph(view), ""]
 
     # ── قرار الدخول §8 — weighted entry decision ────────────────────────────
     L += ["## قرار الدخول (المحرك الموزون §8)", ""]
@@ -1052,7 +1136,9 @@ def render_markdown(view: dict) -> str:
         for s in segs:
             L.append(f"- {s.get('segment')} — الأساس: {s.get('basis')}")
     else:
-        L.append("بيانات غير كافية للشرائح — يتطلب وكيل المستهلك")
+        L.append("بيانات غير كافية للشرائح — التقسيم السلوكي/الديموغرافي "
+                "يتطلب بحثاً أولياً (مقابلات أو استبيانات) لم يُجرَ بعد؛ "
+                "لا يُشتق من بيانات ثانوية")
     L.append("")
 
     # ── دليل المورّدين والمصنّعين — supplier directory ───────────────────────
