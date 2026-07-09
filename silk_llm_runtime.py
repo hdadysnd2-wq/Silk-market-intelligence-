@@ -177,6 +177,29 @@ def _tool_gdelt_news(args: dict, ctx: dict) -> list[DataPoint]:
     return gdelt_news(query, market=market.name_en, months=months)
 
 
+def _tool_channels_importers(args: dict, ctx: dict) -> list[DataPoint]:
+    """قنوات التوزيع والمستوردون المرشَّحون — reuses the existing free-web
+    DistributionChannelsAgent/ImportersAgent logic (§مهمة channels_importers)
+    instead of duplicating their web-search-candidate discipline."""
+    market = ctx["market"]
+    product = str(args.get("product") or ctx.get("product") or "").strip()
+    if not product:
+        return [DataPoint(None, "Web Search", 0.0, "لا اسم منتج", _today())]
+    which = str(args.get("which") or "both").strip().lower()
+    task = {"product": product, "market": market.name_en,
+           "num": int(args.get("num") or 3)}
+    out: list[DataPoint] = []
+    if which in ("channels", "both"):
+        from silk_channels_agent import DistributionChannelsAgent
+        out.extend(DistributionChannelsAgent().run(task).findings)
+    if which in ("importers", "both"):
+        from silk_importers_agent import ImportersAgent
+        out.extend(ImportersAgent().run(task).findings)
+    return out or [DataPoint(None, "Web Search", 0.0,
+                             f"لا مرشّحين لـ{product} في {market.name_en}",
+                             _today())]
+
+
 def _tool_lookup_reference(args: dict, ctx: dict) -> list[DataPoint]:
     table = str(args.get("table") or "").strip().lower()
     market = ctx["market"]
@@ -287,6 +310,18 @@ TOOLS: dict[str, dict] = {
                 "required": ["query"]},
         },
     },
+    "channels_importers": {
+        "fn": _tool_channels_importers,
+        "spec": {
+            "name": "channels_importers",
+            "description": "قنوات توزيع ومستوردون مرشَّحون (فعلي+رقمي) من "
+                           "بحث الويب — مرشَّحات غير موثَّقة، تحتاج تأكيداً.",
+            "input_schema": {"type": "object", "properties": {
+                "which": {"type": "string",
+                         "enum": ["channels", "importers", "both"]},
+                "num": {"type": "integer", "description": "per lens, default 3"}}},
+        },
+    },
     "lookup_reference": {
         "fn": _tool_lookup_reference,
         "spec": {
@@ -365,18 +400,7 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
     system = f"{_PRINCIPLE}\n\n{mission.get('instructions', '')}"
     market: MarketRef = ctx["market"]
     hs = ctx.get("hs_code") or ""
-    user_intro = (
-        f"المهمة: {_isolate(str(mission.get('name') or mission.get('key') or ''))}\n"
-        f"المنتج: {_isolate(str(ctx.get('product') or ''))}\n"
-        f"السوق: {_isolate(f'{market.name_en} ({market.iso3})')}\n"
-        + (f"رمز HS: {_isolate(str(hs))}\n" if hs else "")
-        + "استخدم الأدوات المتاحة لجمع حقائق حقيقية، ثم أعد النتيجة النهائية "
-        "بصيغة JSON فقط (لا نص خارجها): "
-        '{"findings":[{"claim":"...","datapoint_ids":["dp1"],'
-        '"confidence":0.0-1.0}],"gaps":["..."],"summary":"..."}. '
-        "كل claim يجب أن يستشهد بمعرّف نقطة بيانات (datapoint_ids) عاد فعلاً "
-        "من نداء أداة — بند بلا استشهاد صحيح يُسقَط.")
-    messages: list[dict] = [{"role": "user", "content": user_intro}]
+
     registry: dict[str, DataPoint] = {}
     next_id = [1]
     tool_calls_used = [0]
@@ -386,6 +410,32 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
         next_id[0] += 1
         registry[did] = dp
         return did
+
+    # نتائج الوكلاء السابقين (opportunity_gaps، الوكيل ١٢ بلا أدوات خاصة به —
+    # §الموجة ٢): تُسجَّل في نفس سجل نقاط البيانات **قبل** بدء الحلقة، فيصير
+    # الاستشهاد بها بمعرّف dpN مطابقاً لأي استشهاد بنتيجة أداة حية — لا مسار
+    # تحقق موازٍ. Prior findings are pre-registered as real DataPoints so the
+    # single citation rule (claim -> real registry id) stays uniform.
+    prior_block = ""
+    for dp in (ctx.get("extra_findings") or []):
+        did = _register(dp)
+        prior_block += f"[{did}] {dp.value} — المصدر: {dp.source} — {dp.note}\n"
+
+    user_intro = (
+        f"المهمة: {_isolate(str(mission.get('name') or mission.get('key') or ''))}\n"
+        f"المنتج: {_isolate(str(ctx.get('product') or ''))}\n"
+        f"السوق: {_isolate(f'{market.name_en} ({market.iso3})')}\n"
+        + (f"رمز HS: {_isolate(str(hs))}\n" if hs else "")
+        + (f"نتائج الوكلاء السابقين (حلّلها ولا تُعِد جمعها — استشهد "
+           f"بمعرّفاتها dpN كأي نقطة بيانات):\n{_isolate(prior_block)}\n"
+          if prior_block else "")
+        + "استخدم الأدوات المتاحة لجمع حقائق حقيقية، ثم أعد النتيجة النهائية "
+        "بصيغة JSON فقط (لا نص خارجها): "
+        '{"findings":[{"claim":"...","datapoint_ids":["dp1"],'
+        '"confidence":0.0-1.0}],"gaps":["..."],"summary":"..."}. '
+        "كل claim يجب أن يستشهد بمعرّف نقطة بيانات (datapoint_ids) عاد فعلاً "
+        "من نداء أداة أو من نتائج الوكلاء السابقين — بند بلا استشهاد صحيح يُسقَط.")
+    messages: list[dict] = [{"role": "user", "content": user_intro}]
 
     tool_budget = int(budget.get("tool_calls", _DEFAULT_BUDGET["tool_calls"]))
     max_tokens = int(budget.get("max_output_tokens",
@@ -432,15 +482,20 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
 
 def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
                   hs_code: str | None = None, budget: dict | None = None,
-                  instruction: str = "") -> AgentReport:
+                  instruction: str = "",
+                  extra_findings: list[DataPoint] | None = None) -> AgentReport:
     """شغّل وكيل مهمة كلود — the mission-driven tool-use loop as an AgentReport.
 
     `mission`: {"key","name","instructions","allowed_tools":[...]} — شكل
     `silk_missions.MISSIONS[key]` (الموجة ٢)؛ يُمرَّر صراحةً هنا لأن سجل
     المهام لم يُبنَ بعد (يبقي هذه الموجة قابلة للاختبار مستقلةً).
+
+    `extra_findings`: نتائج وكلاء سابقين (الوكيل ١٢ opportunity_gaps بلا
+    أدوات خاصة به — يقرأ فقط) — تُسجَّل كنقاط بيانات قابلة للاستشهاد بها.
     """
     eff_budget = {**_DEFAULT_BUDGET, **(budget or {})}
-    ctx = {"market": market, "product": product, "hs_code": hs_code}
+    ctx = {"market": market, "product": product, "hs_code": hs_code,
+          "extra_findings": extra_findings or []}
     eff_mission = dict(mission)
     if instruction:
         eff_mission["instructions"] = (
@@ -497,7 +552,8 @@ class LLMMissionAgent(BaseAgent):
         return run_llm_agent(
             self.mission, market, product=task.get("product", ""),
             hs_code=task.get("hs_code"), budget=task.get("budget"),
-            instruction=task.get("instruction", ""))
+            instruction=task.get("instruction", ""),
+            extra_findings=task.get("extra_findings"))
 
 
 if __name__ == "__main__":

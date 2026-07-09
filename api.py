@@ -591,6 +591,7 @@ def create_app():
         """
         _require_key(request)
         _rate_limit(request)
+        import silk_missions  # noqa: F401 — يسجّل صفوف البعثات الاثنتي عشر
         from silk_agents import AGENT_CATALOG, default_agent_settings
         merged = default_agent_settings()
         saved = _saved_agent_settings() or {}
