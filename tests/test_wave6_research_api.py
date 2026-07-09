@@ -98,11 +98,14 @@ def test_request_model_has_no_paid_fields():
 
     src = inspect.getsource(api.create_app)
     # فحص خفيف: نموذج ResearchRequest لا يذكر أياً من حقول التعميق المدفوعة.
+    # own_price ليس حقلاً مدفوعاً (غير مذكور في _PAID_FLAGS إطلاقاً — رقم
+    # سردي حر لحساب الهامش عند المضاهاة داخل المحلل المجاني) فأُزيل من هذه
+    # القائمة عمداً (الموجة ٩، بلاغ حي: "الموقع التنافسي" غائب من /research
+    # لأن own_price/product_card لم يكونا يصلان الوكلاء إطلاقاً — أُصلح).
     idx = src.find("class ResearchRequest")
     assert idx != -1
     body = src[idx:idx + 800]
-    for paid_field in ("with_volza", "with_explee", "with_localprice",
-                       "own_price"):
+    for paid_field in ("with_volza", "with_explee", "with_localprice"):
         assert paid_field not in body
 
 
