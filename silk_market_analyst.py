@@ -1,0 +1,142 @@
+"""المحلل الشامل للسوق — Silk Comprehensive Market Analyst (الموجة ٣، V5).
+
+الطبقة ٣: وكيل كلود مركزي **بلا أدوات خارجية** — مدخلاته حصراً تقارير
+البعثات الاثنتي عشرة المعزولة (الموجة ٢) + خيوط `correlation.py` إن
+وُجدت (بطاقة منتج). يبني خمس تقاطعات إلزامية (كل تقاطع يستشهد بمعرّفات
+نقاط بيانات من التقارير) ثم SWOT، وينتهي بمسوّدة تقييم تُسلَّم لـ
+`silk_synthesis.synthesize()` (المرحلة ٢) — لا مسار حكم مستقل (٩.٣ محفوظة:
+نقطة الحكم الوحيدة تبقى synthesize).
+
+**قرار تصميم موثَّق**: `correlation.py` مبني على شكل صف `/analyze` القديم
+(`components_detail`، `retail_price`، إلخ) لا شكل تقارير البعثات الجديدة
+— لا محوّل شكل جديد يُبنى هنا (تجنّب ازدواجية منطق مطابقة). خيوط
+`correlation.py` الجاهزة (إن حسبها المستدعي من مسار `/analyze` ببطاقة
+منتج) تُمرَّر كسياق سردي إضافي (`extra_context`) غير قابل للاستشهاد
+المباشر — نفس نمط `silk_synthesis._stage2` (خيوط كسياق JSON معزول).
+"""
+from __future__ import annotations
+
+import json
+import logging
+
+from silk_agents import AgentReport
+from silk_llm_runtime import run_llm_agent
+from silk_market_resolver import MarketRef
+
+log = logging.getLogger(__name__)
+
+# التقاطعات الخمسة الإلزامية — the 5 required intersections (+ SWOT).
+REQUIRED_CATEGORIES: tuple[str, ...] = (
+    "demand", "entry_cost", "price_competitiveness", "entry_door", "swot")
+
+_CATEGORY_LABELS = {
+    "demand": "الطلب الفعلي القابل للتوجيه",
+    "entry_cost": "تكلفة وصعوبة الدخول",
+    "price_competitiveness": "التنافسية السعرية",
+    "entry_door": "أبواب الدخول الأكثر أماناً",
+    "swot": "SWOT من منظور المصدّر السعودي",
+}
+
+_ANALYST_MISSION = {
+    "key": "market_analyst", "name": "المحلل الشامل للسوق",
+    "allowed_tools": [],
+    "instructions": (
+        "أنت المحلل الشامل (الطبقة ٣) — لا أدوات لك، اقرأ فقط نتائج "
+        "البعثات الاثنتي عشرة المرفقة (وأي خيوط تقاطع إن أُرفقت كسياق "
+        "سردي). ابنِ **خمسة تقاطعات إلزامية بالضبط**، كل واحد بند "
+        "'category' من هذه القيم حرفياً: demand, entry_cost, "
+        "price_competitiveness, entry_door, swot — وبند واحد على الأقل "
+        "لكل قيمة (إن لم تكفِ الأدلة لتقاطع، اكتب ذلك صراحة في category "
+        "المناسبة مع تصريح 'دليل غير كافٍ' بدل حذفه):\n"
+        "1. demand = ثقافة الاستهلاك × حجم الاستيراد × السكان × نسبة "
+        "المسلمين (عند صلة الحلال) — تقدير **استدلالي من مصادر موثّقة**، "
+        "صرّح أنه استدلال لا حقيقة، مع إظهار المعادلة.\n"
+        "2. entry_cost = الاشتراطات الجمركية × التعريفة والاتفاقيات × "
+        "اللوجستيات.\n"
+        "3. price_competitiveness = أسعار المنافسين × التعريفة × مؤشر "
+        "اللوجستيات (تكلفة الشحن الفعلية تبقى فجوة معلنة إن لم تُرصد).\n"
+        "4. entry_door = قنوات التوزيع × المخاطر والأخبار — أي باب أكثر "
+        "أماناً وواقعية.\n"
+        "5. swot = نقاط قوة/ضعف السوق من منظور مصدّر سعودي تحديداً.\n"
+        "كل رقم تذكره يجب أن يستشهد بمعرّف نقطة بيانات من نتائج البعثات "
+        "المرفقة — لا اختلاق، والفجوة الحرجة تُذكر صراحة في gaps."),
+}
+
+
+def _tag_source_reports(mission_reports: dict[str, AgentReport]) -> list:
+    """أضف اسم البعثة المصدر لكل نتيجة — traceability: أي بعثة قالت ماذا."""
+    from silk_data_layer import DataPoint
+
+    tagged: list[DataPoint] = []
+    for key, report in (mission_reports or {}).items():
+        for dp in report.findings:
+            tagged.append(DataPoint(dp.value, dp.source, dp.confidence,
+                                    f"[{key}] {dp.note}", dp.retrieved_at,
+                                    getattr(dp, "status", "")))
+    return tagged
+
+
+def analyze_market(market: MarketRef, product: str,
+                   mission_reports: dict[str, AgentReport],
+                   hs_code: str | None = None,
+                   correlation_threads: dict | None = None,
+                   budget: dict | None = None) -> dict:
+    """حلّل السوق تحليلاً شاملاً — the 5 intersections + SWOT as one AgentReport.
+
+    `mission_reports`: خرْج `silk_missions.run_all_missions()` (١٢ تقريراً).
+    `correlation_threads`: خيوط `correlation.py` الجاهزة إن حُسبت مسبقاً من
+    مسار ببطاقة منتج (اختياري، تُمرَّر كسياق سردي — راجع تعليق التصميم أعلى
+    الملف). يعيد {"report": AgentReport, "by_category": {فئة: [DataPoint]},
+    "missing_categories": [...]} — الفجوة معلنة لا مخفيّة.
+    """
+    tagged = _tag_source_reports(mission_reports)
+    extra_context = (json.dumps(correlation_threads, ensure_ascii=False,
+                                default=str) if correlation_threads else "")
+
+    report = run_llm_agent(
+        _ANALYST_MISSION, market, product=product, hs_code=hs_code,
+        budget=budget, extra_findings=tagged, extra_context=extra_context)
+
+    by_category: dict[str, list] = {c: [] for c in REQUIRED_CATEGORIES}
+    for dp in report.findings:
+        note = str(dp.note or "")
+        if note.startswith("["):
+            cat = note[1:note.find("]")]
+            if cat in by_category:
+                by_category[cat].append(dp)
+    missing = [c for c in REQUIRED_CATEGORIES if not by_category[c]]
+    if missing:
+        labels = "، ".join(_CATEGORY_LABELS[c] for c in missing)
+        report.summary = (f"{report.summary} | تقاطعات ناقصة الأدلة: "
+                          f"{labels}")[:600]
+
+    return {"report": report, "by_category": by_category,
+           "missing_categories": missing}
+
+
+def to_synthesis_input(result: dict) -> dict:
+    """حوّل خرْج analyze_market إلى مُدخَل قابل للتسلسل — plain-value dict for
+    `silk_synthesis.synthesize(analyst_assessment=...)` (AgentReport/DataPoint
+    ليسا JSON-serializable مباشرة)."""
+    return {
+        "summary": result["report"].summary,
+        "by_category": {
+            cat: [{"claim": dp.value, "confidence": dp.confidence,
+                  "note": dp.note} for dp in dps]
+            for cat, dps in result["by_category"].items()},
+        "missing_categories": result["missing_categories"],
+    }
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    from silk_market_resolver import resolve_market
+    from silk_missions import run_all_missions
+
+    ref, _ = resolve_market("Nigeria")
+    reports = run_all_missions(ref, product="تمور", hs_code="080410")
+    out = analyze_market(ref, "تمور", reports, hs_code="080410")
+    r = out["report"]
+    print(f"[{'FAILED' if r.failed else 'ok'}] {r.agent_name}: {r.summary}")
+    for cat, dps in out["by_category"].items():
+        print(f"  {cat}: {len(dps)} finding(s)")

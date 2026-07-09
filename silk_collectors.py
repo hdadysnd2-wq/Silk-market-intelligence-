@@ -276,8 +276,103 @@ def refresh() -> dict:
             break
         got = collect_comtrade(hs, targets, year)
         comtrade_runs.append({"hs6": hs, "year": year, **got})
+    # مراقبة ما بعد الدخول (الموجة ٤) — نفس الخيط والإيقاع (SILK_REFRESH_HOURS)،
+    # لا خدمة cron منفصلة (قرص Railway يُركَّب على خدمة واحدة فقط). فشلها لا
+    # يُسقط بقية التحديث الدوري — تحذير مسجَّل فقط.
+    try:
+        alerts = check_post_entry()
+    except Exception as e:  # noqa: BLE001 — طبقة مراقبة لا تُسقط التحديث
+        log.warning("post-entry monitoring skipped: %s", e)
+        alerts = []
     return {"worldbank": wb, "comtrade": comtrade_runs,
-            "comtrade_budget_left": comtrade_budget_left()}
+            "comtrade_budget_left": comtrade_budget_left(),
+            "post_entry_alerts": alerts}
+
+
+# ── مراقبة ما بعد الدخول (الموجة ٤، V5) ──────────────────────────────────────
+# لتحليلات البحث العميق (result["deep_research"]) المُعلَّمة outcome="entered"
+# فقط — تعيد جلب إشارتَي trade_flow/risk_news حيّاً وتقارن بما خزَّنته البعثتان
+# أصلاً؛ تغيّر جوهري (نمو استيراد سلبي حالياً / تعريفة تغيّرت) = تنبيه مُسجَّل
+# يظهر في اللوحة (view["deep_research"], لاحقاً). لا استدعاء كلود هنا إطلاقاً —
+# نفس انضباط هذا الملف بأكمله (بيانات حتمية فقط)؛ فحص «الإشارة» لا إعادة تشغيل
+# البعثة بأكملها.
+
+def _entered_deep_research_analyses(path: str | None = None) -> list[dict]:
+    """التحليلات المُدخَلة فعلياً وذات بحث عميق — outcome=entered فقط."""
+    import silk_storage
+    out = []
+    for meta in silk_storage.list_analyses(path):
+        if meta.get("outcome") != "entered":
+            continue
+        full = silk_storage.get_analysis(meta["id"], path)
+        if not full or not full.get("deep_research"):
+            continue
+        out.append({"id": meta["id"], "full": full})
+    return out
+
+
+def _stored_tariff_pct(full: dict) -> float | None:
+    """التعريفة المخزَّنة أصلاً من بعثة tariffs_agreements — تحليل نصّي محافظ."""
+    import re
+    mission = ((full.get("deep_research") or {}).get("missions") or {}).get(
+        "tariffs_agreements") or {}
+    for f in mission.get("findings") or []:
+        note = str(f.get("note") or "") + " " + str(f.get("value") or "")
+        m = re.search(r"(\d+(?:\.\d+)?)\s*%", note)
+        if m:
+            return float(m.group(1))
+    return None
+
+
+def check_post_entry(path: str | None = None) -> list[dict]:
+    """راقب التحليلات المُدخَلة — إشارة تجارة+مخاطر حيّة لكل واحدة، وتنبيه
+    عند تغيّر جوهري. تعيد قائمة التنبيهات (وتُسجّلها warning)؛ فشل جلب
+    تحليل واحد لا يوقف البقية (نفس مبدأ عزل الأعطال القائم في هذا الملف)."""
+    from silk_data_layer import comtrade_trade, primary_value
+    from silk_tariffs_agent import applied_tariff
+
+    alerts: list[dict] = []
+    year = _today_year() - 1
+    for item in _entered_deep_research_analyses(path):
+        aid, full = item["id"], item["full"]
+        hs = full.get("hs_code")
+        market = full.get("market") or {}
+        iso3, m49 = market.get("iso3"), market.get("m49")
+        if not hs or not iso3:
+            continue
+        try:
+            cur = comtrade_trade(hs, m49 or iso3, year, flow="M", partner=0)
+            prev = comtrade_trade(hs, m49 or iso3, year - 1, flow="M", partner=0)
+        except Exception as e:  # noqa: BLE001 — عزل الأعطال، لا سقوط جماعي
+            log.warning("post-entry monitoring: trade fetch failed for "
+                       "analysis %s: %s", aid, e)
+            continue
+        cur_v = sum(v for v in (primary_value(r) for r in (cur or [])) if v)
+        prev_v = sum(v for v in (primary_value(r) for r in (prev or [])) if v)
+        growth_negative = bool(prev_v) and cur_v < prev_v
+
+        tariff_changed = False
+        new_tariff = None
+        stored_tariff = _stored_tariff_pct(full)
+        if stored_tariff is not None:
+            dp = applied_tariff(hs, iso3, year=year)
+            if dp.value is not None:
+                new_tariff = dp.value
+                tariff_changed = abs(dp.value - stored_tariff) >= 1.0  # نقطة مئوية
+
+        if not growth_negative and not tariff_changed:
+            continue
+        alert = {
+            "analysis_id": aid, "hs_code": hs, "iso3": iso3,
+            "growth_negative": growth_negative,
+            "tariff_changed": tariff_changed,
+            "old_tariff_pct": stored_tariff, "new_tariff_pct": new_tariff,
+            "checked_at": datetime.date.today().isoformat(),
+        }
+        alerts.append(alert)
+        log.warning("post-entry alert (analysis %s, HS%s->%s): %s",
+                   aid, hs, iso3, alert)
+    return alerts
 
 
 # ── المُجدول داخل العملية · in-process scheduler ─────────────────────────────

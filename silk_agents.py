@@ -73,6 +73,26 @@ AGENT_CATALOG: list[dict] = [
 ]
 
 
+def register_agents(rows: list[dict]) -> int:
+    """سجّل صفوفاً إضافية في الكتالوج — additive registration (V5 wave 2).
+
+    `silk_missions.py` (١٢ وكيل كلود بالأدوات) يستدعيها عند الاستيراد
+    لإضافة صفوفه دون أن يستورد `silk_agents` منه (يمنع الاستيراد الدائري:
+    silk_missions <- silk_llm_runtime <- silk_agents). التسجيل مضافٌ لا
+    استبدال — مفتاح موجود مسبقاً يُتجاهَل صفّه الجديد (الكتالوج الأصلي
+    الفائز دائماً)، فتبقى AGENT_CATALOG «السجل القانوني الواحد» حرفياً
+    حتى مع مصدرين للصفوف. يعيد عدد الصفوف المضافة فعلاً.
+    """
+    existing = {a["key"] for a in AGENT_CATALOG}
+    added = 0
+    for row in rows:
+        if row.get("key") and row["key"] not in existing:
+            AGENT_CATALOG.append(row)
+            existing.add(row["key"])
+            added += 1
+    return added
+
+
 def default_agent_settings() -> dict:
     """الإعدادات الافتراضية — المجاني مفعّل والمدفوع مطفأ، بلا توجيهات."""
     return {a["key"]: {"on": not a["paid"], "cmd": ""} for a in AGENT_CATALOG}

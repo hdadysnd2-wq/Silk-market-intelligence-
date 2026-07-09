@@ -312,26 +312,37 @@ def render_brief(view: dict, dashboard_url: str = "/") -> str:
     d = view.get("decision") or {}
     cp = view.get("competitive_position") or {}
     top = (view.get("markets") or [{}])[0]
+    dr = view.get("deep_research")
     numbers = []
-    for c in (top.get("components_detail") or []):
-        if c.get("value") is None:
-            continue
-        name = c.get("name")
-        # كل مقياس بصيغته البشرية — مؤشر HHI الخام لا يصل وجه المستخدم أبداً.
-        val = (fmt_money(c["value"]) if name in ("market_size",
-                                                 "demand_capacity")
-               else fmt_pct(c["value"]) if name == "saudi_position"
-               else competition_phrase(c["value"]) if name == "competition"
-               else _fmt(c["value"]))
-        numbers.append(f"• {internal_ar(name)}: {val} "
-                       f"[{c.get('source', '؟')}]")
-        if len(numbers) == 3:
-            break
+    if dr:  # الموجة ٤: أرقام من تقاطعات المحلل الشامل لا components_detail
+        by_cat = (dr.get("analyst") or {}).get("by_category") or {}
+        for cat in ("demand", "price_competitiveness", "entry_cost"):
+            items = by_cat.get(cat) or []
+            if items:
+                numbers.append(f"• {_CATEGORY_AR.get(cat, cat)}: "
+                               f"{items[0].get('value')} "
+                               f"[{items[0].get('source', '؟')}]")
+    else:
+        for c in (top.get("components_detail") or []):
+            if c.get("value") is None:
+                continue
+            name = c.get("name")
+            # كل مقياس بصيغته البشرية — مؤشر HHI الخام لا يصل وجه المستخدم أبداً.
+            val = (fmt_money(c["value"]) if name in ("market_size",
+                                                     "demand_capacity")
+                   else fmt_pct(c["value"]) if name == "saudi_position"
+                   else competition_phrase(c["value"]) if name == "competition"
+                   else _fmt(c["value"]))
+            numbers.append(f"• {internal_ar(name)}: {val} "
+                           f"[{c.get('source', '؟')}]")
+            if len(numbers) == 3:
+                break
     if not numbers:
         numbers = [f"• {GAP_WORD}"]
     L = ([] if not view.get("test_run") else
          ["⚠ TEST RUN — تشغيل برهاني ببدائل موسومة، ليس تقريراً إنتاجياً"])
-    market_ar = country_ar(top.get("iso3"), d.get("market"))
+    market_ar = (((dr or {}).get("market") or {}).get("name_ar")
+                if dr else country_ar(top.get("iso3"), d.get("market")))
     L += [f"سِلك | {view.get('product')} — سوق {market_ar} | "
           f"قراءة أولية {view.get('year')}",
          "",
@@ -688,6 +699,83 @@ def _docx_regulatory(doc, m: dict) -> None:
         doc.add_paragraph(f"غير متوفر: {_gap_ar(g)}", style="List Bullet")
 
 
+_CATEGORY_AR = {
+    "demand": "الطلب الفعلي القابل للتوجيه",
+    "entry_cost": "تكلفة وصعوبة الدخول",
+    "price_competitiveness": "التنافسية السعرية",
+    "entry_door": "أبواب الدخول الأكثر أماناً",
+    "swot": "SWOT من منظور المصدّر السعودي",
+}
+
+
+def _docx_deep_research(doc, view: dict) -> None:
+    """قسم البحث العميق (الموجة ٤، V5) — ١٢ بعثة + محلل + حكم + تقرير مراجَع.
+
+    يُستدعى إضافياً فقط عند `view["deep_research"]` (نتيجة /research) — لا
+    يمسّ الأقسام الأربعة عشر القائمة لتقرير /analyze الكلاسيكي.
+    """
+    dr = view.get("deep_research")
+    if not dr:
+        return
+    doc.add_heading("قسم البحث العميق — التقاطعات الخمسة والمحلل الشامل",
+                    level=1)
+
+    market = dr.get("market") or {}
+    verdict = dr.get("verdict") or {}
+    ai = verdict.get("ai") or {}
+    doc.add_paragraph(
+        f"السوق: {market.get('name_ar') or market.get('name_en')} "
+        f"({market.get('iso3')}) — الحكم: "
+        f"{ai.get('verdict') or verdict.get('verdict') or 'غير محسوم'}")
+    if ai.get("reasoning"):
+        doc.add_paragraph(str(ai["reasoning"]), style="Intense Quote")
+
+    doc.add_heading("البعثات الاثنتا عشرة — ملخّص", level=2)
+    missions = dr.get("missions") or {}
+    _add_table(doc, ["البعثة", "الحالة", "الملخّص"], [
+        [key, "فشلت/بلا أدلة" if m.get("failed") else "ناجحة",
+         (m.get("summary") or "")[:300]]
+        for key, m in missions.items()])
+
+    doc.add_heading("المحلل الشامل — التقاطعات الخمسة", level=2)
+    analyst = dr.get("analyst") or {}
+    by_cat = analyst.get("by_category") or {}
+    for cat, ar_label in _CATEGORY_AR.items():
+        doc.add_heading(ar_label, level=3)
+        items = by_cat.get(cat) or []
+        if not items:
+            doc.add_paragraph("دليل غير كافٍ لهذا التقاطع في هذا التشغيل — "
+                              "فجوة معلنة")
+            continue
+        for f in items:
+            doc.add_paragraph(str(f.get("value")), style="List Bullet")
+            doc.add_paragraph(f"[{f.get('source')}، ثقة {f.get('confidence')}] "
+                              f"{f.get('note') or ''}", style="Intense Quote")
+
+    if dr.get("report", {}).get("text"):
+        doc.add_heading("التقرير الكامل (كاتب التقرير، مراجَع)", level=2)
+        for line in str(dr["report"]["text"]).splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("## "):
+                doc.add_heading(line[3:].strip(), level=3)
+            else:
+                doc.add_paragraph(line)
+        if dr["report"].get("unresolved_notes"):
+            doc.add_heading("ملاحظات مراجعة لم تُحلّ", level=3)
+            for n in dr["report"]["unresolved_notes"]:
+                doc.add_paragraph(str(n), style="List Bullet")
+
+    if dr.get("next_step"):
+        doc.add_paragraph(dr["next_step"], style="Intense Quote")
+
+    if dr.get("limits"):
+        doc.add_heading("حدود قسم البحث العميق", level=2)
+        for x in dr["limits"][:12]:
+            doc.add_paragraph(str(x), style="List Bullet")
+
+
 def render_docx(view: dict, path: str) -> str:
     """التقرير الكامل Word (§10.3) — من القالب الموحّد حصراً.
 
@@ -989,6 +1077,8 @@ def render_docx(view: dict, path: str) -> str:
             for f in b.get("failures") or []:
                 doc.add_paragraph(f"    فشل مُسجَّل: {f}",
                                   style="Intense Quote")
+
+    _docx_deep_research(doc, view)
 
     doc.save(path)
     return path

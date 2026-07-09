@@ -103,8 +103,14 @@ _data_counter: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
 
 
 def begin_data_counter() -> dict:
-    """ابدأ عدّاداً جديداً — fresh counter for this analysis run (contextvar)."""
-    c = {"store_hits": 0, "cache_hits": 0, "live_fetches": 0}
+    """ابدأ عدّاداً جديداً — fresh counter for this analysis run (contextvar).
+
+    `llm_calls`/`tool_calls` (V5 wave 1): كل نداء كلود ونداء أداة داخل حلقة
+    الوكيل اللغوي (`silk_llm_runtime.run_llm_agent`) يُعدّ هنا — نفس القناة
+    الجانبية الصامتة لعدّادات المخزن/الجلب الحي، صفر أثر خارج تحليل نشط.
+    """
+    c = {"store_hits": 0, "cache_hits": 0, "live_fetches": 0,
+         "llm_calls": 0, "tool_calls": 0}
     _data_counter.set(c)
     return c
 

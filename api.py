@@ -591,6 +591,7 @@ def create_app():
         """
         _require_key(request)
         _rate_limit(request)
+        import silk_missions  # noqa: F401 — يسجّل صفوف البعثات الاثنتي عشر
         from silk_agents import AGENT_CATALOG, default_agent_settings
         merged = default_agent_settings()
         saved = _saved_agent_settings() or {}
@@ -670,6 +671,115 @@ def create_app():
                 hs_code=req.hs_code,
                 persist=req.persist)
         result["view"] = _view(result)
+        return _json(result)
+
+    class ResearchRequest(BaseModel):
+        """طلب بحث عميق (الموجة ٤، V5) — ١٢ بعثة كلود + محلل شامل + تقرير.
+
+        لا حقول مدفوعة (كـ AnalyzeRequest تماماً) — مسار مجاني حصراً. `market`
+        نص حر (اسم عربي/إنجليزي أو ISO3) يُحلّ عبر silk_market_resolver؛
+        مطابقة ضعيفة/غامضة = 422 مع اقتراحات، لا تخمين سوق.
+        """
+        product: str
+        market: str
+        hs_code: str | None = None
+        product_card: ProductCard | None = None
+        persist: bool = True
+        agent_prefs: dict | None = None
+
+    @app.post("/research")
+    def research(req: ResearchRequest, request: Request):
+        """بحث عميق — ١٢ بعثة كلود بالأدوات + محلل شامل + حكم + تقرير مراجَع.
+
+        مسار مجاني حصراً (نموذج بلا حقول مدفوعة، كـ/analyze) — إضافات كلود
+        (البعثات + المحلل + توليف المرحلة ٢ + الكاتب/المراجع) تمرّ عبر نفس
+        بوابة H2 (`_free_ai_extras_allowed`) وحجزها الذرّي الواحد من
+        SILK_PAID_DAILY_CAP (كنداء AI إضافي واحد على /analyz تماماً) — لا
+        مسار كلود موازٍ. الحجم الفعلي لعدد النداءات عبر التحليل بأكمله
+        محكوم بسقف منفصل (`SILK_RESEARCH_MAX_LLM_CALLS`/`_MAX_TOOL_CALLS`،
+        افتراضياً ٤٠/١٠٠) يُطبَّق حياً داخل `silk_llm_runtime._run_loop` —
+        إنهاء رشيق لا كسر عند تجاوزه.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        from silk_market_resolver import resolve_market
+        market_ref, suggestions = resolve_market(req.market)
+        if market_ref is None:
+            raise HTTPException(status_code=422, detail={
+                "error": f"unknown or ambiguous market {req.market!r}",
+                "suggestions": suggestions})
+
+        hs_code = req.hs_code
+        hs_note = None
+        if not hs_code:
+            from silk_hs_resolver import resolve as resolve_hs
+            dp = resolve_hs(req.product)
+            hs_code = dp.value
+            if hs_code is None:
+                hs_note = dp.note  # فجوة معلنة — لا اختلاق رمز HS
+
+        ai_ok, ai_note = _free_ai_extras_allowed()
+        import contextlib
+        import silk_context
+        ctx = (contextlib.nullcontext() if ai_ok
+               else silk_context.block_ai_extras())
+        prefs = _clean_agent_prefs(req.agent_prefs)
+        if prefs is None:
+            prefs = _saved_agent_settings()
+
+        with ctx, silk_context.agent_prefs_context(prefs):
+            silk_context.begin_data_counter()
+            from silk_missions import run_all_missions
+            from silk_market_analyst import analyze_market, to_synthesis_input
+            from silk_synthesis import synthesize
+            from silk_ai_judge import write_reviewed_report
+
+            mission_reports = run_all_missions(
+                market_ref, product=req.product, hs_code=hs_code)
+            analyst_out = analyze_market(
+                market_ref, req.product, mission_reports, hs_code=hs_code)
+            analyst_input = to_synthesis_input(analyst_out)
+            verdict = synthesize(
+                list(mission_reports.values()), product=req.product,
+                market=market_ref.name_en, with_ai=ai_ok,
+                analyst_assessment=analyst_input)
+            report_out = (write_reviewed_report(
+                mission_reports, analyst_input.get("summary", ""), verdict,
+                req.product, market_ref.name_en) if ai_ok else
+                {"report": None, "review_cycles": 0, "unresolved_notes": []})
+            economics = dict(silk_context.data_counter() or {})
+
+        served = economics.get("store_hits", 0) + economics.get("cache_hits", 0)
+        economics["note"] = (
+            f"{economics.get('llm_calls', 0)} نداء كلود، "
+            f"{economics.get('tool_calls', 0)} نداء أداة، {served} قراءة "
+            "خُدمت من المخزن/ذاكرة الطلبات")
+
+        result: dict = {
+            "product": req.product, "hs_code": hs_code, "year": None,
+            "preliminary": True,
+            "market": {"iso3": market_ref.iso3, "m49": market_ref.m49,
+                      "iso2": market_ref.iso2, "name_en": market_ref.name_en,
+                      "name_ar": market_ref.name_ar},
+            "markets": [],  # لا ترتيب أسواق هنا — سوق واحد مُحلَّل بعمق
+            "deep_research": {
+                "missions": mission_reports, "analyst": analyst_out,
+                "verdict": verdict, "report": report_out,
+            },
+            "data_economics": economics,
+        }
+        if hs_note:
+            result["hs_resolution_note"] = hs_note
+        if not ai_ok:
+            result["ai_extras_note"] = ai_note
+        result["view"] = _view(result)
+        if req.persist:
+            try:
+                from silk_storage import init_db, save_analysis
+                init_db("data/silk.db")
+                result["analysis_id"] = save_analysis(result, "data/silk.db")
+            except Exception as e:  # noqa: BLE001 — التخزين لا يُسقط النتيجة
+                log.warning("research persist skipped: %s", e)
         return _json(result)
 
     class DiscoverRequest(BaseModel):
