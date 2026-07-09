@@ -169,6 +169,115 @@ def _verdict_tone(vtxt: str) -> str:
     return "unknown"
 
 
+# ── هوية سِلك البصرية (الموجة ١١، §11.1) — config/branding.yaml ─────────
+
+_BRANDING_PATH = "config/branding.yaml"
+_BRANDING_DEFAULTS = {
+    "logo_path": "", "primary_color": "1B3B6F", "secondary_color": "C9A227",
+    "contact_footer": "سِلك لذكاء الأسواق",
+}
+
+
+def _load_branding(path: str = _BRANDING_PATH) -> dict:
+    """اقرأ هوية سِلك البصرية — محلّل مسطّح خفيف (key: value فقط، بلا
+    تعشيش) بلا PyYAML (ليست ضمن requirements.txt؛ المشروع stdlib-first —
+    راجع تعليق أعلى config/branding.yaml). ملف غائب/سطر مشوَّه = القيمة
+    الافتراضية لذلك المفتاح فقط، لا فشل كامل."""
+    out = dict(_BRANDING_DEFAULTS)
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                s = line.strip()
+                if not s or s.startswith("#") or ":" not in s:
+                    continue
+                k, v = s.split(":", 1)
+                k, v = k.strip(), v.strip()
+                if k in out and v:
+                    out[k] = v
+    except FileNotFoundError:
+        pass
+    except Exception as e:  # noqa: BLE001 — الهوية تحسين عرض لا شرط توليد
+        log.warning("branding config unavailable (%s): %s", path, e)
+    return out
+
+
+def _hex_to_rgbcolor(hex_str: str):
+    from docx.shared import RGBColor
+    h = (hex_str or "").lstrip("#")
+    try:
+        return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    except Exception:  # noqa: BLE001 — لون مشوَّه = الكحلي الافتراضي
+        return RGBColor(0x1B, 0x3B, 0x6F)
+
+
+def _set_cell_shading(cell, hex_color: str) -> None:
+    """ظلّل خلفية خلية جدول — python-docx لا يعرض هذا كخاصية عليا؛ عنصر
+    w:shd عبر oxml مباشرة (نمط موثَّق شائع لتلوين رؤوس/أشرطة الجداول)."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:fill"), (hex_color or "").lstrip("#") or "FFFFFF")
+    cell._tc.get_or_add_tcPr().append(shd)
+
+
+def _add_page_number_field(paragraph) -> None:
+    """أدرج حقل رقم الصفحة الديناميكي (PAGE) — python-docx لا يعرض حقول
+    Word كخاصية عليا؛ نمط oxml موثَّق شائع (w:fldChar begin/instrText/end)."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    run = paragraph.add_run()
+    begin = OxmlElement("w:fldChar")
+    begin.set(qn("w:fldCharType"), "begin")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = "PAGE"
+    end = OxmlElement("w:fldChar")
+    end.set(qn("w:fldCharType"), "end")
+    run._r.append(begin)
+    run._r.append(instr)
+    run._r.append(end)
+
+
+def _add_cover_wordmark(doc, branding: dict) -> None:
+    """شعار سِلك على الغلاف — صورة فعلية إن وُجد `logo_path` صالح، وإلا
+    نص نائب ("[شعار سِلك]") بلون سِلك الأساس. لا استثناء يُسقِط التوليد
+    إن تعذّرت قراءة الصورة (مسار خاطئ/صيغة غير مدعومة) — رجوع للنص النائب."""
+    logo_path = branding.get("logo_path")
+    if logo_path:
+        try:
+            import os
+            if os.path.exists(logo_path):
+                doc.add_picture(logo_path, width=_docx_inches(1.5))
+                return
+        except Exception as e:  # noqa: BLE001 — الشعار تحسين عرض لا شرط
+            log.warning("cover logo unavailable (%s): %s", logo_path, e)
+    p = doc.add_paragraph()
+    run = p.add_run("[شعار سِلك]")
+    run.bold = True
+    run.font.color.rgb = _hex_to_rgbcolor(branding["primary_color"])
+
+
+def _docx_inches(n: float):
+    from docx.shared import Inches
+    return Inches(n)
+
+
+def _add_page_header_footer(doc, title: str) -> None:
+    """رأس/تذييل ثابتان لكل صفحة — عنوان التقرير أعلى، ورقم صفحة ديناميكي
+    + سطر هوية سِلك أسفل (الموجة ١١، §11.1: تناسق بصري عبر كل صفحات
+    التقرير، لا الغلاف فقط)."""
+    branding = _load_branding()
+    section = doc.sections[0]
+    hp = section.header.paragraphs[0] if section.header.paragraphs \
+        else section.header.add_paragraph()
+    hp.text = title
+    fp = section.footer.paragraphs[0] if section.footer.paragraphs \
+        else section.footer.add_paragraph()
+    fp.add_run(branding["contact_footer"] + " — صفحة ")
+    _add_page_number_field(fp)
+
+
 _VERDICT_TEXT_COLORS = {"go": (0x1E, 0x7D, 0x32), "watch": (0xB8, 0x86, 0x0B),
                         "nogo": (0xC0, 0x00, 0x00), "unknown": (0x60, 0x60, 0x60)}
 _VERDICT_HIGHLIGHTS = {"go": "BRIGHT_GREEN", "watch": "YELLOW", "nogo": "RED"}
@@ -213,7 +322,8 @@ def _render_markdown_table(doc, table_lines: list[str]) -> None:
     headers, *data = rows
     n = len(headers)
     norm = [(r + [""] * n)[:n] for r in data]
-    _add_table(doc, headers, norm)
+    caption = "جدول: " + " · ".join(h for h in headers if h)  # الموجة ١١
+    _add_table(doc, headers, norm, caption=caption)
 
 
 def _narrative_exec_summary(view: dict) -> list[str]:
@@ -522,29 +632,46 @@ def render_brief(view: dict, dashboard_url: str = "/") -> str:
 
 # ── بناة أقسام Word الجديدة (§7) — new docx section builders (pure display) ──
 
-def _add_table(doc, headers: list[str], rows: list[list]) -> None:
-    """جدول Word موحّد — bordered table, bold header row; no rows => no-op.
+def _add_table(doc, headers: list[str], rows: list[list],
+               caption: str | None = None) -> None:
+    """جدول Word موحّد سِلك — رأس بلون سِلك الأساس وخط أبيض، أشرطة متناوبة
+    خفيفة، تسمية اختيارية أعلاه؛ no rows => no-op.
 
     مراجعة المشروع: النسخة الحية من التقرير (docx، ما يُرسله المستخدم فعلياً)
     كانت نقاطاً سردية بحتة بينما نظيرتها Markdown تستخدم جداول فعلية لنفس
     البيانات (قرار الدخول مثلاً) — تناقضٌ بين الصيغتين، وواحدة من أوضح علامات
     "تقرير غير احترافي" بمقارنة أي منصة أبحاث سوق مرجعية (Country Commercial
     Guides وITC Trade Map وEuromonitor). لا بيانات جديدة، عرضٌ صرفٌ فقط —
-    "Table Grid" نمطٌ مدمج في python-docx (بلا قالب خارجي).
+    "Table Grid" نمطٌ مدمج في python-docx (بلا قالب خارجي). الموجة ١١
+    (§11.1): رأس/أشرطة ملوّنة من `config/branding.yaml` — تقرير موحَّد
+    الهوية بصرياً بدل جدول Word افتراضي عادي.
     """
     if not rows:
         return
+    if caption:
+        cap = doc.add_paragraph()
+        run = cap.add_run(caption)
+        run.italic = True
+        run.bold = True
+    branding = _load_branding()
+    primary = branding["primary_color"]
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
     hdr = table.rows[0].cells
     for i, h in enumerate(headers):
         hdr[i].text = str(h)
+        _set_cell_shading(hdr[i], primary)
         if hdr[i].paragraphs[0].runs:
-            hdr[i].paragraphs[0].runs[0].bold = True
-    for vals in rows:
+            r = hdr[i].paragraphs[0].runs[0]
+            r.bold = True
+            r.font.color.rgb = _hex_to_rgbcolor("FFFFFF")
+    for row_idx, vals in enumerate(rows):
         cells = table.add_row().cells
         for i, v in enumerate(vals):
             cells[i].text = str(v) if v is not None else "—"
+        if row_idx % 2 == 1:  # شريط متناوب خفيف كل صف زوجي (١-مرتكز)
+            for c in cells:
+                _set_cell_shading(c, "F2F2F2")
 
 
 def _docx_entry_strategy(doc, m: dict) -> None:
@@ -1039,7 +1166,10 @@ def _render_research_docx(doc, view: dict) -> None:
     ai = verdict.get("ai") or {}
     vtxt = ai.get("verdict") or verdict.get("verdict") or "غير محسوم"
 
-    # ٠) الغلاف وبطاقة التعريف
+    # ٠) الغلاف وبطاقة التعريف — هوية سِلك (الموجة ١١، §11.1)
+    branding = _load_branding()
+    _add_page_header_footer(doc, f"سِلك — تقرير بحث عميق: {view.get('product')}")
+    _add_cover_wordmark(doc, branding)
     doc.add_heading(f"سِلك — تقرير بحث عميق: {view.get('product')}", 0)
     doc.add_paragraph("أُعد بواسطة منصة سِلك لذكاء الأسواق", style="Intense Quote")
     if view.get("test_run"):
@@ -1110,6 +1240,9 @@ def render_docx(view: dict, path: str) -> str:
     top_m = (view.get("markets") or [{}])[0]
 
     # ═══ 0) الغلاف وبطاقة التعريف — cover + report card ═══
+    # هوية سِلك (الموجة ١١، §11.1) — رأس/تذييل موحّدان لكل تقارير docx.
+    _add_page_header_footer(doc, f"سِلك — تقرير بحث سوق: {view.get('product')}")
+    _add_cover_wordmark(doc, _load_branding())
     doc.add_heading(f"سِلك — تقرير بحث سوق: {view.get('product')}", 0)
     if view.get("test_run"):
         doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة "
