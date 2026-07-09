@@ -236,6 +236,7 @@
             <div class="mini"><label data-t="tier">الفئة</label><select id="cTier"><option value="premium">فاخر</option><option value="standard">قياسي</option><option value="economy">اقتصادي</option></select></div>
             <div class="mini"><label data-t="cap">الطاقة الشهرية</label><input class="num" id="cCap" type="number"></div>
           </div>
+          <div class="mini" style="margin-top:10px"><label data-t="certs">الشهادات (مفصولة بفواصل)</label><input id="cCerts" type="text" placeholder="مثال: HALAL, ISO22000, SFDA"></div>
         </div>
         <div class="runbar">
           <div class="rsum" id="runSum">اختر منتجاً للبدء</div>
@@ -302,6 +303,7 @@ var T={
  q4:{ar:"٤ · بطاقة منتجك",en:"4 · Your product card"},optional:{ar:"اختياري",en:"optional"},
  q4sub:{ar:"أدخل تكلفتك لتفعيل «موقعك التنافسي» واقتراح التسعير.",en:"Enter your cost to unlock competitive position and price suggestion."},
  cost:{ar:"تكلفتك / وحدة",en:"Cost / unit"},price:{ar:"سعرك المستهدف",en:"Your target price"},tier:{ar:"الفئة",en:"Tier"},cap:{ar:"الطاقة الشهرية",en:"Monthly capacity"},
+ certs:{ar:"الشهادات (مفصولة بفواصل)",en:"Certifications (comma-separated)"},
  run:{ar:"حلّل السوق ←",en:"Analyze market →"},running:{ar:"جارٍ التحليل…",en:"Analyzing…"},
  export:{ar:"⇩ تصدير التقرير (Word/PDF)",en:"⇩ Export report (Word/PDF)"},
  boardEmpty:{ar:"شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.",en:"Run an analysis from “New analysis” or chat — the board is built from real results."},
@@ -420,11 +422,12 @@ function sync(){var y=years();$("#yearLabel").textContent=y[0]+" – "+y[1];$("#
 applyLang();sync();
 
 /* ── التحليل ── */
+function certList(){return ($("#cCerts").value||"").split(",").map(function(s){return s.trim()}).filter(Boolean)}
 function buildBody(){var y=years();
   var b={product:S.product,year:y[1],persist:true,trend_span:S.span<2?2:S.span,agent_prefs:S.prefs};
   if(S.market)b.markets=[S.market.iso3];
-  var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value);
-  if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null};
+  var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value),certs=certList();
+  if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
   if(!isNaN(price))b.own_price=price;return b}
 function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#runBtn").textContent=t("running");
   post("/analyze",buildBody()).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#runBtn").textContent=t("run");sync();
@@ -439,8 +442,9 @@ $("#runBtn").addEventListener("click",function(){runAnalysis()});
 function runDeepResearch(){if(!S.product||!S.market||S.busy)return;S.busy=true;sync();
   var lbl=$("#researchBtn").textContent;$("#researchBtn").textContent="…جارٍ البحث";
   var b={product:S.product,market:S.market.iso3,hs_code:S.hs||null,persist:true,agent_prefs:S.prefs};
-  var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value);
-  if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null};
+  var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value),certs=certList();
+  if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
+  if(!isNaN(price))b.own_price=price;  // بلاغ حي (الموجة ٩): كان يُقرَأ ولا يُرسَل إطلاقاً
   post("/research",b).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#researchBtn").textContent=lbl;sync();
     pushHist();renderBoard();nav("board")})
   .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("فشل البحث العميق: "+e.message)})}

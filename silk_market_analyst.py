@@ -44,22 +44,34 @@ _ANALYST_MISSION = {
         "أنت المحلل الشامل (الطبقة ٣) — لا أدوات لك، اقرأ فقط نتائج "
         "البعثات الاثنتي عشرة المرفقة (وأي خيوط تقاطع إن أُرفقت كسياق "
         "سردي). ابنِ **خمسة تقاطعات إلزامية بالضبط**، كل واحد بند "
-        "'category' من هذه القيم حرفياً: demand, entry_cost, "
+        "'category' من هذه القيم **حرفياً بالضبط بأحرف صغيرة إنجليزية، لا "
+        "ترجمة ولا تكبير حرف ولا مسافات إضافية**: demand, entry_cost, "
         "price_competitiveness, entry_door, swot — وبند واحد على الأقل "
-        "لكل قيمة (إن لم تكفِ الأدلة لتقاطع، اكتب ذلك صراحة في category "
-        "المناسبة مع تصريح 'دليل غير كافٍ' بدل حذفه):\n"
+        "لكل قيمة:\n"
         "1. demand = ثقافة الاستهلاك × حجم الاستيراد × السكان × نسبة "
         "المسلمين (عند صلة الحلال) — تقدير **استدلالي من مصادر موثّقة**، "
         "صرّح أنه استدلال لا حقيقة، مع إظهار المعادلة.\n"
         "2. entry_cost = الاشتراطات الجمركية × التعريفة والاتفاقيات × "
         "اللوجستيات.\n"
         "3. price_competitiveness = أسعار المنافسين × التعريفة × مؤشر "
-        "اللوجستيات (تكلفة الشحن الفعلية تبقى فجوة معلنة إن لم تُرصد).\n"
+        "اللوجستيات (تكلفة الشحن الفعلية تبقى فجوة معلنة إن لم تُرصد). "
+        "إن وُجدت بطاقة منتج (تكلفة/سعر مستهدف) بين الحقائق، احسب الهامش "
+        "عند المضاهاة صراحة.\n"
         "4. entry_door = قنوات التوزيع × المخاطر والأخبار — أي باب أكثر "
         "أماناً وواقعية.\n"
         "5. swot = نقاط قوة/ضعف السوق من منظور مصدّر سعودي تحديداً.\n"
         "كل رقم تذكره يجب أن يستشهد بمعرّف نقطة بيانات من نتائج البعثات "
-        "المرفقة — لا اختلاق، والفجوة الحرجة تُذكر صراحة في gaps."),
+        "المرفقة — لا اختلاق، والفجوة الحرجة تُذكر صراحة في gaps.\n\n"
+        "قاعدة صارمة (بلاغ حي: خمس تقاطعات ظهرت 'دليل غير كافٍ' رغم توفر "
+        "أدلة حقيقية في نفس التقرير — أرقام قطاع مسلم × واردات، سلّم أسعار "
+        "Albert Heijn/Jumbo كاملاً، اشتراطات الاتحاد الأوروبي): "
+        "**إن وُجد بندان مترابطان أو أكثر بين الحقائق المرفقة قابلان "
+        "للربط بهذا التقاطع، فيُمنَع كتابة 'دليل غير كافٍ' — اجمعهما "
+        "واكتب الحساب الحسابي صراحة** (مثال: حجم شريحة × تكرار استهلاك × "
+        "نطاق سعري = مدى إمكانية إيراد؛ أظهر المعادلة والأرقام المستشهَد "
+        "بها حرفياً)، ثم صرّح ما البيانات الإضافية التي كانت ستُضيّق هذا "
+        "المدى. 'دليل غير كافٍ' مسموح فقط حين توجد حقيقة واحدة أو صفر "
+        "متعلّقة بهذا التقاطع تحديداً — لا حين توجد بيانات لم تُستغَلّ."),
 }
 
 
@@ -80,29 +92,49 @@ def analyze_market(market: MarketRef, product: str,
                    mission_reports: dict[str, AgentReport],
                    hs_code: str | None = None,
                    correlation_threads: dict | None = None,
-                   budget: dict | None = None) -> dict:
+                   budget: dict | None = None,
+                   product_card: dict | None = None) -> dict:
     """حلّل السوق تحليلاً شاملاً — the 5 intersections + SWOT as one AgentReport.
 
     `mission_reports`: خرْج `silk_missions.run_all_missions()` (١٢ تقريراً).
     `correlation_threads`: خيوط `correlation.py` الجاهزة إن حُسبت مسبقاً من
     مسار ببطاقة منتج (اختياري، تُمرَّر كسياق سردي — راجع تعليق التصميم أعلى
-    الملف). يعيد {"report": AgentReport, "by_category": {فئة: [DataPoint]},
+    الملف). `product_card`: بطاقة منتج مسار /research (الموجة ٩، بلاغ حي:
+    كانت لا تصل هنا إطلاقاً — "الموقع التنافسي" غائب من كل تقرير بحث عميق)
+    — تصل كسياق سردي أيضاً، يستعملها المحلل لحساب الهامش عند المضاهاة
+    داخل تقاطع price_competitiveness صراحة (تعليمات _ANALYST_MISSION).
+    يعيد {"report": AgentReport, "by_category": {فئة: [DataPoint]},
     "missing_categories": [...]} — الفجوة معلنة لا مخفيّة.
     """
+    from silk_missions import _product_card_context
+
     tagged = _tag_source_reports(mission_reports)
-    extra_context = (json.dumps(correlation_threads, ensure_ascii=False,
-                                default=str) if correlation_threads else "")
+    ctx_parts = []
+    if correlation_threads:
+        ctx_parts.append(json.dumps(correlation_threads, ensure_ascii=False,
+                                    default=str))
+    card_ctx = _product_card_context(product_card)
+    if card_ctx:
+        ctx_parts.append(card_ctx)
+    extra_context = "\n".join(ctx_parts)
 
     report = run_llm_agent(
         _ANALYST_MISSION, market, product=product, hs_code=hs_code,
         budget=budget, extra_findings=tagged, extra_context=extra_context)
 
     by_category: dict[str, list] = {c: [] for c in REQUIRED_CATEGORIES}
+    # بلاغ حي (الموجة ٩): مطابقة حرفية صارمة (cat in by_category) كانت
+    # تُسقِط أي بند صمتاً إن كتب كلود القيمة بحرف كبير أو مسافة زائدة
+    # ("Demand" لا "demand") — فتظهر كل التقاطعات الخمسة "دليل غير كافٍ"
+    # رغم أن كلود حلّل فعلاً وأنتج بنوداً حقيقية، لمجرد فشل التصنيف لاحقاً.
+    # الآن: تطبيع (خفض الأحرف + قصّ المسافات) قبل المطابقة.
+    _norm_map = {c.lower(): c for c in REQUIRED_CATEGORIES}
     for dp in report.findings:
         note = str(dp.note or "")
         if note.startswith("["):
-            cat = note[1:note.find("]")]
-            if cat in by_category:
+            raw_cat = note[1:note.find("]")].strip()
+            cat = _norm_map.get(raw_cat.lower())
+            if cat:
                 by_category[cat].append(dp)
     missing = [c for c in REQUIRED_CATEGORIES if not by_category[c]]
     if missing:

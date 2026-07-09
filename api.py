@@ -187,6 +187,7 @@ def create_app():
         tier: str | None = None            # premium|standard|economy
         monthly_capacity: float | None = None
         shipping_per_unit: float | None = None  # افتراض شحن معلَن قابل للتعديل
+        certifications: list[str] | None = None  # مثال: HALAL, ISO22000, SFDA
 
     class AnalyzeRequest(BaseModel):
         """طلب تحليل منتج (المسار العادي) — analyze request body.
@@ -721,6 +722,7 @@ def create_app():
         market: str
         hs_code: str | None = None
         product_card: ProductCard | None = None
+        own_price: float | None = None  # سعرك المستهدف — كـAnalyzeRequest
         persist: bool = True
         agent_prefs: dict | None = None
         # بلاغ حي — بوابة ما قبل التشغيل (409) ترفض تشغيلة بلا كلود صراحة؛
@@ -787,6 +789,14 @@ def create_app():
         if prefs is None:
             prefs = _saved_agent_settings()
 
+        # بطاقة المنتج — بلاغ حي (الموجة ٩): كانت تُقبَل في النموذج ولا تصل
+        # أي بعثة أو المحلل إطلاقاً، فيغيب "الموقع التنافسي"/هامش المضاهاة
+        # من كل تقرير بحث عميق رغم إرسال المستخدم للبطاقة فعلياً.
+        product_card_dict = (req.product_card.model_dump()
+                             if req.product_card else None)
+        if product_card_dict is not None and req.own_price is not None:
+            product_card_dict["own_price"] = req.own_price
+
         with ctx, silk_context.agent_prefs_context(prefs):
             silk_context.begin_data_counter()
             from silk_missions import deep_research
@@ -798,10 +808,12 @@ def create_app():
             # الكامل دوماً (data/traces/{trace_id}.jsonl، الموجة ٦) فيبقى كل
             # تشغيل /research إنتاجي قابلاً للتدقيق، لا التشغيلات التجريبية فقط.
             research_run = deep_research(market_ref, product=req.product,
-                                         hs_code=hs_code)
+                                         hs_code=hs_code,
+                                         product_card=product_card_dict)
             mission_reports = research_run["reports"]
             analyst_out = analyze_market(
-                market_ref, req.product, mission_reports, hs_code=hs_code)
+                market_ref, req.product, mission_reports, hs_code=hs_code,
+                product_card=product_card_dict)
             analyst_input = to_synthesis_input(analyst_out)
             verdict = synthesize(
                 list(mission_reports.values()), product=req.product,

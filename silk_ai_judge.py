@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +65,30 @@ def available() -> bool:
 # نموذج سريع للمهام الخفيفة (تصنيف/فلترة) — Haiku يخفّض زمن التحليل بشدّة
 # مقابل Opus البطيء؛ يُستعمل حيث الجودة كافية والسرعة حرجة.
 _FAST_MODEL = os.environ.get("SILK_AI_FAST_MODEL", "claude-haiku-4-5-20251001")
+
+_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.S | re.I)
+
+
+def _extract_json(text: str | None) -> dict | list | None:
+    """استخرج أول JSON صالح من رد كلود — بلاغ حي (إصلاح مطابق لـ
+    silk_llm_runtime._json_candidates، الموجة ٩): سياج ```json + تعليق
+    ختامي بعده كان يُفسد rfind('}') الساذج عبر النص كله فيُسقط الرد
+    بأكمله. أول محاولة داخل كل سياج على حدة، ثم احتياط النص كاملاً.
+    None إن فشل الجميع — لا اختلاق كائن فارغ يبدو نجاحاً."""
+    if not text:
+        return None
+    candidates = [m.group(1).strip() for m in _FENCE_RE.finditer(text)
+                 if m.group(1).strip()]
+    candidates.append(text)
+    for cand in candidates:
+        start, end = cand.find("{"), cand.rfind("}")
+        if start < 0 or end < start:
+            continue
+        try:
+            return json.loads(cand[start:end + 1])
+        except Exception:  # noqa: BLE001 — مرشّح فاشل، جرّب التالي
+            continue
+    return None
 
 
 def _call(system: str, user: str, max_tokens: int = 1600,
@@ -229,10 +254,8 @@ def consumer_culture(product: str, market: str, headlines: list,
     raw = _call(_PRINCIPLE, user, max_tokens=700, model=_FAST_MODEL, timeout=20)
     if not raw:
         return None
-    try:
-        start, end = raw.find("{"), raw.rfind("}")
-        obj = json.loads(raw[start:end + 1]) if start >= 0 else {}
-    except Exception:  # noqa: BLE001 — رد غير-JSON = لا رؤى، لا اختلاق
+    obj = _extract_json(raw)  # noqa: BLE001 — رد غير-JSON = لا رؤى، لا اختلاق
+    if obj is None:
         return None
     ins = obj.get("insights")
     if not isinstance(ins, list) or not ins:
@@ -310,10 +333,8 @@ def extract_companies(references: list, product: str, market: str,
     raw = _call(_PRINCIPLE, user, max_tokens=600, model=_FAST_MODEL, timeout=15)
     if not raw:
         return None
-    try:
-        start, end = raw.find("{"), raw.rfind("}")
-        obj = json.loads(raw[start:end + 1]) if start >= 0 else {}
-    except Exception:  # noqa: BLE001 — رد غير-JSON = لا استخلاص، لا اختلاق
+    obj = _extract_json(raw)  # noqa: BLE001 — رد غير-JSON = لا استخلاص، لا اختلاق
+    if obj is None:
         return None
     items = obj.get("companies")
     if not isinstance(items, list):
@@ -367,10 +388,8 @@ def extract_prices(references: list, product: str, market: str) -> list[dict] | 
     raw = _call(_PRINCIPLE, user, max_tokens=500, model=_FAST_MODEL, timeout=15)
     if not raw:
         return None
-    try:
-        start, end = raw.find("{"), raw.rfind("}")
-        obj = json.loads(raw[start:end + 1]) if start >= 0 else {}
-    except Exception:  # noqa: BLE001
+    obj = _extract_json(raw)  # noqa: BLE001
+    if obj is None:
         return None
     items = obj.get("prices")
     if not isinstance(items, list):
@@ -427,10 +446,8 @@ def classify_dynamics(product: str, market: str, headlines: list,
                 timeout=25)
     if not raw:
         return None
-    try:
-        start, end = raw.find("{"), raw.rfind("}")
-        obj = json.loads(raw[start:end + 1]) if start >= 0 else {}
-    except Exception:  # noqa: BLE001 — رد غير-JSON = لا تصنيف، لا اختلاق
+    obj = _extract_json(raw)  # noqa: BLE001 — رد غير-JSON = لا تصنيف، لا اختلاق
+    if obj is None:
         return None
 
     def _clean(items, extra_key=None):
@@ -537,7 +554,7 @@ _REPORT_SECTIONS = (
     "ثقافة المستهلك", "المنافسون وأسعارهم", "الاشتراطات الجمركية والمعايير",
     "التعريفات والاتفاقيات", "اللوجستيات", "قنوات التوزيع", "اتجاهات الطلب",
     "المخاطر والأخبار", "التحليل الشامل والفرص", "الحكم والتوصية",
-    "حدود هذا التقرير", "ملحق المصادر والثقة",
+    "خارطة طريق الدخول (٩٠ يوماً)", "حدود هذا التقرير", "ملحق المصادر والثقة",
 )
 
 # مهمة → قسم التقرير الذي تغذّيه — traceability للتحقق البرمجي (المراجع).
@@ -602,8 +619,31 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "اللازمة لبقاء هذا الحكم صحيحاً، ثم ما الذي قد يُغيّر القرار لو تغيّر. "
         "درجات الحكم الرقمية (score/confidence) تُوضَع في جدول Markdown صغير "
         "أسفل هذا السرد (سطر '| العمود | القيمة |' وسطر فاصل)، لا كتلة أرقام "
-        "خام أولاً بلا سياق.")
-    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=4000)
+        "خام أولاً بلا سياق.\n\n"
+        "قاعدة صارمة أخرى (بلاغ حي — 'درجات ثقة تبدو بلا سند تتخلّل السرد'): "
+        "**لا تكتب رقم ثقة خاماً في أي فقرة سردية أو نقطة إطلاقاً** (ممنوع "
+        "مثل 'ثقة 0.6' أو '(0.8)' داخل الجملة) — طبقة العرض تحوّل كل استشهاد "
+        "لشارة أدلة (✓ موثّق / ◐ ثانوي / ○ غير متحقق) تلقائياً؛ اكتب الادّعاء "
+        "ومصدره بالاسم فقط (مثال: 'وفق UN Comtrade' لا 'وفق UN Comtrade "
+        "بثقة 0.9'). أرقام الثقة الكاملة تصل قارئها عبر الملحق التقني "
+        "المبني آلياً، لا عبر نثرك.\n\n"
+        "قسم 'الخلاصة التنفيذية' (رقم ١) يذكر **أطروحة** لا وصفاً: "
+        "'التوصية <X> لأن <أقوى ثلاثة أسباب بأرقامها المستشهَد بها>؛ وتتحول "
+        "إلى GO إذا <شرطان قابلان للقياس>' — جملة واحدة حاسمة، لا سرد عام.\n\n"
+        "قسم جديد إلزامي 'خارطة طريق الدخول (٩٠ يوماً)' (بعد 'الحكم "
+        "والتوصية' مباشرة)، مشروط بالحكم أعلاه (إن كان الحكم NO-GO وضّح ذلك "
+        "بدل خارطة طريق دخول): (أ) الشريحة المستهدَفة (استخدم رقم الشريحة "
+        "المحسوب في تقاطع demand إن وُجد)، (ب) التموضع مقابل سلّم الأسعار "
+        "المرصود — أي فجوة سعرية يمكن للمنتج شغلها (احسب هامش المضاهاة من "
+        "بطاقة المنتج إن وُجدت بين الحقائق)، (ج) أول باب دخول بمرشّحين "
+        "بالاسم (موسومين ○ غير متحقق كما وردوا)، (د) أول ثلاث خطوات عملية "
+        "بمسؤول تنفيذ مقترح وفئة تكلفة تقريبية (منخفضة/متوسطة/عالية — لا "
+        "رقماً مختلَقاً)، (هـ) المؤشران القابلان للقياس اللذان قد يقلبان "
+        "الحكم لو تغيّرا.\n\n"
+        "كل قسم رئيسي (لا الفرعية) ينتهي بسطر غامق واحد حرفياً بصيغة "
+        "'**ماذا يعني هذا لقرارك:** <جملة واحدة>' — خلاصة عملية لا تكرار "
+        "للسرد أعلاه.")
+    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=4500)
 
 
 def review_report(draft: str, mission_reports: dict) -> dict | None:
@@ -616,16 +656,23 @@ def review_report(draft: str, mission_reports: dict) -> dict | None:
         f"الحقائق الخام المرجعية (لا غيرها):\n{facts}\n\n"
         f"مسوّدة التقرير المطلوب تدقيقها:\n{_isolate(draft)}\n\n"
         "دقّق: هل كل رقم في المسوّدة وارد حرفياً في الحقائق أعلاه؟ هل توجد "
-        "تناقضات داخلية؟ هل توجد ادّعاءات بلا سند من الحقائق؟ أعِد JSON "
-        'فقط: {"issues":["مشكلة محددة قابلة للإصلاح", ...], "approved":'
+        "تناقضات داخلية؟ هل توجد ادّعاءات بلا سند من الحقائق؟\n"
+        "دقّق أيضاً بنية الحجة (الموجة ٩ — بلاغ حي: تقرير سابق كان معلومات "
+        "بلا حجة): هل تذكر 'الخلاصة التنفيذية' أطروحة صريحة بصيغة "
+        "'التوصية X لأن ...؛ وتتحول إلى GO إذا ...' لا وصفاً عاماً؟ هل يوجد "
+        "قسم 'خارطة طريق الدخول (٩٠ يوماً)' كاملاً (شريحة مستهدَفة، تموضع "
+        "سعري، باب دخول أول بمرشّحين، ثلاث خطوات بمسؤول وفئة تكلفة، مؤشران "
+        "قابلان للقياس)؟ هل ينتهي كل قسم رئيسي بسطر 'ماذا يعني هذا لقرارك:'؟ "
+        "هل تحتوي التقاطعات الخمسة (إن ورد فيها بندان مترابطان أو أكثر من "
+        "الحقائق) على حساب حسابي صريح (رقم × رقم = نطاق) بدل حكم عام أو "
+        "'دليل غير كافٍ'؟ عدّ أي غياب من هذه كمشكلة صريحة في issues.\n"
+        'أعِد JSON فقط: {"issues":["مشكلة محددة قابلة للإصلاح", ...], "approved":'
         'true|false}. "approved":true فقط إن لم توجد مشاكل جوهرية.')
     raw = _call(_PRINCIPLE, user, max_tokens=900, model=_FAST_MODEL, timeout=30)
     if not raw:
         return None
-    try:
-        start, end = raw.find("{"), raw.rfind("}")
-        obj = json.loads(raw[start:end + 1]) if start >= 0 else {}
-    except Exception:  # noqa: BLE001 — رد غير-JSON = لا مراجعة، لا اختلاق
+    obj = _extract_json(raw)  # noqa: BLE001 — رد غير-JSON = لا مراجعة، لا اختلاق
+    if obj is None:
         return None
     issues = [str(i) for i in (obj.get("issues") or []) if str(i).strip()]
     return {"issues": issues, "approved": bool(obj.get("approved")) and not issues}

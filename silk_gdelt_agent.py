@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import requests
 
@@ -18,6 +19,10 @@ log = logging.getLogger(__name__)
 
 _ENDPOINT = "https://api.gdeltproject.org/api/v2/doc/doc"
 _TIMEOUT = 30
+# محاولة إعادة واحدة مهذّبة عند 429 (الموجة ٩) — لا سيل إعادة محاولات؛
+# تحترم Retry-After إن أعادته GDELT، وإلا تأخير ثابت قصير. فشل المحاولة
+# الثانية = فجوة معلنة مميَّزة (429 لا خطأ عام) — لا اختلاق، لا إلحاح.
+_RETRY_DELAY_S = 2.0
 # ترويسة متصفح — بلاغ حي (الموجة ٨): فشل GDELT على نشر Railway بلا تفاصيل
 # مؤكَّدة (لا وصول شبكي من بيئة التطوير لإعادة الإنتاج حياً)؛ عدّة أطراف
 # API عامة تحجب عميل requests الافتراضي (python-requests/x.y) أو نطاقات
@@ -52,6 +57,22 @@ def gdelt_news(query: str, market: str = "", months: int = 12,
     try:
         resp = requests.get(_ENDPOINT, params=params, headers=_HEADERS,
                             timeout=_TIMEOUT)
+        if resp.status_code == 429:
+            # تراجُع مهذّب + محاولة واحدة فقط — لا إلحاح على مصدر يحجب أصلاً.
+            retry_after = resp.headers.get("Retry-After", "")
+            delay = (float(retry_after) if retry_after.replace(".", "", 1)
+                     .isdigit() else _RETRY_DELAY_S)
+            log.warning("GDELT 429 for %r — one polite retry in %.1fs",
+                       full_query, min(delay, 15.0))
+            time.sleep(min(delay, 15.0))
+            resp = requests.get(_ENDPOINT, params=params, headers=_HEADERS,
+                                timeout=_TIMEOUT)
+        if resp.status_code == 429:
+            note = (f"GDELT rate-limited (HTTP 429) for {full_query!r} حتى "
+                    "بعد محاولة مهذّبة واحدة — على الأرجح حجب نطاق IP "
+                    "(بيئة استضافة سحابية)؛ استخدم web_search كبديل موثَّق.")
+            log.warning(note)
+            return [DataPoint(None, "GDELT", 0.0, note, _today())]
         resp.raise_for_status()
     except Exception as e:  # noqa: BLE001 — never raise to caller
         note = f"GDELT fetch failed for {full_query!r}: {type(e).__name__}: {e}"

@@ -34,6 +34,15 @@ _SEARCH_IN_MARKET_LANGUAGE = (
     " ابحث بلغة (لغات) السوق المستهدف، لا الإنجليزية فقط، حين يكون ذلك "
     "متاحاً — نتائج محلية اللغة أدق من ترجمة استعلام إنجليزي.")
 
+# بلاغ حي (الموجة ٩): "التنافسية السعرية"/"ثقافة الاستهلاك"/إلخ كانت تُبنى
+# من نداء بحث واحد سطحي — عمق غير كافٍ لتحليل حقيقي. سطر مشترك يُلزم
+# البعثات البحثية بأربعة استعلامات مختلفة الزاوية على الأقل قبل الخلاصة.
+_MIN_FOUR_SEARCH_ANGLES = (
+    " لا تكتفِ بنداء بحث واحد — نفّذ أربعة استعلامات web_search مختلفة "
+    "الزاوية على الأقل قبل كتابة الخلاصة (مثال: سعر/توفّر، مستوردون/"
+    "موزّعون بالاسم، عادات/سلوك المستهلك، تنظيم/أخبار حديثة) — بلغة "
+    "(لغات) السوق حين أمكن، ثم اجمع النتائج معاً بدل عرض أول نتيجة واردة.")
+
 MISSIONS: dict[str, dict] = {
     "pricing_scout": {
         "key": "pricing_scout", "name": "وكيل استكشاف الأسعار",
@@ -43,19 +52,21 @@ MISSIONS: dict[str, dict] = {
             "ابحث عن أسعار تجزئة/جملة فعلية لمنتجات تنافس منتج المستخدم في "
             "السوق المستهدف: المنتج، العلامة، السعر، العملة، المتجر/الرابط، "
             "التاريخ. حوّل لدولار أمريكي بسعر صرف مُعلَن المصدر. أي سعر بلا "
-            "رابط = 'غير موثَّق'. لا تُقدّر سعراً لم تجده فعلاً."
-            + _SEARCH_IN_MARKET_LANGUAGE),
+            "رابط = 'غير موثَّق'. لا تُقدّر سعراً لم تجده فعلاً. ابنِ سلّم "
+            "أسعار (٣ متاجر/علامات على الأقل إن توفّرت) لا سعراً واحداً."
+            + _MIN_FOUR_SEARCH_ANGLES),
     },
     "consumer_culture": {
         "key": "consumer_culture", "name": "وكيل ثقافة المستهلك",
         "mission": "ثقافة الاستهلاك للفئة في السوق المستهدف",
-        "allowed_tools": ["web_search", "trends_interest", "lookup_reference"],
+        "allowed_tools": ["web_search", "trends_interest", "lookup_reference",
+                         "openalex_search"],
         "instructions": (
             "حلّل: عادات استهلاك الفئة، البُعد الديني (الحلال — استخدم نسبة "
             "المسلمين من lookup_reference جدول demographics)، المواسم "
             "(رمضان/الأعياد)، تفضيلات التغليف واللغة، حساسية بلد المنشأ "
             "(كيف ينظر السوق للمنتجات السعودية). افصل الحقيقة الموثّقة عن "
-            "الانطباع صراحةً." + _SEARCH_IN_MARKET_LANGUAGE),
+            "الانطباع صراحةً." + _MIN_FOUR_SEARCH_ANGLES),
     },
     "trade_flow": {
         "key": "trade_flow", "name": "وكيل تدفق التجارة",
@@ -83,7 +94,8 @@ MISSIONS: dict[str, dict] = {
             "الدول المنافسة وحصصها من comtrade_imports (بيانات فعلية)، "
             "والشركات/العلامات بالاسم من بحث الويب (موسومة 'غير موثَّقة') "
             "مع نقاط قوتها المُعلَنة. لا تكرّر بحث الأسعار — ذاك عمل "
-            "pricing_scout ويُقاطَع لاحقاً في التحليل الشامل."),
+            "pricing_scout ويُقاطَع لاحقاً في التحليل الشامل."
+            + _MIN_FOUR_SEARCH_ANGLES),
     },
     "customs_requirements": {
         "key": "customs_requirements", "name": "وكيل الاشتراطات الجمركية",
@@ -123,36 +135,52 @@ MISSIONS: dict[str, dict] = {
         "instructions": (
             "أبواب الدخول: مستورد/موزّع/تجزئة/تجارة إلكترونية/معارض "
             "تجارية. المرشّحون بالاسم من channels_importers يُوسَمون "
-            "'غير موثَّقين — التحقق عبر التعميق'." + _SEARCH_IN_MARKET_LANGUAGE),
+            "'غير موثَّقين — التحقق عبر التعميق'." + _MIN_FOUR_SEARCH_ANGLES),
     },
     "demand_trends": {
         "key": "demand_trends", "name": "وكيل اتجاهات الطلب",
         "mission": "اتجاه الطلب والموسمية للمنتج في السوق المستهدف",
-        "allowed_tools": ["trends_interest", "faostat_supply"],
+        "allowed_tools": ["trends_interest", "faostat_supply",
+                         "openalex_search"],
         "instructions": (
-            "اهتمام البحث (trends_interest) خلال ٥ سنوات وموسميته، ونصيب "
-            "الفرد من السلعة (faostat_supply) إن كان المنتج غذائياً فقط."),
+            "لا تكتفِ بنداء trends_interest واحد — نداء واحد لا يكفي "
+            "لتحليل حقيقي. نفّذ على الأقل: (١) مصطلح المنتج بـtimeframe="
+            "'today 5-y' لاتجاه خمس سنوات، (٢) نفس المصطلح بـtimeframe="
+            "'today 12-m' لموسمية العام الأخير، (٣) مصطلح موسمي مرتبط "
+            "('رمضان <المنتج>' أو مناسبة السوق المكافئة) بـ'today 12-m'، "
+            "(٤) مصطلح علامة/فئة بديل. قارن الأربعة صراحة (هل الاهتمام "
+            "الموسمي أعلى من السنوي؟ هل الاتجاه صاعد/هابط عبر ٥ سنوات؟) — "
+            "لا تعرض رقماً واحداً معزولاً. نصيب الفرد من السلعة "
+            "(faostat_supply) إن كان المنتج غذائياً. openalex_search "
+            "اختياري لأدبيات استهلاك/سوق ذات صلة إن وُجدت."),
     },
     "risk_news": {
         "key": "risk_news", "name": "وكيل المخاطر والأخبار",
         "mission": "الاستقرار السياسي ومخاطر العملة وآخر الأخبار القطاعية",
-        "allowed_tools": ["worldbank_indicator", "gdelt_news"],
+        "allowed_tools": ["worldbank_indicator", "gdelt_news", "web_search",
+                          "openalex_search"],
         "instructions": (
             "الاستقرار السياسي وسيادة القانون (worldbank_indicator "
             "political_stability/rule_of_law)، وأهم ١٠ عناوين قطاعية من "
-            "GDELT آخر ١٢ شهراً (عنوان/تاريخ/رابط). تقلّب سعر الصرف من "
-            "البيانات المتاحة فقط، لا تخمين."),
+            "GDELT آخر ١٢ شهراً (عنوان/تاريخ/رابط) — إن أعاد GDELT فجوة "
+            "معلنة (فشل متكرر لا نتائج)، استخدم web_search كبديل موثَّق "
+            "لعناوين إخبارية مشابهة بدل الاستسلام. تقلّب سعر الصرف من "
+            "البيانات المتاحة فقط، لا تخمين. openalex_search اختياري لأدبيات "
+            "أكاديمية/تجارية عن مخاطر القطاع إن وُجدت."
+            + _MIN_FOUR_SEARCH_ANGLES),
     },
     "opportunity_gaps": {
         "key": "opportunity_gaps", "name": "وكيل الفرص والفجوات",
         "mission": "تركيب الفرص والفجوات من تقارير الوكلاء ١-١١ (يعمل أخيراً)",
-        "allowed_tools": [],
+        "allowed_tools": ["openalex_search"],
         "instructions": (
-            "لا أدوات لك — اقرأ فقط نتائج الوكلاء الأحد عشر السابقين "
-            "(مُرفَقة). استخرج: طلباً غير ملبّى، مورّدين يفقدون حصتهم، "
+            "مصدرك الأساس نتائج الوكلاء الأحد عشر السابقين (مُرفَقة) — "
+            "اقرأها أولاً. استخرج: طلباً غير ملبّى، مورّدين يفقدون حصتهم، "
             "مزايا سعودية (قرب، اتفاقية، حلال)، وفجوات بيانات تستحق "
-            "التعميق. كل استنتاج يستشهد بمعرّف نقطة بيانات من التقارير "
-            "المرفقة — لا استنتاج بلا سند."),
+            "التعميق. openalex_search اختياري فقط لسند أدبي إضافي على فرصة "
+            "رصدتها فعلاً من التقارير المرفقة — لا لاكتشاف فرص من الصفر. "
+            "كل استنتاج يستشهد بمعرّف نقطة بيانات من التقارير المرفقة أو "
+            "نتيجة أداة فعلية — لا استنتاج بلا سند."),
     },
 }
 
@@ -181,6 +209,26 @@ _MISSION_BUDGET = {
     "tool_calls": int(os.environ.get("SILK_MISSION_TOOL_CALLS", "5")),
     "max_output_tokens": int(os.environ.get("SILK_MISSION_MAX_TOKENS", "4000")),
 }
+# ميزانية أعمق للبعثات المُلزَمة بأربعة+ استعلامات مختلفة الزاوية أو
+# ٤+ نداءات ترندز (P0-2، الموجة ٩) — ٥ نداءات كانت تكفي بالكاد نداءً
+# سطحياً واحداً، لا التعميق المطلوب الآن؛ محدودة لهذه البعثات فقط، لا
+# رفع عام يُبطئ التشغيلة الكاملة بلا داعٍ.
+_DEEP_RESEARCH_MISSION_BUDGET = {
+    "tool_calls": int(os.environ.get("SILK_DEEP_MISSION_TOOL_CALLS", "9")),
+    "max_output_tokens": _MISSION_BUDGET["max_output_tokens"],
+}
+_DEEP_RESEARCH_MISSIONS = frozenset({
+    "pricing_scout", "consumer_culture", "channels_importers",
+    "competitors", "risk_news", "demand_trends"})
+
+
+def _budget_for(key: str) -> dict:
+    """ميزانية البعثة — أعمق للستّ المُلزَمة بتعدد الاستعلامات، الافتراضي
+    لغيرها (بما فيها opportunity_gaps رغم امتلاكه أداة اختيارية واحدة)."""
+    return (_DEEP_RESEARCH_MISSION_BUDGET if key in _DEEP_RESEARCH_MISSIONS
+           else _MISSION_BUDGET)
+
+
 _MISSION_TIMEOUT_S = int(os.environ.get("SILK_MISSION_TIMEOUT_S", "90"))
 
 
@@ -191,21 +239,54 @@ def _timed_out_report(key: str) -> AgentReport:
         "لا يوقف بقية الوكلاء (ThreadPoolExecutor)")
 
 
+def _product_card_context(product_card: dict | None) -> str:
+    """سياق سردي غير قابل للاستشهاد من بطاقة المنتج — بلاغ حي (الموجة ٩):
+    البطاقة كانت تُجمَع في الواجهة/النموذج ولا تصل أي بعثة أو المحلل
+    إطلاقاً (تحليل الموقع التنافسي غائب تماماً عن /research). لا حساباً
+    هنا — عرض حقائق البطاقة فقط؛ الحساب (الهامش عند المضاهاة) يقع عند
+    المحلل الشامل الذي يستشهد بمعرّفات نقاط بيانات فعلية."""
+    if not product_card:
+        return ""
+    c = product_card
+    parts = [f"تكلفة الوحدة: {c.get('cost_per_unit')} "
+            f"{c.get('unit') or 'وحدة'}"]
+    if c.get("own_price") is not None:
+        parts.append(f"السعر المستهدف: {c['own_price']}")
+    if c.get("tier"):
+        parts.append(f"الفئة: {c['tier']}")
+    if c.get("monthly_capacity") is not None:
+        parts.append(f"الطاقة الشهرية: {c['monthly_capacity']}")
+    if c.get("shipping_per_unit") is not None:
+        parts.append(f"الشحن المُقدَّر للوحدة: {c['shipping_per_unit']}")
+    if c.get("certifications"):
+        parts.append("الشهادات: " + "، ".join(map(str, c["certifications"])))
+    return ("بطاقة منتج المستخدم (سياق فقط — ليست نقطة بيانات مُستشهَداً "
+           "بها، استخدمها في التحليل السردي/الحسابي لا كاستشهاد): "
+           + "؛ ".join(parts))
+
+
 def run_all_missions(market: MarketRef, product: str = "",
-                     hs_code: str | None = None) -> dict[str, AgentReport]:
+                     hs_code: str | None = None,
+                     product_card: dict | None = None
+                     ) -> dict[str, AgentReport]:
     """شغّل البعثات الاثنتي عشرة — missions 1-11 in parallel (ThreadPoolExecutor,
     المستودع متزامن — لا asyncio)، ثم opportunity_gaps (12) قارئاً نتائجها.
 
     فشل/مهلة وكيل واحد = تقرير فاشل موسوم لا يوقف البقية (نفس مبدأ
-    `ResearchManager.distribute`). Returns {mission_key: AgentReport}.
+    `ResearchManager.distribute`). `product_card`: بطاقة منتج اختيارية
+    (الموجة ٩) — تصل كل بعثة كسياق سردي (extra_context)، خصوصاً
+    pricing_scout (سلّم الأسعار) وopportunity_gaps. Returns {mission_key:
+    AgentReport}.
     """
     reports: dict[str, AgentReport] = {}
     parallel_keys = [k for k in MISSION_ORDER if k != "opportunity_gaps"]
+    card_ctx = _product_card_context(product_card)
 
     def _run_one(key: str) -> AgentReport:
         agent = LLMMissionAgent(MISSIONS[key])
         return agent.run({"market": market, "product": product,
-                          "hs_code": hs_code, "budget": _MISSION_BUDGET})
+                          "hs_code": hs_code, "budget": _budget_for(key),
+                          "instruction": "", "extra_context": card_ctx})
 
     # نسخ سياق contextvars الحالي قبل التفريع — ThreadPoolExecutor لا يرث
     # contextvars تلقائياً (خلاف asyncio)، فبلا هذا النسخ تفقد الخيوط
@@ -246,7 +327,8 @@ def deep_research(market: MarketRef, product: str = "",
                   hs_code: str | None = None, dry_run: bool = False,
                   only_agent: str | None = None,
                   trace_id: str | None = None,
-                  trace_dir: str | None = None) -> dict:
+                  trace_dir: str | None = None,
+                  product_card: dict | None = None) -> dict:
     """نقطة دخول التنقيح والتشغيل الموحّدة — أداة التنقيح الأساسية (الموجة ٦،
     §docs/TUNING.md): `dry_run=True, only_agent="pricing_scout"` يشغّل
     بعثة **واحدة** فقط ضد سوق حقيقية ويطبع أثرها الكامل (البرومبت، كل
@@ -272,7 +354,10 @@ def deep_research(market: MarketRef, product: str = "",
         with silk_trace.trace_context(tid, **trace_kwargs) as path:
             agent = LLMMissionAgent(MISSIONS[only_agent])
             report = agent.run({"market": market, "product": product,
-                               "hs_code": hs_code, "budget": _MISSION_BUDGET})
+                               "hs_code": hs_code,
+                               "budget": _budget_for(only_agent),
+                               "extra_context": _product_card_context(
+                                   product_card)})
         events = silk_trace.read_trace(tid, **trace_kwargs)
         log.info("dry-run %s -> %s (%d trace event(s), %s)",
                 only_agent, "FAILED" if report.failed else "ok",
@@ -283,7 +368,8 @@ def deep_research(market: MarketRef, product: str = "",
                "trace_id": tid, "trace_path": path, "events": events}
 
     with silk_trace.trace_context(tid, **trace_kwargs) as path:
-        reports = run_all_missions(market, product=product, hs_code=hs_code)
+        reports = run_all_missions(market, product=product, hs_code=hs_code,
+                                   product_card=product_card)
     return {"mode": "full", "reports": reports, "trace_id": tid,
            "trace_path": path}
 

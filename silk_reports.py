@@ -16,6 +16,7 @@ python-docx تبعية اختيارية: غيابها = RuntimeError واضحة 
 from __future__ import annotations
 
 import logging
+import re
 
 log = logging.getLogger(__name__)
 
@@ -77,16 +78,142 @@ def _fmt(v: object) -> str:
     return str(v)
 
 
+def _truncate_at_word(text: str, max_len: int) -> str:
+    """قصّ نص عند حدّ كلمة كاملة — بلاغ حي (الموجة ٩): "لا تتوفر من أد"
+    (كلمة مقطوعة منتصفها) كانت ناتجة عن قصّ حرفي بلا مراعاة حدود الكلمات
+    (هنا، وفي ملاحظة استشهاد `run_llm_agent` — راجع الإصلاح المقابل هناك).
+    لا يقصّ أبداً منتصف كلمة؛ يتراجع لآخر مسافة قبل الحد."""
+    if len(text) <= max_len:
+        return text
+    cut = text[:max_len]
+    sp = cut.rfind(" ")
+    if sp > max_len * 0.5:  # لا تراجُع مفرط إن كانت الكلمة الأخيرة طويلة جداً
+        cut = cut[:sp]
+    return cut.rstrip() + "…"
+
+
 def _clean_report_text(s: object, max_len: int = 300) -> str:
     """نص آمن للعرض — بلاغ حي (الموجة ٨): لا يجوز أن يتسرّب رد كلود الخام
     غير المفسَّر (كتلة JSON/سياج ```) لواجهة تقرير — يُستبدَل بملخّص نظيف
-    بدل عرضه حرفياً؛ التفاصيل الكاملة تبقى في أثر التتبّع (data/traces/)."""
+    بدل عرضه حرفياً؛ التفاصيل الكاملة تبقى في أثر التتبّع (data/traces/).
+    القصّ عند حدّ كلمة (الموجة ٩) — لا كلمة مقطوعة منتصفها بعد الآن."""
     text = str(s or "").strip()
     if not text:
         return text
     if text.lstrip().startswith(("{", "```")):
         return "بند تقني غير قابل للعرض المباشر — التفاصيل الكاملة في أثر التتبّع."
-    return text[:max_len] + ("…" if len(text) > max_len else "")
+    return _truncate_at_word(text, max_len)
+
+
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_ITALIC_RE = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
+_CODE_SPAN_RE = re.compile(r"`([^`]*)`")
+
+
+def _strip_inline_markdown(line: str) -> str:
+    """أزل تنسيق Markdown من فقرة عادية — بلاغ حي (الموجة ٩): "**عريض**"/
+    "`كود`"/"#" خام كانت تظهر حرفياً على وجه التقرير. العناوين '## '/'### '
+    تتحوّل لعناوين حقيقية في موضع آخر (قبل بلوغ هذه الدالة) — هذه للفقرات
+    العادية التي تحوي تنسيقاً inline فقط."""
+    line = _BOLD_RE.sub(r"\1", line)
+    line = _ITALIC_RE.sub(r"\1", line)
+    line = _CODE_SPAN_RE.sub(r"\1", line)
+    if line.lstrip().startswith("#"):
+        line = line.lstrip("#").strip()
+    return line
+
+
+def _is_markdown_table_row(line: str) -> bool:
+    s = line.strip()
+    return s.startswith("|") and s.endswith("|") and s.count("|") >= 2
+
+
+def _is_markdown_table_separator(line: str) -> bool:
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    return bool(cells) and all(c and set(c) <= {"-", ":"} for c in cells)
+
+
+# عتبات شارة الأدلة — ثابت واحد (P0-B، الموجة ٩): بلاغ حي "درجات ثقة تبدو
+# بلا سند" — أرقام "(ثقة 0.6)" خام كانت تتخلّل السرد بلا سياق لقارئ غير
+# تقني. رقمها الكامل ينتقل لملحق تقني للمدقّقين؛ متن التقرير يحمل شارة
+# مبسّطة ثلاثية فقط.
+_EVIDENCE_VERIFIED_MIN = 0.8
+_EVIDENCE_SECONDARY_MIN = 0.5
+
+
+def _evidence_badge(confidence: object) -> str:
+    """شارة أدلة ثلاثية — ✓ موثّق (مصدر رسمي)/◐ ثانوي (مصدر واحد غير رسمي)/
+    ○ غير متحقق (مرشّح غير مؤكَّد) — بدل رقم ثقة خام في متن السرد."""
+    try:
+        c = float(confidence)
+    except (TypeError, ValueError):
+        return "○ غير متحقق"
+    if c >= _EVIDENCE_VERIFIED_MIN:
+        return "✓ موثّق"
+    if c >= _EVIDENCE_SECONDARY_MIN:
+        return "◐ ثانوي"
+    return "○ غير متحقق"
+
+
+def _verdict_tone(vtxt: str) -> str:
+    """تصنيف لون شارة الحكم — go (أخضر)/watch (كهرماني)/nogo (أحمر)/
+    unknown (رمادي) — نفس منطق تصنيف الشارة في لوحة الواجهة (web/
+    index.html، renderDeepResearch) بالضبط، لا معيار مختلف بمصدرين."""
+    t = (vtxt or "").upper()
+    if "NO-GO" in t or "NO GO" in t:
+        return "nogo"
+    if "WATCH" in t or "CONDITIONAL" in t:
+        return "watch"
+    if "GO" in t:
+        return "go"
+    return "unknown"
+
+
+_VERDICT_TEXT_COLORS = {"go": (0x1E, 0x7D, 0x32), "watch": (0xB8, 0x86, 0x0B),
+                        "nogo": (0xC0, 0x00, 0x00), "unknown": (0x60, 0x60, 0x60)}
+_VERDICT_HIGHLIGHTS = {"go": "BRIGHT_GREEN", "watch": "YELLOW", "nogo": "RED"}
+_VERDICT_LABELS_AR = {"go": "GO — إيجابي", "watch": "WATCH — مراقبة",
+                      "nogo": "NO-GO — سلبي", "unknown": "غير محسوم"}
+
+
+def _add_verdict_badge(doc, vtxt: str) -> None:
+    """شارة حكم ملوّنة على الغلاف — بلاغ حي (الموجة ٩، P0-A): "درجات تبدو
+    بلا سند" — الحكم النصي وحده مدفون بين حقول الجدول؛ شارة بصرية بارزة
+    (تظليل + لون + حجم) تجعل التوصية أول ما تراه العين، كتقرير احترافي."""
+    from docx.shared import Pt, RGBColor
+    tone = _verdict_tone(vtxt)
+    p = doc.add_paragraph()
+    run = p.add_run(f"  {_VERDICT_LABELS_AR[tone]}  ")
+    run.bold = True
+    run.font.size = Pt(16)
+    rgb = _VERDICT_TEXT_COLORS[tone]
+    run.font.color.rgb = RGBColor(*rgb)
+    try:
+        from docx.enum.text import WD_COLOR_INDEX
+        name = _VERDICT_HIGHLIGHTS.get(tone)
+        if name:
+            run.font.highlight_color = getattr(WD_COLOR_INDEX, name)
+            run.font.color.rgb = RGBColor(0x00, 0x00, 0x00)
+    except Exception:  # noqa: BLE001 — التظليل تحسين عرض لا شرط توليد
+        pass
+
+
+def _render_markdown_table(doc, table_lines: list[str]) -> None:
+    """حوّل جدول Markdown (| عمود | عمود |) لجدول Word حقيقي — بلاغ حي
+    (الموجة ٩): سلاسل رقمية (تدفقات استيراد، سلّم أسعار، اشتراطات،
+    ديموغرافيا) كانت تُعرض نقاطاً سردية مبعثرة بدل جدول واحد يقارَن بنظرة."""
+    rows = []
+    for ln in table_lines:
+        if _is_markdown_table_separator(ln):
+            continue
+        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+        rows.append(cells)
+    if len(rows) < 2:  # رأس فقط أو فارغ — لا جدول ذو معنى
+        return
+    headers, *data = rows
+    n = len(headers)
+    norm = [(r + [""] * n)[:n] for r in data]
+    _add_table(doc, headers, norm)
 
 
 def _narrative_exec_summary(view: dict) -> list[str]:
@@ -786,22 +913,44 @@ def _docx_deep_research(doc, view: dict) -> None:
     if dr.get("report", {}).get("text"):
         doc.add_heading("التقرير الكامل (كاتب التقرير، مراجَع)", level=2)
         _stamp_degraded_banner(doc, view)
-        for line in str(dr["report"]["text"]).splitlines():
-            line = line.strip()
+        lines = str(dr["report"]["text"]).splitlines()
+        i, n = 0, len(lines)
+        while i < n:
+            line = lines[i].strip()
             if not line:
+                i += 1
                 continue
             if line.startswith("### "):
                 # عناوين فرعية للتقاطعات الخمسة داخل قسم "التحليل الشامل
                 # والفرص" — بلا هذا كانت "### السطر" تظهر نصاً خاماً بثلاث
                 # علامات # حرفية بدل عنوان فعلي.
                 doc.add_heading(line[4:].strip(), level=4)
-            elif line.startswith("## "):
+                i += 1
+                continue
+            if line.startswith("## "):
                 doc.add_heading(line[3:].strip(), level=3)
-            elif set(line.replace("|", "").replace(" ", "")) <= {"-", ":"} \
-                    and "|" in line:
-                continue  # سطر فاصل جدول Markdown (|---|---|) — ضجيج بصري صرف
+                i += 1
+                continue
+            if _is_markdown_table_row(line):
+                # بلاغ حي (الموجة ٩): سلاسل رقمية (استيراد/أسعار/اشتراطات/
+                # ديموغرافيا) كانت نقاطاً سردية مبعثرة — تُجمَع أسطر الجدول
+                # المتتالية وتُحوَّل لجدول Word حقيقي واحد.
+                block = []
+                while i < n and _is_markdown_table_row(lines[i].strip()):
+                    block.append(lines[i].strip())
+                    i += 1
+                _render_markdown_table(doc, block)
+                continue
+            stripped = _strip_inline_markdown(line)
+            # سطر الخلاصة الإلزامي لكل قسم (P0-C، الموجة ٩) — يُكتشَف نصياً
+            # (لا بالاعتماد على ** الحرفية من كلود، التي تُزال أعلاه أصلاً)
+            # ويُغمَّق برمجياً — إخلاص شكلي لا يعتمد على انضباط كلود بالسياج.
+            if stripped.startswith("ماذا يعني هذا لقرارك:"):
+                p = doc.add_paragraph()
+                p.add_run(stripped).bold = True
             else:
-                doc.add_paragraph(line)
+                doc.add_paragraph(stripped)
+            i += 1
 
     doc.add_heading("ملحق — الأدلة الرقمية الداعمة للتقاطعات الخمسة", level=2)
     _stamp_degraded_banner(doc, view)
@@ -819,7 +968,7 @@ def _docx_deep_research(doc, view: dict) -> None:
             continue
         for f in items:
             doc.add_paragraph(str(f.get("value")), style="List Bullet")
-            doc.add_paragraph(f"[{f.get('source')}، ثقة {f.get('confidence')}] "
+            doc.add_paragraph(f"[{f.get('source')} — {_evidence_badge(f.get('confidence'))}] "
                               f"{f.get('note') or ''}", style="Intense Quote")
         if dr["report"].get("unresolved_notes"):
             doc.add_heading("ملاحظات مراجعة لم تُحلّ", level=3)
@@ -833,6 +982,31 @@ def _docx_deep_research(doc, view: dict) -> None:
         doc.add_heading("حدود قسم البحث العميق", level=2)
         for x in dr["limits"][:12]:
             doc.add_paragraph(_clean_report_text(x), style="List Bullet")
+
+    _docx_technical_appendix(doc, dr)
+
+
+def _docx_technical_appendix(doc, dr: dict) -> None:
+    """ملحق تقني للمدقّقين — بلاغ حي (P0-B، الموجة ٩): الأرقام الكاملة
+    (ثقة/مصدر/تاريخ) نُقلت من متن السرد (شارات مبسّطة فقط هناك) لجدول واحد
+    شامل هنا — لا معلومة ضاعت، فقط انتقلت لموضع المدقّق لا القارئ العادي."""
+    rows = []
+    for key, m in (dr.get("missions") or {}).items():
+        findings = m.get("findings") if isinstance(m, dict) else None
+        for f in (findings or []):
+            rows.append([
+                key, _clean_report_text(f.get("value"), max_len=120),
+                f.get("source") or "—",
+                f.get("retrieved_at") or "—",
+                f"{f.get('confidence')} ({_evidence_badge(f.get('confidence'))})"])
+    if not rows:
+        return
+    doc.add_heading("ملحق تقني — كل الاستشهادات بثقتها الرقمية الكاملة",
+                    level=2)
+    doc.add_paragraph("للمدقّقين فقط — القيمة الرقمية الكاملة لكل بند مذكور "
+                      "أعلاه بشارته المبسّطة.", style="Intense Quote")
+    _add_table(doc, ["البعثة", "الادّعاء", "المصدر", "تاريخ الجلب", "الثقة"],
+              rows[:80])
 
 
 def _render_research_docx(doc, view: dict) -> None:
@@ -855,18 +1029,19 @@ def _render_research_docx(doc, view: dict) -> None:
 
     # ٠) الغلاف وبطاقة التعريف
     doc.add_heading(f"سِلك — تقرير بحث عميق: {view.get('product')}", 0)
+    doc.add_paragraph("أُعد بواسطة منصة سِلك لذكاء الأسواق", style="Intense Quote")
     if view.get("test_run"):
         doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة "
                           "(SILK_HERMETIC)، ليس تقريراً إنتاجياً")
     _stamp_degraded_banner(doc, view)
+    _add_verdict_badge(doc, vtxt)
     _add_table(doc, ["البند", "القيمة"], [
         ["المنتج", h.get("product")],
         ["رمز HS", h.get("hs_code")],
         ["المنشأ", "المملكة العربية السعودية"],
         ["السوق المستهدف", h.get("target_market")
          or market.get("name_ar") or market.get("name_en")],
-        ["تاريخ الإعداد", h.get("date")],
-        ["الحكم", vtxt]])
+        ["تاريخ الإعداد", h.get("date")]])
 
     # جدول محتويات مطابق لبنية البحث العميق الفعلية — لا الأقسام الكلاسيكية
     # التي لا تُبنى هنا أصلاً (لا جدول محتويات يَعِد بأقسام غائبة).

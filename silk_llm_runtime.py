@@ -189,6 +189,14 @@ def _tool_gdelt_news(args: dict, ctx: dict) -> list[DataPoint]:
     return gdelt_news(query, market=market.name_en, months=months)
 
 
+def _tool_openalex_search(args: dict, ctx: dict) -> list[DataPoint]:
+    from silk_openalex_agent import openalex_search
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return [DataPoint(None, "OpenAlex", 0.0, "استعلام فارغ", _today())]
+    return openalex_search(query, max_records=int(args.get("max_records") or 5))
+
+
 def _tool_channels_importers(args: dict, ctx: dict) -> list[DataPoint]:
     """قنوات التوزيع والمستوردون المرشَّحون — reuses the existing free-web
     DistributionChannelsAgent/ImportersAgent logic (§مهمة channels_importers)
@@ -279,11 +287,16 @@ TOOLS: dict[str, dict] = {
         "spec": {
             "name": "trends_interest",
             "description": "متوسط اهتمام بحث جوجل تريندز (0-100) لكلمة في "
-                           "السوق المستهدف آخر ١٢ شهراً.",
+                           "السوق المستهدف — استدعها عدة مرات بمصطلحات/مديات "
+                           "زمنية مختلفة (لا نداء واحد سطحي): timeframe="
+                           "'today 5-y' لاتجاه خمس سنوات، 'today 12-m' "
+                           "(الافتراضي) لموسمية العام الأخير.",
             "input_schema": {"type": "object", "properties": {
                 "term": {"type": "string"},
                 "timeframe": {"type": "string",
-                             "description": "default 'today 12-m'"}}},
+                             "description": "e.g. 'today 12-m' (default, "
+                                            "seasonality) or 'today 5-y' "
+                                            "(long-run trend)"}}},
         },
     },
     "faostat_supply": {
@@ -319,6 +332,20 @@ TOOLS: dict[str, dict] = {
             "input_schema": {"type": "object", "properties": {
                 "query": {"type": "string"},
                 "months": {"type": "integer", "description": "1-24, default 12"}},
+                "required": ["query"]},
+        },
+    },
+    "openalex_search": {
+        "fn": _tool_openalex_search,
+        "spec": {
+            "name": "openalex_search",
+            "description": "بحث في أدبيات أكاديمية/صناعية حقيقية (OpenAlex، "
+                           "بديل Scopus المجاني) — عنوان/سنة/مصدر/ملخّص/DOI "
+                           "لسند إضافي على استهلاك/سوق/مخاطر القطاع.",
+            "input_schema": {"type": "object", "properties": {
+                "query": {"type": "string"},
+                "max_records": {"type": "integer",
+                                "description": "1-25, default 5"}},
                 "required": ["query"]},
         },
     },
@@ -364,6 +391,19 @@ def _execute_tool(name: str, args: dict, ctx: dict) -> list[DataPoint]:
 
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.S | re.I)
+
+
+def _truncate_at_word(text: str, max_len: int) -> str:
+    """قصّ عند حدّ كلمة كاملة — بلاغ حي (الموجة ٩): نقاط سرد كانت تنتهي
+    منتصف كلمة ("لا تتوفر من أد") بسبب قصّ حرفي [:N] لملاحظة الاستشهاد/
+    الملخّص هنا. لا يقصّ أبداً منتصف كلمة؛ يتراجع لآخر مسافة قبل الحد."""
+    if len(text) <= max_len:
+        return text
+    cut = text[:max_len]
+    sp = cut.rfind(" ")
+    if sp > max_len * 0.5:
+        cut = cut[:sp]
+    return cut.rstrip() + "…"
 
 
 def _json_candidates(text: str) -> list[str]:
@@ -479,7 +519,10 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
     t_mission_start = _time.monotonic()
 
     allowed = mission.get("allowed_tools") or []
-    tool_specs = [TOOLS[k]["spec"] for k in allowed if k in TOOLS]
+    # None لا [] حين لا أدوات (بعثة المحلل الشامل، allowed_tools=[]) — بلاغ
+    # حي (الموجة ٩): مصفوفة tools فارغة صراحة قد تُفسَّر مختلفاً عن غيابها
+    # كلياً في واجهات LLM؛ الغياب الصريح أوضح دلالياً ولا مجازفة.
+    tool_specs = [TOOLS[k]["spec"] for k in allowed if k in TOOLS] or None
     system = f"{_PRINCIPLE}\n\n{mission.get('instructions', '')}"
     market: MarketRef = ctx["market"]
     hs = ctx.get("hs_code") or ""
@@ -537,6 +580,10 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
     # — تُرسَل إما عند نفاد الميزانية، أو حين يتوقف كلود مبكراً برد لا يشبه
     # الصيغة النهائية المطلوبة (JSON بمفتاح findings/gaps/summary).
     forced_finalization_sent = False
+    # بعثات بلا أدوات إطلاقاً (المحلل الشامل، allowed_tools=[]) لم "تنفد"
+    # ميزانيتها — لم تكن تملك أدوات أصلاً، فلا داعي لتوجيه إنهاء قسري في
+    # الجولة صفر (كان سيُرسَل قبل أي فرصة فعلية للتحليل — بلاغ حي، الموجة ٩).
+    had_tools = tool_specs is not None
 
     for _round in range(max_rounds):
         # السقف الكلي عبر التحليل بأكمله (١٢ بعثة معاً — قسم «الميزانية
@@ -552,7 +599,8 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
                 global_cap_hit = True
         offer_tools = (tool_specs if tool_calls_used[0] < tool_budget
                       and not global_cap_hit else None)
-        if offer_tools is None and not forced_finalization_sent:
+        if (offer_tools is None and had_tools
+                and not forced_finalization_sent):
             messages.append({"role": "user", "content": _FINALIZE_NUDGE})
             forced_finalization_sent = True
         t_round = _time.monotonic()
@@ -670,18 +718,21 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
         prefix = f"[{f['category']}] " if f.get("category") else ""
         findings.append(DataPoint(
             f["claim"], f"{label} (Claude tool-use)", f["confidence"],
-            (f"{prefix}مبني على: {cited_notes}")[:500], today))
+            _truncate_at_word(f"{prefix}مبني على: {cited_notes}", 500), today))
 
     failed = not findings
     summary = result.get("summary") or ("لا نتائج مبنية على استشهاد — "
                                         "no grounded findings" if failed else "")
     if result.get("gaps"):
-        summary = f"{summary} | فجوات: {'؛ '.join(result['gaps'])}"[:500]
+        summary = _truncate_at_word(
+            f"{summary} | فجوات: {'؛ '.join(result['gaps'])}", 500)
     if result.get("dropped"):
-        summary = f"{summary} | أُسقطت {len(result['dropped'])} بند(ود) بلا استشهاد"[:600]
+        summary = _truncate_at_word(
+            f"{summary} | أُسقطت {len(result['dropped'])} بند(ود) بلا استشهاد", 600)
     # نداءات الأداة تُلحَق دوماً — لوحة التتبّع (الموجة ٦) تستخرجها من هنا
     # بدل تمديد عقد AgentReport (البقية لا يحملن هذا الحقل، لا داعٍ لسمة جديدة).
-    summary = f"{summary} | نداءات أدوات: {result.get('tool_calls_used', 0)}"[:700]
+    summary = _truncate_at_word(
+        f"{summary} | نداءات أدوات: {result.get('tool_calls_used', 0)}", 700)
     return AgentReport(f"LLMAgent:{eff_mission.get('key', label)}", findings,
                        failed, summary)
 
