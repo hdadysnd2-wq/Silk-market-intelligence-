@@ -43,6 +43,9 @@ def test_every_pref_key_points_to_a_catalog_row():
     import silk_tariffs_agent, silk_trends_agent, silk_volza_agent
     import silk_websearch_agent
     import silk_agents
+    import silk_llm_runtime  # V5: LLMMissionAgent يخدم المهام الـ١٢ بصنف واحد
+    import silk_missions      # يسجّل صفوف المهام الـ١٢ إضافياً عند الاستيراد
+    import silk_ai_judge      # يسجّل reviewer/report_writer (دوال لا أصناف)
     from silk_agents import BaseAgent
     keys = {a["key"] for a in AGENT_CATALOG}
     seen = set()
@@ -56,8 +59,14 @@ def test_every_pref_key_points_to_a_catalog_row():
                     and getattr(obj, "PREF_KEY", "")):
                 assert obj.PREF_KEY in keys, (obj.__name__, obj.PREF_KEY)
                 seen.add(obj.PREF_KEY)
-    # كل صف بحثي/بياني في السجل له وكيل فعلي (ما عدا صف التوليف — دالة لا صنف)
-    assert keys - seen == {"synthesis"}
+    # الوكلاء الـ١٢ (الموجة ٢، V5): صنف واحد بيانات-محور (LLMMissionAgent)
+    # يخدم كل المهام — PREF_KEY يُضبط على مستوى النسخة لا الصنف فلا يظهر
+    # للفحص الساكن أعلاه؛ التحقق هنا بنيوي: الصنف موجود فعلاً ويرث BaseAgent.
+    assert issubclass(silk_llm_runtime.LLMMissionAgent, BaseAgent)
+    seen |= set(silk_missions.MISSIONS)
+    # كل صف بحثي/بياني في السجل له وكيل فعلي (ما عدا صفوف الدوال — لا صنف):
+    # synthesis (المرحلة ٢)، reviewer وreport_writer (الموجة ٤، كاتب/مراجع).
+    assert keys - seen == {"synthesis", "reviewer", "report_writer"}
 
 
 # ── التعطيل = صفر نداء · disabled means zero calls ───────────────────────────

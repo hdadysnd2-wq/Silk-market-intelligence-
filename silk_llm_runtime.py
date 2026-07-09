@@ -447,9 +447,22 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
                                 _DEFAULT_BUDGET["max_output_tokens"]))
     max_rounds = tool_budget + 2  # هامش أمان: نص نهائي + جولة إجبار بلا أدوات
     final_text: str | None = None
+    global_cap_hit = False
 
     for _round in range(max_rounds):
-        offer_tools = tool_specs if tool_calls_used[0] < tool_budget else None
+        # السقف الكلي عبر التحليل بأكمله (١٢ بعثة معاً — قسم «الميزانية
+        # والأمان» بالتكليف): يقرأ عدّاد data_economics المشترك (نفس
+        # القاموس يُشارَك بين خيوط silk_missions.run_all_missions بعد نسخ
+        # السياق — راجع تعليق copy_context هناك)؛ تجاوزه = إنهاء رشيق
+        # (جولة أخيرة بلا أدوات) لا كسر — نفس آلية استنفاد الميزانية المحلية.
+        counter = silk_context.data_counter()
+        if counter is not None and not global_cap_hit:
+            llm_cap = int(os.environ.get("SILK_RESEARCH_MAX_LLM_CALLS", "40"))
+            tool_cap = int(os.environ.get("SILK_RESEARCH_MAX_TOOL_CALLS", "100"))
+            if counter["llm_calls"] >= llm_cap or counter["tool_calls"] >= tool_cap:
+                global_cap_hit = True
+        offer_tools = (tool_specs if tool_calls_used[0] < tool_budget
+                      and not global_cap_hit else None)
         resp = _call_tools(system, messages, tools=offer_tools,
                            max_tokens=max_tokens, model=_MODEL)
         silk_context.count_data("llm_calls")
@@ -481,6 +494,11 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
         messages.append({"role": "user", "content": tool_results})
 
     parsed = _parse_output(final_text, registry)
+    if global_cap_hit:
+        parsed["gaps"] = list(parsed.get("gaps") or []) + [
+            "السقف الكلي لنداءات كلود/الأدوات عبر هذا التحليل بأكمله "
+            "(SILK_RESEARCH_MAX_LLM_CALLS/_MAX_TOOL_CALLS) بلغ حدّه — "
+            "إنهاء رشيق مبكر لهذا الوكيل"]
     parsed["registry"] = registry
     return parsed
 

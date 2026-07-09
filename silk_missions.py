@@ -205,8 +205,21 @@ def run_all_missions(market: MarketRef, product: str = "",
         return agent.run({"market": market, "product": product,
                           "hs_code": hs_code, "budget": _MISSION_BUDGET})
 
+    # نسخ سياق contextvars الحالي قبل التفريع — ThreadPoolExecutor لا يرث
+    # contextvars تلقائياً (خلاف asyncio)، فبلا هذا النسخ تفقد الخيوط
+    # الموازية بصمت: توجيهات لوحة إعدادات الوكلاء (agent_prefs_context)،
+    # حجب إضافات كلود (block_ai_extras)، وعدّاد llm_calls/tool_calls —
+    # ثلاثتها contextvars يضبطها استدعاء api.py الخارجي. اكتُشف تجريبياً
+    # أثناء بناء هذه الموجة (لا مجرد نظري): بلا `ctx.run` كل خيط يرى القيم
+    # الافتراضية بصمت (توجيه مُتجاهَل، حجب غير سارٍ) — فشل صامت خطير.
+    # نسخة Context **مستقلة لكل مهمة** — كائن Context واحد لا يقبل `.run()`
+    # من أكثر من خيط في آن (RuntimeError: "already entered")؛ copy_context()
+    # من الخيط الرئيسي نفسه لكل مهمة تعطي لقطات مستقلة آمنة للتوازي.
+    import contextvars
+
     with ThreadPoolExecutor(max_workers=len(parallel_keys) or 1) as pool:
-        futures = {pool.submit(_run_one, k): k for k in parallel_keys}
+        futures = {pool.submit(contextvars.copy_context().run, _run_one, k): k
+                  for k in parallel_keys}
         for fut, key in futures.items():
             try:
                 reports[key] = fut.result(timeout=_MISSION_TIMEOUT_S)

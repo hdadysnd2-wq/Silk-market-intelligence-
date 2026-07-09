@@ -175,3 +175,33 @@ def test_disabled_mission_agent_never_calls_claude():
     assert report.failed is True
     assert "معطّل" in report.summary
     mocked.assert_not_called()
+
+
+def test_global_research_cap_stops_early_even_under_generous_local_budget():
+    # السقف الكلي عبر التحليل بأكمله (SILK_RESEARCH_MAX_LLM_CALLS) — يقرأ
+    # عدّاد data_economics المشترك، يتوقف رشيقاً قبل الميزانية المحلية للوكيل.
+    import silk_context
+    import silk_llm_runtime as rt
+
+    silk_context.begin_data_counter()
+    calls = {"n": 0}
+
+    def fake_call_tools(system, messages, tools=None, max_tokens=1600,
+                        model=None, timeout=None):
+        calls["n"] += 1
+        if tools:
+            return {"stop_reason": "tool_use", "content": [
+                {"type": "tool_use", "id": f"t{calls['n']}",
+                 "name": "web_search", "input": {"query": "x"}}]}
+        return {"stop_reason": "end_turn", "content": [
+            {"type": "text", "text": json.dumps(
+                {"findings": [], "gaps": [], "summary": "done"})}]}
+
+    with block_network(), \
+         patch.dict(os.environ, {"SILK_RESEARCH_MAX_LLM_CALLS": "3"}), \
+         patch("silk_llm_runtime._call_tools", side_effect=fake_call_tools):
+        report = rt.run_llm_agent(_MISSION, _ref(), product="تمور",
+                                  budget={"tool_calls": 20})
+
+    assert calls["n"] < 20  # لم يستنفد الميزانية المحلية السخية
+    assert "السقف الكلي" in report.summary

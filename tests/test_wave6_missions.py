@@ -112,3 +112,28 @@ def test_channels_importers_tool_degrades_without_network_or_key():
         out = rt._execute_tool("channels_importers", {"product": "تمور"},
                                {"market": _ref(), "product": "تمور"})
     assert all(dp.value is None for dp in out)
+
+
+def test_contextvars_propagate_into_parallel_mission_threads():
+    # انحدار حقيقي اكتُشف أثناء بناء هذه الموجة: ThreadPoolExecutor لا يرث
+    # contextvars تلقائياً — بلا copy_context().run(...) كانت توجيهات لوحة
+    # إعدادات الوكلاء (تعطيل/توجيه) وحجب إضافات كلود (block_ai_extras)
+    # تُتجاهَل بصمت داخل الخيوط الموازية رغم ضبطها في الخيط المستدعي.
+    # لا محاكاة لـ_call_tools هنا عمداً — الاختبار يتحقق من النداء الحقيقي
+    # (يفحص ai_extras_blocked() داخلياً قبل أي شبكة، فلا حاجة لقطعها).
+    import silk_context
+    import silk_missions as sm
+
+    prefs = {"pricing_scout": {"on": False, "cmd": ""}}
+    with silk_context.agent_prefs_context(prefs), \
+         silk_context.block_ai_extras():
+        reports = sm.run_all_missions(_ref(), product="تمور")
+
+    # التعطيل سرى داخل خيط pricing_scout الموازي (لا تجاهل صامت).
+    assert reports["pricing_scout"].failed is True
+    assert "معطّل" in reports["pricing_scout"].summary
+    # الحجب سرى أيضاً: بقية الوكلاء لم يستطيعوا نداء كلود رغم عدم تعطيلهم
+    # (ai_extras_blocked() يعيد True فيُرفَض النداء قبل أي شبكة/مفتاح).
+    assert reports["trade_flow"].failed is True
+    assert "تعذّر" in reports["trade_flow"].summary or "gap" in \
+        reports["trade_flow"].summary.lower()

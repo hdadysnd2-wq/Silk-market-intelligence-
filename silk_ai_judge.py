@@ -528,6 +528,136 @@ def ai_report(result: dict) -> str | None:
     return _call(_PRINCIPLE, user, max_tokens=1600)
 
 
+# ── الطبقة ٤ — كاتب التقرير + المراجع (الموجة ٤، V5) ─────────────────────────
+# تقرير البحث العميق (١٢ بعثة + المحلل الشامل + الحكم) — لا مسار حكم موازٍ:
+# الحكم يصل جاهزاً من silk_synthesis.synthesize، هذا القسم يكتب ويراجع فقط.
+
+_REPORT_SECTIONS = (
+    "الخلاصة التنفيذية", "الديموغرافيا والاقتصاد", "الواردات وتدفقات التجارة",
+    "ثقافة المستهلك", "المنافسون وأسعارهم", "الاشتراطات الجمركية والمعايير",
+    "التعريفات والاتفاقيات", "اللوجستيات", "قنوات التوزيع", "اتجاهات الطلب",
+    "المخاطر والأخبار", "التحليل الشامل والفرص", "الحكم والتوصية",
+    "حدود هذا التقرير", "ملحق المصادر والثقة",
+)
+
+# مهمة → قسم التقرير الذي تغذّيه — traceability للتحقق البرمجي (المراجع).
+_MISSION_TO_SECTION = {
+    "demographics_economy": "الديموغرافيا والاقتصاد",
+    "trade_flow": "الواردات وتدفقات التجارة",
+    "consumer_culture": "ثقافة المستهلك",
+    "competitors": "المنافسون وأسعارهم", "pricing_scout": "المنافسون وأسعارهم",
+    "customs_requirements": "الاشتراطات الجمركية والمعايير",
+    "tariffs_agreements": "التعريفات والاتفاقيات",
+    "logistics": "اللوجستيات", "channels_importers": "قنوات التوزيع",
+    "demand_trends": "اتجاهات الطلب", "risk_news": "المخاطر والأخبار",
+    "opportunity_gaps": "التحليل الشامل والفرص",
+}
+
+
+def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
+                product: str, market_name: str,
+                review_notes: list | None = None) -> str | None:
+    """اكتب تقرير البحث العميق — the 15-section professional report (وكيل الكتابة).
+
+    مبنيّ حصراً على حقائق البعثات المعزولة + مسوّدة المحلل الشامل + الحكم
+    الجاهز من synthesize — لا يُصدر حكماً بنفسه (نقطة الحكم الوحيدة تبقى
+    synthesize). `review_notes`: ملاحظات المراجع من دورة سابقة (إن وُجدت)
+    تُطلب معالجتها صراحة. None بلا مفتاح/فشل النداء.
+    """
+    if not available():
+        return None
+    facts = _isolate(_facts(list(mission_reports.values())))
+    sections = "\n".join(f"{i}. {s}" for i, s in enumerate(_REPORT_SECTIONS, 1))
+    parts = [
+        f"المنتج: {_isolate(product)}. السوق: {_isolate(market_name)}.",
+        f"الحكم الجاهز (من طبقة التوليف — لا تُصدر حكماً مختلفاً، اشرحه): "
+        f"{_isolate(json.dumps(verdict, ensure_ascii=False, default=str))}",
+        f"مسوّدة المحلل الشامل (خمس تقاطعات + SWOT):\n{_isolate(analyst_summary)}",
+        f"حقائق البعثات الاثنتي عشرة (لا تتجاوزها، كل رقم من هنا فقط):\n{facts}",
+    ]
+    if review_notes:
+        parts.append("ملاحظات المراجع من دورة سابقة — عالجها في هذه المسوّدة:\n"
+                     + _isolate("\n".join(f"- {n}" for n in review_notes)))
+    parts.append(
+        "اكتب تقريراً احترافياً بالعربية بهذه الأقسام الخمسة عشر بالترتيب، كل "
+        f"قسم يبدأ بسطر '## <رقم>. <عنوان>' حرفياً:\n{sections}\n"
+        "قاعدة صارمة: كل رقم تذكره يجب أن يكون وارداً حرفياً في الحقائق أعلاه "
+        "— رقم غير وارد يُذكر فجوة صريحة بدل اختلاقه. قسم 'حدود هذا التقرير' "
+        "يسرد الفجوات المُعلَنة في الحقائق. قسم 'ملحق المصادر والثقة' يلخّص "
+        "مصادر الأرقام الرئيسية ودرجة ثقتها.")
+    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=4000)
+
+
+def review_report(draft: str, mission_reports: dict) -> dict | None:
+    """راجع مسوّدة التقرير — المراجع (نموذج سريع): هل كل رقم مسنود؟ تناقضات؟
+    ادّعاءات بلا سند؟ يعيد {"issues":[...], "approved": bool} أو None."""
+    if not available() or not (draft or "").strip():
+        return None
+    facts = _isolate(_facts(list(mission_reports.values())))
+    user = (
+        f"الحقائق الخام المرجعية (لا غيرها):\n{facts}\n\n"
+        f"مسوّدة التقرير المطلوب تدقيقها:\n{_isolate(draft)}\n\n"
+        "دقّق: هل كل رقم في المسوّدة وارد حرفياً في الحقائق أعلاه؟ هل توجد "
+        "تناقضات داخلية؟ هل توجد ادّعاءات بلا سند من الحقائق؟ أعِد JSON "
+        'فقط: {"issues":["مشكلة محددة قابلة للإصلاح", ...], "approved":'
+        'true|false}. "approved":true فقط إن لم توجد مشاكل جوهرية.')
+    raw = _call(_PRINCIPLE, user, max_tokens=900, model=_FAST_MODEL, timeout=30)
+    if not raw:
+        return None
+    try:
+        start, end = raw.find("{"), raw.rfind("}")
+        obj = json.loads(raw[start:end + 1]) if start >= 0 else {}
+    except Exception:  # noqa: BLE001 — رد غير-JSON = لا مراجعة، لا اختلاق
+        return None
+    issues = [str(i) for i in (obj.get("issues") or []) if str(i).strip()]
+    return {"issues": issues, "approved": bool(obj.get("approved")) and not issues}
+
+
+def write_reviewed_report(mission_reports: dict, analyst_summary: str,
+                          verdict: dict, product: str, market_name: str,
+                          max_cycles: int = 2) -> dict:
+    """حلقة الكتابة والمراجعة — Writer → Reviewer، أقصى دورتين (التكليف).
+
+    يعيد {"report": نص أو None, "review_cycles": عدد الدورات الفعلية,
+    "unresolved_notes": ملاحظات لم تُعالَج (تظهر في «حدود هذا التقرير»)}.
+    فشل الكتابة (بلا مفتاح) = تقرير None، لا اختلاق نص بديل.
+    """
+    draft = deep_report(mission_reports, analyst_summary, verdict, product,
+                        market_name)
+    if not draft:
+        return {"report": None, "review_cycles": 0, "unresolved_notes": []}
+
+    notes: list = []
+    cycles = 0
+    for cycles in range(1, max(1, max_cycles) + 1):
+        review = review_report(draft, mission_reports)
+        if not review or review["approved"]:
+            notes = []
+            break
+        notes = review["issues"]
+        if cycles >= max_cycles:
+            break
+        fixed = deep_report(mission_reports, analyst_summary, verdict,
+                            product, market_name, review_notes=notes)
+        if fixed:
+            draft = fixed
+    return {"report": draft, "review_cycles": cycles, "unresolved_notes": notes}
+
+
+# صف «المراجع» في لوحة إعدادات الوكلاء — تسجيل إضافي (نفس نمط silk_missions).
+try:
+    import silk_agents as _silk_agents
+    _silk_agents.register_agents([
+        {"key": "reviewer", "name": "وكيل المراجعة",
+         "role": "تدقيق تقرير البحث العميق مقابل الحقائق الخام · كلود (سريع)",
+         "paid": False},
+        {"key": "report_writer", "name": "وكيل كتابة التقرير",
+         "role": "تقرير البحث العميق بخمسة عشر قسماً · كلود", "paid": False},
+    ])
+except Exception as _e:  # noqa: BLE001 — التسجيل تحسين لا شرط استيراد
+    log.debug("agent catalog registration skipped: %s", _e)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print("AI judge available (ANTHROPIC_API_KEY set)?", available())
