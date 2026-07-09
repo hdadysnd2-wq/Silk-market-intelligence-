@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Silk deep-research golden case",
+  "description": "مرجع حالة ذهبية — رقم واحد موثّق يدوياً من مصدر رسمي حي، لا مُختلَق (الموجة ٥، V5). كل حقل 'expected' يستشهد بمصدره الرسمي صراحة؛ لا يُضاف صفّ بلا رابط مصدر حقيقي تم التحقق منه فعلياً.",
+  "type": "object",
+  "required": ["key", "product", "market", "hs_code", "expected", "verified_at", "verified_by"],
+  "properties": {
+    "key": {"type": "string", "description": "معرّف قصير فريد، مثال: nigeria_dates"},
+    "product": {"type": "string", "description": "اسم المنتج بالعربية"},
+    "market": {"type": "string", "description": "اسم السوق (يُحلّ عبر silk_market_resolver)"},
+    "hs_code": {"type": "string", "pattern": "^[0-9]{6}$"},
+    "expected": {
+      "type": "object",
+      "description": "أرقام مرجعية حقيقية موثّقة يدوياً — كل مفتاح يحمل source_url",
+      "properties": {
+        "trade_import_usd": {
+          "type": "object",
+          "properties": {
+            "value": {"type": "number"},
+            "year": {"type": "integer"},
+            "source_url": {"type": "string", "format": "uri"}
+          },
+          "required": ["value", "year", "source_url"]
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["value", "source_url"],
+        "properties": {
+          "value": {},
+          "source_url": {"type": "string", "format": "uri"}
+        }
+      }
+    },
+    "verified_at": {"type": "string", "format": "date"},
+    "verified_by": {"type": "string", "description": "من راجع الأرقام يدوياً مقابل المصدر"},
+    "notes": {"type": "string"}
+  }
+}
