@@ -429,9 +429,52 @@ drawHist();
 /* ── اللوحة — تُبنى من view الحقيقي حصراً؛ الغائب «—» هادئة ── */
 function money(v){if(v==null)return"—";var n=+v;if(n>=1e9)return"$"+(n/1e9).toFixed(1)+" مليار";if(n>=1e6)return"$"+(n/1e6).toFixed(1)+" م";if(n>=1e3)return"$"+(n/1e3).toFixed(0)+" ألف";return"$"+n}
 function comp(m,k){var c=(m.components_detail||[]).filter(function(x){return x.name===k})[0]||{};return c}
+/* لوحة البحث العميق (الموجة ٤، V5) — تُبنى من v.deep_research حصراً؛
+   مختلفة عن renderBoard الكلاسيكية (لا ترتيب أسواق، سوق واحد مُحلَّل بعمق
+   بـ١٢ بعثة). القالب الموحّد نفسه (result.view) — لا مسار عرض موازٍ. */
+function renderDeepResearch(v){
+  var dr=v.deep_research,h=v.header||{},verdict=(dr.verdict||{}),ai=verdict.ai||{};
+  var vtxt=ai.verdict||verdict.verdict||"غير محسوم";
+  var tone=/NO-GO/.test(vtxt)?"no":(/WATCH|CONDITIONAL/.test(vtxt)?"":"go");
+  var html='';
+  html+='<div class="verdict"><div><span class="vtag '+tone+'"><span class="d"></span>'+esc(vtxt)+'</span>'
+    +'<h2>'+esc((v.brief||[])[0]||"")+'</h2><p>'+esc(ai.reasoning||(v.brief||[])[1]||"")+'</p></div>'
+    +'<div class="conf"><div class="lvl">بحث عميق — ١٢ بعثة</div><div class="cap">سوق '+esc((dr.market||{}).name_ar||(dr.market||{}).name_en||"")+'</div></div></div>';
+  // البعثات الاثنتا عشرة
+  var missions=dr.missions||{},mkeys=Object.keys(missions);
+  html+='<div class="bcard" style="margin:18px 0"><h3>البعثات الاثنتا عشرة</h3><div class="note">كل بعثة وكيل كلود بأدوات — الحالة والملخّص</div>'
+    +'<table><thead><tr><th>البعثة</th><th>الحالة</th><th>الملخّص</th></tr></thead><tbody>'
+    +mkeys.map(function(k){var mm=missions[k];var ok=!mm.failed;
+      return '<tr><td class="rowname">'+esc(k)+'</td><td><span class="state '+(ok?"s-good":"s-warn")+'">'+(ok?"ناجحة":"بلا أدلة")+'</span></td><td style="font-size:13px">'+esc((mm.summary||"").slice(0,140))+'</td></tr>'}).join("")
+    +'</tbody></table></div>';
+  // خمس تقاطعات المحلل الشامل
+  var CAT_AR={demand:"الطلب الفعلي القابل للتوجيه",entry_cost:"تكلفة وصعوبة الدخول",price_competitiveness:"التنافسية السعرية",entry_door:"أبواب الدخول الأكثر أماناً",swot:"SWOT من منظور المصدّر السعودي"};
+  var byCat=((dr.analyst||{}).by_category)||{};
+  html+='<div class="grid">'+Object.keys(CAT_AR).map(function(cat){
+    var items=byCat[cat]||[];
+    return '<div class="bcard"><h3>'+CAT_AR[cat]+'</h3>'
+      +(items.length?items.map(function(f){return '<p style="font-size:14px;margin-bottom:8px">• '+esc(String(f.value))+'<span style="display:block;font-size:11.5px;color:var(--muted)">'+esc(f.source||"")+' · ثقة '+f.confidence+'</span></p>'}).join("")
+        :'<div class="gap">دليل غير كافٍ لهذا التقاطع — فجوة معلنة</div>')+'</div>'}).join("")+'</div>';
+  // الخطوة التالية (تعميق) — فقط عند حكم GO
+  if(dr.next_step)html+='<div class="next"><div><h4>الخطوة التالية</h4><p>'+esc(dr.next_step)+'</p></div><button class="cta" id="deepBtn">فعّل التعميق ←</button></div>';
+  // التقرير الكامل المكتوب والمراجَع
+  var rep=(dr.report||{});
+  if(rep.text){html+='<div class="bcard" style="margin:18px 0"><h3>التقرير الكامل (كاتب مراجَع، '+(rep.review_cycles||0)+' دورة مراجعة)</h3>'
+    +'<div style="font-size:13.5px;white-space:pre-wrap;max-height:420px;overflow:auto">'+esc(rep.text)+'</div>'
+    +(rep.unresolved_notes&&rep.unresolved_notes.length?('<div class="note" style="margin-top:10px">ملاحظات مراجعة لم تُحلّ:</div>'+rep.unresolved_notes.map(function(n){return '<p style="font-size:12.5px;color:var(--muted)">• '+esc(n)+'</p>'}).join("")):"")+'</div>'}
+  else html+='<div class="bcard" style="margin:18px 0"><h3>التقرير الكامل</h3><p class="gap">يتطلب مفتاح كلود (ANTHROPIC_API_KEY) على الخادم — غير متوفر في هذا التشغيل</p></div>';
+  // الحدود
+  if((dr.limits||[]).length)html+='<div class="bcard" style="margin:18px 0"><h3>حدود هذا البحث</h3>'
+    +dr.limits.slice(0,8).map(function(x){return '<p style="font-size:12.5px;color:var(--muted)">• '+esc(x)+'</p>'}).join("")+'</div>';
+  var de=v.data_economics;
+  if(de&&de.note)html+='<div class="bcard" style="margin:18px 0 50px"><h3>اقتصاد البيانات</h3><p style="font-size:14px">'+esc(de.note)+'</p></div>';
+  $("#boardBody").innerHTML=html;
+  var dq=$("#deepBtn");if(dq)dq.addEventListener("click",function(){toast("التعميق يتطلب مفاتيح المصادر المدفوعة — فعّلها من الإعدادات")});
+}
 function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class="empty">شغّل تحليلاً أولاً.</div>';return}
   var d=v.decision||{},m=(v.markets||[{}])[0],h=v.header||{};
   $("#bTitle").textContent=(v.product||"")+" · "+(h.target_market||"");
+  if(v.deep_research){renderDeepResearch(v);return}
   var tone=/NO-GO/.test(d.verdict||"")?"no":(/CONDITIONAL|WATCH/.test(d.verdict||"")?"":"go");
   var brief=(v.brief||[])[0]||"";
   var ms=comp(m,"market_size"),sp=comp(m,"saudi_position"),tr=m.trend||{};
