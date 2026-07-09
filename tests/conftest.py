@@ -60,3 +60,14 @@ def _isolated_fact_store(monkeypatch):
     # 1b: عطّل مباعدة النداءات في الاختبارات — الشبكة مقطوعة أصلاً، والمباعدة
     # 250ms × مئات النداءات الفاشلة كانت ستبطئ الحزمة بلا فائدة.
     monkeypatch.setenv("SILK_HTTP_MIN_GAP_MS", "0")
+    # الموجة ٦ (V5): عزل ملفات التتبّع أيضاً — بلا هذا، اختبارات /research
+    # الحقيقية (TestClient) تكتب data/traces/*.jsonl فعلياً على القرص.
+    monkeypatch.setenv("SILK_TRACE_DIR", tempfile.mkdtemp())
+    # عزل عدّاد data_economics بين الاختبارات — contextvar بلا حدود عملية
+    # مستقلة (pytest يُشغّل كل الاختبارات على نفس الخيط)، فاختبار سابق ترك
+    # عدّاداً بأرقام عالية كان سيُفعِّل سقف silk_llm_runtime._run_loop
+    # الكلي زوراً في اختبار لاحق لا علاقة له (انحدار اكتُشف فعلياً، الموجة
+    # ٦). الإنتاج غير متأثر: كل طلب /research يستدعي begin_data_counter()
+    # صراحة قبل أي استخدام.
+    import silk_context
+    silk_context._data_counter.set(None)

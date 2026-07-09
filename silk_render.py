@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 log = logging.getLogger(__name__)
 
@@ -516,6 +517,27 @@ def _report_fields(rep: object) -> dict:
            "summary": getattr(rep, "summary", "") or ""}
 
 
+_TOOL_CALLS_RE = re.compile(r"نداءات أدوات:\s*(\d+)")
+_DROPPED_RE = re.compile(r"أُسقطت\s*(\d+)\s*بند")
+_GAPS_RE = re.compile(r"فجوات:\s*([^|]*)")
+
+
+def _mission_trace_summary(failed: bool, summary: str) -> dict:
+    """لوحة تتبّع بلمحة (الموجة ٦، §docs/TUNING.md) — حالة/نداءات أداة/
+    بنود مُسقَطة/فجوات، مُستخرَجة من نص ملخّص البعثة (لا تمديد على عقد
+    AgentReport — راجع تعليق التصميم في silk_llm_runtime.run_llm_agent)."""
+    skipped = "معطّل" in summary
+    status = "skipped" if skipped else ("failed" if failed else "succeeded")
+    tool_m = _TOOL_CALLS_RE.search(summary)
+    dropped_m = _DROPPED_RE.search(summary)
+    gaps_m = _GAPS_RE.search(summary)
+    gaps_n = len([g for g in (gaps_m.group(1).split("؛") if gaps_m else [])
+                 if g.strip()])
+    return {"status": status, "tool_calls": int(tool_m.group(1)) if tool_m else 0,
+           "dropped": int(dropped_m.group(1)) if dropped_m else 0,
+           "gaps": gaps_n}
+
+
 def _deep_research_view(result: dict) -> dict | None:
     """قسم البحث العميق (الموجة ٤، V5) — إضافي بحت، لا يمسّ أي مفتاح قائم.
 
@@ -534,6 +556,7 @@ def _deep_research_view(result: dict) -> dict | None:
             "name": f["agent_name"], "failed": f["failed"],
             "summary": f["summary"],
             "findings": [_dp(x) for x in f["findings"]],
+            "trace": _mission_trace_summary(f["failed"], f["summary"]),
         }
     analyst = dr.get("analyst") or {}
     analyst_report = _report_fields(analyst.get("report"))
@@ -549,6 +572,7 @@ def _deep_research_view(result: dict) -> dict | None:
                for n in (report_out.get("unresolved_notes") or [])])
     return {
         "market": result.get("market"),
+        "trace_id": dr.get("trace_id"),
         "missions": missions,
         "analyst": {"summary": analyst_report["summary"],
                    "missing_categories": analyst.get("missing_categories") or [],

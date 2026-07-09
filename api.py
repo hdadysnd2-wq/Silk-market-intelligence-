@@ -729,13 +729,17 @@ def create_app():
 
         with ctx, silk_context.agent_prefs_context(prefs):
             silk_context.begin_data_counter()
-            from silk_missions import run_all_missions
+            from silk_missions import deep_research
             from silk_market_analyst import analyze_market, to_synthesis_input
             from silk_synthesis import synthesize
             from silk_ai_judge import write_reviewed_report
 
-            mission_reports = run_all_missions(
-                market_ref, product=req.product, hs_code=hs_code)
+            # deep_research() (لا run_all_missions مباشرة) — يفعّل التتبّع
+            # الكامل دوماً (data/traces/{trace_id}.jsonl، الموجة ٦) فيبقى كل
+            # تشغيل /research إنتاجي قابلاً للتدقيق، لا التشغيلات التجريبية فقط.
+            research_run = deep_research(market_ref, product=req.product,
+                                         hs_code=hs_code)
+            mission_reports = research_run["reports"]
             analyst_out = analyze_market(
                 market_ref, req.product, mission_reports, hs_code=hs_code)
             analyst_input = to_synthesis_input(analyst_out)
@@ -765,6 +769,7 @@ def create_app():
             "deep_research": {
                 "missions": mission_reports, "analyst": analyst_out,
                 "verdict": verdict, "report": report_out,
+                "trace_id": research_run.get("trace_id"),
             },
             "data_economics": economics,
         }
