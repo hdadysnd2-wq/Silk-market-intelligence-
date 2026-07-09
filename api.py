@@ -858,6 +858,23 @@ def create_app():
             result["degraded"] = True
             result["degraded_reason"] = (ai_note if not ai_ok else "") or ready_reason
         result["view"] = _view(result)
+
+        # بوابة الجودة قبل التسليم (الموجة ١٠) — تعمل على القالب الموحّد
+        # النهائي **قبل** أي عرض docx، فتلحَق نتيجتها بالتتبّع وبقسم
+        # "منهجية البحث ونطاقه" داخل التقرير (طبقة العرض، silk_reports.py).
+        try:
+            import silk_quality_gate
+            gate_out = silk_quality_gate.run_quality_gate(result["view"])
+            result["view"]["deep_research"]["quality_gate"] = gate_out
+            trace_id = research_run.get("trace_id")
+            if trace_id:
+                import silk_trace
+                silk_trace.append_event(
+                    trace_id, event="quality_gate", verdict=gate_out["verdict"],
+                    finding_count=len(gate_out["findings"]))
+        except Exception as e:  # noqa: BLE001 — البوابة تحسين لا شرط تسليم
+            log.warning("quality gate skipped: %s", e)
+
         if req.persist:
             try:
                 from silk_storage import init_db, save_analysis

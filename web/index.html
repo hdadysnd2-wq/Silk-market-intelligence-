@@ -444,6 +444,7 @@ function runDeepResearch(){if(!S.product||!S.market||S.busy)return;S.busy=true;s
   var b={product:S.product,market:S.market.iso3,hs_code:S.hs||null,persist:true,agent_prefs:S.prefs};
   var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value),certs=certList();
   if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
+  else toast("بدون بطاقة المنتج سيغيب عمود الربحية — أكملها الآن؟ دقيقتان");  // تنبيه لا حجب (الموجة ١٠)
   if(!isNaN(price))b.own_price=price;  // بلاغ حي (الموجة ٩): كان يُقرَأ ولا يُرسَل إطلاقاً
   post("/research",b).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#researchBtn").textContent=lbl;sync();
     pushHist();renderBoard();nav("board")})

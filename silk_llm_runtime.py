@@ -52,8 +52,14 @@ _WB_INDICATORS = {
     "income_per_capita": "NY.GDP.PCAP.CD",
     "ppp_per_capita": "NY.GDP.PCAP.PP.CD",
     "political_stability": "PV.EST",
+    "regulatory_quality": "RQ.EST",
     "rule_of_law": "RL.EST",
     "logistics_lpi": "LP.LPI.OVRL.XQ",
+    # سعر الصرف الرسمي (LCU/USD) — الموجة ١٠: لم يكن مؤشر الصرف مُتاحاً
+    # لأداة worldbank_indicator إطلاقاً، فتقلّب العملة المطلوب في تعليمات
+    # risk_news كان بلا مصدر بيانات فعلي. نداءات متعددة بسنوات مختلفة
+    # (نفس نمط demand_trends) تعطي سلسلة يُحسب منها التقلّب.
+    "exchange_rate": "PA.NUS.FCRF",
 }
 
 _REF_TABLES = {
@@ -124,6 +130,40 @@ def _tool_comtrade_imports(args: dict, ctx: dict) -> list[DataPoint]:
             f"HS{hs} إجمالي استيراد {market.name_en} من العالم {year}, USD",
             _today()))
     return out
+
+
+def _tool_comtrade_competitors(args: dict, ctx: dict) -> list[DataPoint]:
+    """مورّدو السوق بالبلد (كومتريد ثنائي الأطراف) + تركّز HHI — بلاغ حي
+    (الموجة ١٠/١١: تشغيلة إسبانيا أظهرت 'المنافسون' بتغطية 0.0 رغم توفر
+    بيانات كومتريد الثنائية دوماً). comtrade_imports يعيد إجمالي العالم فقط
+    (partner=0) — هذه الأداة تستدعي partner='all' فتعيد حصص كل دولة مورّدة
+    بالاسم الحقيقي (silk_data_layer.partner_name، الموجة ١٠) — لا تعتمد على
+    بحث الويب لصورة تنافسية أساسية."""
+    from silk_data_layer_v2 import market_competitors
+    hs, market = ctx.get("hs_code"), ctx["market"]
+    if not hs:
+        return [DataPoint(None, "UN Comtrade", 0.0,
+                          "لا رمز HS مرتبط بهذه المهمة", _today())]
+    year = args.get("year")
+    top_n = min(max(int(args.get("top_n") or 10), 1), 20)
+    y = int(year) if year else _recent_years(1)[0]
+    comps = market_competitors(hs, market.m49, y)
+    if not comps:
+        return [DataPoint(
+            None, "UN Comtrade", 0.0,
+            f"HS{hs} مورّدو {market.name_en} {y}: لا سجل ثنائي/تعذّر الجلب",
+            _today())]
+    top = comps[:top_n]
+    hhi = round(sum((c.value.get("share") or 0.0) ** 2 for c in comps), 1)
+    summary = DataPoint(
+        {"year": y, "hhi": hhi, "supplier_count": len(comps),
+         "top_suppliers": [{"partner": c.value["partner"],
+                            "share": c.value["share"]} for c in top]},
+        "UN Comtrade", 0.9,
+        f"HS{hs} مورّدو {market.name_en} {y}: {len(comps)} دولة مرصودة، "
+        f"مؤشر تركّز HHI={hhi} (>2500 مركّز جداً، 1500-2500 معتدل، <1500 مجزَّأ)",
+        _today())
+    return [summary, *top]
 
 
 def _tool_worldbank_indicator(args: dict, ctx: dict) -> list[DataPoint]:
@@ -257,6 +297,23 @@ TOOLS: dict[str, dict] = {
             "input_schema": {"type": "object", "properties": {
                 "years": {"type": "array", "items": {"type": "integer"},
                           "description": "calendar years (default: last 3)"}}},
+        },
+    },
+    "comtrade_competitors": {
+        "fn": _tool_comtrade_competitors,
+        "spec": {
+            "name": "comtrade_competitors",
+            "description": ("الدول المورّدة لرمز HS هذه المهمة إلى السوق "
+                            "المستهدف بالاسم والحصة ومؤشر تركّز HHI (UN "
+                            "Comtrade ثنائي الأطراف، حقيقي دوماً — لا يعتمد "
+                            "على بحث الويب). استدعها أولاً في بعثة المنافسين "
+                            "قبل بحث أسماء الشركات. Country-level supplier "
+                            "shares + HHI concentration for the mission's "
+                            "HS code into the target market."),
+            "input_schema": {"type": "object", "properties": {
+                "year": {"type": "integer"},
+                "top_n": {"type": "integer",
+                         "description": "1-20, default 10"}}},
         },
     },
     "worldbank_indicator": {

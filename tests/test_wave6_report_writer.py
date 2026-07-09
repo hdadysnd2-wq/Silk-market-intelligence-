@@ -20,6 +20,15 @@ def _mission_reports():
         [DataPoint(950000.0, "UN Comtrade", 0.9, "استيراد 2023")], False, "ok")}
 
 
+def _complete_draft():
+    """مسوّدة كاملة الأقسام الأحد عشر (الموجة ١٠) — بلا هذا يفشل الفحص
+    البنيوي الحتمي في review_report() لأسباب لا علاقة لها بآلية الحلقة
+    التي تختبرها هذه الحالات (عدّ الدورات، التوقف عند الموافقة، إلخ)."""
+    import silk_ai_judge as aj
+    return "\n".join(f"## {i}. {s}\nنص." for i, s in
+                     enumerate(aj._REPORT_SECTIONS, 1))
+
+
 def test_no_key_returns_none_not_fabrication():
     import silk_ai_judge as aj
 
@@ -42,7 +51,7 @@ def test_loop_stops_early_when_reviewer_approves():
         calls["n"] += 1
         if model == aj._FAST_MODEL:
             return '{"issues": [], "approved": true}'
-        return "## 1. الخلاصة التنفيذية\nنص."
+        return _complete_draft()
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}), \
          patch("silk_ai_judge._call", side_effect=fake_call):
@@ -60,7 +69,7 @@ def test_max_two_cycles_and_unresolved_notes_surface():
     def fake_call(system, user, max_tokens=1600, model=None, timeout=None):
         if model == aj._FAST_MODEL:
             return '{"issues": ["مشكلة مستمرة"], "approved": false}'
-        return "## 1. الخلاصة التنفيذية\nنص."
+        return _complete_draft()
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}), \
          patch("silk_ai_judge._call", side_effect=fake_call):
@@ -76,7 +85,7 @@ def test_reviewer_none_reply_treated_as_no_review_not_rejection():
     import silk_ai_judge as aj
 
     def fake_call(system, user, max_tokens=1600, model=None, timeout=None):
-        return None if model == aj._FAST_MODEL else "## 1. الخلاصة\nنص."
+        return None if model == aj._FAST_MODEL else _complete_draft()
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}), \
          patch("silk_ai_judge._call", side_effect=fake_call):
