@@ -355,15 +355,23 @@ var AGENTS=[
  {k:"contacts",n:"وكيل جهات الاتصال",d:"مشترون B2B · Explee (تعميق)",paid:true}];
 function defaultPrefs(){var p={};AGENTS.forEach(function(a){p[a.k]={on:!a.paid,cmd:""}});return p}
 if(!S.prefs)S.prefs=defaultPrefs();
-/* سجل الخادم القانوني — يحدّث AGENTS والإعدادات المحفوظة خادمياً عند التوفر */
+/* سجل الخادم القانوني — يحدّث AGENTS والإعدادات المحفوظة خادمياً عند التوفر.
+   بلاغ: اللوحة كانت تعرض الوكلاء الأربعة عشر القدامى فقط بصمت على أي نشر
+   محمي بـSILK_API_KEY قبل ضبط مفتاح الخدمة في المتصفح — fetch يعود 401،
+   catch القديم كان يبتلعه بلا أثر فيبقى AGENTS على القائمة الاحتياطية
+   للأبد. الآن: catalogStatus صريح يقرأه drawDrawer ليُظهر تحذيراً مرئياً. */
+S.catalogStatus="loading";
 function loadAgentCatalog(){return fetch(base()+"/settings/agents",{headers:hdrs(false)})
-  .then(function(r){if(!r.ok)throw 0;return r.json()})
+  .then(function(r){if(!r.ok){var err=new Error("HTTP "+r.status);err.status=r.status;throw err}return r.json()})
   .then(function(d){
     if(d&&Array.isArray(d.agents)&&d.agents.length)
       AGENTS=d.agents.map(function(a){return{k:a.key,n:a.name,d:a.role,paid:!!a.paid}});
     if(d&&d.saved&&d.settings){S.prefs=d.settings;localStorage.setItem("silk_agent_prefs",JSON.stringify(S.prefs))}
-    AGENTS.forEach(function(a){if(!S.prefs[a.k])S.prefs[a.k]={on:!a.paid,cmd:""}})})
-  .catch(function(){AGENTS.forEach(function(a){if(!S.prefs[a.k])S.prefs[a.k]={on:!a.paid,cmd:""}})})}
+    AGENTS.forEach(function(a){if(!S.prefs[a.k])S.prefs[a.k]={on:!a.paid,cmd:""}});
+    S.catalogStatus="ok"})
+  .catch(function(e){
+    S.catalogStatus=(e&&e.status===401)?"unauthorized":"error";
+    AGENTS.forEach(function(a){if(!S.prefs[a.k])S.prefs[a.k]={on:!a.paid,cmd:""}})})}
 
 /* ── تنقّل ── */
 function nav(v){$$(".view").forEach(function(x){x.classList.remove("on");x.style.display="none"});
@@ -642,7 +650,17 @@ function drawDrawer(){var free=AGENTS.filter(function(a){return!a.paid}),paid=AG
   function card(a){var p=S.prefs[a.k]||{on:!a.paid,cmd:""};
     return '<div class="acard" data-k="'+a.k+'"><div class="atop"><span class="aname2"><b>'+a.n+(a.paid?'<span class="paidtag">مدفوع</span>':'')+'</b><span>'+a.d+'</span></span><span class="tg'+(p.on?"":" off")+'"><i></i></span></div>'
       +'<div class="cmd"><label>توجيه الوكيل (نص حر)</label><textarea placeholder="مثال: ركّز على الطلب في رمضان وأهمية الحلال">'+esc(p.cmd)+'</textarea></div></div>'}
-  $("#drawerBody").innerHTML='<div class="slbl">الوكلاء المجانيون</div>'+free.map(card).join("")+'<div class="slbl">الوكلاء المدفوعون</div>'+paid.map(card).join("");
+  // بلاغ: عرض قائمة احتياطية بصمت كان يُخفي أن سجل الخادم الكامل (٢٨ وكيلاً
+  // — ١٤ قديم + ١٢ بعثة بحث عميق + مراجع/كاتب) لم يُحمَّل. الآن تحذير مرئي.
+  var warn="";
+  if(S.catalogStatus==="unauthorized")
+    warn='<div class="note" style="background:#c00;color:#fff;padding:8px 10px;border-radius:6px;margin-bottom:10px">'
+      +'⚠ هذه قائمة احتياطية (١٤ وكيلاً قديماً فقط) — الخادم محمي بمفتاح خدمة. '
+      +'اضغط «مفتاح الخدمة» أدناه لعرض كل الوكلاء الـ٢٨ (منها بعثات البحث العميق الاثنتا عشرة).</div>';
+  else if(S.catalogStatus==="error")
+    warn='<div class="note" style="background:#c00;color:#fff;padding:8px 10px;border-radius:6px;margin-bottom:10px">'
+      +'⚠ تعذّر الاتصال بالخادم — هذه قائمة احتياطية (١٤ وكيلاً قديماً فقط)، لا سجل الخادم الكامل.</div>';
+  $("#drawerBody").innerHTML=warn+'<div class="slbl">الوكلاء المجانيون</div>'+free.map(card).join("")+'<div class="slbl">الوكلاء المدفوعون</div>'+paid.map(card).join("");
   $$("#drawerBody .tg").forEach(function(t){t.addEventListener("click",function(){this.classList.toggle("off")})})}
 $("#gearBtn").addEventListener("click",function(){drawDrawer();loadAgentCatalog().then(drawDrawer);$("#ov").classList.add("open");$("#dr").classList.add("open")});
 /* مفتاح الخدمة X-API-Key — مصادقة المنصّة، خارج لوحة الوكلاء عمداً (اللوحة بلا حقول مفاتيح) */
