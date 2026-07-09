@@ -95,18 +95,112 @@ def _known_numbers(mission_reports: dict) -> set[float]:
     return known
 
 
+
+# ── محور حسابي (TAM/SAM/SOM وأشباهها) — formula-aware validation ────────────
+# رقم مشتق (شريحة سوق، TAM/SAM/SOM، مدى إيراد) ليس اختلاقاً إن كانت مدخلاته
+# أرقاماً مسندة فعلاً وكانت المعادلة صحيحة حسابياً — القرار الموثَّق أعلاه
+# (`debt 1`، تدقيق ما بعد الموجة ١١): الفحص الحرفي وحده كان يُسقط كل رقم
+# TAM/SAM/SOM لأنه ناتج ضرب لا يرد حرفياً في أي بعثة، رغم أن مدخلاته حقيقية.
+_EQ_RE = re.compile(
+    r"(?P<a>-?\d[\d,]*\.?\d*)(?P<apct>\s*%)?"
+    r"[^\n=×xX*÷/+\-−\d]{0,20}"
+    r"(?P<op>[×xX*÷/+\-−])\s*"
+    r"(?P<b>-?\d[\d,]*\.?\d*)(?P<bpct>\s*%)?"
+    r"[^\n=\d]{0,60}"
+    r"=\s*"
+    r"(?P<c>-?\d[\d,]*\.?\d*)(?P<cpct>\s*%)?"
+)
+_ASSUMPTION_MARKERS = ("افتراض", "assumption", "assumed", "نفترض", "بافتراض")
+
+
+def _num_literal(raw: str) -> float:
+    return float(raw.replace(",", ""))
+
+
+def _num_value(raw: str, pct: str | None) -> float:
+    v = _num_literal(raw)
+    return v / 100.0 if pct else v
+
+
+def _apply_op(a: float, op: str, b: float) -> float | None:
+    if op in ("×", "x", "X", "*"):
+        return a * b
+    if op in ("÷", "/"):
+        return (a / b) if b else None
+    if op == "+":
+        return a + b
+    if op in ("-", "−"):
+        return a - b
+    return None
+
+
+def _num_close(actual: float, expected: float | None,
+              rel: float = 0.03, abs_tol: float = 1.0) -> bool:
+    """تسامح تقريب — كلود يقرّب للمنازل/الآلاف أحياناً عند عرض الناتج."""
+    if expected is None:
+        return False
+    return abs(actual - expected) <= max(abs_tol, abs(expected) * rel)
+
+
+def _nearby_has_assumption(text: str, start: int, end: int, window: int = 80) -> bool:
+    seg = text[max(0, start - window): end + window]
+    return any(marker in seg for marker in _ASSUMPTION_MARKERS)
+
+
+def formula_grounded_numbers(report_text: str, known: set) -> set:
+    """أرقام مشتقة صحّت معادلتها ومدخلاتها — derived numbers whose equation
+    checks out arithmetically AND at least one operand traces back to a real
+    cited number (مباشرة أو عبر سلسلة معادلات سابقة) — لا يُقبل ناتج معادلة
+    كلا طرفيها افتراض غير مسند، فهذا يعادل اختلاق سلسلة كاملة من لا شيء.
+    """
+    grounded: set = set()
+    rooted: set = set()
+    for m in _EQ_RE.finditer(report_text or ""):
+        try:
+            a_lit, b_lit, c_lit = (_num_literal(m.group(g)) for g in ("a", "b", "c"))
+            expected = _apply_op(_num_value(m.group("a"), m.group("apct")),
+                                 m.group("op"),
+                                 _num_value(m.group("b"), m.group("bpct")))
+            c_val = _num_value(m.group("c"), m.group("cpct"))
+        except (ValueError, ZeroDivisionError):
+            continue
+        if not _num_close(c_val, expected):
+            continue
+        a_known = a_lit in known or a_lit in rooted
+        b_known = b_lit in known or b_lit in rooted
+        a_ok = a_known or a_lit in grounded or _nearby_has_assumption(
+            report_text, m.start("a"), m.end("a"))
+        b_ok = b_known or b_lit in grounded or _nearby_has_assumption(
+            report_text, m.start("b"), m.end("b"))
+        if a_ok and b_ok and (a_known or b_known):
+            grounded.add(c_lit)
+            rooted.add(c_lit)
+            # حصة/افتراض مُعلَن صراحة بجوار المعادلة الصحيحة — ليس ادّعاءً
+            # يحتاج استشهاداً خارجياً؛ استثنِ رقمه الحرفي أيضاً (مثال: "15%"
+            # في "TAM × 15% (افتراض) = SAM").
+            if _nearby_has_assumption(report_text, m.start("a"), m.end("a")) and not a_known:
+                grounded.add(a_lit)
+            if _nearby_has_assumption(report_text, m.start("b"), m.end("b")) and not b_known:
+                grounded.add(b_lit)
+    return grounded
+
+
 def citation_correctness_score(report_text: str,
                                mission_reports: dict) -> dict:
-    """المحور البرمجي — كل رقم في التقرير يجب أن يرد حرفياً في بعثة ما.
+    """المحور البرمجي — كل رقم في التقرير يجب أن يرد حرفياً في بعثة ما، أو أن
+    يكون ناتج معادلة صحيحة مدخلاتها مسندة (TAM/SAM/SOM وأشباهها).
 
     يعيد {"score": 0|100, "violations": [أرقام غير مسندة]} — لا نداء كلود،
     لا تقدير جزئي (رقم واحد مختلَق = صفر الفور، نفس مبدأ لا اختلاق).
     """
     known = _known_numbers(mission_reports)
+    grounded = formula_grounded_numbers(report_text, known)
     report_numbers = _extract_numbers(report_text)
-    violations = sorted({n for n in report_numbers if n not in known})
+    effective = known | grounded
+    violations = sorted({n for n in report_numbers if n not in effective})
     return {"score": 0 if violations else 100, "violations": violations,
-           "checked": len(report_numbers), "known_pool": len(known)}
+           "checked": len(report_numbers), "known_pool": len(known),
+           "formula_grounded": sorted(grounded)}
 
 
 def _judge_prompt(result: dict) -> str:

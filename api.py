@@ -830,6 +830,11 @@ def create_app():
             f"{economics.get('llm_calls', 0)} نداء كلود، "
             f"{economics.get('tool_calls', 0)} نداء أداة، {served} قراءة "
             "خُدمت من المخزن/ذاكرة الطلبات")
+        from silk_pricing import estimate_cost_usd
+        cost = estimate_cost_usd(economics.get("llm_usage"))
+        economics["cost_usd_estimate"] = cost["total_usd"]
+        economics["cost_usd_by_model"] = cost["by_model"]
+        economics["cost_unpriced_models"] = cost["unpriced_models"]
 
         result: dict = {
             "product": req.product, "hs_code": hs_code, "year": None,

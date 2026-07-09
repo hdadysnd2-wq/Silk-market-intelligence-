@@ -16,8 +16,6 @@ import re
 
 log = logging.getLogger(__name__)
 
-_ENDPOINT = "https://api.anthropic.com/v1/messages"
-_VERSION = "2023-06-01"
 _MODEL = os.environ.get("SILK_AI_MODEL", "claude-opus-4-8")
 _TIMEOUT = 60
 
@@ -97,35 +95,18 @@ def _call(system: str, user: str, max_tokens: int = 1600,
 
     model/timeout اختياريان: للمهام الخفيفة (فلترة الكيانات) مرّر _FAST_MODEL
     ومهلة قصيرة كي لا يعلّق التحليل خلف Opus البطيء.
+
+    التنفيذ الفعلي (مسار HTTP، شكل الحمولة) مستخرَج إلى `silk_llm_provider`
+    (تدقيق المعمارية، دين ٣) — هذه الدالة تبقى الواجهة الثابتة لكل المستدعين
+    الحاليين، وتحمل فقط منطق السياسة (حجب ai_extras) لا تفاصيل المزوّد.
     """
     from silk_context import ai_extras_blocked
     if ai_extras_blocked():  # حزام أمان ثانٍ فوق available() — لا نداء داخل الحجب
         log.info("AI call skipped: ai-extras blocked in this context")
         return None
-    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not key:
-        return None
-    try:
-        import requests  # lazy: keep core import offline-safe
-        resp = requests.post(
-            _ENDPOINT, timeout=timeout or _TIMEOUT,
-            headers={"x-api-key": key, "anthropic-version": _VERSION,
-                     "content-type": "application/json"},
-            json={"model": model or _MODEL, "max_tokens": max_tokens,
-                  "system": system,
-                  "messages": [{"role": "user", "content": user}]},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        if data.get("stop_reason") == "refusal":  # safety decline -> no fabrication
-            log.warning("AI judge: request refused by the model")
-            return None
-        text = "".join(b.get("text", "") for b in data.get("content", [])
-                       if b.get("type") == "text").strip()
-        return text or None
-    except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
-        log.warning("AI judge call failed: %s", e)
-        return None
+    from silk_llm_provider import get_provider
+    return get_provider().complete(system, user, max_tokens,
+                                   model or _MODEL, timeout or _TIMEOUT)
 
 
 def _call_tools(system: str, messages: list, tools: list | None = None,
@@ -138,31 +119,17 @@ def _call_tools(system: str, messages: list, tools: list | None = None,
     agent loop drives the tool_use/tool_result rounds on top of this.
 
     `_call` stays untouched for its existing single-turn callers; this is a
-    sibling for the multi-turn tool loop (V5 wave 1).
+    sibling for the multi-turn tool loop (V5 wave 1). Also delegates its HTTP
+    mechanics to `silk_llm_provider` (architecture debt 3) — same
+    zero-behavior-change seam.
     """
     from silk_context import ai_extras_blocked
     if ai_extras_blocked():
         log.info("AI tool call skipped: ai-extras blocked in this context")
         return None
-    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not key:
-        return None
-    try:
-        import requests  # lazy: keep core import offline-safe
-        payload = {"model": model or _MODEL, "max_tokens": max_tokens,
-                  "system": system, "messages": messages}
-        if tools:
-            payload["tools"] = tools
-        resp = requests.post(
-            _ENDPOINT, timeout=timeout or _TIMEOUT,
-            headers={"x-api-key": key, "anthropic-version": _VERSION,
-                     "content-type": "application/json"},
-            json=payload)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
-        log.warning("AI tool call failed: %s", e)
-        return None
+    from silk_llm_provider import get_provider
+    return get_provider().complete_tools(system, messages, tools, max_tokens,
+                                         model or _MODEL, timeout or _TIMEOUT)
 
 
 def _facts(reports: list) -> str:

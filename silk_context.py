@@ -108,9 +108,13 @@ def begin_data_counter() -> dict:
     `llm_calls`/`tool_calls` (V5 wave 1): كل نداء كلود ونداء أداة داخل حلقة
     الوكيل اللغوي (`silk_llm_runtime.run_llm_agent`) يُعدّ هنا — نفس القناة
     الجانبية الصامتة لعدّادات المخزن/الجلب الحي، صفر أثر خارج تحليل نشط.
+
+    `llm_usage` (تدقيق المعمارية، دين ٤): رموز الإدخال/الإخراج الفعلية لكل
+    نموذج — يغذّي تقدير التكلفة (`silk_pricing.estimate_cost_usd`)؛ نفس مبدأ
+    القناة الجانبية الصامتة — راجع `record_llm_usage`.
     """
     c = {"store_hits": 0, "cache_hits": 0, "live_fetches": 0,
-         "llm_calls": 0, "tool_calls": 0}
+         "llm_calls": 0, "tool_calls": 0, "llm_usage": {}}
     _data_counter.set(c)
     return c
 
@@ -120,6 +124,19 @@ def count_data(kind: str, n: int = 1) -> None:
     c = _data_counter.get()
     if c is not None and kind in c:
         c[kind] += n
+
+
+def record_llm_usage(model: str, input_tokens: int, output_tokens: int) -> None:
+    """سجّل استهلاك رموز نداء كلود لكل نموذج — silent no-op outside an active
+    counter (نفس نمط count_data). يستدعيها `silk_llm_provider` بعد كل رد
+    ناجح يحمل حقل usage — لا يغيّر عقد أي دالة نداء قائمة (قناة جانبية فقط)."""
+    c = _data_counter.get()
+    if c is None:
+        return
+    usage = c.setdefault("llm_usage", {})
+    row = usage.setdefault(model, {"input_tokens": 0, "output_tokens": 0})
+    row["input_tokens"] += int(input_tokens or 0)
+    row["output_tokens"] += int(output_tokens or 0)
 
 
 def data_counter() -> dict | None:
