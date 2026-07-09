@@ -154,6 +154,7 @@ class ExpleeAgent(BaseAgent):
     """
 
     PAID = True
+    PREF_KEY = "contacts"
     SOURCE = "Explee"
 
     def __init__(self) -> None:

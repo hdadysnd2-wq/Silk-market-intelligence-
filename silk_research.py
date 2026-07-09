@@ -315,6 +315,7 @@ class MarketSizeAgent(ResearchAgent):
     """TAM مرصود (كومتريد) · SAM/SOM نموذجان معلنا الافتراضات · نمو من المخزن."""
 
     AGENT = "market_size"
+    PREF_KEY = "trade"
     EXPECTED = ("tam_usd", "import_growth_pct", "import_cagr_pct",
                 "sam_usd", "som_usd")
 
@@ -466,6 +467,7 @@ class CompetitorAgent(ResearchAgent):
     (Serper/Maps) — مرشّحون غير موثَّقين برابط وتاريخ، ثقة 0.4، لا اختلاق."""
 
     AGENT = "competitor"
+    PREF_KEY = "competition"
     EXPECTED = ("hhi", "top_supplier_share_pct", "saudi_share_pct",
                 "supplier_countries", "named_companies")
 
@@ -718,6 +720,7 @@ class RegulatoryAgent(ResearchAgent):
     """قائمة الاشتراطات L1 (مرجع ساكن مُستشهَد) + التعريفة المطبّقة (WITS)."""
 
     AGENT = "regulatory"
+    PREF_KEY = "regulatory"
     EXPECTED = ("requirements_checklist", "entry_requirements_count",
                 "eligibility_gate", "tariff_applied_pct")
 
@@ -914,6 +917,7 @@ class RiskAgent(ResearchAgent):
     """WGI (استقرار/تنظيم) + LPI لوجستي + تقلب صرف من السلسلة + تركّز مورّدين."""
 
     AGENT = "risk"
+    PREF_KEY = "risk"
     EXPECTED = ("political_stability_wgi", "regulatory_quality_wgi",
                 "logistics_lpi", "fx_volatility_pct", "supplier_concentration_hhi")
 
@@ -1024,6 +1028,7 @@ class ConsumerDemandAgent(ResearchAgent):
     حصة مسلمة (مرجع Pew ساكن) وموسمية رمضان كقاعدة معلنة عليها."""
 
     AGENT = "consumer_demand"
+    PREF_KEY = "consumer"
     EXPECTED = ("gdp_per_capita_usd", "population", "percapita_supply_kg",
                 "search_interest", "muslim_share_pct", "ramadan_seasonality")
 
@@ -1100,6 +1105,7 @@ class SupplierAgent(ResearchAgent):
     مرشّحون بالاسم برابط وتاريخ، غير موثَّقين (0.4)، لا أسماء مخترعة أبداً."""
 
     AGENT = "supplier"
+    PREF_KEY = "maps"
     EXPECTED = ("saudi_suppliers", "target_distributors")
 
     def _research(self, task):

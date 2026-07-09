@@ -34,6 +34,50 @@ class AgentReport:
     summary: str = ""
 
 
+# ── سجل الوكلاء القانوني · the ONE agent catalog (لوحة «إعدادات الوكلاء») ────
+# المصدر الوحيد لصفوف اللوحة: مفتاح + اسم + دور بسطر + مدفوع/مجاني. الواجهة
+# تبنيه من GET /settings/agents (لا قائمة موازية تنحرف). كل BaseAgent يحمل
+# PREF_KEY يشير لصفّه هنا؛ المفتاح الواحد قد يجمع أكثر من صنف (وكيل التجارة =
+# TradeFlowAgent + وكيل حجم السوق البحثي). **لا حقول مفاتيح مصادر هنا** —
+# المفاتيح تُضبط في بيئة النشر (Railway env) حصراً.
+AGENT_CATALOG: list[dict] = [
+    {"key": "trade", "name": "وكيل التجارة",
+     "role": "حجم استيراد/تصدير السوق وحجم الفرصة · UN Comtrade", "paid": False},
+    {"key": "economic", "name": "الوكيل الاقتصادي",
+     "role": "دخل الفرد والسكان · World Bank", "paid": False},
+    {"key": "competition", "name": "وكيل المنافسة",
+     "role": "الدول المورّدة وحصصها ومنافسون بالاسم · UN Comtrade", "paid": False},
+    {"key": "regulatory", "name": "وكيل الاشتراطات",
+     "role": "اشتراطات الدخول والتعريفة · مرجع L1 + WITS", "paid": False},
+    {"key": "risk", "name": "وكيل المخاطر",
+     "role": "استقرار ولوجستيات وعملة · البنك الدولي", "paid": False},
+    {"key": "trends", "name": "وكيل الاتجاهات",
+     "role": "اهتمام البحث والموسمية · Google Trends", "paid": False},
+    {"key": "maps", "name": "وكيل الأعمال بالاسم",
+     "role": "مصانع وموزّعون بالاسم · Google Maps", "paid": False},
+    {"key": "channels", "name": "وكيل قنوات التوزيع",
+     "role": "أبواب الدخول ومستوردون مرشّحون (الطبقة الحرة) · بحث ويب",
+     "paid": False},
+    {"key": "consumer", "name": "وكيل ثقافة المستهلك",
+     "role": "هل المنتج مرغوب؟ · بحث + كلود", "paid": False},
+    {"key": "dynamics", "name": "وكيل الديناميكيات",
+     "role": "دوافع وكوابح وفرص · بحث + كلود", "paid": False},
+    {"key": "synthesis", "name": "حكم التوليف",
+     "role": "حكم كلود فوق حقائق الوكلاء المعزولة (المرحلة ٢)", "paid": False},
+    {"key": "pricing", "name": "وكيل التسعير",
+     "role": "أسعار التجزئة الفعلية · طبقة التعميق المدفوعة", "paid": True},
+    {"key": "importers", "name": "وكيل المستوردين",
+     "role": "مستوردون بالاسم من بوالص الشحن · Volza (تعميق)", "paid": True},
+    {"key": "contacts", "name": "وكيل جهات الاتصال",
+     "role": "مشترون وجهات اتصال B2B · Explee (تعميق)", "paid": True},
+]
+
+
+def default_agent_settings() -> dict:
+    """الإعدادات الافتراضية — المجاني مفعّل والمدفوع مطفأ، بلا توجيهات."""
+    return {a["key"]: {"on": not a["paid"], "cmd": ""} for a in AGENT_CATALOG}
+
+
 class Agent(ABC):
     """وكيل أساس — base research agent; name + abstract run()."""
 
@@ -41,7 +85,7 @@ class Agent(ABC):
         self.name = name
 
     @abstractmethod
-    def run(self, task: dict) -> AgentReport:
+    def run(self, task: dict, instruction: str = "") -> AgentReport:
         """نفّذ المهمة — execute the task, returning an AgentReport."""
         raise NotImplementedError
 
@@ -65,31 +109,56 @@ class BaseAgent(Agent):
 
     PAID: bool = False   # تصنيف إلزامي عند التعريف — مدفوع أم مجاني
     SOURCE: str = ""     # وسم المصدر لنقاط الفشل البنيوية (افتراضه اسم الوكيل)
+    PREF_KEY: str = ""   # صفّ الوكيل في «إعدادات الوكلاء» (AGENT_CATALOG) —
+                         # "" = وكيل داخلي بلا صف (لا مفتاح تعطيل ولا توجيه)
 
-    def run(self, task: dict) -> AgentReport:
-        """نفّذ محروساً — guarded execution; subclasses implement _execute()."""
+    def run(self, task: dict, instruction: str = "") -> AgentReport:
+        """نفّذ محروساً — guarded execution; subclasses implement _execute().
+
+        حارسا اللوحة (إعدادات الوكلاء):
+          • وكيل معطّل (`agent_enabled(PREF_KEY)` False) = **يستحيل التنفيذ**
+            — تقرير متخطى موسوم بلا أي نداء، كنمط حارس PAID نفسه.
+          • التوجيه النصي (`instruction` الصريح أو أمر اللوحة المحفوظ) يمرَّر
+            للوكيل في task["instruction"] ويُعلن في خلاصة التقرير — **يوجّه
+            العرض والتركيز فقط ولا يغيّر أي رقم مجلوب** (الثابت التأسيسي:
+            القيمة الغائبة تبقى None مهما كان التوجيه).
+        """
         import silk_context  # lazy: keeps import graph flat
 
         src = self.SOURCE or self.name
+        today = datetime.date.today().isoformat()
+        if self.PREF_KEY and not silk_context.agent_enabled(self.PREF_KEY):
+            note = (f"{self.name}: معطّل من إعدادات الوكلاء — disabled by "
+                    "user setting (skipped, no call attempted)")
+            log.info(note)
+            return AgentReport(
+                self.name, [DataPoint(None, src, 0.0, note, today)],
+                True, note)
         if self.PAID and not silk_context.deepen_active():
             note = (f"{self.name}: paid agent outside /deepen — skipped "
                     "(structural guard, no call attempted)")
             log.warning(note)
             return AgentReport(
-                self.name,
-                [DataPoint(None, src, 0.0, note,
-                           datetime.date.today().isoformat())],
+                self.name, [DataPoint(None, src, 0.0, note, today)],
                 True, note)
+        steer = (instruction or (silk_context.agent_command(self.PREF_KEY)
+                                 if self.PREF_KEY else "")).strip()[:500]
+        if steer:
+            task = dict(task)
+            task["instruction"] = steer
         try:
-            return self._execute(task)
+            report = self._execute(task)
         except Exception as e:  # noqa: BLE001 — silent failure impossible
             note = f"{self.name} error: {type(e).__name__}: {e}"
             log.warning(note)
             return AgentReport(
-                self.name,
-                [DataPoint(None, src, 0.0, note,
-                           datetime.date.today().isoformat())],
+                self.name, [DataPoint(None, src, 0.0, note, today)],
                 True, note)
+        if steer and not report.failed:
+            # إعلان التوجيه في الخلاصة — presentation only, numbers untouched.
+            report.summary = (f"{report.summary} · توجيه المستخدم (عرض "
+                              f"وتركيز فقط): {steer[:120]}")
+        return report
 
     def _execute(self, task: dict) -> AgentReport:
         """منطق الوكيل الفعلي — the agent's actual logic (subclass hook)."""
@@ -100,6 +169,7 @@ class TradeFlowAgent(BaseAgent):
     """وكيل تدفّق التجارة — Comtrade import/export size of an HS code in a market."""
 
     PAID = False
+    PREF_KEY = "trade"
 
     def __init__(self) -> None:
         super().__init__("TradeFlowAgent")
@@ -215,6 +285,7 @@ class EconomicAgent(BaseAgent):
     """وكيل اقتصادي — World Bank income (GDP & PPP per capita) + population."""
 
     PAID = False
+    PREF_KEY = "economic"
 
     def __init__(self) -> None:
         super().__init__("EconomicAgent")
@@ -239,10 +310,24 @@ class CompetitionAgent(BaseAgent):
 
     PAID = False
     SOURCE = "UN Comtrade"
+    PREF_KEY = "competition"
 
     def __init__(self, top_n: int = 5) -> None:
         super().__init__("CompetitionAgent")
         self.top_n = top_n
+
+    def _effective_top_n(self, task: dict) -> int:
+        """عدد الصفوف من توجيه المستخدم — presentation-only top-N (1..10).
+
+        «أعلى 8» / "top 3" في توجيه اللوحة يغيّر **عدد الصفوف المعروضة**
+        فقط — القيم المجلوبة نفسها لا تُمسّ (الثابت التأسيسي).
+        """
+        import re
+        m = re.search(r"(?:top|أعلى|اعلى)\s*(\d{1,2})",
+                      str(task.get("instruction") or ""), re.IGNORECASE)
+        if not m:
+            return self.top_n
+        return min(max(int(m.group(1)), 1), 10)
 
     @staticmethod
     def _competitors_from_store(hs: str, iso3: str, year: int):
@@ -305,7 +390,7 @@ class CompetitionAgent(BaseAgent):
                 [DataPoint(None, "UN Comtrade", 0.0,
                            f"HS{hs} competitors in market {market} {year}: no data / fetch failed")],
                 True, "لا توجد بيانات منافسين — no competitor data available")
-        findings = comps[: self.top_n]
+        findings = comps[: self._effective_top_n(task)]
         return AgentReport(self.name, findings, False,
                            f"top {len(findings)} supplier(s) by import value")
 
@@ -317,11 +402,18 @@ class ResearchManager:
         self.agents = agents or [TradeFlowAgent(), EconomicAgent(), CompetitionAgent()]
 
     def distribute(self, task: dict) -> list[AgentReport]:
-        """وزّع المهمة — run every agent, collecting their reports (never crashes)."""
+        """وزّع المهمة — run every agent, collecting their reports (never crashes).
+
+        يمرّر لكل وكيل أمرَه المحفوظ من لوحة «إعدادات الوكلاء» وقت التشغيل
+        (BaseAgent.run يحسمه أيضاً من السياق — التمرير الصريح عقد المدير).
+        """
+        import silk_context
         reports: list[AgentReport] = []
         for agent in self.agents:
+            key = getattr(agent, "PREF_KEY", "") or ""
+            cmd = silk_context.agent_command(key) if key else ""
             try:
-                reports.append(agent.run(task))
+                reports.append(agent.run(task, instruction=cmd))
             except Exception as e:  # noqa: BLE001 — an agent must not crash the run
                 log.warning("agent %s raised: %s", agent.name, e)
                 reports.append(AgentReport(agent.name, [], True, f"agent error: {e}"))

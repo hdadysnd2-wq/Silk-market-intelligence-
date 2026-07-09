@@ -29,6 +29,7 @@ class NamedCompetitorsAgent(BaseAgent):
     """وكيل المنافسين المُسمّين — company-level competitor candidates by name."""
 
     PAID = False
+    PREF_KEY = "competition"
     SOURCE = "Web Search (Serper)"
 
     def __init__(self) -> None:

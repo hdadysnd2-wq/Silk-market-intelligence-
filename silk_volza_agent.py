@@ -126,6 +126,7 @@ class VolzaAgent(BaseAgent):
     """
 
     PAID = True
+    PREF_KEY = "importers"
     SOURCE = "Volza"
 
     def __init__(self) -> None:

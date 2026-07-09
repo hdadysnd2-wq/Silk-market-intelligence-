@@ -297,6 +297,7 @@ class LocalPriceAgent(BaseAgent):
     """وكيل أسعار السوق المحلي — actual retail prices/best-sellers in-market."""
 
     PAID = True
+    PREF_KEY = "pricing"
     SOURCE = "Local retail"
 
     def __init__(self) -> None:

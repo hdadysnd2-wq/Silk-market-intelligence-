@@ -24,6 +24,7 @@ class DynamicsAgent(BaseAgent):
     """وكيل الديناميكيات — إشارات ويب مصنّفة في أطر بورتر/PESTEL بمصادرها."""
 
     PAID = False
+    PREF_KEY = "dynamics"
     SOURCE = "Web Search + Claude تصنيف"
 
     def __init__(self) -> None:
@@ -55,7 +56,9 @@ class DynamicsAgent(BaseAgent):
                                "no headlines returned")
 
         from silk_ai_judge import classify_dynamics
-        classified = classify_dynamics(product, market, real)
+        classified = classify_dynamics(product, market, real,
+                                       instruction=str(
+                                           task.get("instruction") or ""))
         if classified is None:
             # بلا كلود: العناوين الخام إشارات غير مصنّفة — معلنة كذلك.
             dp = DataPoint(

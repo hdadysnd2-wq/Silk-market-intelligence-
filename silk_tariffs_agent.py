@@ -128,6 +128,7 @@ class TariffsAgent(BaseAgent):
     """وكيل التعريفات — applied customs tariff (%) into a market for an HS code."""
 
     PAID = False
+    PREF_KEY = "regulatory"
 
     def __init__(self) -> None:
         super().__init__("TariffsAgent")

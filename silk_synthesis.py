@@ -21,7 +21,7 @@ import json
 import logging
 
 from silk_agents import JuryCommittee
-from silk_ai_judge import _call, _facts, _isolate, _MODEL, _PRINCIPLE
+from silk_ai_judge import _call, _facts, _isolate, _user_steer, _MODEL, _PRINCIPLE
 
 log = logging.getLogger(__name__)
 
@@ -36,10 +36,12 @@ _CONFRONTATION = (
 
 
 def _stage2(product: str, market: str, reports: list,
-            threads: dict | None) -> dict | None:
+            threads: dict | None, instruction: str = "") -> dict | None:
     """المرحلة ٢ — حكم كلود المعزول — Claude's judgment over isolated inputs.
 
     None عند غياب المفتاح/فشل النداء (المرحلة ١ تكفي وحدها حينها).
+    `instruction`: توجيه المستخدم من لوحة «إعدادات الوكلاء» (صف «حكم
+    التوليف») — يُلحق داخل العزل ويوجّه التركيز فقط، لا يتجاوز الحقائق.
     """
     facts = _isolate(_facts(reports))
     # market يُعزل كسائر الحقول (مراجعة المشروع) — اتساق العزل لا يستثني حقلاً.
@@ -53,7 +55,8 @@ def _stage2(product: str, market: str, reports: list,
         parts += ["", "أصدر حكمًا أوّليًّا على دخول هذا السوق."]
     parts += ["", 'أعد JSON فقط بهذا الشكل:',
               '{"verdict":"GO|WATCH|NO-GO","confidence":0.0-1.0,'
-              '"reasoning":"سبب موجز مبني على الحقائق والخيوط"}']
+              '"reasoning":"سبب موجز مبني على الحقائق والخيوط"}'
+              + _user_steer("synthesis", instruction)]
     out = _call(_PRINCIPLE, "\n".join(parts), max_tokens=900)
     if not out:
         return None
@@ -75,17 +78,25 @@ def _stage2(product: str, market: str, reports: list,
 
 
 def synthesize(reports: list, *, product: str, market: str,
-               threads: dict | None = None, with_ai: bool = False) -> dict:
+               threads: dict | None = None, with_ai: bool = False,
+               instruction: str = "") -> dict:
     """التوليف الموحّد — the single verdict entry point (both stages).
 
     يعيد بنية «jury» المتوافقة مع الواجهة القائمة (شرط ٩.٣: الحذف لا يغيّر
     شكل الاستجابة): مفاتيح المرحلة ١ كما كانت + `ai` للمرحلة ٢ إن توفرت.
+    صف «حكم التوليف» في لوحة إعدادات الوكلاء: تعطيلُه يوقف المرحلة ٢ (كلود)
+    فقط — المرحلة ١ الحتمية لا تُطفأ أبداً؛ وأمرُه النصي يوجّه تركيز الحكم.
     """
     verdict = JuryCommittee.evaluate(reports)          # المرحلة ١ — حتمية
     verdict["synthesis_stage"] = 1
+    import silk_context
+    if with_ai and not silk_context.agent_enabled("synthesis"):
+        verdict["ai_note"] = ("حكم كلود (المرحلة ٢) معطّل من إعدادات "
+                              "الوكلاء — اكتفي بالمرحلة الحتمية")
+        with_ai = False
     if with_ai:
         try:
-            ai = _stage2(product, market, reports, threads)
+            ai = _stage2(product, market, reports, threads, instruction)
         except Exception as e:  # noqa: BLE001 — AI stage must never crash
             log.warning("synthesis stage 2 failed for %s: %s", market, e)
             ai = None

@@ -32,6 +32,7 @@ class DistributionChannelsAgent(BaseAgent):
     """وكيل القنوات — retail/wholesale + e-commerce channel candidates."""
 
     PAID = False
+    PREF_KEY = "channels"
     SOURCE = "Web Search (Serper)"
 
     def __init__(self) -> None:

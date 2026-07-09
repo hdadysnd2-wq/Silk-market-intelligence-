@@ -27,6 +27,7 @@ class ImportersAgent(BaseAgent):
     """وكيل المستوردين — importer/distributor candidates (free web layer)."""
 
     PAID = False
+    PREF_KEY = "channels"
     SOURCE = "Web Search (Serper)"
 
     def __init__(self) -> None:
