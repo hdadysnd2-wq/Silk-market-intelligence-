@@ -103,6 +103,29 @@ def _brief(decision: dict, cp: dict) -> list[str]:
     return lines
 
 
+def _deep_research_brief(dr_view: dict) -> list[str]:
+    """مختصر البحث العميق — القرار + أرقام حاسمة + الموقع التنافسي (الموجة ٤).
+
+    نفس فلسفة `_brief` (§10.4: سطر جوال) لكن على شكل view["deep_research"]
+    (١٢ بعثة + محلل، لا قائمة أسواق مرتّبة)."""
+    verdict = dr_view.get("verdict") or {}
+    ai = verdict.get("ai") or {}
+    v = ai.get("verdict") or verdict.get("verdict") or "غير محسوم"
+    market = ((dr_view.get("market") or {}).get("name_ar")
+             or (dr_view.get("market") or {}).get("name_en") or "؟")
+    lines = [f"التوصية: {v} — سوق {market} (بحث عميق، ١٢ بعثة)"]
+    demand = (dr_view.get("analyst") or {}).get("by_category", {}).get("demand") or []
+    if demand:
+        lines.append(f"الطلب الفعلي المقدَّر: {demand[0].get('value')}")
+    entry_door = (dr_view.get("analyst") or {}).get("by_category", {}).get(
+        "entry_door") or []
+    if entry_door:
+        lines.append(f"أفضل باب دخول: {entry_door[0].get('value')}")
+    if dr_view.get("next_step"):
+        lines.append(dr_view["next_step"])
+    return lines
+
+
 def _completeness(markets: list) -> dict:
     """مؤشر اكتمال الدراسة — how much of the study is OBSERVED vs. declared gaps.
 
@@ -480,6 +503,69 @@ def _supplier_directory(research: dict | None) -> dict:
                     "الترقية الموثّقة عبر /deepen"}
 
 
+def _report_fields(rep: object) -> dict:
+    """طبّع AgentReport/dict — a live AgentReport dataclass OR a dict reloaded
+    from storage (json_blob)، نفس نمط `_dp` أعلاه."""
+    if isinstance(rep, dict):
+        return {"agent_name": rep.get("agent_name"),
+               "findings": rep.get("findings") or [],
+               "failed": bool(rep.get("failed")), "summary": rep.get("summary") or ""}
+    return {"agent_name": getattr(rep, "agent_name", None),
+           "findings": getattr(rep, "findings", None) or [],
+           "failed": bool(getattr(rep, "failed", False)),
+           "summary": getattr(rep, "summary", "") or ""}
+
+
+def _deep_research_view(result: dict) -> dict | None:
+    """قسم البحث العميق (الموجة ٤، V5) — إضافي بحت، لا يمسّ أي مفتاح قائم.
+
+    **تنبيه تسمية مهم**: هذا المفتاح `view["deep_research"]` مختلف تماماً عن
+    `row["research"]` الموجود أصلاً (حزمة وكلاء البحث الثمانية الحتمية،
+    Stage 3 §4b) — تعمّد اختيار اسم مختلف لتفادي تصادم دلالي، لا تكرار خطأ.
+    None عند غياب `result["deep_research"]` (تحليل /analyze عادي — لا أثر).
+    """
+    dr = result.get("deep_research")
+    if not dr:
+        return None
+    missions = {}
+    for key, rep in (dr.get("missions") or {}).items():
+        f = _report_fields(rep)
+        missions[key] = {
+            "name": f["agent_name"], "failed": f["failed"],
+            "summary": f["summary"],
+            "findings": [_dp(x) for x in f["findings"]],
+        }
+    analyst = dr.get("analyst") or {}
+    analyst_report = _report_fields(analyst.get("report"))
+    by_category = {cat: [_dp(x) for x in (dps or [])]
+                  for cat, dps in (analyst.get("by_category") or {}).items()}
+    report_out = dr.get("report") or {}
+    verdict = dr.get("verdict") or {}
+    limits = ([f"فرصة {k} بلا نتائج مبنية على استشهاد: {v['summary']}"
+              for k, v in missions.items() if v["failed"]]
+             + [f"تقاطع المحلل بلا أدلة كافية: {c}"
+               for c in (analyst.get("missing_categories") or [])]
+             + [f"ملاحظة مراجع لم تُعالَج: {n}"
+               for n in (report_out.get("unresolved_notes") or [])])
+    return {
+        "market": result.get("market"),
+        "missions": missions,
+        "analyst": {"summary": analyst_report["summary"],
+                   "missing_categories": analyst.get("missing_categories") or [],
+                   "by_category": by_category},
+        "verdict": verdict,
+        "report": {"text": report_out.get("report"),
+                  "review_cycles": report_out.get("review_cycles", 0),
+                  "unresolved_notes": report_out.get("unresolved_notes") or []},
+        "limits": limits,
+        "next_step": ("فعّل التعميق (/deepen) للتحقق من المستوردين وجهات "
+                     "الاتصال (Volza/Explee)"
+                     if str(verdict.get("verdict") or
+                           (verdict.get("ai") or {}).get("verdict") or "")
+                        .upper().startswith(("GO", "PRELIMINARY GO")) else None),
+    }
+
+
 def build_view(result: dict) -> dict:
     """ابنِ نموذج العرض القانوني — the ONE canonical view-model (vision §10.1).
 
@@ -553,15 +639,21 @@ def build_view(result: dict) -> dict:
               for f in (m.get("quality_flags") or [])]
     if not result.get("classified"):
         limits.insert(0, result.get("hs_note") or "تعذّر التصنيف")
+    # قسم البحث العميق (الموجة ٤، V5) — إضافي بحت؛ None لتحليل /analyze عادي.
+    dr_view = _deep_research_view(result)
+    if dr_view:
+        limits = dr_view["limits"] + limits
     # ترويسة 2B: التغطية الإجمالية % = مُسهم/مُحاوَل عبر أقسام السوق الأعلى.
     top_cov = _section_coverage(markets[0]) if markets else {}
     att = sum(c["attempted"] for c in top_cov.values())
     con = sum(c["contributed"] for c in top_cov.values())
+    dr_market = (dr_view or {}).get("market") or {}
     header = {
         "product": result.get("product"), "hs_code": result.get("hs_code"),
         "origin": "SAU",
-        "target_market": (markets[0].get("country") or markets[0].get("iso3"))
-                         if markets else None,
+        "target_market": ((markets[0].get("country") or markets[0].get("iso3"))
+                          if markets else
+                          (dr_market.get("name_ar") or dr_market.get("name_en"))),
         "date": _t_today(),
         "coverage_pct": round(100 * con / att, 1) if att else 0.0,
     }
@@ -583,12 +675,16 @@ def build_view(result: dict) -> dict:
         "markets": view_markets,
         "culture": _culture(result),          # روابط خام (تراجُع/استشهاد)
         "consumer_culture": _consumer_culture(result),  # ثقافة المستهلك المستخلَصة (كلود)
-        "brief": _brief(decision, cp),
+        "brief": (_deep_research_brief(dr_view) if dr_view
+                 else _brief(decision, cp)),
         "limits": limits,
         "provenance": _provenance(result),   # Stage 2A: لا فشل صامتاً
         # اقتصاد البيانات (persist-5): عدّاد مرصود — مخزن/ذاكرة مقابل جلب حي.
         "data_economics": result.get("data_economics"),
         "note": result.get("note"),
+        # الموجة ٤ (V5): مختلف عن row["research"] القائم — راجع تنبيه التسمية
+        # أعلى _deep_research_view. None لتحليل /analyze العادي (لا أثر).
+        "deep_research": dr_view,
     }
     return view
 
