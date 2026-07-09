@@ -260,7 +260,32 @@ def comtrade_trade(
 
 
 def world_bank(iso3: str, indicator: str, year: int | None = None) -> DataPoint:
-    """مؤشر البنك الدولي — latest (or given-year) value as a DataPoint."""
+    """مؤشر البنك الدولي — القيمة لسنة محددة، أو أحدث سنة منشورة.
+
+    بلاغ حي (الموجة ٨): مؤشرات مثل WGI (PV.EST/RL.EST) وLPI تُنشَر بفارق
+    سنة أو أكثر أحياناً، وLPI كل سنتين فقط — طلب سنة محددة (كما قد تفعل
+    بعثة كلود عبر أداة worldbank_indicator) لم تُنشر بعد كان يعيد فجوة
+    صامتة (None) رغم توفر بيانات فعلية حقيقية لسنوات أقرب. الآن: إن فشلت
+    السنة المطلوبة تحديداً، تراجُع صريح واحد لأحدث سنة منشورة فعلاً —
+    مُعلَن في الملاحظة، لا اختلاق ولا فجوة زائفة."""
+    dp = _world_bank_for_year(iso3, indicator, year)
+    if dp.value is not None or year is None:
+        return dp
+    fallback = _world_bank_for_year(iso3, indicator, None)
+    if fallback.value is not None:
+        return DataPoint(
+            value=fallback.value, source=fallback.source,
+            confidence=fallback.confidence,
+            note=f"{indicator}: سنة {year} لم تُنشر بعد لـ{iso3} — "
+                 f"استُخدمت أحدث سنة متاحة ({fallback.note})",
+            retrieved_at=fallback.retrieved_at)
+    return dp
+
+
+def _world_bank_for_year(iso3: str, indicator: str,
+                         year: int | None) -> DataPoint:
+    """جلب فعلي لسنة محددة أو الأحدث — helper مستدعى مباشرة من world_bank()
+    ومن مسار التراجُع فيه؛ لا يُستدعى مباشرة خارج هذا الملف."""
     url = f"{ENDPOINTS['world_bank']}/country/{iso3}/indicator/{indicator}"
     params = {"format": "json", "per_page": "100"}
     if year is not None:

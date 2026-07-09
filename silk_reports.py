@@ -77,6 +77,18 @@ def _fmt(v: object) -> str:
     return str(v)
 
 
+def _clean_report_text(s: object, max_len: int = 300) -> str:
+    """نص آمن للعرض — بلاغ حي (الموجة ٨): لا يجوز أن يتسرّب رد كلود الخام
+    غير المفسَّر (كتلة JSON/سياج ```) لواجهة تقرير — يُستبدَل بملخّص نظيف
+    بدل عرضه حرفياً؛ التفاصيل الكاملة تبقى في أثر التتبّع (data/traces/)."""
+    text = str(s or "").strip()
+    if not text:
+        return text
+    if text.lstrip().startswith(("{", "```")):
+        return "بند تقني غير قابل للعرض المباشر — التفاصيل الكاملة في أثر التتبّع."
+    return text[:max_len] + ("…" if len(text) > max_len else "")
+
+
 def _narrative_exec_summary(view: dict) -> list[str]:
     """خلاصة تنفيذية سردية — تفويض كامل لطبقة الترجمة (P1، silk_narrative).
 
@@ -764,7 +776,7 @@ def _docx_deep_research(doc, view: dict) -> None:
     missions = dr.get("missions") or {}
     _add_table(doc, ["البعثة", "الحالة", "الملخّص"], [
         [key, "فشلت/بلا أدلة" if m.get("failed") else "ناجحة",
-         (m.get("summary") or "")[:300]]
+         _clean_report_text(m.get("summary"))]
         for key, m in missions.items()])
 
     # Phase 3 (بلاغ حي: "تقرير احترافي لا تفريغ بيانات"): التقرير السردي
@@ -820,13 +832,80 @@ def _docx_deep_research(doc, view: dict) -> None:
     if dr.get("limits"):
         doc.add_heading("حدود قسم البحث العميق", level=2)
         for x in dr["limits"][:12]:
-            doc.add_paragraph(str(x), style="List Bullet")
+            doc.add_paragraph(_clean_report_text(x), style="List Bullet")
+
+
+def _render_research_docx(doc, view: dict) -> None:
+    """تقرير /research الكامل — بلاغ حي (الموجة ٨): التقرير السردي (كاتب
+    التقرير) هو متن التقرير من الصفحة الأولى، لا ملحقاً بعد هيكل كلاسيكي
+    غير مُغذّى. الأقسام الأربعة عشر الكلاسيكية (render_docx العادي) مبنية
+    لتحليل /analyze متعدد الأسواق (`top_m` من `markets[0]`) — /research
+    يحلّل سوقاً واحداً بعمق عبر البعثات الاثنتي عشر فتبقى `markets=[]`
+    بنيوياً دوماً هنا، فبناء تلك الأقسام كان يُنتج هيكلاً فارغاً ("التغطية
+    0.0%"، "0 أسواق"، "تعذّر إصدار توصية") يسبق المحتوى الحقيقي ويحمل حكماً
+    غير مُغذّى (محرك موزون بلا مدخلات) يناقض حكم التوليف الفعلي — حكم واحد
+    لا حكمان، ومتن واحد لا متنان (b). لذا: تُحذَف كلياً هنا، لا تُبنى فارغة.
+    """
+    dr = view.get("deep_research") or {}
+    h = view.get("header") or {}
+    market = dr.get("market") or {}
+    verdict = dr.get("verdict") or {}
+    ai = verdict.get("ai") or {}
+    vtxt = ai.get("verdict") or verdict.get("verdict") or "غير محسوم"
+
+    # ٠) الغلاف وبطاقة التعريف
+    doc.add_heading(f"سِلك — تقرير بحث عميق: {view.get('product')}", 0)
+    if view.get("test_run"):
+        doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة "
+                          "(SILK_HERMETIC)، ليس تقريراً إنتاجياً")
+    _stamp_degraded_banner(doc, view)
+    _add_table(doc, ["البند", "القيمة"], [
+        ["المنتج", h.get("product")],
+        ["رمز HS", h.get("hs_code")],
+        ["المنشأ", "المملكة العربية السعودية"],
+        ["السوق المستهدف", h.get("target_market")
+         or market.get("name_ar") or market.get("name_en")],
+        ["تاريخ الإعداد", h.get("date")],
+        ["الحكم", vtxt]])
+
+    # جدول محتويات مطابق لبنية البحث العميق الفعلية — لا الأقسام الكلاسيكية
+    # التي لا تُبنى هنا أصلاً (لا جدول محتويات يَعِد بأقسام غائبة).
+    doc.add_heading("المحتويات", level=1)
+    for i, ttl in enumerate((
+            "الخلاصة التنفيذية", "البعثات الاثنتا عشرة — ملخّص",
+            "التقرير الكامل (كاتب التقرير، مراجَع)",
+            "ملحق — الأدلة الرقمية الداعمة للتقاطعات الخمسة",
+            "حدود هذا التقرير"), 1):
+        doc.add_paragraph(f"{i}. {ttl}")
+
+    # ١) الخلاصة التنفيذية — من حكم التوليف حصراً (المصدر الوحيد للحكم في
+    # هذا التقرير) — لا محرك §8 الموزون غير المُغذّى، ولا نص JSON خام.
+    doc.add_heading("١. الخلاصة التنفيذية", level=1)
+    doc.add_paragraph(f"الحكم: {vtxt}")
+    reasoning = ai.get("reasoning") or verdict.get("note") or ""
+    if reasoning:
+        doc.add_paragraph(_clean_report_text(reasoning, max_len=600))
+    missions = dr.get("missions") or {}
+    n_ok = sum(1 for m in missions.values()
+              if not (m.get("failed") if isinstance(m, dict) else
+                      getattr(m, "failed", False)))
+    doc.add_paragraph(f"مبني على {n_ok}/{len(missions)} بعثة بحث نجحت في "
+                      "جمع نتائج مبنية على استشهاد، إضافة إلى المحلل "
+                      "الشامل وكاتب التقرير (راجع «حدود هذا التقرير» "
+                      "أدناه لكل فجوة معلنة).")
+
+    _docx_deep_research(doc, view)
 
 
 def render_docx(view: dict, path: str) -> str:
     """التقرير الكامل Word (§10.3) — من القالب الموحّد حصراً.
 
     يعيد المسار عند النجاح؛ RuntimeError واضحة بلا python-docx.
+
+    نتيجة `/research` (`view["deep_research"]` موجود) تُبنى عبر مسار مخصّص
+    (`_render_research_docx`) لا الأقسام الأربعة عشر الكلاسيكية — راجع
+    تعليق التصميم هناك (بلاغ حي، الموجة ٨: كانت تُبنى هيكلاً فارغاً يسبق
+    التقرير الحقيقي).
     """
     try:
         from docx import Document
@@ -835,6 +914,12 @@ def render_docx(view: dict, path: str) -> str:
 
     _assert_production_clean(view)
     doc = Document()
+
+    if view.get("deep_research"):
+        _render_research_docx(doc, view)
+        doc.save(path)
+        return path
+
     top_m = (view.get("markets") or [{}])[0]
 
     # ═══ 0) الغلاف وبطاقة التعريف — cover + report card ═══

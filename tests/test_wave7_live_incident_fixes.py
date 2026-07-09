@@ -363,7 +363,9 @@ def test_narrative_prose_precedes_the_raw_evidence_appendix(monkeypatch):
     path = render_docx(view, os.path.join(tempfile.mkdtemp(), "order.docx"))
     text = docx_all_text(path)
     narrative_idx = text.find("يكشف التقاطع بين حجم الاستيراد")
-    appendix_idx = text.find("ملحق — الأدلة الرقمية الداعمة")
+    # ابحث عن عنوان الملحق الفعلي بعد موضع السرد — لا سطر جدول المحتويات
+    # الذي يذكر العنوان نفسه مبكراً (نفس نمط اختبار "٨." vs "8." السابق).
+    appendix_idx = text.find("ملحق — الأدلة الرقمية الداعمة", narrative_idx)
     assert narrative_idx != -1 and appendix_idx != -1
     assert narrative_idx < appendix_idx
     # فقرة سردية واحدة على الأقل تتجاوز ٢٠٠ حرفاً قبل أي محتوى نقطي
