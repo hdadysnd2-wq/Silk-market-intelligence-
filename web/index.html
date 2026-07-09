@@ -239,6 +239,7 @@
         </div>
         <div class="runbar">
           <div class="rsum" id="runSum">اختر منتجاً للبدء</div>
+          <button class="runbtn" id="researchBtn" disabled title="يتطلب اختيار سوق واحد — ١٢ بعثة كلود + محلل شامل + تقرير مراجَع">بحث عميق (كلود) ←</button>
           <button class="runbtn" id="runBtn" disabled data-t="run">حلّل السوق ←</button>
         </div>
       </div>
@@ -374,7 +375,8 @@ $$("#langSeg .mode").forEach(function(m){m.addEventListener("click",function(){L
 /* ── الشبكة ── */
 function hdrs(json){var h=json?{"Content-Type":"application/json"}:{};if(S.adminKey)h["X-API-Key"]=S.adminKey;return h}
 function toast(m){var el=document.createElement("div");el.className="toast";el.textContent=m;document.body.appendChild(el);setTimeout(function(){el.remove()},3200)}
-function post(path,body){return fetch(base()+path,{method:"POST",headers:hdrs(true),body:JSON.stringify(body)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+((d&&d.detail)||t).toString().slice(0,200));return d})})}
+function detailText(d,raw){var x=d&&d.detail;if(x==null)return raw;if(typeof x==="string")return x;return x.reason||x.error||JSON.stringify(x)}
+function post(path,body){return fetch(base()+path,{method:"POST",headers:hdrs(true),body:JSON.stringify(body)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));return d})})}
 
 /* ── بحث المنتج ── */
 var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim();clearTimeout(pT);if(!q){$("#pDrop").classList.remove("open");return}
@@ -405,6 +407,7 @@ $$(".preset").forEach(function(p){p.addEventListener("click",function(){$$(".pre
 function years(){var to=CURY-1,from=to-S.span+1;return[from,to]}
 function sync(){var y=years();$("#yearLabel").textContent=y[0]+" – "+y[1];$("#yearSpanLbl").textContent=S.span+" "+(S.span>2?t("yearsWord"):t("yearWord"));
   $("#runBtn").disabled=!S.product||S.busy;
+  $("#researchBtn").disabled=!S.product||!S.market||S.busy;
   $("#runSum").innerHTML=S.product?(t("readyFor")+" <b>"+esc(S.product)+"</b> "+t("inM")+" <b>"+esc(S.market?S.market.name:t("allM"))+"</b> "+t("over")+" <b>"+y[0]+"–"+y[1]+"</b>"):t("pickFirst")}
 applyLang();sync();
 
@@ -420,6 +423,20 @@ function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#r
     pushHist();renderBoard();if(then)then(res);else nav("board")})
   .catch(function(e){S.busy=false;$("#runBtn").textContent=t("run");sync();toast("فشل الطلب: "+e.message)})}
 $("#runBtn").addEventListener("click",function(){runAnalysis()});
+
+/* بحث عميق — ١٢ بعثة كلود + محلل شامل + كاتب/مراجع (POST /research، لا
+   /analyze). يتطلب سوقاً واحداً محدداً (S.market) — البحث العميق يحلّل سوقاً
+   بعينه بعمق، لا يرتّب أسواقاً مرشّحة. 409 من البوابة المسبقة (كلود غير
+   متاح) يُعرض كرسالة واضحة — لا إعادة محاولة تلقائية بـallow_degraded. */
+function runDeepResearch(){if(!S.product||!S.market||S.busy)return;S.busy=true;sync();
+  var lbl=$("#researchBtn").textContent;$("#researchBtn").textContent="…جارٍ البحث";
+  var b={product:S.product,market:S.market.iso3,hs_code:S.hs||null,persist:true,agent_prefs:S.prefs};
+  var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value);
+  if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null};
+  post("/research",b).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#researchBtn").textContent=lbl;sync();
+    pushHist();renderBoard();nav("board")})
+  .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("فشل البحث العميق: "+e.message)})}
+$("#researchBtn").addEventListener("click",function(){runDeepResearch()});
 function pushHist(){var label=S.product+" · "+((S.view&&S.view.header&&S.view.header.target_market)||"—");
   S.hist=[{label:label}].concat(S.hist.filter(function(h){return h.label!==label})).slice(0,5);
   localStorage.setItem("silk_hist",JSON.stringify(S.hist));drawHist()}
@@ -437,6 +454,9 @@ function renderDeepResearch(v){
   var vtxt=ai.verdict||verdict.verdict||"غير محسوم";
   var tone=/NO-GO/.test(vtxt)?"no":(/WATCH|CONDITIONAL/.test(vtxt)?"":"go");
   var html='';
+  if(dr.degraded||v.degraded){html+='<div style="background:#c00;color:#fff;font-weight:bold;padding:10px 14px;border-radius:6px;margin-bottom:14px">'
+    +'⚠ DEGRADED — نظام الذكاء الاصطناعي غير متاح: '+esc(dr.degraded_reason||v.degraded_reason||"طبقة كلود غير متاحة")
+    +'<div style="font-weight:normal;font-size:12.5px;margin-top:4px">هذا التقرير مبنيّ على مسار بلا حكم كلود — بعثات/محلل/تقرير قد تكون فارغة. غير مُنصَح بالاعتماد عليه للتسليم النهائي.</div></div>'}
   html+='<div class="verdict"><div><span class="vtag '+tone+'"><span class="d"></span>'+esc(vtxt)+'</span>'
     +'<h2>'+esc((v.brief||[])[0]||"")+'</h2><p>'+esc(ai.reasoning||(v.brief||[])[1]||"")+'</p></div>'
     +'<div class="conf"><div class="lvl">بحث عميق — ١٢ بعثة</div><div class="cap">سوق '+esc((dr.market||{}).name_ar||(dr.market||{}).name_en||"")+'</div></div></div>';
