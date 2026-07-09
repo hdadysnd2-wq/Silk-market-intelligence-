@@ -393,8 +393,19 @@ def _parse_output(text: str | None, registry: dict[str, DataPoint]) -> dict:
 
 def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
     """الحلقة المحكومة بالميزانية — tool_use/tool_result rounds until a final
-    JSON answer or budget exhaustion (then one forced tools-off round)."""
+    JSON answer or budget exhaustion (then one forced tools-off round).
+
+    كل جولة (نداء كلود + كل نداء أداة) تُسجَّل عبر silk_trace.record_event
+    إن كان التتبّع مفعَّلاً (silk_trace.trace_context) — no-op بلا تكلفة
+    خارج تشغيلة تنقيح صريحة (§docs/TUNING.md، الموجة ٦).
+    """
+    import time as _time
+
     import silk_context
+    import silk_trace
+
+    mission_key = mission.get("key") or mission.get("name") or "?"
+    t_mission_start = _time.monotonic()
 
     allowed = mission.get("allowed_tools") or []
     tool_specs = [TOOLS[k]["spec"] for k in allowed if k in TOOLS]
@@ -463,13 +474,24 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
                 global_cap_hit = True
         offer_tools = (tool_specs if tool_calls_used[0] < tool_budget
                       and not global_cap_hit else None)
+        t_round = _time.monotonic()
         resp = _call_tools(system, messages, tools=offer_tools,
                            max_tokens=max_tokens, model=_MODEL)
         silk_context.count_data("llm_calls")
+        elapsed_ms = round((_time.monotonic() - t_round) * 1000)
         if resp is None:
+            silk_trace.record_event(
+                kind="llm_call", mission=mission_key, round=_round,
+                tools_offered=bool(offer_tools), elapsed_ms=elapsed_ms,
+                result="no_response (no key / call failed)")
             return {"findings": [], "gaps": ["تعذّر نداء كلود (بلا مفتاح/فشل)"],
                     "summary": "", "dropped": [], "registry": registry}
         content = resp.get("content") or []
+        silk_trace.record_event(
+            kind="llm_call", mission=mission_key, round=_round,
+            tools_offered=bool(offer_tools), elapsed_ms=elapsed_ms,
+            stop_reason=resp.get("stop_reason"),
+            system_prompt=system, last_user_message=messages[-1].get("content"))
         messages.append({"role": "assistant", "content": content})
         tool_uses = [b for b in content if b.get("type") == "tool_use"]
         if not tool_uses or resp.get("stop_reason") != "tool_use":
@@ -480,10 +502,18 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
         tool_results = []
         for block in tool_uses:
             name = block.get("name")
+            t_tool = _time.monotonic()
             dps = _execute_tool(name, block.get("input") or {}, ctx)
             silk_context.count_data("tool_calls")
             tool_calls_used[0] += 1
             ids = [_register(dp) for dp in dps]
+            silk_trace.record_event(
+                kind="tool_call", mission=mission_key, round=_round,
+                tool=name, input=block.get("input") or {},
+                output=[{"id": did, "value": dp.value, "source": dp.source,
+                        "confidence": dp.confidence} for did, dp in
+                       zip(ids, dps)],
+                elapsed_ms=round((_time.monotonic() - t_tool) * 1000))
             payload = {"data": [
                 {"id": did, "value": dp.value, "source": dp.source,
                  "confidence": dp.confidence, "note": _isolate(str(dp.note))}
@@ -499,7 +529,14 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
             "السقف الكلي لنداءات كلود/الأدوات عبر هذا التحليل بأكمله "
             "(SILK_RESEARCH_MAX_LLM_CALLS/_MAX_TOOL_CALLS) بلغ حدّه — "
             "إنهاء رشيق مبكر لهذا الوكيل"]
+    silk_trace.record_event(
+        kind="finish", mission=mission_key,
+        elapsed_ms=round((_time.monotonic() - t_mission_start) * 1000),
+        tool_calls_used=tool_calls_used[0],
+        findings_kept=len(parsed["findings"]), dropped=parsed["dropped"],
+        gaps=parsed["gaps"], summary=parsed["summary"])
     parsed["registry"] = registry
+    parsed["tool_calls_used"] = tool_calls_used[0]
     return parsed
 
 
@@ -551,6 +588,9 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
         summary = f"{summary} | فجوات: {'؛ '.join(result['gaps'])}"[:500]
     if result.get("dropped"):
         summary = f"{summary} | أُسقطت {len(result['dropped'])} بند(ود) بلا استشهاد"[:600]
+    # نداءات الأداة تُلحَق دوماً — لوحة التتبّع (الموجة ٦) تستخرجها من هنا
+    # بدل تمديد عقد AgentReport (البقية لا يحملن هذا الحقل، لا داعٍ لسمة جديدة).
+    summary = f"{summary} | نداءات أدوات: {result.get('tool_calls_used', 0)}"[:700]
     return AgentReport(f"LLMAgent:{eff_mission.get('key', label)}", findings,
                        failed, summary)
 

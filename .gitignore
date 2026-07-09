@@ -9,3 +9,4 @@ venv/
 *.db
 .cache/
 data/cache/
+data/traces/

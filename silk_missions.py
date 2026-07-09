@@ -14,8 +14,10 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout
 
 import silk_agents
@@ -238,6 +240,52 @@ def run_all_missions(market: MarketRef, product: str = "",
         "market": market, "product": product, "hs_code": hs_code,
         "budget": _MISSION_BUDGET, "extra_findings": prior_findings})
     return reports
+
+
+def deep_research(market: MarketRef, product: str = "",
+                  hs_code: str | None = None, dry_run: bool = False,
+                  only_agent: str | None = None,
+                  trace_id: str | None = None,
+                  trace_dir: str | None = None) -> dict:
+    """نقطة دخول التنقيح والتشغيل الموحّدة — أداة التنقيح الأساسية (الموجة ٦،
+    §docs/TUNING.md): `dry_run=True, only_agent="pricing_scout"` يشغّل
+    بعثة **واحدة** فقط ضد سوق حقيقية ويطبع أثرها الكامل (البرومبت، كل
+    نداء أداة، البنود المُسقَطة) للطرفية — بلا حرق تشغيلة الاثنتي عشرة
+    كاملة. `dry_run=False` (الافتراضي) يشغّل `run_all_missions` كالمعتاد،
+    بتتبّع مفعَّل دوماً (data/traces/{trace_id}.jsonl) كي يبقى كل تشغيل
+    إنتاجي قابلاً للتدقيق.
+
+    يعيد {"mode": "dry_run"|"full", "trace_id":..., "trace_path":...,
+    "reports": {...} أو {"mission": key, "report": AgentReport} للتنقيح}.
+    """
+    import silk_trace
+
+    tid = trace_id or (
+        f"dryrun-{only_agent}-{market.iso3}" if dry_run and only_agent
+        else f"run-{market.iso3}-{int(time.time())}")
+    trace_kwargs = {"dir_path": trace_dir} if trace_dir else {}
+
+    if dry_run and only_agent:
+        if only_agent not in MISSIONS:
+            raise ValueError(f"unknown mission {only_agent!r} — "
+                             f"available: {sorted(MISSIONS)}")
+        with silk_trace.trace_context(tid, **trace_kwargs) as path:
+            agent = LLMMissionAgent(MISSIONS[only_agent])
+            report = agent.run({"market": market, "product": product,
+                               "hs_code": hs_code, "budget": _MISSION_BUDGET})
+        events = silk_trace.read_trace(tid, **trace_kwargs)
+        log.info("dry-run %s -> %s (%d trace event(s), %s)",
+                only_agent, "FAILED" if report.failed else "ok",
+                len(events), path)
+        for ev in events:
+            print(json.dumps(ev, ensure_ascii=False, indent=2))
+        return {"mode": "dry_run", "mission": only_agent, "report": report,
+               "trace_id": tid, "trace_path": path, "events": events}
+
+    with silk_trace.trace_context(tid, **trace_kwargs) as path:
+        reports = run_all_missions(market, product=product, hs_code=hs_code)
+    return {"mode": "full", "reports": reports, "trace_id": tid,
+           "trace_path": path}
 
 
 if __name__ == "__main__":
