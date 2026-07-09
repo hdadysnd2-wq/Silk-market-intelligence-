@@ -60,15 +60,35 @@ def applied_tariff(
         r = requests.get(url, params=params, timeout=_TIMEOUT)
         r.raise_for_status()
         rate = _parse_rate(r)
+    except requests.exceptions.HTTPError as e:
+        # WITS يعيد 400 (لا 404/200-فارغ) حين لا توجد بيانات تعريفة مُبلَّغة
+        # لهذا الثلاثي (مُبلِّغ/شريك/منتج/سنة) — شائع لاقتصادات لا تُبلِّغ
+        # جداول تعريفتها بانتظام لـWITS (اكتُشف حياً: HS210390 SAU->ETH).
+        # هذا فارقٌ معنوي عن عطل شبكة: فجوة بيانات حقيقية لا خللاً تقنياً —
+        # نص عربي هادئ بلا رابط/نص استثناء خام يتسرّب لتقرير مُنتَج.
+        status = getattr(e.response, "status_code", None)
+        if status is not None and 400 <= status < 500:
+            note = (f"لا بيانات تعريفة مُبلَّغة إلى WITS لهذا الزوج (HS{hs6}، "
+                    f"{partner_iso3}←{market_iso3}، {year}) — الزوج غير "
+                    "مُغطّى في مصدر WITS لهذه السنة، ليس عطلاً تقنياً "
+                    f"(HTTP {status}).")
+        else:
+            note = (f"WITS غير متاح الآن (HTTP {status or '؟'}) لـHS{hs6} "
+                    f"{partner_iso3}←{market_iso3} {year} — أعد المحاولة لاحقاً.")
+        log.warning("WITS HTTPError %s for HS%s %s->%s %s: %s",
+                   status, hs6, partner_iso3, market_iso3, year, e)
+        return DataPoint(None, "World Bank WITS", 0.0, note, _today())
     except Exception as e:  # noqa: BLE001 — WITS is volatile; never raise
-        note = (f"WITS unavailable: {type(e).__name__} for HS{hs6} "
-                f"{partner_iso3}->{market_iso3} {year}: {e}")
-        log.warning(note)
+        note = (f"WITS غير متاح الآن ({type(e).__name__}) لـHS{hs6} "
+                f"{partner_iso3}←{market_iso3} {year} — أعد المحاولة لاحقاً.")
+        log.warning("WITS %s for HS%s %s->%s %s: %s",
+                   type(e).__name__, hs6, partner_iso3, market_iso3, year, e)
         return DataPoint(None, "World Bank WITS", 0.0, note, _today())
     if rate is None:
-        note = (f"WITS unavailable: no applied rate parsed for HS{hs6} "
-                f"{partner_iso3}->{market_iso3} {year}")
-        log.warning(note)
+        note = (f"لا تعريفة مُطبَّقة قابلة للتفسير من ردّ WITS لـHS{hs6} "
+                f"{partner_iso3}←{market_iso3} {year} — فجوة معلنة.")
+        log.warning("WITS: no applied rate parsed for HS%s %s->%s %s",
+                   hs6, partner_iso3, market_iso3, year)
         return DataPoint(None, "World Bank WITS", 0.0, note, _today())
     return DataPoint(
         round(rate, 2), "World Bank WITS", 0.9,

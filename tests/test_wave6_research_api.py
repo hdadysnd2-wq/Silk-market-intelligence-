@@ -27,20 +27,37 @@ def test_ambiguous_market_returns_422_with_suggestions_no_guessing():
     assert "Nigeria" in body["suggestions"]
 
 
-def test_no_key_degrades_to_declared_gaps_never_500():
-    # TestClient يحتاج مقابس حقيقية داخلياً (نقل anyio) — block_network()
-    # يقطع socket.socket عالمياً فيكسر النقل نفسه؛ المطابق هنا (نفس نمط
-    # اختبارات FastAPI الأخرى في الحزمة) هو قطع requests.get تحديداً.
+def test_no_key_returns_409_never_a_silent_skeleton():
+    # بلاغ حي (أول تشغيلة إنتاجية): بلا كلود كان /research يسلّم 200 بهيكل
+    # فارغ (١٢ بعثة فاشلة، "يتطلب مفتاح كلود") وكأنه المنتج النهائي — الآن
+    # يُرفض صراحة بـ409 قبل تشغيل أي بعثة، لا صامتاً بعد التشغيل.
     with patch("requests.get", side_effect=OSError("network disabled")):
         r = _client().post("/research", json={
             "product": "تمور", "market": "Nigeria", "hs_code": "080410",
             "persist": False})
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["error"] == "research_not_ready"
+    assert "ANTHROPIC_API_KEY" in detail["reason"]
+
+
+def test_allow_degraded_escape_hatch_runs_and_stamps_degraded():
+    # فتحة الهروب الصريحة: allow_degraded=true يشغّل التشغيلة رغم غياب
+    # كلود، لكن يُوسَم الناتج degraded=true بسبب واضح — لا هيكل صامت.
+    with patch("requests.get", side_effect=OSError("network disabled")):
+        r = _client().post("/research", json={
+            "product": "تمور", "market": "Nigeria", "hs_code": "080410",
+            "persist": False, "allow_degraded": True})
     assert r.status_code == 200
     data = r.json()
     dr = data["deep_research"]
     assert len(dr["missions"]) == 12
     assert dr["verdict"]["verdict"]  # المرحلة ١ الحتمية تعمل دوماً
     assert dr["report"]["report"] is None  # بلا مفتاح => لا تقرير مختلَق
+    assert data["degraded"] is True
+    assert "ANTHROPIC_API_KEY" in data["degraded_reason"]
+    assert data["view"]["degraded"] is True
+    assert data["view"]["deep_research"]["degraded"] is True
 
 
 def test_full_mocked_run_reaches_stage2_and_writes_report():
@@ -92,7 +109,8 @@ def test_request_model_has_no_paid_fields():
 def test_hs_resolved_automatically_when_omitted():
     with patch("requests.get", side_effect=OSError("network disabled")):
         r = _client().post("/research", json={
-            "product": "تمور", "market": "Nigeria", "persist": False})
+            "product": "تمور", "market": "Nigeria", "persist": False,
+            "allow_degraded": True})
     assert r.status_code == 200
     data = r.json()
     # التمور رمزها الحقيقي 080410 في بذرة سِلك — يُحلّ تلقائياً بلا hs_code صريح.

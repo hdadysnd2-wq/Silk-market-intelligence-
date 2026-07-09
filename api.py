@@ -294,6 +294,13 @@ def create_app():
                 else "off — GOOGLE_MAPS_API_KEY غائب"),
             "claude": _claude,
         }
+        # جهوزية البحث العميق (/research) — بلاغ حي: كلود شرط تشغيل هناك لا
+        # تحسين اختياري؛ حقل صريح هنا كي يتحقق المشغّل قبل أي طلب حي، لا
+        # بعد تسليم هيكل فارغ (نفس فحص _research_readiness دون حجز ميزانية).
+        _rr_ready, _rr_reason = _research_readiness()
+        health["research_ready"] = _rr_ready
+        if not _rr_ready:
+            health["research_ready_reason"] = _rr_reason
         # القرص الدائم: المسارات المحلولة فعلاً لكل مخزن — للتحقق بعد النشر أن
         # كل شيء يكتب للقرص (persistent=true عندما يقع المسار تحت SILK_DATA_DIR
         # أو وُجّه بمتغير صريح). Resolved storage paths for volume verification.
@@ -493,6 +500,36 @@ def create_app():
                            "التحليل المجاني اكتمل بدونها.")
         return True, ""
 
+    def _research_readiness() -> tuple[bool, str]:
+        """جهوزية البحث العميق — (ready, reason). فحص قراءة بلا حجز (M-2 نمط
+        would_exceed_cap، لا try_reserve_paid_calls) — الحجز الذرّي الفعلي
+        يبقى في _free_ai_extras_allowed أثناء التنفيذ؛ هذا فحص مسبق رخيص.
+
+        بلاغ حي (أول تشغيلة إنتاجية): /research بلا كلود ينتج هيكلاً فارغاً
+        لا تقريراً — الاثنتا عشرة بعثة + المحلل + التوليف مرحلة ٢ + الكاتب/
+        المراجع كلها نداءات كلود، خلافاً لـ/analyze حيث كلود تحسين اختياري.
+        الفرق: هنا كلود **شرط تشغيل**، فيُرفض غيابه صراحة (409) قبل تشغيل
+        أي بعثة — لا يُسلَّم هيكل فارغ كأنه المنتج. `allow_degraded=true`
+        فتحة هروب صريحة تطلبها الجهة المستهلكة، لا تدهوراً افتراضياً.
+        """
+        import silk_ai_judge
+        if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+            return False, ("ANTHROPIC_API_KEY غير مضبوط — البحث العميق "
+                           "يتطلب كلود لكل الاثنتي عشرة بعثة والمحلل "
+                           "والكاتب؛ بلا مفتاح لا تقرير حقيقي ممكن.")
+        unprotected = _unprotected_paid_keys()
+        if unprotected:
+            return False, ("ANTHROPIC_API_KEY مضبوط بلا SILK_API_KEY — "
+                           "طبقة كلود محجوبة (حارس 503) حتى تُضبط "
+                           "SILK_API_KEY في بيئة النشر.")
+        if not silk_ai_judge.available():
+            return False, ("طبقة كلود محجوبة سياقياً (block_ai_extras) في "
+                           "هذا الطلب — راجع سياق التشغيل الحالي.")
+        if silk_usage.would_exceed_cap(1):
+            return False, ("سقف الاستهلاك اليومي (SILK_PAID_DAILY_CAP) "
+                           "مستنفد — أعد المحاولة غداً أو ارفع السقف.")
+        return True, ""
+
     @app.post("/analyze")
     def analyze(req: AnalyzeRequest, request: Request):
         """حلّل منتجًا عبر الأسواق (المسار العادي، مجاني حصراً) — free-only path.
@@ -686,6 +723,10 @@ def create_app():
         product_card: ProductCard | None = None
         persist: bool = True
         agent_prefs: dict | None = None
+        # بلاغ حي — بوابة ما قبل التشغيل (409) ترفض تشغيلة بلا كلود صراحة؛
+        # هذا الحقل فتحة هروب صريحة تطلبها الجهة المستهلكة (لا تدهور
+        # افتراضي): تسليم تقرير موسوم بوضوح "متدهور" بدل رفضه كلياً.
+        allow_degraded: bool = False
 
     @app.post("/research")
     def research(req: ResearchRequest, request: Request):
@@ -699,6 +740,14 @@ def create_app():
         محكوم بسقف منفصل (`SILK_RESEARCH_MAX_LLM_CALLS`/`_MAX_TOOL_CALLS`،
         افتراضياً ٤٠/١٠٠) يُطبَّق حياً داخل `silk_llm_runtime._run_loop` —
         إنهاء رشيق لا كسر عند تجاوزه.
+
+        بوابة ما قبل التشغيل (بلاغ حي): كلود هنا **شرط تشغيل** لا تحسين
+        اختياري — بلا مفتاح فعّال كل الاثنتي عشرة بعثة تفشل بصفر نتائج
+        والتقرير هيكل فارغ. `_research_readiness()` يرفض هذا صراحة بـ409
+        قبل تشغيل أي بعثة، إلا أن يمرّر الطالب `allow_degraded=true` —
+        عندها تُشغَّل التشغيلة وتُوسَم النتيجة `degraded=true` مع سبب واضح
+        (`degraded_reason`)، فتحمل كل مشتقات التقرير (docx/مختصر/لوحة)
+        لافتة تحذير حمراء بدل تسليم هيكل فارغ بصمت كأنه المنتج.
         """
         _require_key(request)
         _rate_limit(request)
@@ -708,6 +757,17 @@ def create_app():
             raise HTTPException(status_code=422, detail={
                 "error": f"unknown or ambiguous market {req.market!r}",
                 "suggestions": suggestions})
+
+        # بوابة ما قبل التشغيل بعد التحقق من صحة الإدخال (422 على خطأ
+        # الطالب يسبق 409 على جهوزية الخادم — خطأ العميل يستحق أن يُشرَح
+        # حتى لو كان الخادم متدهوراً الآن) وقبل تشغيل أي بعثة أو حجز ميزانية.
+        ready, ready_reason = _research_readiness()
+        if not ready and not req.allow_degraded:
+            raise HTTPException(status_code=409, detail={
+                "error": "research_not_ready", "reason": ready_reason,
+                "hint": "اضبط ANTHROPIC_API_KEY (وSILK_API_KEY إن لزم) ثم "
+                        "أعد المحاولة، أو مرّر allow_degraded=true لتسليم "
+                        "تقرير موسوم صراحة كمتدهور (غير مُنصَح به تسليمياً)."})
 
         hs_code = req.hs_code
         hs_note = None
@@ -777,6 +837,14 @@ def create_app():
             result["hs_resolution_note"] = hs_note
         if not ai_ok:
             result["ai_extras_note"] = ai_note
+        # التدهور الفعلي = عدم الجهوزية (ready=False، بلاغ حي: _free_ai_
+        # extras_allowed تعيد (True, "") حين لا مفتاح إطلاقاً — "لا قيد على
+        # إضافات كلود" لأن /analyze لا يحتاجها أصلاً؛ ذلك المنطق يُخفي هنا
+        # حقيقة أن /research **لا يعمل بلا مفتاح** رغم ai_ok=True ظاهرياً)
+        # أو فشل الحجز الذرّي المتأخر رغم اجتياز البوابة (سباق نادر).
+        if not ready or not ai_ok:
+            result["degraded"] = True
+            result["degraded_reason"] = (ai_note if not ai_ok else "") or ready_reason
         result["view"] = _view(result)
         if req.persist:
             try:

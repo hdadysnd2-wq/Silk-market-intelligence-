@@ -538,6 +538,20 @@ def _mission_trace_summary(failed: bool, summary: str) -> dict:
            "gaps": gaps_n}
 
 
+def _mission_gap_lines(name: str, summary: str) -> list[str]:
+    """فجوات بعثة معلنة داخل ملخّصها — كل بعثة، لا الفاشلة (صفر نتائج) فقط.
+
+    بعثة قد "تنجح" (نتائج مبنية على استشهاد ≥١) وتُصرّح بفجوات جزئية داخل
+    نفس الملخّص («فجوات: لا بيانات أسعار؛ لا بيانات مخاطر») — كانت هذه
+    الفجوات غير مرئية لقسم «حدود التقرير» لأن التجميع القديم فحص `failed`
+    فقط. إصلاح مراجعة حية: أي فجوة مُعلَنة في أي مكان يجب أن تظهر هنا.
+    """
+    m = _GAPS_RE.search(summary or "")
+    if not m:
+        return []
+    return [f"{name}: {g.strip()}" for g in m.group(1).split("؛") if g.strip()]
+
+
 def _deep_research_view(result: dict) -> dict | None:
     """قسم البحث العميق (الموجة ٤، V5) — إضافي بحت، لا يمسّ أي مفتاح قائم.
 
@@ -566,13 +580,27 @@ def _deep_research_view(result: dict) -> dict | None:
     verdict = dr.get("verdict") or {}
     limits = ([f"فرصة {k} بلا نتائج مبنية على استشهاد: {v['summary']}"
               for k, v in missions.items() if v["failed"]]
+             # فجوات جزئية داخل بعثات "ناجحة" (نتائج ≥١ لكن ببنود ناقصة
+             # معلنة) — كانت هذه تُسقَط صامتة من حدود التقرير قبل هذا الإصلاح.
+             + [g for k, v in missions.items()
+               for g in _mission_gap_lines(v["name"] or k, v["summary"])]
              + [f"تقاطع المحلل بلا أدلة كافية: {c}"
                for c in (analyst.get("missing_categories") or [])]
              + [f"ملاحظة مراجع لم تُعالَج: {n}"
                for n in (report_out.get("unresolved_notes") or [])])
+    if result.get("hs_resolution_note"):
+        limits.append(f"تصنيف HS: {result['hs_resolution_note']}")
+    if result.get("ai_extras_note"):
+        limits.append(f"طبقة كلود: {result['ai_extras_note']}")
+    if verdict.get("ai_note"):
+        limits.append(f"حكم كلود (مرحلة ٢): {verdict['ai_note']}")
     return {
         "market": result.get("market"),
         "trace_id": dr.get("trace_id"),
+        # لافتة التدهور (بلاغ حي، بوابة ما قبل التشغيل api.py) — تصل هنا كي
+        # يحملها كل مشتق (docx/مختصر/طرفية/لوحة) لا سطر ملاحظة وحيد مدفون.
+        "degraded": bool(result.get("degraded")),
+        "degraded_reason": result.get("degraded_reason") or "",
         "missions": missions,
         "analyst": {"summary": analyst_report["summary"],
                    "missing_categories": analyst.get("missing_categories") or [],
@@ -685,6 +713,10 @@ def build_view(result: dict) -> dict:
         # راية التشغيل البرهاني: العواذف تضبط SILK_HERMETIC — كل المشتقات تطبع
         # لافتة TEST RUN؛ وفي الإنتاج يرفض المولّد أي أثر برهاني (silk_reports).
         "test_run": bool(os.environ.get("SILK_HERMETIC")),
+        # لافتة التدهور (بلاغ حي) — top-level لتظهر في كل مشتق يقرأ
+        # view["degraded"] مباشرة، بلا حاجة لفتح deep_research أولاً.
+        "degraded": bool((dr_view or {}).get("degraded")),
+        "degraded_reason": (dr_view or {}).get("degraded_reason") or "",
         "header": header,
         "product": result.get("product"), "hs_code": result.get("hs_code"),
         "hs_confidence": result.get("hs_confidence"),

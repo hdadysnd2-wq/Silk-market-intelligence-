@@ -44,6 +44,30 @@ def _assert_production_clean(view: dict) -> None:
                 "SILK_HERMETIC=1 للتشغيلات البرهانية)")
 
 
+def _degraded_banner_text(view: dict) -> str | None:
+    """نص لافتة التدهور — None إن لم يكن التشغيل متدهوراً (بلاغ حي: بوابة
+    ما قبل التشغيل في api.py توسم `degraded=true` فقط عند allow_degraded=
+    true صريح أو سباق نادر على حجز الميزانية؛ هذه اللافتة تجعل التدهور
+    مرئياً في كل مشتق بدل هيكل يبدو كالمنتج النهائي)."""
+    if not view.get("degraded"):
+        return None
+    reason = view.get("degraded_reason") or "طبقة كلود غير متاحة"
+    return f"⚠ DEGRADED — نظام الذكاء الاصطناعي غير متاح ({reason})"
+
+
+def _stamp_degraded_banner(doc, view: dict) -> None:
+    """اطبع لافتة تدهور حمراء بارزة — تُستدعى عند الغلاف وأعلى كل قسم رئيسي
+    من قسم البحث العميق. لا أثر إن لم يكن التشغيل متدهوراً."""
+    text = _degraded_banner_text(view)
+    if not text:
+        return
+    from docx.shared import RGBColor
+    p = doc.add_paragraph()
+    run = p.add_run(text)
+    run.bold = True
+    run.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
+
+
 def _fmt(v: object) -> str:
     """تنسيق قيمة للعرض — display formatting (None = فجوة معلنة)."""
     if v is None:
@@ -536,7 +560,11 @@ def _docx_competition_research(doc, m: dict) -> None:
     for metric in ("hhi", "top_supplier_share_pct", "saudi_share_pct"):
         f = _rfind(ag, metric)
         if f and f.get("value") is not None:
-            metrics_rows.append([metric, _fmt(f.get("value")), _f_src_bare(f)])
+            # وحدة الحقيقة (%) كانت تُسقَط هنا — نفس البند في نسخة الماركداون
+            # (_f_text) يعرضها صحيحة؛ إصلاح تناسق: كلاهما يقرأ f['unit'] الآن.
+            unit = f" {f['unit']}" if f.get("unit") else ""
+            metrics_rows.append([metric, f"{_fmt(f.get('value'))}{unit}",
+                                 _f_src_bare(f)])
             if f.get("note"):
                 metrics_rows[-1].append(str(f["note"]))
         else:
@@ -719,6 +747,7 @@ def _docx_deep_research(doc, view: dict) -> None:
         return
     doc.add_heading("قسم البحث العميق — التقاطعات الخمسة والمحلل الشامل",
                     level=1)
+    _stamp_degraded_banner(doc, view)
 
     market = dr.get("market") or {}
     verdict = dr.get("verdict") or {}
@@ -731,13 +760,42 @@ def _docx_deep_research(doc, view: dict) -> None:
         doc.add_paragraph(str(ai["reasoning"]), style="Intense Quote")
 
     doc.add_heading("البعثات الاثنتا عشرة — ملخّص", level=2)
+    _stamp_degraded_banner(doc, view)
     missions = dr.get("missions") or {}
     _add_table(doc, ["البعثة", "الحالة", "الملخّص"], [
         [key, "فشلت/بلا أدلة" if m.get("failed") else "ناجحة",
          (m.get("summary") or "")[:300]]
         for key, m in missions.items()])
 
-    doc.add_heading("المحلل الشامل — التقاطعات الخمسة", level=2)
+    # Phase 3 (بلاغ حي: "تقرير احترافي لا تفريغ بيانات"): التقرير السردي
+    # (كاتب التقرير) يُعرض أولاً — فقرات تحليلية تُفسّر الأرقام لقرار الدخول،
+    # بما فيها التقاطعات الخمسة كأقسام فرعية '### ' سردية — قبل ملحق الأدلة
+    # الرقمية الخام (كان الترتيب معكوساً: نقاط خام تسبق أي سرد).
+    if dr.get("report", {}).get("text"):
+        doc.add_heading("التقرير الكامل (كاتب التقرير، مراجَع)", level=2)
+        _stamp_degraded_banner(doc, view)
+        for line in str(dr["report"]["text"]).splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("### "):
+                # عناوين فرعية للتقاطعات الخمسة داخل قسم "التحليل الشامل
+                # والفرص" — بلا هذا كانت "### السطر" تظهر نصاً خاماً بثلاث
+                # علامات # حرفية بدل عنوان فعلي.
+                doc.add_heading(line[4:].strip(), level=4)
+            elif line.startswith("## "):
+                doc.add_heading(line[3:].strip(), level=3)
+            elif set(line.replace("|", "").replace(" ", "")) <= {"-", ":"} \
+                    and "|" in line:
+                continue  # سطر فاصل جدول Markdown (|---|---|) — ضجيج بصري صرف
+            else:
+                doc.add_paragraph(line)
+
+    doc.add_heading("ملحق — الأدلة الرقمية الداعمة للتقاطعات الخمسة", level=2)
+    _stamp_degraded_banner(doc, view)
+    doc.add_paragraph("كل نقطة أدناه هي الحقيقة الخام (بمصدرها) التي بُني "
+                      "عليها السرد أعلاه — للتحقق المباشر لا كبديل عنه.",
+                      style="Intense Quote")
     analyst = dr.get("analyst") or {}
     by_cat = analyst.get("by_category") or {}
     for cat, ar_label in _CATEGORY_AR.items():
@@ -751,17 +809,6 @@ def _docx_deep_research(doc, view: dict) -> None:
             doc.add_paragraph(str(f.get("value")), style="List Bullet")
             doc.add_paragraph(f"[{f.get('source')}، ثقة {f.get('confidence')}] "
                               f"{f.get('note') or ''}", style="Intense Quote")
-
-    if dr.get("report", {}).get("text"):
-        doc.add_heading("التقرير الكامل (كاتب التقرير، مراجَع)", level=2)
-        for line in str(dr["report"]["text"]).splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith("## "):
-                doc.add_heading(line[3:].strip(), level=3)
-            else:
-                doc.add_paragraph(line)
         if dr["report"].get("unresolved_notes"):
             doc.add_heading("ملاحظات مراجعة لم تُحلّ", level=3)
             for n in dr["report"]["unresolved_notes"]:
@@ -795,6 +842,7 @@ def render_docx(view: dict, path: str) -> str:
     if view.get("test_run"):
         doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة "
                           "(SILK_HERMETIC)، ليس تقريراً إنتاجياً")
+    _stamp_degraded_banner(doc, view)  # لافتة الغلاف — بلاغ حي
     h = view.get("header") or {}
     _add_table(doc, ["البند", "القيمة"], [
         ["المنتج", h.get("product")],
@@ -904,14 +952,19 @@ def render_docx(view: dict, path: str) -> str:
 
     # ═══ ٨) تحليل التجارة — قوّة كومتريد الفريدة ═══
     doc.add_heading("٨. تحليل التجارة (استيراد/تصدير)", level=1)
-    countries = top_m.get("supplier_countries") or []
+    from silk_narrative import fmt_money, fmt_pct
+    # صفّ بلا مورّد ولا قيمة بند زائف — يُستبعد قبل الحكم على الفراغ، وإلا
+    # ظهر جدول "بيانات" فارغة الخلايا فوق سطر مصدر يتيم (P2: حدود بلا محتوى).
+    countries = [c for c in (top_m.get("supplier_countries") or [])
+                if c.get("partner") or c.get("value_usd") is not None]
     if countries:
-        _add_table(doc, ["الدولة المورّدة", "الحصة %", "القيمة (دولار)"],
-                   [[c.get("partner"), c.get("share"),
-                     _fmt(c.get("value_usd"))] for c in countries[:8]])
+        _add_table(doc, ["الدولة المورّدة", "الحصة", "القيمة"],
+                   [[c.get("partner"), fmt_pct(c.get("share")),
+                     fmt_money(c.get("value_usd"))] for c in countries[:8]])
         doc.add_paragraph("المصدر: UN Comtrade", style="Intense Quote")
     else:
-        doc.add_paragraph("—")
+        doc.add_paragraph("لا بيانات تجارة ثنائية مرصودة لهذا التحليل — "
+                          "فجوة معلنة (تتطلب with_research/UN Comtrade).")
 
     # ═══ ٩) التحليل الإقليمي — كل سوق بمكوّناته ومصادرها ═══
     doc.add_heading("٩. التحليل الإقليمي (الأسواق المرشّحة)", level=1)
@@ -1227,8 +1280,9 @@ def render_markdown(view: dict) -> str:
         sc_f = _rfind(comp, "supplier_countries")
         for c in ((sc_f or {}).get("value") or [])[:6]:
             if isinstance(c, dict):
+                from silk_narrative import fmt_money
                 L.append(f"- {c.get('partner')}: {c.get('share')}% "
-                         f"({_fmt(c.get('value_usd'))}$) ({_f_srcline(sc_f)})")
+                         f"({fmt_money(c.get('value_usd'))}) ({_f_srcline(sc_f)})")
         named_rc = (_rfind(comp, "named_companies") or {}).get("value") or []
         ents_rc, refs_rc = _split_candidates(named_rc)
         L += ["", "**شركات بالاسم (كيانات Google Places، غير موثَّقة):**"]
@@ -1251,9 +1305,10 @@ def render_markdown(view: dict) -> str:
     if st_c and st_c.get("status") == "insufficient":
         L += [insufficient_line("المنافسون", st_c), ""]
     else:
+        from silk_narrative import fmt_money
         for c in (top_m.get("supplier_countries") or [])[:6]:
             L.append(f"- {c.get('partner')}: {c.get('share')}% "
-                     f"({_fmt(c.get('value_usd'))}$) (المصدر: UN Comtrade)")
+                     f"({fmt_money(c.get('value_usd'))}) (المصدر: UN Comtrade)")
         for n in (top_m.get("named_competitors") or [])[:8]:
             # عناوين بحث (الطبقة القديمة) — مراجع لا أسماء منافسين (ثغرة ٢).
             L.append(f"- مرجع ويب للمراجعة اليدوية: {n}")
