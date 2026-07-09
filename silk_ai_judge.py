@@ -103,6 +103,43 @@ def _call(system: str, user: str, max_tokens: int = 1600,
         return None
 
 
+def _call_tools(system: str, messages: list, tools: list | None = None,
+                max_tokens: int = 1600, model: str | None = None,
+                timeout: float | None = None) -> dict | None:
+    """نداء Messages API بأدوات — multi-turn tool-use call; returns the RAW
+    parsed response dict (not just text), or None on missing key / blocked /
+    any failure. Extends the existing call plumbing (key, endpoint, model,
+    ai_extras_blocked guard) rather than a new client — `silk_llm_runtime`'s
+    agent loop drives the tool_use/tool_result rounds on top of this.
+
+    `_call` stays untouched for its existing single-turn callers; this is a
+    sibling for the multi-turn tool loop (V5 wave 1).
+    """
+    from silk_context import ai_extras_blocked
+    if ai_extras_blocked():
+        log.info("AI tool call skipped: ai-extras blocked in this context")
+        return None
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        import requests  # lazy: keep core import offline-safe
+        payload = {"model": model or _MODEL, "max_tokens": max_tokens,
+                  "system": system, "messages": messages}
+        if tools:
+            payload["tools"] = tools
+        resp = requests.post(
+            _ENDPOINT, timeout=timeout or _TIMEOUT,
+            headers={"x-api-key": key, "anthropic-version": _VERSION,
+                     "content-type": "application/json"},
+            json=payload)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
+        log.warning("AI tool call failed: %s", e)
+        return None
+
+
 def _facts(reports: list) -> str:
     """حوّل تقارير الوكلاء إلى حقائق نصّية موسومة — agents' findings as tagged facts."""
     lines: list[str] = []

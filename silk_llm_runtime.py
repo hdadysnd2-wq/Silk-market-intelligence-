@@ -1,0 +1,514 @@
+"""زمن تشغيل وكيل كلود بالأدوات لسِلك — Silk Claude tool-use agent runtime.
+
+الموجة ١ من التكليف الختامي: طبقة ٢ جديدة — وكلاء كلود يقرّرون أي أداة
+يستدعون (بدل مسار محدَّد سلفاً)، ضمن ميزانية بحث محدودة وقائمة أدوات
+مسموحة لكل مهمة (`silk_missions.MISSIONS`، الموجة ٢). كل أداة تُغلّف دالة
+حقيقية من الطبقة ١ (Comtrade/World Bank/WITS/Trends/FAOSTAT/بحث ويب/GDELT/
+مرجع ثابت) وتُعيد DataPoint موسومة — **لا اختلاق**: أداة فاشلة تعيد
+DataPoint(None) موسوماً بالسبب، لا استثناءً صامتاً ولا رقماً مخترعاً.
+
+مخرَج الوكيل الإلزامي JSON: findings[] (كل بند يستشهد بمعرّفات نقاط بيانات
+عادت من نداء أداة فعلي) + gaps[] + summary. بند يستشهد بمعرّفٍ غائبٍ من
+سجل الجلسة **يُسقَط ويُسجَّل تحذيراً** — لا رقم بلا استشهاد قابل للتتبع.
+
+الحلقة: نظام (`_PRINCIPLE` + تعليمات المهمة) + رسالة مستخدم -> جولات
+tool_use/tool_result حتى نص نهائي أو استنفاد الميزانية (افتراضي ٨ نداءات
+أداة و~٦٠٠٠ رمز مخرَج للوكيل الواحد — قسم «الميزانية والأمان» بالتكليف؛
+السقف الكلي عبر التحليل بأكمله يُطبَّق في الموجة ٢ عند تشغيل ١٢ وكيلاً
+معاً). يُستهلك عبر `_call_tools` (امتداد صرف لأدوات نداء `silk_ai_judge`،
+لا عميل جديد) و`_isolate` (نفس وسمَي العزل — كل نص خارجي من نتائج الأدوات
+معزول قبل إرساله لكلود).
+
+كل وكيل مهمة يُغلَّف `BaseAgent` (`LLMMissionAgent`) فيرث مجاناً حارسَي
+`/deepen`/التعطيل واستحالة الفشل الصامت.
+"""
+from __future__ import annotations
+
+import datetime
+import functools
+import json
+import logging
+import os
+
+from silk_agents import AgentReport, BaseAgent
+from silk_ai_judge import _MODEL, _PRINCIPLE, _call_tools, _isolate
+from silk_data_layer import DataPoint, comtrade_trade, primary_value, world_bank
+from silk_market_resolver import MarketRef
+
+log = logging.getLogger(__name__)
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+# ميزانية افتراضية لوكيل واحد — per-agent default (run_llm_agent's `budget`
+# arg overrides). السقف الكلي عبر التحليل (SILK_RESEARCH_MAX_LLM_CALLS/
+# _MAX_TOOL_CALLS) مسؤولية المنسّق في الموجة ٢، لا هذا الملف.
+_DEFAULT_BUDGET = {"tool_calls": 8, "max_output_tokens": 6000}
+
+# مؤشرات البنك الدولي المتاحة للوكلاء — أسماء وصفية مضبوطة بدل رموز WB خام
+# (يمنع كلود من تخمين رمز مؤشر غير موجود). Curated, not free-text WB codes.
+_WB_INDICATORS = {
+    "population": "SP.POP.TOTL",
+    "income_per_capita": "NY.GDP.PCAP.CD",
+    "ppp_per_capita": "NY.GDP.PCAP.PP.CD",
+    "political_stability": "PV.EST",
+    "rule_of_law": "RL.EST",
+    "logistics_lpi": "LP.LPI.OVRL.XQ",
+}
+
+_REF_TABLES = {
+    "demographics": os.path.join(_HERE, "data", "demographics_l1.csv"),
+    "ports": os.path.join(_HERE, "data", "ports_l1.csv"),
+    "agreements": os.path.join(_HERE, "data", "agreements_l1.csv"),
+}
+
+
+def _today() -> str:
+    return datetime.date.today().isoformat()
+
+
+def _recent_years(n: int = 3) -> list[int]:
+    """آخر n سنة على الأرجح مكتملة — Comtrade عادة يتأخر سنة عن الحالية."""
+    last = datetime.date.today().year - 1
+    return list(range(last - n + 1, last + 1))
+
+
+@functools.lru_cache(maxsize=8)
+def _load_csv(path: str) -> tuple[dict, ...]:
+    import csv
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            return tuple(csv.DictReader(f))
+    except Exception as e:  # noqa: BLE001 — مرجع غائب يُعامَل كفجوة، لا عطل
+        log.warning("reference CSV unavailable (%s): %s", path, e)
+        return ()
+
+
+# ── الأدوات · tool implementations (args from Claude, ctx from the run) ─────
+
+def _tool_comtrade_imports(args: dict, ctx: dict) -> list[DataPoint]:
+    hs, market = ctx.get("hs_code"), ctx["market"]
+    if not hs:
+        return [DataPoint(None, "UN Comtrade", 0.0,
+                          "لا رمز HS مرتبط بهذه المهمة", _today())]
+    years = [int(y) for y in (args.get("years") or _recent_years(3))]
+    out: list[DataPoint] = []
+    for year in years:
+        recs = comtrade_trade(hs, market.m49, year, flow="M", partner=0)
+        if recs is None:
+            out.append(DataPoint(
+                None, "UN Comtrade", 0.0,
+                f"HS{hs} استيراد {market.name_en} {year}: تعذّر الجلب",
+                _today(), status="fetch_failed"))
+            continue
+        vals = [v for v in (primary_value(r) for r in recs) if v is not None]
+        if not vals:
+            out.append(DataPoint(
+                None, "UN Comtrade", 0.0,
+                f"HS{hs} استيراد {market.name_en} {year}: لا سجل",
+                _today(), status="no_record"))
+            continue
+        out.append(DataPoint(
+            sum(vals), "UN Comtrade", 0.9,
+            f"HS{hs} إجمالي استيراد {market.name_en} من العالم {year}, USD",
+            _today()))
+    return out
+
+
+def _tool_worldbank_indicator(args: dict, ctx: dict) -> list[DataPoint]:
+    market = ctx["market"]
+    key = str(args.get("indicator") or "").strip()
+    code = _WB_INDICATORS.get(key)
+    if not code:
+        return [DataPoint(None, "World Bank", 0.0,
+                          f"مؤشر غير معروف: {key!r} — يجب أن يكون أحد "
+                          f"{sorted(_WB_INDICATORS)}", _today())]
+    year = args.get("year")
+    return [world_bank(market.iso3, code, int(year) if year else None)]
+
+
+def _tool_wits_tariff(args: dict, ctx: dict) -> list[DataPoint]:
+    from silk_tariffs_agent import applied_tariff
+    hs, market = ctx.get("hs_code"), ctx["market"]
+    if not hs:
+        return [DataPoint(None, "World Bank WITS", 0.0,
+                          "لا رمز HS مرتبط بهذه المهمة", _today())]
+    partner = str(args.get("partner_iso3") or "SAU").upper()
+    year = args.get("year")
+    return [applied_tariff(hs, market.iso3, partner_iso3=partner,
+                           year=int(year) if year else None)]
+
+
+def _tool_trends_interest(args: dict, ctx: dict) -> list[DataPoint]:
+    from silk_trends_agent import trends_interest
+    term = str(args.get("term") or ctx.get("product") or "").strip()
+    if not term:
+        return [DataPoint(None, "Google Trends", 0.0, "لا كلمة بحث", _today())]
+    market = ctx["market"]
+    timeframe = str(args.get("timeframe") or "today 12-m")
+    return [trends_interest(term, geo=(market.iso2 or None), timeframe=timeframe)]
+
+
+def _tool_faostat_supply(args: dict, ctx: dict) -> list[DataPoint]:
+    from silk_faostat_agent import per_capita_supply
+    item = str(args.get("item") or ctx.get("product") or "").strip()
+    if not item:
+        return [DataPoint(None, "FAOSTAT", 0.0, "لا اسم سلعة غذائية", _today())]
+    market = ctx["market"]
+    year = args.get("year")
+    return [per_capita_supply(market.iso3, item, year=int(year) if year else None)]
+
+
+def _tool_web_search(args: dict, ctx: dict) -> list[DataPoint]:
+    from silk_websearch_agent import web_search
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return [DataPoint(None, "Web Search", 0.0, "استعلام فارغ", _today())]
+    num = int(args.get("num") or 5)
+    return web_search(query, num=min(max(num, 1), 10))
+
+
+def _tool_gdelt_news(args: dict, ctx: dict) -> list[DataPoint]:
+    from silk_gdelt_agent import gdelt_news
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return [DataPoint(None, "GDELT", 0.0, "استعلام فارغ", _today())]
+    market = ctx["market"]
+    months = int(args.get("months") or 12)
+    return gdelt_news(query, market=market.name_en, months=months)
+
+
+def _tool_lookup_reference(args: dict, ctx: dict) -> list[DataPoint]:
+    table = str(args.get("table") or "").strip().lower()
+    market = ctx["market"]
+    if table == "requirements":
+        from silk_requirements_agent import RequirementsAgent
+        report = RequirementsAgent().run(
+            {"market_iso3": market.iso3, "hs_code": ctx.get("hs_code")})
+        return report.findings
+    path = _REF_TABLES.get(table)
+    if not path:
+        return [DataPoint(None, "Silk L1 reference", 0.0,
+                          f"جدول غير معروف: {table!r} — يجب أن يكون أحد "
+                          f"{sorted(_REF_TABLES) + ['requirements']}", _today())]
+    rows = _load_csv(path)
+    matched = [r for r in rows if (r.get("iso3") or "").strip().upper() == market.iso3]
+    if not matched:
+        return [DataPoint(None, "Silk L1 reference", 0.0,
+                          f"{table}: لا صف لِ {market.iso3} ({market.name_en}) "
+                          "— فجوة مرجعية معلنة لهذا السوق", _today())]
+    return [DataPoint(dict(r), r.get("source") or "Silk L1 reference",
+                      float(r.get("confidence") or 0.7),
+                      r.get("note") or f"مرجع {table}", _today())
+           for r in matched]
+
+
+TOOLS: dict[str, dict] = {
+    "comtrade_imports": {
+        "fn": _tool_comtrade_imports,
+        "spec": {
+            "name": "comtrade_imports",
+            "description": ("حجم استيراد السوق المستهدف لرمز HS هذه المهمة عبر "
+                            "سنوات محدَّدة (UN Comtrade، حقيقي لا تقديري). "
+                            "Import volume of the mission's HS code into the "
+                            "target market, by year."),
+            "input_schema": {"type": "object", "properties": {
+                "years": {"type": "array", "items": {"type": "integer"},
+                          "description": "calendar years (default: last 3)"}}},
+        },
+    },
+    "worldbank_indicator": {
+        "fn": _tool_worldbank_indicator,
+        "spec": {
+            "name": "worldbank_indicator",
+            "description": "مؤشر اقتصادي/حوكمي من البنك الدولي للسوق المستهدف. "
+                           "A World Bank indicator for the target market.",
+            "input_schema": {"type": "object", "properties": {
+                "indicator": {"type": "string", "enum": sorted(_WB_INDICATORS)},
+                "year": {"type": "integer"}}, "required": ["indicator"]},
+        },
+    },
+    "wits_tariff": {
+        "fn": _tool_wits_tariff,
+        "spec": {
+            "name": "wits_tariff",
+            "description": "التعريفة الجمركية المطبَّقة (WITS) لرمز HS هذه "
+                           "المهمة من شريك (افتراضياً السعودية) للسوق المستهدف.",
+            "input_schema": {"type": "object", "properties": {
+                "partner_iso3": {"type": "string",
+                                 "description": "default 'SAU'"},
+                "year": {"type": "integer"}}},
+        },
+    },
+    "trends_interest": {
+        "fn": _tool_trends_interest,
+        "spec": {
+            "name": "trends_interest",
+            "description": "متوسط اهتمام بحث جوجل تريندز (0-100) لكلمة في "
+                           "السوق المستهدف آخر ١٢ شهراً.",
+            "input_schema": {"type": "object", "properties": {
+                "term": {"type": "string"},
+                "timeframe": {"type": "string",
+                             "description": "default 'today 12-m'"}}},
+        },
+    },
+    "faostat_supply": {
+        "fn": _tool_faostat_supply,
+        "spec": {
+            "name": "faostat_supply",
+            "description": "نصيب الفرد من سلعة غذائية (كجم/سنة، FAOSTAT) في "
+                           "السوق المستهدف — للمنتجات الغذائية فقط.",
+            "input_schema": {"type": "object", "properties": {
+                "item": {"type": "string",
+                         "description": "FAOSTAT item name, e.g. 'Dates'"},
+                "year": {"type": "integer"}}},
+        },
+    },
+    "web_search": {
+        "fn": _tool_web_search,
+        "spec": {
+            "name": "web_search",
+            "description": "بحث ويب عام (نتائج عضوية) — استخدمه بلغة السوق "
+                           "المستهدف حين يكون ذلك مناسباً.",
+            "input_schema": {"type": "object", "properties": {
+                "query": {"type": "string"},
+                "num": {"type": "integer", "description": "1-10, default 5"}},
+                "required": ["query"]},
+        },
+    },
+    "gdelt_news": {
+        "fn": _tool_gdelt_news,
+        "spec": {
+            "name": "gdelt_news",
+            "description": "عناوين أخبار حقيقية (GDELT) متعلقة بالاستعلام "
+                           "والسوق المستهدف خلال الأشهر الأخيرة.",
+            "input_schema": {"type": "object", "properties": {
+                "query": {"type": "string"},
+                "months": {"type": "integer", "description": "1-24, default 12"}},
+                "required": ["query"]},
+        },
+    },
+    "lookup_reference": {
+        "fn": _tool_lookup_reference,
+        "spec": {
+            "name": "lookup_reference",
+            "description": "اقرأ مرجعاً ثابتاً للسوق المستهدف من جداول سِلك "
+                           "(demographics/ports/agreements/requirements) — لا "
+                           "شبكة، بيانات مسبقة التوثيق.",
+            "input_schema": {"type": "object", "properties": {
+                "table": {"type": "string",
+                         "enum": sorted(list(_REF_TABLES) + ["requirements"])}},
+                "required": ["table"]},
+        },
+    },
+}
+
+
+def _execute_tool(name: str, args: dict, ctx: dict) -> list[DataPoint]:
+    entry = TOOLS.get(name)
+    if not entry:
+        return [DataPoint(None, "tool", 0.0, f"أداة غير معروفة: {name!r}",
+                          _today())]
+    try:
+        return entry["fn"](args or {}, ctx) or []
+    except Exception as e:  # noqa: BLE001 — أداة فاشلة = فجوة موسومة لا عطل
+        note = f"{name} tool error: {type(e).__name__}: {e}"
+        log.warning(note)
+        return [DataPoint(None, name, 0.0, note, _today())]
+
+
+def _parse_output(text: str | None, registry: dict[str, DataPoint]) -> dict:
+    """فسِّر الرد النهائي — validate findings against the cited-datapoint
+    registry; an uncited/mis-cited claim is dropped + logged (never kept)."""
+    if not text or not text.strip():
+        return {"findings": [], "gaps": ["لا رد نهائي من كلود"], "summary": "",
+                "dropped": []}
+    try:
+        start, end = text.find("{"), text.rfind("}")
+        obj = json.loads(text[start:end + 1]) if start >= 0 else {}
+    except Exception:  # noqa: BLE001 — رد غير-JSON = بلا نتائج، لا اختلاق
+        return {"findings": [], "gaps": ["رد كلود غير قابل للتفسير كـ JSON"],
+                "summary": text.strip()[:300], "dropped": []}
+
+    kept: list[dict] = []
+    dropped: list[dict] = []
+    for it in obj.get("findings") or []:
+        if not isinstance(it, dict):
+            continue
+        claim = str(it.get("claim") or "").strip()
+        raw_ids = [i for i in (it.get("datapoint_ids") or []) if isinstance(i, str)]
+        valid_ids = [i for i in raw_ids if i in registry]
+        if not claim or not valid_ids:
+            log.warning("LLM agent finding dropped (uncited datapoint): %r "
+                       "(cited=%s)", claim, raw_ids)
+            dropped.append({"claim": claim, "cited": raw_ids,
+                            "reason": "no valid cited datapoint_id"})
+            continue
+        try:
+            conf = float(it.get("confidence"))
+        except (TypeError, ValueError):
+            conf = min(registry[i].confidence for i in valid_ids)
+        kept.append({"claim": claim, "datapoint_ids": valid_ids,
+                    "confidence": round(max(0.0, min(1.0, conf)), 2)})
+
+    gaps = [str(g).strip() for g in (obj.get("gaps") or []) if str(g).strip()]
+    return {"findings": kept, "gaps": gaps,
+            "summary": str(obj.get("summary") or "").strip(), "dropped": dropped}
+
+
+def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
+    """الحلقة المحكومة بالميزانية — tool_use/tool_result rounds until a final
+    JSON answer or budget exhaustion (then one forced tools-off round)."""
+    import silk_context
+
+    allowed = mission.get("allowed_tools") or []
+    tool_specs = [TOOLS[k]["spec"] for k in allowed if k in TOOLS]
+    system = f"{_PRINCIPLE}\n\n{mission.get('instructions', '')}"
+    market: MarketRef = ctx["market"]
+    hs = ctx.get("hs_code") or ""
+    user_intro = (
+        f"المهمة: {_isolate(str(mission.get('name') or mission.get('key') or ''))}\n"
+        f"المنتج: {_isolate(str(ctx.get('product') or ''))}\n"
+        f"السوق: {_isolate(f'{market.name_en} ({market.iso3})')}\n"
+        + (f"رمز HS: {_isolate(str(hs))}\n" if hs else "")
+        + "استخدم الأدوات المتاحة لجمع حقائق حقيقية، ثم أعد النتيجة النهائية "
+        "بصيغة JSON فقط (لا نص خارجها): "
+        '{"findings":[{"claim":"...","datapoint_ids":["dp1"],'
+        '"confidence":0.0-1.0}],"gaps":["..."],"summary":"..."}. '
+        "كل claim يجب أن يستشهد بمعرّف نقطة بيانات (datapoint_ids) عاد فعلاً "
+        "من نداء أداة — بند بلا استشهاد صحيح يُسقَط.")
+    messages: list[dict] = [{"role": "user", "content": user_intro}]
+    registry: dict[str, DataPoint] = {}
+    next_id = [1]
+    tool_calls_used = [0]
+
+    def _register(dp: DataPoint) -> str:
+        did = f"dp{next_id[0]}"
+        next_id[0] += 1
+        registry[did] = dp
+        return did
+
+    tool_budget = int(budget.get("tool_calls", _DEFAULT_BUDGET["tool_calls"]))
+    max_tokens = int(budget.get("max_output_tokens",
+                                _DEFAULT_BUDGET["max_output_tokens"]))
+    max_rounds = tool_budget + 2  # هامش أمان: نص نهائي + جولة إجبار بلا أدوات
+    final_text: str | None = None
+
+    for _round in range(max_rounds):
+        offer_tools = tool_specs if tool_calls_used[0] < tool_budget else None
+        resp = _call_tools(system, messages, tools=offer_tools,
+                           max_tokens=max_tokens, model=_MODEL)
+        silk_context.count_data("llm_calls")
+        if resp is None:
+            return {"findings": [], "gaps": ["تعذّر نداء كلود (بلا مفتاح/فشل)"],
+                    "summary": "", "dropped": [], "registry": registry}
+        content = resp.get("content") or []
+        messages.append({"role": "assistant", "content": content})
+        tool_uses = [b for b in content if b.get("type") == "tool_use"]
+        if not tool_uses or resp.get("stop_reason") != "tool_use":
+            final_text = "".join(b.get("text", "") for b in content
+                                 if b.get("type") == "text")
+            break
+
+        tool_results = []
+        for block in tool_uses:
+            name = block.get("name")
+            dps = _execute_tool(name, block.get("input") or {}, ctx)
+            silk_context.count_data("tool_calls")
+            tool_calls_used[0] += 1
+            ids = [_register(dp) for dp in dps]
+            payload = {"data": [
+                {"id": did, "value": dp.value, "source": dp.source,
+                 "confidence": dp.confidence, "note": _isolate(str(dp.note))}
+                for did, dp in zip(ids, dps)]}
+            tool_results.append({
+                "type": "tool_result", "tool_use_id": block.get("id"),
+                "content": json.dumps(payload, ensure_ascii=False, default=str)})
+        messages.append({"role": "user", "content": tool_results})
+
+    parsed = _parse_output(final_text, registry)
+    parsed["registry"] = registry
+    return parsed
+
+
+def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
+                  hs_code: str | None = None, budget: dict | None = None,
+                  instruction: str = "") -> AgentReport:
+    """شغّل وكيل مهمة كلود — the mission-driven tool-use loop as an AgentReport.
+
+    `mission`: {"key","name","instructions","allowed_tools":[...]} — شكل
+    `silk_missions.MISSIONS[key]` (الموجة ٢)؛ يُمرَّر صراحةً هنا لأن سجل
+    المهام لم يُبنَ بعد (يبقي هذه الموجة قابلة للاختبار مستقلةً).
+    """
+    eff_budget = {**_DEFAULT_BUDGET, **(budget or {})}
+    ctx = {"market": market, "product": product, "hs_code": hs_code}
+    eff_mission = dict(mission)
+    if instruction:
+        eff_mission["instructions"] = (
+            f"{eff_mission.get('instructions', '')}\n"
+            f"توجيه المستخدم (وجّه التركيز فقط — لا تخترع بيانات): "
+            f"{_isolate(instruction)}")
+
+    result = _run_loop(eff_mission, ctx, eff_budget)
+    today = _today()
+    label = eff_mission.get("name") or eff_mission.get("key") or "LLM agent"
+    registry = result.get("registry", {})
+
+    findings: list[DataPoint] = []
+    for f in result["findings"]:
+        cited_notes = "؛ ".join(
+            str(registry[i].note) for i in f["datapoint_ids"] if i in registry)
+        findings.append(DataPoint(
+            f["claim"], f"{label} (Claude tool-use)", f["confidence"],
+            (f"مبني على: {cited_notes}")[:500], today))
+
+    failed = not findings
+    summary = result.get("summary") or ("لا نتائج مبنية على استشهاد — "
+                                        "no grounded findings" if failed else "")
+    if result.get("gaps"):
+        summary = f"{summary} | فجوات: {'؛ '.join(result['gaps'])}"[:500]
+    if result.get("dropped"):
+        summary = f"{summary} | أُسقطت {len(result['dropped'])} بند(ود) بلا استشهاد"[:600]
+    return AgentReport(f"LLMAgent:{eff_mission.get('key', label)}", findings,
+                       failed, summary)
+
+
+class LLMMissionAgent(BaseAgent):
+    """وكيل مهمة كلود عام — a Claude tool-use agent driven by a mission spec.
+
+    نسخة واحدة لكل مهمة (لا صنف لكل مهمة): `PREF_KEY`/`SOURCE` يُضبطان على
+    مستوى النسخة في __init__ — BaseAgent.run() يقرأهما كسمتَي نسخة فتُطبَّق
+    حراسة اللوحة (تعطيل/توجيه) طبيعياً بلا تعديل على BaseAgent نفسه.
+    """
+
+    PAID = False
+
+    def __init__(self, mission: dict) -> None:
+        super().__init__(f"LLMMissionAgent:{mission.get('key', '?')}")
+        self.mission = mission
+        self.SOURCE = mission.get("name", self.name)
+        self.PREF_KEY = mission.get("key", "")
+
+    def _execute(self, task: dict) -> AgentReport:
+        market = task.get("market")
+        if not isinstance(market, MarketRef):
+            return AgentReport(self.name, [], True,
+                               "لا MarketRef صالح — market must be a resolved "
+                               "MarketRef, not a raw string")
+        return run_llm_agent(
+            self.mission, market, product=task.get("product", ""),
+            hs_code=task.get("hs_code"), budget=task.get("budget"),
+            instruction=task.get("instruction", ""))
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    from silk_market_resolver import resolve_market
+    ref, _ = resolve_market("Nigeria")
+    demo_mission = {"key": "demo", "name": "عرض توضيحي",
+                    "instructions": "اجمع حقائق تجارية أساسية عن هذا المنتج.",
+                    "allowed_tools": ["comtrade_imports", "worldbank_indicator"]}
+    report = run_llm_agent(demo_mission, ref, product="تمور", hs_code="080410")
+    print(f"[{'FAILED' if report.failed else 'ok'}] {report.agent_name}: "
+          f"{report.summary}")
+    for dp in report.findings:
+        print(f"  - {dp.value} (ثقة {dp.confidence}) — {dp.note}")

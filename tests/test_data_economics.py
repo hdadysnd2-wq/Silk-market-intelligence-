@@ -20,11 +20,23 @@ def test_counter_lifecycle_and_isolation():
     c1 = silk_context.begin_data_counter()
     silk_context.count_data("store_hits")
     silk_context.count_data("cache_hits", 2)
-    assert silk_context.data_counter() == {"store_hits": 1, "cache_hits": 2,
-                                           "live_fetches": 0}
+    assert silk_context.data_counter() == {
+        "store_hits": 1, "cache_hits": 2, "live_fetches": 0,
+        "llm_calls": 0, "tool_calls": 0}
     c2 = silk_context.begin_data_counter()   # تشغيلة جديدة = عدّاد جديد
-    assert c2 == {"store_hits": 0, "cache_hits": 0, "live_fetches": 0}
+    assert c2 == {"store_hits": 0, "cache_hits": 0, "live_fetches": 0,
+                  "llm_calls": 0, "tool_calls": 0}
     assert c1["store_hits"] == 1             # الأول لم يُمسّ
+
+
+def test_llm_and_tool_call_counters():
+    # V5 wave 1: silk_llm_runtime يعدّ نداءات كلود/الأدوات في نفس العدّاد.
+    silk_context.begin_data_counter()
+    silk_context.count_data("llm_calls")
+    silk_context.count_data("tool_calls", 3)
+    c = silk_context.data_counter()
+    assert c["llm_calls"] == 1
+    assert c["tool_calls"] == 3
 
 
 def test_count_data_noop_without_counter():
