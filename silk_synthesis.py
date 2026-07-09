@@ -36,12 +36,16 @@ _CONFRONTATION = (
 
 
 def _stage2(product: str, market: str, reports: list,
-            threads: dict | None, instruction: str = "") -> dict | None:
+            threads: dict | None, instruction: str = "",
+            analyst_assessment: dict | None = None) -> dict | None:
     """المرحلة ٢ — حكم كلود المعزول — Claude's judgment over isolated inputs.
 
     None عند غياب المفتاح/فشل النداء (المرحلة ١ تكفي وحدها حينها).
     `instruction`: توجيه المستخدم من لوحة «إعدادات الوكلاء» (صف «حكم
     التوليف») — يُلحق داخل العزل ويوجّه التركيز فقط، لا يتجاوز الحقائق.
+    `analyst_assessment`: خرْج المحلل الشامل (الطبقة ٣، الموجة ٣ —
+    `silk_market_analyst.to_synthesis_input`) — خمس تقاطعات + SWOT، يُلحق
+    كسياق معزول إضافي؛ لا يستبدل حقائق الوكلاء الخام ولا خيوط التقاطع.
     """
     facts = _isolate(_facts(reports))
     # market يُعزل كسائر الحقول (مراجعة المشروع) — اتساق العزل لا يستثني حقلاً.
@@ -53,6 +57,11 @@ def _stage2(product: str, market: str, reports: list,
                   _isolate(blob), "", _CONFRONTATION]
     else:
         parts += ["", "أصدر حكمًا أوّليًّا على دخول هذا السوق."]
+    if analyst_assessment:
+        blob = json.dumps(analyst_assessment, ensure_ascii=False, default=str)
+        parts += ["", "تقييم المحلل الشامل (الطبقة ٣ — خمس تقاطعات مبنية "
+                  "على الأدلة + SWOT، زِنها في حكمك ولا تنسخها حرفياً):",
+                  _isolate(blob)]
     parts += ["", 'أعد JSON فقط بهذا الشكل:',
               '{"verdict":"GO|WATCH|NO-GO","confidence":0.0-1.0,'
               '"reasoning":"سبب موجز مبني على الحقائق والخيوط"}'
@@ -74,18 +83,22 @@ def _stage2(product: str, market: str, reports: list,
         "by": f"Claude ({_MODEL})",
         "preliminary": True,
         "grounded_in_threads": bool(threads),
+        "grounded_in_analyst": bool(analyst_assessment),
     }
 
 
 def synthesize(reports: list, *, product: str, market: str,
                threads: dict | None = None, with_ai: bool = False,
-               instruction: str = "") -> dict:
+               instruction: str = "",
+               analyst_assessment: dict | None = None) -> dict:
     """التوليف الموحّد — the single verdict entry point (both stages).
 
     يعيد بنية «jury» المتوافقة مع الواجهة القائمة (شرط ٩.٣: الحذف لا يغيّر
     شكل الاستجابة): مفاتيح المرحلة ١ كما كانت + `ai` للمرحلة ٢ إن توفرت.
     صف «حكم التوليف» في لوحة إعدادات الوكلاء: تعطيلُه يوقف المرحلة ٢ (كلود)
     فقط — المرحلة ١ الحتمية لا تُطفأ أبداً؛ وأمرُه النصي يوجّه تركيز الحكم.
+    `analyst_assessment`: مُدخَل اختياري من المحلل الشامل (الطبقة ٣، الموجة
+    ٣) — يصل المرحلة ٢ فقط إن with_ai، ولا يؤثر على المرحلة ١ الحتمية.
     """
     verdict = JuryCommittee.evaluate(reports)          # المرحلة ١ — حتمية
     verdict["synthesis_stage"] = 1
@@ -96,7 +109,8 @@ def synthesize(reports: list, *, product: str, market: str,
         with_ai = False
     if with_ai:
         try:
-            ai = _stage2(product, market, reports, threads, instruction)
+            ai = _stage2(product, market, reports, threads, instruction,
+                        analyst_assessment)
         except Exception as e:  # noqa: BLE001 — AI stage must never crash
             log.warning("synthesis stage 2 failed for %s: %s", market, e)
             ai = None

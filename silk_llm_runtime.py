@@ -383,7 +383,8 @@ def _parse_output(text: str | None, registry: dict[str, DataPoint]) -> dict:
         except (TypeError, ValueError):
             conf = min(registry[i].confidence for i in valid_ids)
         kept.append({"claim": claim, "datapoint_ids": valid_ids,
-                    "confidence": round(max(0.0, min(1.0, conf)), 2)})
+                    "confidence": round(max(0.0, min(1.0, conf)), 2),
+                    "category": str(it.get("category") or "").strip()})
 
     gaps = [str(g).strip() for g in (obj.get("gaps") or []) if str(g).strip()]
     return {"findings": kept, "gaps": gaps,
@@ -429,10 +430,14 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
         + (f"نتائج الوكلاء السابقين (حلّلها ولا تُعِد جمعها — استشهد "
            f"بمعرّفاتها dpN كأي نقطة بيانات):\n{_isolate(prior_block)}\n"
           if prior_block else "")
+        + (f"سياق إضافي غير قابل للاستشهاد المباشر (خيوط تقاطع محسوبة "
+           f"سابقاً — للاستئناس السردي فقط):\n{_isolate(str(ctx['extra_context']))}\n"
+          if ctx.get("extra_context") else "")
         + "استخدم الأدوات المتاحة لجمع حقائق حقيقية، ثم أعد النتيجة النهائية "
         "بصيغة JSON فقط (لا نص خارجها): "
         '{"findings":[{"claim":"...","datapoint_ids":["dp1"],'
-        '"confidence":0.0-1.0}],"gaps":["..."],"summary":"..."}. '
+        '"confidence":0.0-1.0,"category":"..."(اختياري)}],"gaps":["..."],'
+        '"summary":"..."}. '
         "كل claim يجب أن يستشهد بمعرّف نقطة بيانات (datapoint_ids) عاد فعلاً "
         "من نداء أداة أو من نتائج الوكلاء السابقين — بند بلا استشهاد صحيح يُسقَط.")
     messages: list[dict] = [{"role": "user", "content": user_intro}]
@@ -483,7 +488,8 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
 def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
                   hs_code: str | None = None, budget: dict | None = None,
                   instruction: str = "",
-                  extra_findings: list[DataPoint] | None = None) -> AgentReport:
+                  extra_findings: list[DataPoint] | None = None,
+                  extra_context: str = "") -> AgentReport:
     """شغّل وكيل مهمة كلود — the mission-driven tool-use loop as an AgentReport.
 
     `mission`: {"key","name","instructions","allowed_tools":[...]} — شكل
@@ -492,10 +498,13 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
 
     `extra_findings`: نتائج وكلاء سابقين (الوكيل ١٢ opportunity_gaps بلا
     أدوات خاصة به — يقرأ فقط) — تُسجَّل كنقاط بيانات قابلة للاستشهاد بها.
+    `extra_context`: سياق سردي إضافي غير قابل للاستشهاد المباشر (خيوط
+    تقاطع محسوبة سابقاً من correlation.py — الموجة ٣) — يُعزَل ويُلحَق
+    للاستئناس فقط، لا يفتح مسار استشهاد ثانياً.
     """
     eff_budget = {**_DEFAULT_BUDGET, **(budget or {})}
     ctx = {"market": market, "product": product, "hs_code": hs_code,
-          "extra_findings": extra_findings or []}
+          "extra_findings": extra_findings or [], "extra_context": extra_context}
     eff_mission = dict(mission)
     if instruction:
         eff_mission["instructions"] = (
@@ -512,9 +521,10 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
     for f in result["findings"]:
         cited_notes = "؛ ".join(
             str(registry[i].note) for i in f["datapoint_ids"] if i in registry)
+        prefix = f"[{f['category']}] " if f.get("category") else ""
         findings.append(DataPoint(
             f["claim"], f"{label} (Claude tool-use)", f["confidence"],
-            (f"مبني على: {cited_notes}")[:500], today))
+            (f"{prefix}مبني على: {cited_notes}")[:500], today))
 
     failed = not findings
     summary = result.get("summary") or ("لا نتائج مبنية على استشهاد — "
@@ -553,7 +563,8 @@ class LLMMissionAgent(BaseAgent):
             self.mission, market, product=task.get("product", ""),
             hs_code=task.get("hs_code"), budget=task.get("budget"),
             instruction=task.get("instruction", ""),
-            extra_findings=task.get("extra_findings"))
+            extra_findings=task.get("extra_findings"),
+            extra_context=task.get("extra_context", ""))
 
 
 if __name__ == "__main__":
