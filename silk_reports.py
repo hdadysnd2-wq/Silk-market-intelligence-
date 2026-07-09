@@ -921,14 +921,26 @@ def _docx_deep_research(doc, view: dict) -> None:
                 i += 1
                 continue
             if line.startswith("### "):
-                # عناوين فرعية للتقاطعات الخمسة داخل قسم "التحليل الشامل
-                # والفرص" — بلا هذا كانت "### السطر" تظهر نصاً خاماً بثلاث
-                # علامات # حرفية بدل عنوان فعلي.
+                # عناوين فرعية عامة (الموجة ١٠: "خارطة طريق الدخول" داخل
+                # "التوصيات الاستراتيجية" مثلاً) — بلا هذا كانت "### السطر"
+                # تظهر نصاً خاماً بثلاث علامات # حرفية بدل عنوان فعلي.
                 doc.add_heading(line[4:].strip(), level=4)
                 i += 1
                 continue
             if line.startswith("## "):
-                doc.add_heading(line[3:].strip(), level=3)
+                heading_text = line[3:].strip()
+                doc.add_heading(heading_text, level=3)
+                # الموجة ١٠: نتائج بوابة الجودة غير القابلة للإصلاح تُلحَق
+                # هنا برمجياً داخل قسم "منهجية البحث ونطاقه" — مهنياً، لا
+                # لافتة تحذير على الغلاف ولا صمت (silk_quality_gate.py).
+                if "منهجية" in heading_text:
+                    notes = ((dr.get("quality_gate") or {})
+                            .get("methodology_notes") or [])
+                    if notes:
+                        doc.add_heading("حدود المنهجية وجودة البيانات",
+                                        level=4)
+                        for note in notes:
+                            doc.add_paragraph(str(note), style="List Bullet")
                 i += 1
                 continue
             if _is_markdown_table_row(line):

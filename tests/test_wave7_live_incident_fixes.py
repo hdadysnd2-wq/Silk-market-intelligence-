@@ -376,10 +376,13 @@ def test_narrative_prose_precedes_the_raw_evidence_appendix(monkeypatch):
 def test_writer_prompt_requires_narrative_intersections_and_reasoned_verdict():
     # الالتزام بشكل الكتابة موجود في التعليمات المُرسَلة لكلود — لا يمكن
     # اختبار جودة نثر كلود هيرمتياً، لكن يمكن التأكد أن البرومبت يطلبها.
+    # بلاغ حي (الموجة ١٠): "التحليل الشامل والفرص" الأحادي حل محله توزيع
+    # الحساب الحسابي عبر أقسام البنية الأحد عشر الدولية (٣/٥/٦/١٠) — راجع
+    # docs/DEEP_RESEARCH_DECISIONS.md "الموجة ١٠".
     import inspect
     import silk_ai_judge
     src = inspect.getsource(silk_ai_judge.deep_report)
     assert "فقرة سردية" in src
-    assert "### <اسم التقاطع>" in src
+    assert "حساب حسابي صريح" in src
     assert "أقوى ثلاثة أسباب" in src
-    assert "ما الذي قد يُغيّر القرار" in src
+    assert "يقلبان الحكم" in src

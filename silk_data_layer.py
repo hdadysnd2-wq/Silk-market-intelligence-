@@ -6,6 +6,7 @@ on any failure returns a provenance-tagged None / [] and logs a warning.
 from __future__ import annotations
 
 import datetime
+import functools
 import logging
 import os
 from dataclasses import dataclass
@@ -161,33 +162,56 @@ M49_TO_ISO3 = {
 }
 ISO3_TO_M49 = {v: k for k, v in M49_TO_ISO3.items()}
 
-# M49 numeric (str) -> country name (EN). 0 = World aggregate.
-PARTNER_NAMES = {
+# الشركاء الخاصون/التجميعيون في كومتريد — Comtrade special/aggregate partner
+# codes, ليسوا دولاً ISO فلا يظهرون في countries.csv. قائمة محافظة مقصودة —
+# فقط الرموز عالية الثقة من مرجع Comtrade العام والمستقر (partnerAreas)؛
+# التوسّع لاحقاً عبر تشغيلة متصلة بالشبكة إن ظهرت رموز إضافية متكررة في
+# التتبّع الحي (بلاغ حي، الموجة ١٠: تشغيلة إسبانيا أظهرت رموز شركاء خامة في
+# جدول المنافسين — "899" لم يكن مصنَّفاً هناك حتى الآن).
+_COMTRADE_SPECIAL_PARTNERS = {
     "0": "World",
-    "682": "Saudi Arabia", "784": "United Arab Emirates", "634": "Qatar",
-    "414": "Kuwait", "512": "Oman", "048": "Bahrain", "400": "Jordan",
-    "422": "Lebanon", "818": "Egypt", "504": "Morocco", "788": "Tunisia",
-    "012": "Algeria", "434": "Libya", "729": "Sudan", "887": "Yemen",
-    "368": "Iraq", "364": "Iran", "792": "Turkey", "586": "Pakistan",
-    "356": "India", "050": "Bangladesh", "144": "Sri Lanka", "360": "Indonesia",
-    "458": "Malaysia", "702": "Singapore", "764": "Thailand", "704": "Viet Nam",
-    "608": "Philippines", "156": "China", "392": "Japan", "410": "South Korea",
-    "344": "Hong Kong", "158": "Taiwan", "036": "Australia", "554": "New Zealand",
-    "840": "United States", "124": "Canada", "484": "Mexico", "076": "Brazil",
-    "032": "Argentina", "152": "Chile", "170": "Colombia", "604": "Peru",
-    "826": "United Kingdom", "276": "Germany", "250": "France", "380": "Italy",
-    "724": "Spain", "528": "Netherlands", "056": "Belgium", "756": "Switzerland",
-    "040": "Austria", "752": "Sweden", "578": "Norway", "208": "Denmark",
-    "246": "Finland", "616": "Poland", "203": "Czechia", "620": "Portugal",
-    "300": "Greece", "372": "Ireland", "643": "Russia", "804": "Ukraine",
-    "710": "South Africa", "566": "Nigeria", "404": "Kenya", "231": "Ethiopia",
-    "288": "Ghana", "834": "Tanzania", "800": "Uganda",
+    "899": "Areas, nes",
 }
 
 
+def _normalize_m49(code: object) -> str:
+    """طبّع رمز M49 لثلاث خانات — "4" و"004" و"0004" جميعها نفس الرمز؛ "0"
+    (العالم) يبقى كما هو لا يُبطَّن. غير الرقمي يُعاد كما ورد (لا تحويل)."""
+    s = str(code).strip()
+    if not s.isdigit():
+        return s
+    return "0" if int(s) == 0 else s.zfill(3)
+
+
+@functools.lru_cache(maxsize=1)
+def _country_m49_index() -> dict:
+    """فهرس M49 → صف دولة من countries.csv (٢٥٠ دولة حقيقية، مlédoze/countries)
+    — المصدر الأساس لأسماء شركاء كومتريد (الموجة ١٠، بلاغ حي: قائمة ٧٠ دولة
+    مضمَّنة سابقاً كانت تعيد رموزاً خامة لأي دولة خارجها، ٍمثل معظم أسواق
+    إفريقيا/أمريكا اللاتينية/آسيا الوسطى)."""
+    try:
+        from silk_market_resolver import _DEFAULT_PATH, _load
+        return {_normalize_m49(r["m49"]): r for r in _load(_DEFAULT_PATH)
+                if (r.get("m49") or "").strip()}
+    except Exception as e:  # noqa: BLE001 — فهرس تحسيني، فشل = رجوع للخاصين فقط
+        log.warning("country m49 index unavailable: %s", e)
+        return {}
+
+
 def partner_name(code: object) -> str:
-    """اسم الشريك — map an M49 code to a name, else the bare code as string."""
-    return PARTNER_NAMES.get(str(code), str(code))
+    """اسم الشريك — countries.csv (٢٥٠ دولة حقيقية) أولاً، ثم رموز كومتريد
+    الخاصة/التجميعية، وإلا تسمية معلنة "منطقة غير مصنّفة" بدل رقم خام (بوابة
+    الجودة، الموجة ١٠: لا رقم خام حيث يُتوقَّع اسم دولة/شريك)."""
+    raw = str(code)
+    norm = _normalize_m49(raw)
+    row = _country_m49_index().get(norm)
+    if row:
+        return row.get("name_en") or row.get("name_ar") or raw
+    if norm in _COMTRADE_SPECIAL_PARTNERS:
+        return _COMTRADE_SPECIAL_PARTNERS[norm]
+    if raw.isdigit():
+        return f"Unclassified area (Comtrade code {raw})"
+    return raw
 
 
 def primary_value(rec: dict) -> float | None:
@@ -282,10 +306,38 @@ def world_bank(iso3: str, indicator: str, year: int | None = None) -> DataPoint:
     return dp
 
 
+def _wb_shape_error(payload: object) -> str | None:
+    """تحقّق من شكل ردّ البنك الدولي — الموجة ١٠ (بلاغ حي: WGI فارغ لهولندا
+    ثم إسبانيا كان يتدهور بصمت لملاحظة عامة عبر except الشامل بدل تشخيص
+    واضح). يعيد رسالة خطأ عربية إن كان الشكل مخالفاً لعقد الـAPI الموثَّق
+    (`[{page,...}, [records]]` أو `[{"message":[...]}]` عند خطأ)، وإلا None.
+    لا يستهلك الشبكة — فحص بنيوي صرف على جسم مُستلَم فعلاً."""
+    if not isinstance(payload, list) or not payload:
+        return f"شكل ردّ غير متوقع من البنك الدولي: {type(payload).__name__}"
+    envelope = payload[0]
+    if isinstance(envelope, dict) and envelope.get("message"):
+        msgs = envelope["message"]
+        detail = (msgs[0].get("value") or msgs[0].get("key") or str(msgs[0])
+                  if isinstance(msgs, list) and msgs else str(msgs))
+        return f"البنك الدولي أعاد خطأ API: {detail}"
+    if len(payload) < 2:
+        return "ردّ البنك الدولي بلا صفحة سجلات (عنصر ثانٍ غائب)"
+    records = payload[1]
+    if records is None:
+        return None  # صفحة فارغة صالحة (لا سجلات لهذا المؤشر/الدولة) — ليس خطأ شكل
+    if not isinstance(records, list):
+        return f"سجلات البنك الدولي ليست قائمة: {type(records).__name__}"
+    return None
+
+
 def _world_bank_for_year(iso3: str, indicator: str,
                          year: int | None) -> DataPoint:
     """جلب فعلي لسنة محددة أو الأحدث — helper مستدعى مباشرة من world_bank()
-    ومن مسار التراجُع فيه؛ لا يُستدعى مباشرة خارج هذا الملف."""
+    ومن مسار التراجُع فيه؛ لا يُستدعى مباشرة خارج هذا الملف.
+
+    الموجة ١٠: تحقّق صريح من شكل الردّ (`_wb_shape_error`) قبل التفسير —
+    خطأ API (رمز مؤشر/دولة غير صحيح) أو جسم مشوَّه ينتج ملاحظة تشخيصية
+    واضحة بدل السقوط في except الشامل برسالة استثناء غامضة."""
     url = f"{ENDPOINTS['world_bank']}/country/{iso3}/indicator/{indicator}"
     params = {"format": "json", "per_page": "100"}
     if year is not None:
@@ -296,9 +348,14 @@ def _world_bank_for_year(iso3: str, indicator: str,
             r = _http_get(url, params)
             r.raise_for_status()
             payload = r.json()
-        records = payload[1] if isinstance(payload, list) and len(payload) > 1 else []
+        shape_err = _wb_shape_error(payload)
+        if shape_err:
+            note = f"{indicator} ({iso3}): {shape_err}"
+            log.warning(note)
+            return DataPoint(None, "World Bank", 0.0, note, _today())
+        records = payload[1] or []
         for rec in records:  # WB returns newest-first; take first non-null
-            if rec.get("value") is not None:
+            if isinstance(rec, dict) and rec.get("value") is not None:
                 return DataPoint(
                     value=rec["value"], source="World Bank", confidence=0.95,
                     note=f"{indicator} year={rec.get('date')}", retrieved_at=_today(),

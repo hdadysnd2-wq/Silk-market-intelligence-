@@ -72,6 +72,18 @@ def _redacted(obj: object) -> object:
     return obj
 
 
+def _write_event(path: str, fields: dict) -> None:
+    event = _redacted({
+        "ts": datetime.datetime.now(datetime.timezone.utc)
+             .isoformat(timespec="milliseconds"),
+        **fields})
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event, ensure_ascii=False, default=str) + "\n")
+    except Exception as e:  # noqa: BLE001 — التتبّع تحسين لا شرط
+        log.warning("trace write failed (%s): %s", path, e)
+
+
 def record_event(**fields) -> None:
     """سجّل حدثاً — no-op بهدوء خارج trace_context (تكلفة صفر افتراضياً).
 
@@ -81,15 +93,17 @@ def record_event(**fields) -> None:
     st = _active.get()
     if st is None:
         return
-    event = _redacted({
-        "ts": datetime.datetime.now(datetime.timezone.utc)
-             .isoformat(timespec="milliseconds"),
-        **fields})
-    try:
-        with open(st["path"], "a", encoding="utf-8") as f:
-            f.write(json.dumps(event, ensure_ascii=False, default=str) + "\n")
-    except Exception as e:  # noqa: BLE001 — التتبّع تحسين لا شرط
-        log.warning("trace write failed (%s): %s", st.get("path"), e)
+    _write_event(st["path"], fields)
+
+
+def append_event(trace_id: str, dir_path: str | None = None, **fields) -> None:
+    """ألحِق حدثاً بملف تتبّع قائم **خارج** trace_context() — الموجة ١٠:
+    بوابة الجودة تعمل بعد إغلاق سياق تتبّع `deep_research()` (النتيجة
+    الكاملة/العرض غير جاهزين إلا بعد عودته)، فلا يمكنها استعمال
+    `record_event()` (no-op خارج السياق). صمت عند فشل الكتابة — نفس انضباط
+    `record_event`، تحسين تشخيصي لا شرط."""
+    path = os.path.join(dir_path or _default_dir(), f"{trace_id}.jsonl")
+    _write_event(path, fields)
 
 
 def read_trace(trace_id: str, dir_path: str | None = None) -> list[dict]:

@@ -593,7 +593,10 @@ def test_writer_prompt_requires_thesis_and_roadmap_and_takeaway():
     assert "أطروحة" in src
     assert "خارطة طريق الدخول" in src
     assert "ماذا يعني هذا لقرارك" in src
-    assert "خارطة طريق الدخول (٩٠ يوماً)" in silk_ai_judge._REPORT_SECTIONS
+    # الموجة ١٠: الخارطة أصبحت فرعاً داخل "التوصيات الاستراتيجية" (البنية
+    # الدولية بأحد عشر قسماً) لا قسماً مستقلاً — راجع test_wave10_*.
+    assert "التوصيات الاستراتيجية" in silk_ai_judge._REPORT_SECTIONS
+    assert len(silk_ai_judge._REPORT_SECTIONS) == 11
 
 
 # P0-C (تكملة): _extract_json الآمن للسياج + قاعدة المراجع الموسّعة.
@@ -629,7 +632,11 @@ def test_review_report_uses_extract_json(monkeypatch):
     raw = ('```json\n{"issues": [], "approved": true}\n```\n'
           'تعليق ختامي يحوي قوساً } زائداً.')
     monkeypatch.setattr(silk_ai_judge, "_call", lambda *a, **k: raw)
-    result = silk_ai_judge.review_report("مسوّدة تقرير", {})
+    # مسوّدة كاملة الأقسام حتى لا يتدخّل الفحص البنيوي الحتمي (الموجة ١٠) —
+    # هذا الاختبار عن تفسير JSON المسيَّج تحديداً، لا اكتمال البنية.
+    draft = "\n".join(f"## {i}. {s}\nنص." for i, s in
+                      enumerate(silk_ai_judge._REPORT_SECTIONS, 1))
+    result = silk_ai_judge.review_report(draft, {})
     assert result == {"issues": [], "approved": True}
 
 
