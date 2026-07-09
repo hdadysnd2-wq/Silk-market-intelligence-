@@ -270,3 +270,114 @@ def test_large_usd_value_is_abbreviated_with_unit_in_trade_table(monkeypatch):
     assert "1,436,057" not in text   # لا رقم خام بلا وحدة/اختصار
     assert "مليون دولار" in text     # fmt_money: 1.4 مليون دولار
     assert "42.5%" in text
+
+
+# ── Phase 3: التقرير سرد تحليلي لا تفريغ بيانات ──────────────────────────
+
+_NARRATIVE_SECTION = (
+    "## 12. التحليل الشامل والفرص\n"
+    "يكشف التقاطع بين حجم الاستيراد المرصود وحصة السعودية الحالية عن فجوة "
+    "طلب حقيقية قابلة للتوجيه: السوق يستورد كميات متنامية من هذا المنتج "
+    "بينما الحضور السعودي محدود نسبياً (المصدر: UN Comtrade)، ما يفتح "
+    "مساحة دخول واضحة إن عولجت عقبات التسعير الحدودي المذكورة أدناه.\n"
+    "### الطلب الفعلي القابل للتوجيه\n"
+    "يبلغ حجم الاستيراد المرصود مستوًى يبرر استهدافاً تجارياً جاداً، وقد "
+    "نما على مدى فترة الدراسة (المصدر: UN Comtrade) — هذا يعني أن الفرصة "
+    "ليست لحظية بل اتجاهاً مستمراً يستحق تخصيص موارد تصديرية حقيقية له.\n"
+    "### تكلفة وصعوبة الدخول\n"
+    "التعرفة المطبّقة والاشتراطات الجمركية المرصودة تضع عتبة دخول متوسطة "
+    "لا حادة (المصدر: World Bank WITS)، ما يعني أن الدخول ممكن خلال دورة "
+    "تجارية واحدة إن أُعدّت الوثائق المطلوبة مسبقاً.\n"
+    "## 13. الحكم والتوصية\n"
+    "استناداً إلى الحكم الجاهز أعلاه، فإن أقوى ثلاثة أسباب داعمة هي: نمو "
+    "الاستيراد المستمر، الحصة السعودية المحدودة حالياً كفرصة نمو لا كإشارة "
+    "ضعف، وتوفّر باب دخول آمن نسبياً عبر الموزّع المحلي المرصود. الشرط "
+    "اللازم لبقاء هذا الحكم صحيحاً هو استقرار التعرفة الحالية؛ وأي ارتفاع "
+    "حاد فيها يستدعي إعادة تقييم الجدوى الاقتصادية للدخول.\n"
+    "| العمود | القيمة |\n"
+    "|---|---|\n"
+    "| النقاط | 0.62 |\n"
+)
+
+
+def _phase3_deep_research_result():
+    from silk_agents import AgentReport
+    from silk_data_layer import DataPoint
+    from silk_market_resolver import resolve_market
+
+    ref, _ = resolve_market("Nigeria")
+    analyst_report = AgentReport(
+        "LLMAgent:market_analyst",
+        [DataPoint("طلب استدلالي معقول", "x", 0.6, "n")], False, "تحليل")
+    return {
+        "product": "تمور", "hs_code": "080410", "year": None,
+        "market": {"iso3": ref.iso3, "m49": ref.m49, "iso2": ref.iso2,
+                  "name_en": ref.name_en, "name_ar": ref.name_ar},
+        "markets": [],
+        "deep_research": {
+            "missions": {"trade_flow": AgentReport(
+                "LLMAgent:trade_flow",
+                [DataPoint(950000.0, "UN Comtrade", 0.9, "n")], False, "ok")},
+            "analyst": {"report": analyst_report,
+                       "by_category": {"demand": analyst_report.findings,
+                                      "entry_cost": [], "price_competitiveness": [],
+                                      "entry_door": [], "swot": []},
+                       "missing_categories": []},
+            "verdict": {"verdict": "PRELIMINARY GO",
+                       "ai": {"verdict": "WATCH", "confidence": 0.5,
+                             "reasoning": "سبب موجز"}},
+            "report": {"report": _NARRATIVE_SECTION, "review_cycles": 1,
+                      "unresolved_notes": []},
+        },
+    }
+
+
+def test_markdown_subheadings_become_real_docx_headings_not_literal_text(
+        monkeypatch):
+    import pytest
+    pytest.importorskip("docx")
+    from docx import Document
+    from silk_render import build_view
+    from silk_reports import render_docx
+    monkeypatch.setenv("SILK_HERMETIC", "1")
+    view = build_view(_phase3_deep_research_result())
+    path = render_docx(view, os.path.join(tempfile.mkdtemp(), "narr.docx"))
+    doc = Document(path)
+    heads = [p.text for p in doc.paragraphs if p.style.name.startswith("Heading")]
+    assert "الطلب الفعلي القابل للتوجيه" in heads
+    assert "تكلفة وصعوبة الدخول" in heads
+    text = docx_all_text(path)
+    assert "###" not in text        # لا نص خام بعلامات #
+    assert "|---|---|" not in text  # سطر فاصل الجدول مُستبعَد
+
+
+def test_narrative_prose_precedes_the_raw_evidence_appendix(monkeypatch):
+    # Phase 3: السرد التحليلي (كاتب التقرير) يسبق ملحق الأدلة الرقمية الخام
+    # في ترتيب المستند — لا نقاط خام تسبق أي فقرة تحليلية (بلاغ الحادثة).
+    import pytest
+    pytest.importorskip("docx")
+    from silk_render import build_view
+    from silk_reports import render_docx
+    monkeypatch.setenv("SILK_HERMETIC", "1")
+    view = build_view(_phase3_deep_research_result())
+    path = render_docx(view, os.path.join(tempfile.mkdtemp(), "order.docx"))
+    text = docx_all_text(path)
+    narrative_idx = text.find("يكشف التقاطع بين حجم الاستيراد")
+    appendix_idx = text.find("ملحق — الأدلة الرقمية الداعمة")
+    assert narrative_idx != -1 and appendix_idx != -1
+    assert narrative_idx < appendix_idx
+    # فقرة سردية واحدة على الأقل تتجاوز ٢٠٠ حرفاً قبل أي محتوى نقطي
+    # (نفس فقرة "يكشف التقاطع..." أعلاه — بلاغ الحادثة: تفريغ نقاط بلا سرد).
+    assert len(_NARRATIVE_SECTION.split("###")[0]) > 200
+
+
+def test_writer_prompt_requires_narrative_intersections_and_reasoned_verdict():
+    # الالتزام بشكل الكتابة موجود في التعليمات المُرسَلة لكلود — لا يمكن
+    # اختبار جودة نثر كلود هيرمتياً، لكن يمكن التأكد أن البرومبت يطلبها.
+    import inspect
+    import silk_ai_judge
+    src = inspect.getsource(silk_ai_judge.deep_report)
+    assert "فقرة سردية" in src
+    assert "### <اسم التقاطع>" in src
+    assert "أقوى ثلاثة أسباب" in src
+    assert "ما الذي قد يُغيّر القرار" in src

@@ -767,8 +767,35 @@ def _docx_deep_research(doc, view: dict) -> None:
          (m.get("summary") or "")[:300]]
         for key, m in missions.items()])
 
-    doc.add_heading("المحلل الشامل — التقاطعات الخمسة", level=2)
+    # Phase 3 (بلاغ حي: "تقرير احترافي لا تفريغ بيانات"): التقرير السردي
+    # (كاتب التقرير) يُعرض أولاً — فقرات تحليلية تُفسّر الأرقام لقرار الدخول،
+    # بما فيها التقاطعات الخمسة كأقسام فرعية '### ' سردية — قبل ملحق الأدلة
+    # الرقمية الخام (كان الترتيب معكوساً: نقاط خام تسبق أي سرد).
+    if dr.get("report", {}).get("text"):
+        doc.add_heading("التقرير الكامل (كاتب التقرير، مراجَع)", level=2)
+        _stamp_degraded_banner(doc, view)
+        for line in str(dr["report"]["text"]).splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("### "):
+                # عناوين فرعية للتقاطعات الخمسة داخل قسم "التحليل الشامل
+                # والفرص" — بلا هذا كانت "### السطر" تظهر نصاً خاماً بثلاث
+                # علامات # حرفية بدل عنوان فعلي.
+                doc.add_heading(line[4:].strip(), level=4)
+            elif line.startswith("## "):
+                doc.add_heading(line[3:].strip(), level=3)
+            elif set(line.replace("|", "").replace(" ", "")) <= {"-", ":"} \
+                    and "|" in line:
+                continue  # سطر فاصل جدول Markdown (|---|---|) — ضجيج بصري صرف
+            else:
+                doc.add_paragraph(line)
+
+    doc.add_heading("ملحق — الأدلة الرقمية الداعمة للتقاطعات الخمسة", level=2)
     _stamp_degraded_banner(doc, view)
+    doc.add_paragraph("كل نقطة أدناه هي الحقيقة الخام (بمصدرها) التي بُني "
+                      "عليها السرد أعلاه — للتحقق المباشر لا كبديل عنه.",
+                      style="Intense Quote")
     analyst = dr.get("analyst") or {}
     by_cat = analyst.get("by_category") or {}
     for cat, ar_label in _CATEGORY_AR.items():
@@ -782,18 +809,6 @@ def _docx_deep_research(doc, view: dict) -> None:
             doc.add_paragraph(str(f.get("value")), style="List Bullet")
             doc.add_paragraph(f"[{f.get('source')}، ثقة {f.get('confidence')}] "
                               f"{f.get('note') or ''}", style="Intense Quote")
-
-    if dr.get("report", {}).get("text"):
-        doc.add_heading("التقرير الكامل (كاتب التقرير، مراجَع)", level=2)
-        _stamp_degraded_banner(doc, view)
-        for line in str(dr["report"]["text"]).splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith("## "):
-                doc.add_heading(line[3:].strip(), level=3)
-            else:
-                doc.add_paragraph(line)
         if dr["report"].get("unresolved_notes"):
             doc.add_heading("ملاحظات مراجعة لم تُحلّ", level=3)
             for n in dr["report"]["unresolved_notes"]:
