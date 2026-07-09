@@ -717,9 +717,15 @@ def create_app():
         لا حقول مدفوعة (كـ AnalyzeRequest تماماً) — مسار مجاني حصراً. `market`
         نص حر (اسم عربي/إنجليزي أو ISO3) يُحلّ عبر silk_market_resolver؛
         مطابقة ضعيفة/غامضة = 422 مع اقتراحات، لا تخمين سوق.
+
+        حادثة نقطة تفتيش/استئناف + تشغيل خلفي (P0): `resume` يستأنف تشغيلة
+        سابقة بمعرّفها — `product`/`market` يصيران اختياريَين عندها (تُقرَآن
+        من الطلب المخزَّن وقت الإنشاء)، وإلا إلزاميان كالسابق. `async_run`
+        يُعيد `analysis_id` فوراً (202) ويكمل المعالجة في خيط خلفي — تجاوز
+        مهلة بوّابة/وكيل عكسي لا يقتل التشغيلة أو يُيتّمها بعد اليوم.
         """
-        product: str
-        market: str
+        product: str | None = None
+        market: str | None = None
         hs_code: str | None = None
         product_card: ProductCard | None = None
         own_price: float | None = None  # سعرك المستهدف — كـAnalyzeRequest
@@ -729,74 +735,41 @@ def create_app():
         # هذا الحقل فتحة هروب صريحة تطلبها الجهة المستهلكة (لا تدهور
         # افتراضي): تسليم تقرير موسوم بوضوح "متدهور" بدل رفضه كلياً.
         allow_degraded: bool = False
+        resume: int | None = None
+        async_run: bool = False
 
-    @app.post("/research")
-    def research(req: ResearchRequest, request: Request):
-        """بحث عميق — ١٢ بعثة كلود بالأدوات + محلل شامل + حكم + تقرير مراجَع.
+    def _research_budget_status(economics: dict) -> dict:
+        """حالة الميزانية على مستوى التشغيلة كاملة — P1، حادثة نفاد
+        الاعتمادات: يسمّي **أي** سقف بلغ حدّه صراحة، لا يكتفي بملاحظة
+        مدفونة داخل فجوات بعثة واحدة (كانت موجودة أصلاً — هذا تجميع
+        علوي إضافي يجعلها مرئية فوراً للوحة/المستهلك)."""
+        llm_cap = int(os.environ.get("SILK_RESEARCH_MAX_LLM_CALLS", "40"))
+        tool_cap = int(os.environ.get("SILK_RESEARCH_MAX_TOOL_CALLS", "100"))
+        llm_calls = economics.get("llm_calls", 0)
+        tool_calls = economics.get("tool_calls", 0)
+        hit = []
+        if llm_calls >= llm_cap:
+            hit.append(f"SILK_RESEARCH_MAX_LLM_CALLS={llm_cap}")
+        if tool_calls >= tool_cap:
+            hit.append(f"SILK_RESEARCH_MAX_TOOL_CALLS={tool_cap}")
+        return {"exhausted": bool(hit), "caps_hit": hit,
+               "llm_calls": llm_calls, "llm_cap": llm_cap,
+               "tool_calls": tool_calls, "tool_cap": tool_cap}
 
-        مسار مجاني حصراً (نموذج بلا حقول مدفوعة، كـ/analyze) — إضافات كلود
-        (البعثات + المحلل + توليف المرحلة ٢ + الكاتب/المراجع) تمرّ عبر نفس
-        بوابة H2 (`_free_ai_extras_allowed`) وحجزها الذرّي الواحد من
-        SILK_PAID_DAILY_CAP (كنداء AI إضافي واحد على /analyz تماماً) — لا
-        مسار كلود موازٍ. الحجم الفعلي لعدد النداءات عبر التحليل بأكمله
-        محكوم بسقف منفصل (`SILK_RESEARCH_MAX_LLM_CALLS`/`_MAX_TOOL_CALLS`،
-        افتراضياً ٤٠/١٠٠) يُطبَّق حياً داخل `silk_llm_runtime._run_loop` —
-        إنهاء رشيق لا كسر عند تجاوزه.
-
-        بوابة ما قبل التشغيل (بلاغ حي): كلود هنا **شرط تشغيل** لا تحسين
-        اختياري — بلا مفتاح فعّال كل الاثنتي عشرة بعثة تفشل بصفر نتائج
-        والتقرير هيكل فارغ. `_research_readiness()` يرفض هذا صراحة بـ409
-        قبل تشغيل أي بعثة، إلا أن يمرّر الطالب `allow_degraded=true` —
-        عندها تُشغَّل التشغيلة وتُوسَم النتيجة `degraded=true` مع سبب واضح
-        (`degraded_reason`)، فتحمل كل مشتقات التقرير (docx/مختصر/لوحة)
-        لافتة تحذير حمراء بدل تسليم هيكل فارغ بصمت كأنه المنتج.
-        """
-        _require_key(request)
-        _rate_limit(request)
-        from silk_market_resolver import resolve_market
-        market_ref, suggestions = resolve_market(req.market)
-        if market_ref is None:
-            raise HTTPException(status_code=422, detail={
-                "error": f"unknown or ambiguous market {req.market!r}",
-                "suggestions": suggestions})
-
-        # بوابة ما قبل التشغيل بعد التحقق من صحة الإدخال (422 على خطأ
-        # الطالب يسبق 409 على جهوزية الخادم — خطأ العميل يستحق أن يُشرَح
-        # حتى لو كان الخادم متدهوراً الآن) وقبل تشغيل أي بعثة أو حجز ميزانية.
-        ready, ready_reason = _research_readiness()
-        if not ready and not req.allow_degraded:
-            raise HTTPException(status_code=409, detail={
-                "error": "research_not_ready", "reason": ready_reason,
-                "hint": "اضبط ANTHROPIC_API_KEY (وSILK_API_KEY إن لزم) ثم "
-                        "أعد المحاولة، أو مرّر allow_degraded=true لتسليم "
-                        "تقرير موسوم صراحة كمتدهور (غير مُنصَح به تسليمياً)."})
-
-        hs_code = req.hs_code
-        hs_note = None
-        if not hs_code:
-            from silk_hs_resolver import resolve as resolve_hs
-            dp = resolve_hs(req.product)
-            hs_code = dp.value
-            if hs_code is None:
-                hs_note = dp.note  # فجوة معلنة — لا اختلاق رمز HS
-
-        ai_ok, ai_note = _free_ai_extras_allowed()
+    def _run_research_pipeline(market_ref, product: str, hs_code: str | None,
+                               hs_note: str | None, product_card_dict: dict | None,
+                               ai_ok: bool, ai_note: str, prefs: dict | None,
+                               ready: bool, ready_reason: str,
+                               analysis_id: int | None,
+                               resume_reports: dict | None) -> dict:
+        """جسم التشغيلة الثقيل — بعثات + محلل + توليف + كاتب/مراجع + بوابة
+        جودة. مستخرَج من مسار /research المتزامن السابق **بلا تغيير سلوكي**
+        كي يُستدعى إما مباشرة (وضع متزامن) أو من خيط خلفي (async_run=true)
+        بلا ازدواج منطق. لا حفظ هنا — المستدعي يقرّر متى/كيف يُخزَّن."""
         import contextlib
         import silk_context
         ctx = (contextlib.nullcontext() if ai_ok
                else silk_context.block_ai_extras())
-        prefs = _clean_agent_prefs(req.agent_prefs)
-        if prefs is None:
-            prefs = _saved_agent_settings()
-
-        # بطاقة المنتج — بلاغ حي (الموجة ٩): كانت تُقبَل في النموذج ولا تصل
-        # أي بعثة أو المحلل إطلاقاً، فيغيب "الموقع التنافسي"/هامش المضاهاة
-        # من كل تقرير بحث عميق رغم إرسال المستخدم للبطاقة فعلياً.
-        product_card_dict = (req.product_card.model_dump()
-                             if req.product_card else None)
-        if product_card_dict is not None and req.own_price is not None:
-            product_card_dict["own_price"] = req.own_price
-
         with ctx, silk_context.agent_prefs_context(prefs):
             silk_context.begin_data_counter()
             from silk_missions import deep_research
@@ -807,21 +780,23 @@ def create_app():
             # deep_research() (لا run_all_missions مباشرة) — يفعّل التتبّع
             # الكامل دوماً (data/traces/{trace_id}.jsonl، الموجة ٦) فيبقى كل
             # تشغيل /research إنتاجي قابلاً للتدقيق، لا التشغيلات التجريبية فقط.
-            research_run = deep_research(market_ref, product=req.product,
+            research_run = deep_research(market_ref, product=product,
                                          hs_code=hs_code,
-                                         product_card=product_card_dict)
+                                         product_card=product_card_dict,
+                                         analysis_id=analysis_id,
+                                         resume_reports=resume_reports)
             mission_reports = research_run["reports"]
             analyst_out = analyze_market(
-                market_ref, req.product, mission_reports, hs_code=hs_code,
+                market_ref, product, mission_reports, hs_code=hs_code,
                 product_card=product_card_dict)
             analyst_input = to_synthesis_input(analyst_out)
             verdict = synthesize(
-                list(mission_reports.values()), product=req.product,
+                list(mission_reports.values()), product=product,
                 market=market_ref.name_en, with_ai=ai_ok,
                 analyst_assessment=analyst_input)
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
-                req.product, market_ref.name_en) if ai_ok else
+                product, market_ref.name_en) if ai_ok else
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
             economics = dict(silk_context.data_counter() or {})
 
@@ -835,9 +810,10 @@ def create_app():
         economics["cost_usd_estimate"] = cost["total_usd"]
         economics["cost_usd_by_model"] = cost["by_model"]
         economics["cost_unpriced_models"] = cost["unpriced_models"]
+        budget_status = _research_budget_status(economics)
 
         result: dict = {
-            "product": req.product, "hs_code": hs_code, "year": None,
+            "product": product, "hs_code": hs_code, "year": None,
             "preliminary": True,
             "market": {"iso3": market_ref.iso3, "m49": market_ref.m49,
                       "iso2": market_ref.iso2, "name_en": market_ref.name_en,
@@ -847,6 +823,9 @@ def create_app():
                 "missions": mission_reports, "analyst": analyst_out,
                 "verdict": verdict, "report": report_out,
                 "trace_id": research_run.get("trace_id"),
+                # P1 (حادثة نفاد الاعتمادات): سقف بلغ حدّه = إنهاء رشيق
+                # بفجوات معلنة، لا خطأ صلب — لكن يُذكَر صراحةً أيّ سقف.
+                "budget_status": budget_status,
             },
             "data_economics": economics,
         }
@@ -879,15 +858,232 @@ def create_app():
                     finding_count=len(gate_out["findings"]))
         except Exception as e:  # noqa: BLE001 — البوابة تحسين لا شرط تسليم
             log.warning("quality gate skipped: %s", e)
+        return result
 
-        if req.persist:
-            try:
-                from silk_storage import init_db, save_analysis
-                init_db("data/silk.db")
-                result["analysis_id"] = save_analysis(result, "data/silk.db")
-            except Exception as e:  # noqa: BLE001 — التخزين لا يُسقط النتيجة
-                log.warning("research persist skipped: %s", e)
+    def _finish_research_run(analysis_id: int | None, result: dict) -> None:
+        """خزّن النتيجة النهائية وحدّث حالة التشغيلة — نفس معرّف الإنشاء
+        (P0: نتيجة الاستئناف تنتهي بنفس analysis_id الذي بدأت به).
+
+        `analysis_id` يُضاف لِـ`result` **قبل** التخزين لا بعده — بلاغ حي
+        (اختبار استئناف تشغيلة مكتملة): إضافته بعد `save_analysis` تعني
+        أن النسخة المخزَّنة لا تحمله أبداً، فقراءتها لاحقاً عبر استئناف أو
+        `GET /analyses/{id}` تفتقد الحقل رغم ظهوره في الرد الأصلي المباشر.
+        """
+        if analysis_id is None:
+            return
+        result["analysis_id"] = analysis_id
+        from silk_storage import save_analysis
+        save_analysis(result, analysis_id=analysis_id)
+
+    def _research_background(market_ref, product, hs_code, hs_note,
+                             product_card_dict, ai_ok, ai_note, prefs,
+                             ready, ready_reason, analysis_id,
+                             resume_reports) -> None:
+        """جسم الخيط الخلفي (async_run=true) — يُغلَّف باستثناء شامل عمداً:
+        خيط بايثون غير المُمسوك يفشل صامتاً (لا كسر عملية، لا تحديث حالة)
+        فتبقى التشغيلة عالقة على 'running' للأبد — بلاغ التحقيق (P0) يمنع
+        هذا صراحة. نقاط تفتيش البعثات المكتملة فعلاً تبقى مخزَّنة بصرف
+        النظر عن نتيجة هذه المحاولة — استئناف لاحق يقرأها."""
+        try:
+            result = _run_research_pipeline(
+                market_ref, product, hs_code, hs_note, product_card_dict,
+                ai_ok, ai_note, prefs, ready, ready_reason, analysis_id,
+                resume_reports)
+            _finish_research_run(analysis_id, result)
+        except Exception as e:  # noqa: BLE001 — خيط خلفي: هذا آخر حزام أمان
+            log.error("background /research run %s failed: %s", analysis_id, e)
+            from silk_storage import mark_research_failed
+            mark_research_failed(analysis_id, f"{type(e).__name__}: {e}")
+
+    @app.post("/research")
+    def research(req: ResearchRequest, request: Request):
+        """بحث عميق — ١٢ بعثة كلود بالأدوات + محلل شامل + حكم + تقرير مراجَع.
+
+        مسار مجاني حصراً (نموذج بلا حقول مدفوعة، كـ/analyze) — إضافات كلود
+        (البعثات + المحلل + توليف المرحلة ٢ + الكاتب/المراجع) تمرّ عبر نفس
+        بوابة H2 (`_free_ai_extras_allowed`) وحجزها الذرّي الواحد من
+        SILK_PAID_DAILY_CAP (كنداء AI إضافي واحد على /analyz تماماً) — لا
+        مسار كلود موازٍ. الحجم الفعلي لعدد النداءات عبر التحليل بأكمله
+        محكوم بسقف منفصل (`SILK_RESEARCH_MAX_LLM_CALLS`/`_MAX_TOOL_CALLS`،
+        افتراضياً ٤٠/١٠٠) يُطبَّق حياً داخل `silk_llm_runtime._run_loop` —
+        إنهاء رشيق لا كسر عند تجاوزه، ومُلخَّص علوياً في
+        `deep_research.budget_status` (P1، حادثة نفاد الاعتمادات).
+
+        بوابة ما قبل التشغيل (بلاغ حي): كلود هنا **شرط تشغيل** لا تحسين
+        اختياري — بلا مفتاح فعّال كل الاثنتي عشرة بعثة تفشل بصفر نتائج
+        والتقرير هيكل فارغ. `_research_readiness()` يرفض هذا صراحة بـ409
+        قبل تشغيل أي بعثة، إلا أن يمرّر الطالب `allow_degraded=true` —
+        عندها تُشغَّل التشغيلة وتُوسَم النتيجة `degraded=true` مع سبب واضح
+        (`degraded_reason`)، فتحمل كل مشتقات التقرير (docx/مختصر/لوحة)
+        لافتة تحذير حمراء بدل تسليم هيكل فارغ بصمت كأنه المنتج.
+
+        نقطة تفتيش/استئناف + تشغيل خلفي (P0، حادثة نفاد الاعتمادات —
+        `docs/DEEP_RESEARCH_DECISIONS.md`): `persist=true` (الافتراضي)
+        يخصّص `analysis_id` **قبل** تشغيل أي بعثة، وكل بعثة تُخزَّن فور
+        اكتمالها — عطل/إعادة نشر منتصف الطريق لا يخسر البعثات المكتملة.
+        `resume=<analysis_id>` يعيد فتح تشغيلة سابقة (مكتملة/فاشلة/عالقة)
+        ويُشغّل فقط البعثات الناقصة + المحلل/الكاتب من جديد؛ إن كانت
+        مكتملة أصلاً يعيدها كما هي بلا أي نداء كلود جديد (لا حرق اعتمادات
+        مضاعف). `async_run=true` يعيد `{analysis_id, status:"running"}`
+        فوراً (202) ويكمل المعالجة في خيط خلفي — تجاوز مهلة بوّابة/وكيل
+        عكسي يعود يقطع اتصال العميل فقط، لا التشغيلة نفسها، ولا يُيتّمها:
+        استطلع `GET /research/{analysis_id}/status` حتى `status=="completed"`
+        ثم `GET /analyses/{analysis_id}` للنتيجة الكاملة.
+        """
+        _require_key(request)
+        _rate_limit(request)
+
+        resume_reports: dict | None = None
+        analysis_id: int | None = None
+        stored_request: dict = {}
+
+        if req.resume is not None:
+            from silk_storage import get_analysis, get_research_run, \
+                load_mission_checkpoints
+            run_row = get_research_run(req.resume)
+            if run_row is None:
+                raise HTTPException(status_code=404, detail={
+                    "error": "resume_not_found",
+                    "reason": f"research run {req.resume} not found"})
+            if run_row.get("kind") != "research":
+                raise HTTPException(status_code=400, detail={
+                    "error": "not_a_research_run",
+                    "reason": f"analysis {req.resume} is not a /research "
+                              "run — resume only applies to /research"})
+            if run_row.get("status") == "completed":
+                # مكتملة فعلاً — أعِدها كما هي، لا إعادة تشغيل ولا حرق
+                # اعتمادات إضافي (استئناف مكتمل يجب أن يكون آمناً للتكرار).
+                existing = get_analysis(req.resume)
+                if existing is not None:
+                    return _json(existing)
+            stored_request = run_row.get("request") or {}
+            analysis_id = req.resume
+            resume_reports = load_mission_checkpoints(req.resume)
+
+        product = req.product or stored_request.get("product")
+        market_name = req.market or stored_request.get("market")
+        if not product or not market_name:
+            raise HTTPException(status_code=422, detail={
+                "error": "product_and_market_required",
+                "reason": "product/market are required unless resuming an "
+                         "existing analysis_id that already has them"})
+
+        from silk_market_resolver import resolve_market
+        market_ref, suggestions = resolve_market(market_name)
+        if market_ref is None:
+            raise HTTPException(status_code=422, detail={
+                "error": f"unknown or ambiguous market {market_name!r}",
+                "suggestions": suggestions})
+
+        # بوابة ما قبل التشغيل بعد التحقق من صحة الإدخال (422 على خطأ
+        # الطالب يسبق 409 على جهوزية الخادم — خطأ العميل يستحق أن يُشرَح
+        # حتى لو كان الخادم متدهوراً الآن) وقبل تشغيل أي بعثة أو حجز ميزانية.
+        ready, ready_reason = _research_readiness()
+        if not ready and not req.allow_degraded:
+            raise HTTPException(status_code=409, detail={
+                "error": "research_not_ready", "reason": ready_reason,
+                "hint": "اضبط ANTHROPIC_API_KEY (وSILK_API_KEY إن لزم) ثم "
+                        "أعد المحاولة، أو مرّر allow_degraded=true لتسليم "
+                        "تقرير موسوم صراحة كمتدهور (غير مُنصَح به تسليمياً)."})
+
+        hs_code = req.hs_code or stored_request.get("hs_code")
+        hs_note = None
+        if not hs_code:
+            from silk_hs_resolver import resolve as resolve_hs
+            dp = resolve_hs(product)
+            hs_code = dp.value
+            if hs_code is None:
+                hs_note = dp.note  # فجوة معلنة — لا اختلاق رمز HS
+
+        ai_ok, ai_note = _free_ai_extras_allowed()
+        prefs = _clean_agent_prefs(req.agent_prefs)
+        if prefs is None:
+            prefs = stored_request.get("agent_prefs") or _saved_agent_settings()
+
+        # بطاقة المنتج — بلاغ حي (الموجة ٩): كانت تُقبَل في النموذج ولا تصل
+        # أي بعثة أو المحلل إطلاقاً، فيغيب "الموقع التنافسي"/هامش المضاهاة
+        # من كل تقرير بحث عميق رغم إرسال المستخدم للبطاقة فعلياً.
+        product_card_dict = (req.product_card.model_dump() if req.product_card
+                             else stored_request.get("product_card"))
+        own_price = (req.own_price if req.own_price is not None
+                    else stored_request.get("own_price"))
+        if product_card_dict is not None and own_price is not None:
+            product_card_dict = dict(product_card_dict)
+            product_card_dict["own_price"] = own_price
+
+        if analysis_id is None and req.persist:
+            from silk_storage import create_research_run
+            request_snapshot = {
+                "product": product, "market": market_name, "hs_code": hs_code,
+                "product_card": product_card_dict, "own_price": own_price,
+                "agent_prefs": prefs, "allow_degraded": req.allow_degraded}
+            analysis_id = create_research_run(
+                product, market_ref.iso3, hs_code, request_snapshot)
+
+        if req.async_run:
+            if analysis_id is None:
+                raise HTTPException(status_code=400, detail={
+                    "error": "async_requires_persist",
+                    "reason": "async_run=true needs persist=true (or an "
+                             "existing resume target) — otherwise there is "
+                             "no analysis_id to poll a status for."})
+            threading.Thread(
+                target=_research_background,
+                args=(market_ref, product, hs_code, hs_note, product_card_dict,
+                     ai_ok, ai_note, prefs, ready, ready_reason, analysis_id,
+                     resume_reports),
+                daemon=True).start()
+            return JSONResponse(status_code=202, content={
+                "analysis_id": analysis_id, "status": "running",
+                "async": True,
+                "poll_url": f"/research/{analysis_id}/status"})
+
+        try:
+            result = _run_research_pipeline(
+                market_ref, product, hs_code, hs_note, product_card_dict,
+                ai_ok, ai_note, prefs, ready, ready_reason, analysis_id,
+                resume_reports)
+        except Exception as e:  # noqa: BLE001 — P0: فشل لا يخسر البعثات المكتملة
+            log.error("sync /research run %s failed: %s", analysis_id, e)
+            if analysis_id is not None:
+                from silk_storage import mark_research_failed
+                mark_research_failed(analysis_id, f"{type(e).__name__}: {e}")
+                raise HTTPException(status_code=500, detail={
+                    "error": "research_run_failed",
+                    "reason": f"{type(e).__name__}: {e}",
+                    "analysis_id": analysis_id,
+                    "hint": f"البعثات المكتملة قبل العطل محفوظة — أعد "
+                            f"المحاولة بـ resume={analysis_id} بدل تشغيلة "
+                            "كاملة جديدة (لا حرق اعتمادات مضاعف)."}) from e
+            raise
+        _finish_research_run(analysis_id, result)  # no-op إن persist=false
         return _json(result)
+
+    @app.get("/research/{analysis_id}/status")
+    def research_status(analysis_id: int, request: Request):
+        """حالة تشغيلة بحث عميق — تقدّم لكل بعثة من الاثنتي عشرة + الحالة
+        العامة (P0، حادثة نفاد الاعتمادات) — اللوحة تستطلعها دورياً بدل
+        انتظار اتصال HTTP واحد طويل قد تقطعه بوّابة عكسية."""
+        _require_key(request)
+        _rate_limit(request)
+        from silk_missions import MISSION_ORDER
+        from silk_storage import get_research_run, mission_status_map
+        run_row = get_research_run(analysis_id)
+        if run_row is None or run_row.get("kind") != "research":
+            raise HTTPException(status_code=404,
+                                detail=f"research run {analysis_id} not found")
+        done = mission_status_map(analysis_id)
+        missions = {key: done.get(key, "pending") for key in MISSION_ORDER}
+        return _json({
+            "analysis_id": analysis_id, "status": run_row.get("status"),
+            "product": run_row.get("product"), "hs_code": run_row.get("hs_code"),
+            "created_at": run_row.get("created_at"),
+            "updated_at": run_row.get("updated_at"),
+            "missions": missions,
+            "missions_completed": sum(1 for v in missions.values()
+                                      if v != "pending"),
+            "missions_total": len(missions),
+        })
 
     class DiscoverRequest(BaseModel):
         """طلب اكتشاف الفرص المعكوس (الموجة ٥أ، vision §11) — سوق بدل منتج."""
