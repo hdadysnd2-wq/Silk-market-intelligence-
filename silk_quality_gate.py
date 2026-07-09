@@ -51,18 +51,27 @@ def _check_raw_confidence(text: str) -> list[dict]:
 
 
 def _check_mid_word_truncation(text: str) -> list[dict]:
-    """تقطيع منتصف كلمة — سطر ينتهي بحرف/رقم بلا علامة ترقيم ختامية، مع طول
-    كافٍ يستبعد عناوين/فواصل قصيرة عادية (بلاغ حي: "لا تتوفر من أد")."""
+    """تقطيع منتصف كلمة — آخر سطر في كل **فقرة** (كتلة أسطر متتالية بين
+    سطرين فارغين) ينتهي بحرف/رقم بلا علامة ترقيم ختامية، مع طول كافٍ
+    يستبعد عناوين/فواصل قصيرة عادية (بلاغ حي: "لا تتوفر من أد"). يفحص
+    آخر سطر في الفقرة فقط لا كل سطر — نثر مُلفوف يدوياً عبر أسطر متعددة
+    (تنسيق شائع للمصدر) لا يجب أن يُبلَّغ سطراً سطراً كتقطيع مزيَّف؛
+    التقطيع الحقيقي يظهر في نهاية الوحدة المولَّدة لا وسطها."""
     if not text:
         return []
     findings = []
-    for ln in text.splitlines():
-        s = ln.strip()
-        if len(s) < 25 or s.startswith(("#", "|", "-", "*")):
+    for block in re.split(r"\n\s*\n", text):
+        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        if not lines:
             continue
-        if s and s[-1] not in _TERMINAL_PUNCT and not s.endswith("**"):
+        s = lines[-1]
+        if s.startswith(("#", "|", "-", "*")):
+            continue
+        if len(s) < 25:
+            continue
+        if s[-1] not in _TERMINAL_PUNCT and not s.endswith("**"):
             findings.append({"check": "mid_word_truncation", "repairable": True,
-                             "note": f"سطر ينتهي بلا علامة ترقيم ختامية: "
+                             "note": f"فقرة تنتهي بلا علامة ترقيم ختامية: "
                                      f"'...{s[-40:]}'"})
     return findings
 
@@ -119,13 +128,23 @@ def _check_section_structure(dr: dict) -> list[dict]:
 
 
 def _check_agent_health(dr: dict) -> list[dict]:
-    """بعثات بلا أي نتيجة مستشهَد بها — تُسرَد صراحة، لا تُخفى داخل ملخّص."""
+    """بعثات بلا أي نتيجة مستشهَد بها — تُسرَد صراحة، لا تُخفى داخل ملخّص.
+
+    بعثة **فشلت فعلياً** (`failed=True`) أشد من بعثة نجحت لكن لم تجد
+    جديداً (مثل `opportunity_gaps` حين تكون كل الفرص مغطّاة أصلاً في
+    البعثات الأخرى) — الأولى بند `agent_failed` (تُفشِل الحكم)، الثانية
+    `agent_empty` (ملاحظة منهجية فقط، لا تُفشِل الحكم وحدها)."""
     findings = []
     for key, m in (dr.get("missions") or {}).items():
-        if m.get("failed") or not (m.get("findings") or []):
+        if m.get("failed"):
             findings.append({
-                "check": "agent_health", "repairable": False,
-                "note": f"البعثة '{key}' بلا نتائج مستشهَد بها — "
+                "check": "agent_failed", "repairable": False,
+                "note": f"البعثة '{key}' فشلت بلا نتائج مستشهَد بها — "
+                       f"{m.get('summary') or 'بلا ملخّص'}"})
+        elif not (m.get("findings") or []):
+            findings.append({
+                "check": "agent_empty", "repairable": False,
+                "note": f"البعثة '{key}' نجحت لكن بلا نتائج مستشهَد بها — "
                        f"{m.get('summary') or 'بلا ملخّص'}"})
     return findings
 
@@ -166,7 +185,10 @@ def run_quality_gate(view: dict) -> dict:
     findings: list[dict] = []
     findings += _check_markdown_and_raw_json(combined_text)
     findings += _check_raw_confidence(combined_text)
-    findings += _check_mid_word_truncation(combined_text)
+    # ملخّصات البعثات عبارات قصيرة عمداً بلا علامة ترقيم ختامية بالاصطلاح
+    # (راجع أي AgentReport.summary في المشروع) — فحص التقطيع يقتصر على نص
+    # التقرير السردي الكامل (كاتب التقرير) حيث التقطيع الحقيقي مرصود فعلاً.
+    findings += _check_mid_word_truncation(text)
     findings += _check_bare_partner_codes(dr)
     findings += _check_intersection_insufficiency(dr)
     findings += _check_section_structure(dr)
@@ -176,7 +198,7 @@ def run_quality_gate(view: dict) -> dict:
     non_repairable = [f for f in findings if not f["repairable"]]
     if not findings:
         verdict = PASS
-    elif any(f["check"] in ("section_structure", "agent_health") for f in
+    elif any(f["check"] in ("section_structure", "agent_failed") for f in
              non_repairable):
         verdict = FAIL
     else:
