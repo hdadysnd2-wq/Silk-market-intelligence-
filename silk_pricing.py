@@ -1,0 +1,59 @@
+"""أسعار نماذج كلود — Claude model pricing constants (تدقيق المعمارية، دين ٤).
+
+المصدر الوحيد لتسعير التشغيلات — دولار لكل مليون رمز (توثيق Anthropic
+الرسمي وقت الكتابة، `SILK_AI_MODEL`/`SILK_AI_FAST_MODEL` في silk_ai_judge.py).
+نموذج غير مُدرَج هنا يُستبعد من التقدير ويُعلَن في `unpriced_models` — لا
+تخمين سعر لنموذج مجهول (نفس مبدأ لا اختلاق المطبَّق على البيانات).
+"""
+from __future__ import annotations
+
+# دولار لكل مليون رمز {"input": ..., "output": ...} — USD per 1M tokens.
+MODEL_PRICING: dict[str, dict[str, float]] = {
+    "claude-opus-4-8": {"input": 5.00, "output": 25.00},
+    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
+}
+
+# بادئات لمطابقة معرّفات مؤرَّخة (مثال: claude-haiku-4-5-20251001) بأسرة
+# التسعير الصحيحة — أطول بادئة أولاً كي "claude-opus-4-8" لا يطابق أسرة أحدث لاحقاً.
+_PRICING_PREFIXES: tuple[str, ...] = tuple(
+    sorted(MODEL_PRICING, key=len, reverse=True))
+
+
+def _pricing_for(model: str) -> dict[str, float] | None:
+    if model in MODEL_PRICING:
+        return MODEL_PRICING[model]
+    for prefix in _PRICING_PREFIXES:
+        if model.startswith(prefix):
+            return MODEL_PRICING[prefix]
+    return None
+
+
+def estimate_cost_usd(llm_usage: dict | None) -> dict:
+    """قدّر تكلفة التشغيلة بالدولار من عدّاد الاستهلاك لكل نموذج.
+
+    المدخل بشكل `silk_context.record_llm_usage` المتراكم:
+    {model: {"input_tokens": N, "output_tokens": N}}.
+    المخرَج: {"total_usd", "by_model", "unpriced_models"} — نموذج بلا سعر
+    معروف يُستبعد من المجموع ويُسمّى صراحة في unpriced_models، لا يُصفَّر بصمت.
+    """
+    total = 0.0
+    by_model: dict[str, float] = {}
+    unpriced: list[str] = []
+    for model, tok in (llm_usage or {}).items():
+        pricing = _pricing_for(model)
+        if pricing is None:
+            unpriced.append(model)
+            continue
+        cost = ((tok.get("input_tokens", 0) or 0) / 1_000_000 * pricing["input"]
+                + (tok.get("output_tokens", 0) or 0) / 1_000_000 * pricing["output"])
+        by_model[model] = round(cost, 6)
+        total += cost
+    return {"total_usd": round(total, 6), "by_model": by_model,
+           "unpriced_models": sorted(unpriced)}
+
+
+if __name__ == "__main__":
+    print(estimate_cost_usd({
+        "claude-opus-4-8": {"input_tokens": 100_000, "output_tokens": 20_000},
+        "claude-haiku-4-5-20251001": {"input_tokens": 50_000, "output_tokens": 5_000},
+    }))

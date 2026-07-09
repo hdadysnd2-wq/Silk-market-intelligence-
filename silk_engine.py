@@ -275,14 +275,22 @@ def _economics(counter: dict) -> dict:
 
     أرقام مرصودة فقط (عدّ أحداث فعلية) — النسبة قسمة معلنة لا تقدير.
     Observed counts only; the percentage is declared arithmetic, no estimate.
+
+    تقدير التكلفة (تدقيق المعمارية، دين ٤): من رموز `llm_usage` المرصودة
+    فعلياً (silk_context.record_llm_usage) عبر أسعار silk_pricing المركزية —
+    نموذج بلا سعر معروف يُستبعد ويُعلَن، لا يُخمَّن.
     """
+    from silk_pricing import estimate_cost_usd
     served = counter["store_hits"] + counter["cache_hits"]
     total = served + counter["live_fetches"]
     note = (f"{served} قراءة خُدمت من المخزن/ذاكرة الطلبات مقابل "
             f"{counter['live_fetches']} جلبة حية")
     if total:
         note += f" — {round(100 * served / total)}% من النداءات وفّرها التخزين"
-    return {**counter, "note": note}
+    cost = estimate_cost_usd(counter.get("llm_usage"))
+    return {**counter, "note": note, "cost_usd_estimate": cost["total_usd"],
+           "cost_usd_by_model": cost["by_model"],
+           "cost_unpriced_models": cost["unpriced_models"]}
 
 
 def _ai_report(result: dict):

@@ -434,6 +434,19 @@ TOOLS: dict[str, dict] = {
 }
 
 
+def _isolate_external(v):
+    """اعزل حقل بيانات أداة خارجي — isolate a tool-result field before it
+    reaches Claude, regardless of shape (str/dict/list). أرقام صرفة
+    (int/float بلا نص) تُترك كما هي — لا نص فيها يحمل حقناً محتملاً، وعزلها
+    يمنع كلود من استخدامها حسابياً بلا داعٍ. كل ما عداها (نص، أو بنية تحمل
+    نصاً كعناوين نتائج البحث) يُحوَّل لنص ويُعزل — الثغرة التي غطّاها هذا
+    الإصلاح: `note` وحده كان يُعزل سابقاً بينما `value`/`source` يمران خاماً.
+    """
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return _isolate(str(v))
+    return v
+
+
 def _execute_tool(name: str, args: dict, ctx: dict) -> list[DataPoint]:
     entry = TOOLS.get(name)
     if not entry:
@@ -711,7 +724,8 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
                        zip(ids, dps)],
                 elapsed_ms=round((_time.monotonic() - t_tool) * 1000))
             payload = {"data": [
-                {"id": did, "value": dp.value, "source": dp.source,
+                {"id": did, "value": _isolate_external(dp.value),
+                 "source": _isolate_external(dp.source),
                  "confidence": dp.confidence, "note": _isolate(str(dp.note))}
                 for did, dp in zip(ids, dps)]}
             tool_results.append({

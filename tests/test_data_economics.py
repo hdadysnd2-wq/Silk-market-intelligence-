@@ -22,10 +22,10 @@ def test_counter_lifecycle_and_isolation():
     silk_context.count_data("cache_hits", 2)
     assert silk_context.data_counter() == {
         "store_hits": 1, "cache_hits": 2, "live_fetches": 0,
-        "llm_calls": 0, "tool_calls": 0}
+        "llm_calls": 0, "tool_calls": 0, "llm_usage": {}}
     c2 = silk_context.begin_data_counter()   # تشغيلة جديدة = عدّاد جديد
     assert c2 == {"store_hits": 0, "cache_hits": 0, "live_fetches": 0,
-                  "llm_calls": 0, "tool_calls": 0}
+                  "llm_calls": 0, "tool_calls": 0, "llm_usage": {}}
     assert c1["store_hits"] == 1             # الأول لم يُمسّ
 
 
