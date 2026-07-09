@@ -18,6 +18,13 @@ log = logging.getLogger(__name__)
 
 _ENDPOINT = "https://api.gdeltproject.org/api/v2/doc/doc"
 _TIMEOUT = 30
+# ترويسة متصفح — بلاغ حي (الموجة ٨): فشل GDELT على نشر Railway بلا تفاصيل
+# مؤكَّدة (لا وصول شبكي من بيئة التطوير لإعادة الإنتاج حياً)؛ عدّة أطراف
+# API عامة تحجب عميل requests الافتراضي (python-requests/x.y) أو نطاقات
+# IP مراكز البيانات السحابية — إصلاح معقول ومنخفض المخاطر بلا أثر جانبي
+# على الاستجابة الناجحة، غير مؤكَّد أنه السبب الجذري الفعلي هنا صراحة.
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; SilkMarketIntel/1.0; "
+                         "+https://github.com/hdadysnd2-wq)"}
 
 
 def gdelt_news(query: str, market: str = "", months: int = 12,
@@ -43,11 +50,22 @@ def gdelt_news(query: str, market: str = "", months: int = 12,
         "sort": "datedesc",
     }
     try:
-        resp = requests.get(_ENDPOINT, params=params, timeout=_TIMEOUT)
+        resp = requests.get(_ENDPOINT, params=params, headers=_HEADERS,
+                            timeout=_TIMEOUT)
         resp.raise_for_status()
-        payload = resp.json()
     except Exception as e:  # noqa: BLE001 — never raise to caller
         note = f"GDELT fetch failed for {full_query!r}: {type(e).__name__}: {e}"
+        log.warning(note)
+        return [DataPoint(None, "GDELT", 0.0, note, _today())]
+    try:
+        payload = resp.json()
+    except ValueError as e:
+        # ردّ HTTP ناجح لكن ليس JSON — بلاغ حي: هذا نمط شائع لحجب WAF/بوابة
+        # حماية (صفحة HTML بدل JSON) بخلاف فشل شبكة صريح؛ ملاحظة مميَّزة
+        # كي يُشخَّص لاحقاً دون خلطه بعطل اتصال عادي.
+        note = (f"GDELT returned non-JSON body for {full_query!r} "
+                f"(HTTP {resp.status_code}, content-type="
+                f"{resp.headers.get('content-type', '?')!r}) — {e}")
         log.warning(note)
         return [DataPoint(None, "GDELT", 0.0, note, _today())]
 

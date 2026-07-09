@@ -29,6 +29,7 @@ import functools
 import json
 import logging
 import os
+import re
 
 from silk_agents import AgentReport, BaseAgent
 from silk_ai_judge import _MODEL, _PRINCIPLE, _call_tools, _isolate
@@ -74,10 +75,21 @@ def _recent_years(n: int = 3) -> list[int]:
 
 @functools.lru_cache(maxsize=8)
 def _load_csv(path: str) -> tuple[dict, ...]:
+    """اقرأ CSV مرجعي — يتجاهل أسطر تعليق '#' التوثيقية في مقدّمة الملف.
+
+    بلاغ حي (الموجة ٨): `demographics_l1.csv`/`agreements_l1.csv` يبدآن
+    بسطر (أو سطرين) '# ...' يوثّقان المصدر (tools/fetch_demographics.py،
+    tools/fetch_agreements.py) — `csv.DictReader` بلا تصفية كان يعامل أول
+    سطر تعليق كصف رؤوس الأعمدة، فتنزاح كل الصفوف صفاً واحداً ويفشل حقل
+    'iso3' للجميع (لا لسوق واحد — لكل استعلام على هذين الجدولين). فُقِدت
+    نسبة مسلمي هولندا (وكل سوق آخر) بهذا الخلل تحديداً، لا لغياب البيانات
+    (الصف موجود فعلاً في الملف — تحقّق مباشر، لا تخمين).
+    """
     import csv
     try:
         with open(path, newline="", encoding="utf-8") as f:
-            return tuple(csv.DictReader(f))
+            lines = [ln for ln in f if not ln.lstrip().startswith("#")]
+        return tuple(csv.DictReader(lines))
     except Exception as e:  # noqa: BLE001 — مرجع غائب يُعامَل كفجوة، لا عطل
         log.warning("reference CSV unavailable (%s): %s", path, e)
         return ()
@@ -351,16 +363,75 @@ def _execute_tool(name: str, args: dict, ctx: dict) -> list[DataPoint]:
         return [DataPoint(None, name, 0.0, note, _today())]
 
 
+_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.S | re.I)
+
+
+def _json_candidates(text: str) -> list[str]:
+    """مرشّحو نص JSON من رد كلود، بترتيب الأولوية — بلاغ حي (الموجة ٨):
+    ردود مسيّجة بـ```json...``` كانت تُفقَد كاملةً (pricing_scout/
+    opportunity_gaps) لأن آخر '}' في **النص كله** يقع أحياناً بعد السياج
+    (تعليق ختامي بأقواس معقوفة، أو سياج توضيحي ثانٍ) فيمتد المقطع
+    المُستخرَج فوق حدود JSON الحقيقي فيفشل التفسير بالكامل.
+
+    الآن: أول محاولة داخل كل سياج ```...``` على حدة (المحتوى المعزول لا
+    يمكن أن يحوي ما بعد السياج) — وإن غاب السياج أو فشل تفسيره، احتياط
+    السلوك القديم (أول '{' لآخر '}' في النص كاملاً)."""
+    candidates = [m.group(1).strip() for m in _FENCE_RE.finditer(text)
+                 if m.group(1).strip()]
+    candidates.append(text)
+    return candidates
+
+
+_FINAL_ANSWER_KEYS = ("findings", "gaps", "summary")
+
+# توجيه الإنهاء القسري (الموجة ٨) — جولة واحدة فقط، بلا أدوات، حين تُستنفد
+# الميزانية أو يتوقف كلود مبكراً برد لا يشبه الصيغة النهائية المطلوبة.
+_FINALIZE_NUDGE = (
+    "توقّف — لا مزيد من نداءات الأدوات متاحة الآن. اكتب ردّك النهائي فوراً "
+    "بصيغة JSON فقط (لا نص خارجها، لا سؤال توضيحي) من النتائج التي جمعتها "
+    "حتى الآن: "
+    '{"findings":[{"claim":"...","datapoint_ids":["dp1"],'
+    '"confidence":0.0-1.0}],"gaps":["ما لم تستطع تأكيده"],"summary":"..."}. '
+    "إن لم تجد شيئاً مؤكَّداً بعد، أعد findings فارغة وفصّل السبب في gaps — "
+    "لا تخترع بياناً لتملأ الحقل.")
+
+
+def _looks_like_final_answer(text: str) -> bool:
+    """هل يشبه هذا النص رداً نهائياً صالحاً (JSON بمفاتيح findings/gaps/
+    summary)؟ — فحص رخيص يعيد استخدام _json_candidates (يدعم السياج نفسه)
+    لتقرير: أنُرسل جولة إنهاء قسرية أم نقبل هذا الرد كما هو."""
+    for cand in _json_candidates(text or ""):
+        start, end = cand.find("{"), cand.rfind("}")
+        if start < 0 or end < start:
+            continue
+        try:
+            obj = json.loads(cand[start:end + 1])
+        except Exception:  # noqa: BLE001
+            continue
+        if isinstance(obj, dict) and any(k in obj for k in _FINAL_ANSWER_KEYS):
+            return True
+    return False
+
+
 def _parse_output(text: str | None, registry: dict[str, DataPoint]) -> dict:
     """فسِّر الرد النهائي — validate findings against the cited-datapoint
     registry; an uncited/mis-cited claim is dropped + logged (never kept)."""
     if not text or not text.strip():
         return {"findings": [], "gaps": ["لا رد نهائي من كلود"], "summary": "",
                 "dropped": []}
-    try:
-        start, end = text.find("{"), text.rfind("}")
-        obj = json.loads(text[start:end + 1]) if start >= 0 else {}
-    except Exception:  # noqa: BLE001 — رد غير-JSON = بلا نتائج، لا اختلاق
+    obj: dict | None = None
+    for cand in _json_candidates(text):
+        start, end = cand.find("{"), cand.rfind("}")
+        if start < 0 or end < start:
+            continue
+        try:
+            parsed = json.loads(cand[start:end + 1])
+        except Exception:  # noqa: BLE001 — مرشّح فاشل، جرّب التالي
+            continue
+        if isinstance(parsed, dict):
+            obj = parsed
+            break
+    if obj is None:
         return {"findings": [], "gaps": ["رد كلود غير قابل للتفسير كـ JSON"],
                 "summary": text.strip()[:300], "dropped": []}
 
@@ -459,6 +530,13 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
     max_rounds = tool_budget + 2  # هامش أمان: نص نهائي + جولة إجبار بلا أدوات
     final_text: str | None = None
     global_cap_hit = False
+    # بلاغ حي (الموجة ٨): consumer_culture/customs_requirements استنفدا
+    # الميزانية بلا رد نهائي — الجولة الأخيرة كانت تُحذف الأدوات فقط دون
+    # توجيه صريح، فيواصل كلود سرداً/أسئلة توضيحية بدل JSON. الآن: جولة
+    # إنهاء قسرية واحدة فقط (لا أكثر) تحمل توجيهاً صريحاً "أجب الآن نهائياً"
+    # — تُرسَل إما عند نفاد الميزانية، أو حين يتوقف كلود مبكراً برد لا يشبه
+    # الصيغة النهائية المطلوبة (JSON بمفتاح findings/gaps/summary).
+    forced_finalization_sent = False
 
     for _round in range(max_rounds):
         # السقف الكلي عبر التحليل بأكمله (١٢ بعثة معاً — قسم «الميزانية
@@ -474,6 +552,9 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
                 global_cap_hit = True
         offer_tools = (tool_specs if tool_calls_used[0] < tool_budget
                       and not global_cap_hit else None)
+        if offer_tools is None and not forced_finalization_sent:
+            messages.append({"role": "user", "content": _FINALIZE_NUDGE})
+            forced_finalization_sent = True
         t_round = _time.monotonic()
         resp = _call_tools(system, messages, tools=offer_tools,
                            max_tokens=max_tokens, model=_MODEL)
@@ -495,8 +576,18 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
         messages.append({"role": "assistant", "content": content})
         tool_uses = [b for b in content if b.get("type") == "tool_use"]
         if not tool_uses or resp.get("stop_reason") != "tool_use":
-            final_text = "".join(b.get("text", "") for b in content
-                                 if b.get("type") == "text")
+            candidate_text = "".join(b.get("text", "") for b in content
+                                     if b.get("type") == "text")
+            # توقّف مبكر (ميزانية أدوات لم تُستنفد بعد) لكن الرد لا يشبه
+            # الصيغة النهائية — فرصة إنهاء قسرية واحدة قبل الاستسلام، بدل
+            # قبول رد غير مكتمل صامتاً (مطابقة السلوك عند نفاد الميزانية).
+            if (not _looks_like_final_answer(candidate_text)
+                    and not forced_finalization_sent
+                    and _round < max_rounds - 1):
+                messages.append({"role": "user", "content": _FINALIZE_NUDGE})
+                forced_finalization_sent = True
+                continue
+            final_text = candidate_text
             break
 
         tool_results = []
