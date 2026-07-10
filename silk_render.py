@@ -574,7 +574,13 @@ def _deep_research_view(result: dict) -> dict | None:
         }
     analyst = dr.get("analyst") or {}
     analyst_report = _report_fields(analyst.get("report"))
-    by_category = {cat: [_dp(x) for x in (dps or [])]
+    # P2: شارة أدلة ثلاثية (✓/◐/○) محسوبة هنا مرة واحدة في النموذج القانوني —
+    # لا رقم ثقة خام يصل الواجهة، ولا منطق تصنيف مكرَّر في JS العميل.
+    from silk_narrative import evidence_badge
+    def _with_badge(x):
+        d = _dp(x)
+        return {**d, "confidence_badge": evidence_badge(d.get("confidence"))}
+    by_category = {cat: [_with_badge(x) for x in (dps or [])]
                   for cat, dps in (analyst.get("by_category") or {}).items()}
     report_out = dr.get("report") or {}
     verdict = dr.get("verdict") or {}

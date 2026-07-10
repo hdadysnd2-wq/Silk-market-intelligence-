@@ -35,6 +35,33 @@ def test_deep_research_panel_uses_the_five_intersections():
         assert f'{cat}:"' in html or f"{cat}:" in html
 
 
+def test_category_grid_uses_confidence_badge_not_raw_number():
+    """P2 (مراجعة أرقام منفصلة بلا معنى): شبكة التقاطعات الخمس كانت تطبع
+    ثقة عشرية خامة (· ثقة 0.6) — يجب أن تعرض شارة الأدلة الجاهزة من
+    نموذج العرض (confidence_badge) بدل تصنيف خام في JS العميل."""
+    html = _html()
+    assert "f.confidence_badge" in html
+    assert "· ثقة '+f.confidence" not in html
+    assert "'+f.confidence+'" not in html
+
+
+def test_full_report_promoted_above_raw_evidence_in_dom():
+    """التقرير الكامل المكتوب يظهر قبل قسم "الأدلة الخام" (البعثات
+    وتقاطعات المحلل) في ترتيب DOM — كان مدفوناً تحته في صندوق تمرير ضيّق."""
+    html = _html()
+    fn_start = html.index("function renderDeepResearch(")
+    fn_end = html.index("function renderBoard(")
+    body = html[fn_start:fn_end]
+    report_idx = body.index("التقرير الكامل (كاتب مراجَع")
+    raw_evidence_idx = body.index("الأدلة الخام")
+    assert report_idx < raw_evidence_idx
+    # جدول البعثات وشبكة التقاطعات صارا داخل <details> ثانوي مطويّ افتراضياً.
+    details_idx = body.index("<details")
+    missions_table_idx = body.index("البعثة</th>")
+    assert details_idx < missions_table_idx
+    assert "max-height:420px" not in body
+
+
 def test_javascript_syntax_is_valid_after_edit():
     node = shutil.which("node")
     if not node:

@@ -164,6 +164,29 @@ def confidence_phrase(c: object) -> str:
     return f"{band} ({pct}%)"
 
 
+# عتبات شارة الأدلة — ثابت واحد (P0-B، الموجة ٩): بلاغ حي "درجات ثقة تبدو
+# بلا سند" — أرقام "(ثقة 0.6)" خام كانت تتخلّل السرد بلا سياق لقارئ غير
+# تقني. رقمها الكامل ينتقل لملحق تقني للمدقّقين؛ متن التقرير يحمل شارة
+# مبسّطة ثلاثية فقط. رُحِّلت إلى هنا (P2) لتُستعمل في نموذج العرض نفسه
+# (silk_render._deep_research_view) لا في طبقة العرض النصي وحدها.
+EVIDENCE_VERIFIED_MIN = 0.8
+EVIDENCE_SECONDARY_MIN = 0.5
+
+
+def evidence_badge(confidence: object) -> str:
+    """شارة أدلة ثلاثية — ✓ موثّق (مصدر رسمي)/◐ ثانوي (مصدر واحد غير رسمي)/
+    ○ غير متحقق (مرشّح غير مؤكَّد) — بدل رقم ثقة خام في متن السرد."""
+    try:
+        c = float(confidence)
+    except (TypeError, ValueError):
+        return "○ غير متحقق"
+    if c >= EVIDENCE_VERIFIED_MIN:
+        return "✓ موثّق"
+    if c >= EVIDENCE_SECONDARY_MIN:
+        return "◐ ثانوي"
+    return "○ غير متحقق"
+
+
 def competition_phrase(hhi: object, top_share_pct: object = None,
                        n_suppliers: object = None) -> str:
     """حالة المنافسة بالعربية — مؤشر HHI الخام لا يصل المستخدم أبداً.

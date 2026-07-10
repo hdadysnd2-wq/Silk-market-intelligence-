@@ -133,26 +133,14 @@ def _is_markdown_table_separator(line: str) -> bool:
     return bool(cells) and all(c and set(c) <= {"-", ":"} for c in cells)
 
 
-# عتبات شارة الأدلة — ثابت واحد (P0-B، الموجة ٩): بلاغ حي "درجات ثقة تبدو
-# بلا سند" — أرقام "(ثقة 0.6)" خام كانت تتخلّل السرد بلا سياق لقارئ غير
-# تقني. رقمها الكامل ينتقل لملحق تقني للمدقّقين؛ متن التقرير يحمل شارة
-# مبسّطة ثلاثية فقط.
-_EVIDENCE_VERIFIED_MIN = 0.8
-_EVIDENCE_SECONDARY_MIN = 0.5
-
-
-def _evidence_badge(confidence: object) -> str:
-    """شارة أدلة ثلاثية — ✓ موثّق (مصدر رسمي)/◐ ثانوي (مصدر واحد غير رسمي)/
-    ○ غير متحقق (مرشّح غير مؤكَّد) — بدل رقم ثقة خام في متن السرد."""
-    try:
-        c = float(confidence)
-    except (TypeError, ValueError):
-        return "○ غير متحقق"
-    if c >= _EVIDENCE_VERIFIED_MIN:
-        return "✓ موثّق"
-    if c >= _EVIDENCE_SECONDARY_MIN:
-        return "◐ ثانوي"
-    return "○ غير متحقق"
+# شارة الأدلة رُحِّلت إلى silk_narrative.evidence_badge (P2) — لتُستعمل من
+# نموذج العرض (silk_render._deep_research_view) لا من طبقة عرض النص وحدها.
+# الاسم القديم يبقى هنا كتوافق خلفي لكل مستدعي هذا الملف.
+from silk_narrative import (  # noqa: E402
+    EVIDENCE_SECONDARY_MIN as _EVIDENCE_SECONDARY_MIN,
+    EVIDENCE_VERIFIED_MIN as _EVIDENCE_VERIFIED_MIN,
+    evidence_badge as _evidence_badge,
+)
 
 
 def _verdict_tone(vtxt: str) -> str:
