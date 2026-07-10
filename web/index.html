@@ -387,6 +387,9 @@ function hdrs(json){var h=json?{"Content-Type":"application/json"}:{};if(S.admin
 function toast(m){var el=document.createElement("div");el.className="toast";el.textContent=m;document.body.appendChild(el);setTimeout(function(){el.remove()},3200)}
 function detailText(d,raw){var x=d&&d.detail;if(x==null)return raw;if(typeof x==="string")return x;return x.reason||x.error||JSON.stringify(x)}
 function post(path,body){return fetch(base()+path,{method:"POST",headers:hdrs(true),body:JSON.stringify(body)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));return d})})}
+/* حادثة نفاد الاعتمادات — الطلب لا يساوي التشغيلة (P0): GET بسيط لاستطلاع
+   الحالة، تُستعمل مع /research/{id}/status و/analyses/{id}. */
+function getJSON(path){return fetch(base()+path,{headers:hdrs(false)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));return d})})}
 
 /* ── بحث المنتج ── */
 var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim();clearTimeout(pT);if(!q){$("#pDrop").classList.remove("open");return}
@@ -438,15 +441,48 @@ $("#runBtn").addEventListener("click",function(){runAnalysis()});
 /* بحث عميق — ١٢ بعثة كلود + محلل شامل + كاتب/مراجع (POST /research، لا
    /analyze). يتطلب سوقاً واحداً محدداً (S.market) — البحث العميق يحلّل سوقاً
    بعينه بعمق، لا يرتّب أسواقاً مرشّحة. 409 من البوابة المسبقة (كلود غير
-   متاح) يُعرض كرسالة واضحة — لا إعادة محاولة تلقائية بـallow_degraded. */
-function runDeepResearch(){if(!S.product||!S.market||S.busy)return;S.busy=true;sync();
+   متاح) يُعرض كرسالة واضحة — لا إعادة محاولة تلقائية بـallow_degraded.
+
+   حادثة نفاد الاعتمادات (P0): async_run=true — الطلب يعيد analysis_id
+   فوراً (202) بدل انتظار اتصال HTTP واحد قد تقطعه بوّابة عكسية منتصف
+   الطريق؛ اللوحة تستطلع GET /research/{id}/status دورياً وتعرض تقدّم
+   البعثات (س/١٢)، ثم تجلب النتيجة الكاملة عند الاكتمال. تشغيلة فاشلة
+   تُخزَّن معرّفها (S.lastFailedResearchId) — النقر مجدداً **يستأنفها**
+   بدل تشغيلة كاملة جديدة (لا حرق اعتمادات مضاعف). */
+function stopResearchPoll(){if(S.researchPollTimer){clearTimeout(S.researchPollTimer);S.researchPollTimer=null}}
+function pollResearchStatus(analysisId,lbl){
+  getJSON("/research/"+analysisId+"/status").then(function(st){
+    if(st.status==="running"){
+      $("#researchBtn").textContent="…جارٍ البحث ("+st.missions_completed+"/"+st.missions_total+")";
+      S.researchPollTimer=setTimeout(function(){pollResearchStatus(analysisId,lbl)},1500);return}
+    stopResearchPoll();
+    if(st.status==="completed"){
+      getJSON("/analyses/"+analysisId).then(function(res){
+        S.raw=res;S.view=res.view||null;S.busy=false;S.lastFailedResearchId=null;$("#researchBtn").textContent=lbl;sync();
+        pushHist();renderBoard();nav("board")})
+      .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("اكتمل البحث لكن تعذّرت قراءة النتيجة: "+e.message)});
+      return}
+    // 'failed' — البعثات المكتملة محفوظة؛ النقر القادم يستأنف بنفس المعرّف لا يبدأ من الصفر.
+    S.busy=false;S.lastFailedResearchId=analysisId;$("#researchBtn").textContent=lbl;sync();
+    toast("تعذّر إكمال البحث (رقم "+analysisId+") — البعثات المكتملة محفوظة، انقر مجدداً للاستئناف")})
+  .catch(function(e){stopResearchPoll();S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("تعذّر استطلاع حالة البحث: "+e.message)})}
+function runDeepResearch(){if(S.busy)return;
+  var resuming=!!S.lastFailedResearchId;
+  if(!resuming&&(!S.product||!S.market))return;
+  S.busy=true;sync();stopResearchPoll();
   var lbl=$("#researchBtn").textContent;$("#researchBtn").textContent="…جارٍ البحث";
-  var b={product:S.product,market:S.market.iso3,hs_code:S.hs||null,persist:true,agent_prefs:S.prefs};
-  var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value),certs=certList();
-  if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
-  else toast("بدون بطاقة المنتج سيغيب عمود الربحية — أكملها الآن؟ دقيقتان");  // تنبيه لا حجب (الموجة ١٠)
-  if(!isNaN(price))b.own_price=price;  // بلاغ حي (الموجة ٩): كان يُقرَأ ولا يُرسَل إطلاقاً
-  post("/research",b).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#researchBtn").textContent=lbl;sync();
+  var b;
+  if(resuming){b={resume:S.lastFailedResearchId,async_run:true}}
+  else{
+    b={product:S.product,market:S.market.iso3,hs_code:S.hs||null,persist:true,agent_prefs:S.prefs,async_run:true};
+    var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value),certs=certList();
+    if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
+    else toast("بدون بطاقة المنتج سيغيب عمود الربحية — أكملها الآن؟ دقيقتان");  // تنبيه لا حجب (الموجة ١٠)
+    if(!isNaN(price))b.own_price=price}  // بلاغ حي (الموجة ٩): كان يُقرَأ ولا يُرسَل إطلاقاً
+  post("/research",b).then(function(res){
+    if(res&&res.analysis_id&&res.status==="running"){pollResearchStatus(res.analysis_id,lbl);return}
+    // توافق رجعي: رد متزامن كامل (لو عُطِّل async_run مستقبلاً من الخادم).
+    S.raw=res;S.view=res.view||null;S.busy=false;S.lastFailedResearchId=null;$("#researchBtn").textContent=lbl;sync();
     pushHist();renderBoard();nav("board")})
   .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("فشل البحث العميق: "+e.message)})}
 $("#researchBtn").addEventListener("click",function(){runDeepResearch()});

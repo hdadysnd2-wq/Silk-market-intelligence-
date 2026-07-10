@@ -18,7 +18,11 @@ import json
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout
+from concurrent.futures import (
+    FIRST_COMPLETED as cf_FIRST_COMPLETED,
+    ThreadPoolExecutor,
+    wait as cf_wait,
+)
 
 import silk_agents
 from silk_agents import AgentReport
@@ -282,9 +286,24 @@ def _product_card_context(product_card: dict | None) -> str:
            + "؛ ".join(parts))
 
 
+def _checkpoint(analysis_id: int | None, key: str, report: AgentReport) -> None:
+    """خزّن نقطة تفتيش بعثة فور اكتمالها — no-op بلا analysis_id (استدعاء
+    مكتبي مباشر خارج /research، أو `persist=False`). فشل التخزين لا يُسقط
+    التشغيلة — نفس مبدأ عدّادات silk_context (قناة جانبية لا شرط)."""
+    if analysis_id is None:
+        return
+    try:
+        import silk_storage
+        silk_storage.save_mission_checkpoint(analysis_id, key, report)
+    except Exception as e:  # noqa: BLE001 — نقطة التفتيش تحسين لا شرط تشغيل
+        log.warning("checkpoint write failed for %s/%s: %s", analysis_id, key, e)
+
+
 def run_all_missions(market: MarketRef, product: str = "",
                      hs_code: str | None = None,
-                     product_card: dict | None = None
+                     product_card: dict | None = None,
+                     analysis_id: int | None = None,
+                     resume_reports: dict[str, AgentReport] | None = None,
                      ) -> dict[str, AgentReport]:
     """شغّل البعثات الاثنتي عشرة — missions 1-11 in parallel (ThreadPoolExecutor,
     المستودع متزامن — لا asyncio)، ثم opportunity_gaps (12) قارئاً نتائجها.
@@ -294,9 +313,17 @@ def run_all_missions(market: MarketRef, product: str = "",
     (الموجة ٩) — تصل كل بعثة كسياق سردي (extra_context)، خصوصاً
     pricing_scout (سلّم الأسعار) وopportunity_gaps. Returns {mission_key:
     AgentReport}.
+
+    نقطة تفتيش/استئناف (P0، حادثة نفاد الاعتمادات): `analysis_id` يفعّل
+    تخزين كل بعثة **فور اكتمالها** (`_checkpoint`) لا بعد التشغيلة كاملة —
+    عملية تُقتَل منتصف الطريق (عطل/إعادة نشر/تجاوز مهلة البوابة) لا تخسر
+    البعثات المكتملة فعلاً. `resume_reports`: نتائج مُحمَّلة مسبقاً من
+    استئناف سابق — مفاتيحها تُستثنى من إعادة التشغيل والتخزين تماماً
+    (لا نداء كلود جديد لبعثة مكتملة بالفعل).
     """
-    reports: dict[str, AgentReport] = {}
+    reports: dict[str, AgentReport] = dict(resume_reports or {})
     parallel_keys = [k for k in MISSION_ORDER if k != "opportunity_gaps"]
+    to_run = [k for k in parallel_keys if k not in reports]
     card_ctx = _product_card_context(product_card)
 
     def _run_one(key: str) -> AgentReport:
@@ -316,27 +343,53 @@ def run_all_missions(market: MarketRef, product: str = "",
     # من أكثر من خيط في آن (RuntimeError: "already entered")؛ copy_context()
     # من الخيط الرئيسي نفسه لكل مهمة تعطي لقطات مستقلة آمنة للتوازي.
     import contextvars
+    import time as _time
 
-    with ThreadPoolExecutor(max_workers=len(parallel_keys) or 1) as pool:
-        futures = {pool.submit(contextvars.copy_context().run, _run_one, k): k
-                  for k in parallel_keys}
-        for fut, key in futures.items():
-            try:
-                reports[key] = fut.result(timeout=_MISSION_TIMEOUT_S)
-            except _FutureTimeout:
+    if to_run:
+        with ThreadPoolExecutor(max_workers=len(to_run)) as pool:
+            futures = {pool.submit(contextvars.copy_context().run, _run_one, k): k
+                      for k in to_run}
+            # تفتيش تدريجي حقيقي (P0): `wait(..., FIRST_COMPLETED)` في حلقة
+            # بدل `futures.items()` المتسلسل — الأخير كان يحجب على أول
+            # بعثة بترتيب الإرسال حتى مهلتها كاملة قبل حتى النظر لبعثة
+            # ثانية أنجزت فعلاً قبلها، فيؤخّر تخزين نقاط تفتيش جاهزة فعلاً
+            # (بلاغ حي: عطل بين الثانية ٥ والثانية ٨٧ من نافذة ٩٠ ثانية كان
+            # سيخسر بعثة اكتملت في الثانية ٥ لأنها لم تُخزَّن بعد). مهلة
+            # واحدة مشتركة للدفعة كاملة (لا مهلة منفصلة لكل بعثة بالتتابع)
+            # — البعثات فعلاً متوازية فنافذة الانتظار الكلية تقارب مهلة
+            # بعثة واحدة، لا مجموعها.
+            deadline = _time.monotonic() + _MISSION_TIMEOUT_S
+            pending = set(futures)
+            while pending:
+                remaining = deadline - _time.monotonic()
+                if remaining <= 0:
+                    break
+                done, pending = cf_wait(pending, timeout=remaining,
+                                        return_when=cf_FIRST_COMPLETED)
+                for fut in done:
+                    key = futures[fut]
+                    try:
+                        report = fut.result()
+                    except Exception as e:  # noqa: BLE001 — عزل الأعطال، لا سقوط جماعي
+                        log.warning("mission %s raised: %s", key, e)
+                        report = AgentReport(
+                            f"LLMMissionAgent:{key}", [], True,
+                            f"{key}: خطأ غير متوقع: {type(e).__name__}: {e}")
+                    reports[key] = report
+                    _checkpoint(analysis_id, key, report)
+            for fut in pending:  # لم تُنجز قبل انتهاء المهلة المشتركة
+                key = futures[fut]
                 log.warning("mission %s timed out after %ss", key, _MISSION_TIMEOUT_S)
                 reports[key] = _timed_out_report(key)
-            except Exception as e:  # noqa: BLE001 — عزل الأعطال، لا سقوط جماعي
-                log.warning("mission %s raised: %s", key, e)
-                reports[key] = AgentReport(
-                    f"LLMMissionAgent:{key}", [], True,
-                    f"{key}: خطأ غير متوقع: {type(e).__name__}: {e}")
+                _checkpoint(analysis_id, key, reports[key])
 
-    prior_findings = [dp for k in parallel_keys for dp in reports[k].findings]
-    gaps_agent = LLMMissionAgent(MISSIONS["opportunity_gaps"])
-    reports["opportunity_gaps"] = gaps_agent.run({
-        "market": market, "product": product, "hs_code": hs_code,
-        "budget": _MISSION_BUDGET, "extra_findings": prior_findings})
+    if "opportunity_gaps" not in reports:
+        prior_findings = [dp for k in parallel_keys for dp in reports[k].findings]
+        gaps_agent = LLMMissionAgent(MISSIONS["opportunity_gaps"])
+        reports["opportunity_gaps"] = gaps_agent.run({
+            "market": market, "product": product, "hs_code": hs_code,
+            "budget": _MISSION_BUDGET, "extra_findings": prior_findings})
+        _checkpoint(analysis_id, "opportunity_gaps", reports["opportunity_gaps"])
     return reports
 
 
@@ -345,7 +398,10 @@ def deep_research(market: MarketRef, product: str = "",
                   only_agent: str | None = None,
                   trace_id: str | None = None,
                   trace_dir: str | None = None,
-                  product_card: dict | None = None) -> dict:
+                  product_card: dict | None = None,
+                  analysis_id: int | None = None,
+                  resume_reports: dict[str, AgentReport] | None = None,
+                  ) -> dict:
     """نقطة دخول التنقيح والتشغيل الموحّدة — أداة التنقيح الأساسية (الموجة ٦،
     §docs/TUNING.md): `dry_run=True, only_agent="pricing_scout"` يشغّل
     بعثة **واحدة** فقط ضد سوق حقيقية ويطبع أثرها الكامل (البرومبت، كل
@@ -386,7 +442,9 @@ def deep_research(market: MarketRef, product: str = "",
 
     with silk_trace.trace_context(tid, **trace_kwargs) as path:
         reports = run_all_missions(market, product=product, hs_code=hs_code,
-                                   product_card=product_card)
+                                   product_card=product_card,
+                                   analysis_id=analysis_id,
+                                   resume_reports=resume_reports)
     return {"mode": "full", "reports": reports, "trace_id": tid,
            "trace_path": path}
 
