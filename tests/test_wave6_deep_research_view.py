@@ -81,6 +81,17 @@ def test_deep_research_section_built_from_live_agent_reports():
     assert dr["report"]["unresolved_notes"] == ["ملاحظة"]
 
 
+def test_by_category_carries_confidence_badge_not_raw_number():
+    """P2 (مراجعة أرقام منفصلة بلا معنى): كل عنصر في by_category يحمل
+    الآن confidence_badge محسوبة في النموذج القانوني نفسه — الواجهة تعرضها
+    مباشرة بلا تصنيف خام في JS العميل ولا رقم ثقة عشري خام."""
+    from silk_render import build_view
+    view = build_view(_deep_research_result())
+    demand = view["deep_research"]["analyst"]["by_category"]["demand"]
+    assert demand[0]["confidence"] == 0.6
+    assert demand[0]["confidence_badge"] == "◐ ثانوي"
+
+
 def test_deep_research_key_distinct_from_existing_stage3_research_key():
     # تصادم تسمية محتمل: row["research"] له معنى مختلف تماماً (حزمة
     # الوكلاء الثمانية الحتمية، silk_research.py) — يجب ألا يتقاطعا.

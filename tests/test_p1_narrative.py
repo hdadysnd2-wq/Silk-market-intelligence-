@@ -15,6 +15,20 @@ import silk_narrative as N  # noqa: E402
 from silk_data_layer import DataPoint  # noqa: E402
 
 
+def test_evidence_badge_relocated_to_narrative():
+    """شارة الأدلة الثلاثية رُحِّلت من silk_reports إلى silk_narrative (P2)
+    لتُستعمل من نموذج العرض القانوني (silk_render._deep_research_view) لا
+    من طبقة عرض النص وحدها؛ نفس جدول العتبات الذي يحميه
+    tests/test_wave9_sellable_report.py::test_evidence_badge_thresholds
+    عبر توافق خلفي (silk_reports._evidence_badge)."""
+    assert N.evidence_badge(0.9) == "✓ موثّق"
+    assert N.evidence_badge(0.8) == "✓ موثّق"
+    assert N.evidence_badge(0.79) == "◐ ثانوي"
+    assert N.evidence_badge(0.5) == "◐ ثانوي"
+    assert N.evidence_badge(0.49) == "○ غير متحقق"
+    assert N.evidence_badge(None) == "○ غير متحقق"
+
+
 def test_verdict_glossary_never_leaks_machine_codes():
     assert N.verdict_ar("CONDITIONAL-GO") == "دخول مشروط"
     assert N.verdict_ar("GO") == "التوصية بالدخول"
