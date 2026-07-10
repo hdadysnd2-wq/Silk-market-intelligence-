@@ -44,6 +44,27 @@ def _analyzed():
             with_research=True, with_requirements=True, with_risk=True)
 
 
+def _seed_store_multi():
+    """يبذر مورّداً ثانياً (الإمارات) — لاختبار قسم الأسواق المرشّحة الأخرى."""
+    _seed_store()
+    silk_store.upsert_trade_flows([
+        {"hs6": "080410", "reporter_iso3": "ARE", "partner_iso3": "WLD",
+         "year": 2021, "flow": "M", "value_usd": 1.5e7},
+        {"hs6": "080410", "reporter_iso3": "ARE", "partner_iso3": "WLD",
+         "year": 2023, "flow": "M", "value_usd": 2.0e7, "qty_kg": 5.0e6},
+        {"hs6": "080410", "reporter_iso3": "ARE", "partner_iso3": "SAU",
+         "year": 2023, "flow": "M", "value_usd": 1.4e7, "qty_kg": 4.0e6}])
+
+
+def _analyzed_multi():
+    import silk_engine
+    with block_network():
+        return silk_engine.analyze(
+            "تمور", countries=[{"iso3": "CHN", "m49": "156"},
+                              {"iso3": "ARE", "m49": "784"}], year=2023,
+            with_research=True, with_requirements=True, with_risk=True)
+
+
 def test_view_carries_research_decision_and_rule_derived_sections():
     _seed_store()
     from silk_render import build_view
@@ -140,6 +161,89 @@ def test_report_md_endpoint_guarded_and_derived_from_template():
     with mock.patch("silk_storage.get_analysis", return_value=None):
         assert client.get("/analyses/99/report.md").status_code == 404
     os.environ.pop("SILK_RATE_LIMIT", None)
+
+
+def test_source_lines_never_leak_raw_confidence_decimal():
+    """Finding 0 (مراجعة تقرير أرقام منفصلة بلا معنى): _f_src_bare كانت تطبع
+    ثقة عشرية خامة (ثقة: 0.9) في كل سطر مصدر داخل حزمة البحث — في كلا
+    الصيغتين. يجب أن تُستبدل بصيغة بشرية (عالية/متوسطة/منخفضة)."""
+    import re
+    _seed_store()
+    from silk_render import build_view
+    from silk_reports import render_markdown
+    md = render_markdown(build_view(_analyzed()))
+    assert not re.search(r"ثقة:\s*0\.\d", md), "raw confidence decimal leaked"
+    assert any(b in md for b in ("عالية (", "متوسطة (", "منخفضة ("))
+
+
+def test_render_markdown_other_candidate_markets_section_exists():
+    """قسم "الأسواق المرشّحة الأخرى" (جديد) يغطي الأسواق ٢-٨ بجمل تجارية
+    سردية — لا تفريغ components_detail خام، ولا ثقة عشرية خامة."""
+    import re
+    _seed_store_multi()
+    from silk_render import build_view
+    from silk_reports import render_markdown
+    view = build_view(_analyzed_multi())
+    assert len(view["markets"]) >= 2
+    md = render_markdown(view)
+    assert "## الأسواق المرشّحة الأخرى" in md
+    assert not re.search(r"ثقة:\s*0\.\d", md)
+    assert "الثقة الإجمالية لهذا التقييم:" in md
+
+
+def test_ai_report_surfaces_in_view_and_replaces_exec_summary():
+    """ai_report (التحليل الاحترافي، silk_ai_judge) يصل build_view ويستبدل
+    به قسم الخلاصة التنفيذية في كلا الصيغتين حين يتوفر — بدل exec_summary
+    الحتمية (silk_narrative)."""
+    _seed_store()
+    from silk_render import build_view
+    from silk_reports import render_markdown
+    res = _analyzed()
+    res["report"] = ("فقرة احترافية أولى عن أفضل الأسواق.\n"
+                     "فقرة ثانية عن الفجوات والخطوة التالية.")
+    res["report_note"] = None
+    view = build_view(res)
+    assert view["ai_report"] == res["report"]
+    md = render_markdown(view)
+    assert "فقرة احترافية أولى" in md
+    # الخلاصة الحتمية (تبدأ كل فقرة أولى بـ"التوصية: ") لا تظهر بديلاً بعد
+    # توفر التحليل الاحترافي — لا حكمان في قسم واحد.
+    exec_section = md.split("## منهجية البحث")[0]
+    assert "التوصية: " not in exec_section
+
+
+def test_ai_report_absent_falls_back_to_exec_summary_with_declared_note():
+    """غياب مفتاح Claude (أو فشل النداء) يرجع للخلاصة الحتمية بلا كسر —
+    والملاحظة المعلنة (report_note) تظهر لا تُخفى."""
+    _seed_store()
+    from silk_render import build_view
+    from silk_reports import render_markdown
+    res = _analyzed()
+    res["report"] = None
+    res["report_note"] = ("تعذّر توليد تقرير كلود (مفتاح غائب أو فشل "
+                          "النداء) — AI report unavailable, not hidden.")
+    view = build_view(res)
+    assert view["ai_report"] is None
+    md = render_markdown(view)
+    assert "التوصية: " in md
+    assert "تعذّر توليد تقرير كلود" in md
+
+
+def test_render_docx_candidate_markets_are_narrative_not_raw_dump():
+    """قسم ٩ (docx) يعرض جملاً تجارية بمصدر لكل سوق مرشّح — لا مفتاحاً/قيمة
+    خامة يتبعها رقم ثقة عشري."""
+    import re
+    pytest.importorskip("docx")
+    _seed_store_multi()
+    from conftest import docx_all_text
+    from silk_render import build_view
+    from silk_reports import render_docx
+    view = build_view(_analyzed_multi())
+    path = render_docx(view, os.path.join(tempfile.mkdtemp(), "r.docx"))
+    texts = docx_all_text(path)
+    assert "٩." in texts
+    assert not re.search(r"ثقة:\s*0\.\d", texts)
+    assert "الثقة الإجمالية لهذا التقييم" in texts
 
 
 def test_ui_has_eight_screens_and_markdown_link():

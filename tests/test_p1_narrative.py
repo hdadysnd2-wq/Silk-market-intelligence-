@@ -33,6 +33,26 @@ def test_country_names_arabic_for_all_silk_markets():
     assert N.country_ar("China") == "الصين"          # اسم إنجليزي أيضاً
 
 
+def test_market_component_lines_handles_fetch_failed_and_hides_raw_hhi():
+    """market_component_lines (سابقاً _top_drivers الخاصة بالسوق الأول فقط)
+    تعمل الآن لأي سوق في الترتيب؛ تعذّر الجلب يُذكر صراحة لا يُسقَط صامتاً،
+    وHHI الخام لا يصل الجملة أبداً."""
+    market = {
+        "components_detail": [
+            {"name": "market_size", "value": None, "status": "fetch_failed",
+             "source": "UN Comtrade"},
+            {"name": "saudi_position", "value": 16.69, "source": "UN Comtrade"},
+            {"name": "competition", "value": 0.0838, "source": "UN Comtrade"},
+        ],
+        "trend": {"growth_pct": 291.3, "cagr_pct": 25.5, "source": "UN Comtrade"},
+    }
+    lines = N.market_component_lines(market)
+    joined = "\n".join(lines)
+    assert "تعذّر الجلب" in joined
+    assert "0.0838" not in joined
+    assert "16.69%" in joined and "المصدر: UN Comtrade" in joined
+
+
 def test_competition_phrase_hides_raw_hhi():
     open_txt = N.competition_phrase(0.08, top_share_pct=16.7, n_suppliers=43)
     assert "مفتوحة" in open_txt and "0.08" not in open_txt

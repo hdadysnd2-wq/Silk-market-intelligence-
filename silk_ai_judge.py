@@ -484,10 +484,13 @@ def answer_about_analysis(question: str, context: str) -> dict | None:
 
 
 def ai_report(result: dict) -> str | None:
-    """تقرير تصدير مبدئي — a written market-entry report over the full analysis.
+    """التحليل الاحترافي — الخلاصة التنفيذية الاحترافية لتقرير /analyze.
 
-    Summarizes ranked markets + provenance into a readable recommendation. Strictly
-    grounded in `result`; flags gaps rather than inventing numbers. None if no key.
+    يحلّ محل الخلاصة الحتمية (`silk_narrative.exec_summary`) في التقرير
+    المصدَّر حين يتوفر (`silk_reports._narrative_exec_summary`) — مبنيّ حصراً
+    على الأسواق المرتّبة + سياق حزمة بحث السوق الأول المضغوط
+    (`silk_render.analysis_context`، إن وُجد)؛ لا يخترع رقماً، والفجوات
+    تُذكر صراحة. None بلا مفتاح/فشل النداء (القالب يرجع حينها لـ exec_summary).
     """
     if not available():
         return None
@@ -503,13 +506,27 @@ def ai_report(result: dict) -> str | None:
             f"استيراد {cv('market_size')}$، حصة السعودية {cv('saudi_position')}%، "
             f"دخل/PPP {m.get('income_ppp')}، سكان {m.get('population')}، "
             f"منافس مهيمن {m.get('top_competitor')}")
-    user = (  # hs_code قد يصل من جسم الطلب مباشرة — يُعزل كسائر الخارجي
+    try:  # سياق أعمق (TAM/SAM/SOM، نتائج وكلاء البحث السبعة، شروط §8، فجوات)
+        from silk_render import analysis_context
+        ctx = analysis_context(result, max_chars=4000)
+    except Exception as e:  # noqa: BLE001 — طبقة كتابة لا تُسقط التحليل
+        log.warning("ai_report: analysis_context unavailable: %s", e)
+        ctx = ""
+    parts = [  # hs_code قد يصل من جسم الطلب مباشرة — يُعزل كسائر الخارجي
         f"المنتج: {_isolate(str(result.get('product')))} "
-        f"(HS {_isolate(str(result.get('hs_code')))}).\n"
-        f"الأسواق مرتّبة:\n" + _isolate("\n".join(rows)) + "\n\n"
-        "اكتب تقريرًا أوّليًّا موجزًا (٤–٧ فقرات): أفضل ١–٣ أسواق ولماذا (بالأدلة)، "
-        "تحذيرات وفجوات البيانات، وخطوة تالية مقترحة. لا تخترع أرقامًا غير معطاة.")
-    return _call(_PRINCIPLE, user, max_tokens=1600)
+        f"(HS {_isolate(str(result.get('hs_code')))}).",
+        "الأسواق مرتّبة:\n" + _isolate("\n".join(rows)),
+    ]
+    if ctx:
+        parts.append("سياق أعمق للسوق الأول (حزمة البحث والقرار والفجوات):\n"
+                     + _isolate(ctx))
+    parts.append(
+        "اكتب الخلاصة التنفيذية لتقرير بحث سوقي احترافي (٣-٥ فقرات سردية): "
+        "أفضل ١-٣ أسواق ولماذا تجارياً — كل رقم تذكره مدمج داخل الجملة نفسها "
+        "مع مصدره بين قوسين، لا نقطة معزولة ولا سطر استشهاد يتيم؛ ثم فقرة "
+        "تحذيرات وفجوات البيانات الصريحة (لا تخمين)؛ ثم فقرة أخيرة بخطوة "
+        "تالية عملية مقترحة. لا تخترع رقماً غير وارد أعلاه.")
+    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=1800)
 
 
 # ── الطبقة ٤ — كاتب التقرير + المراجع (الموجة ٤، V5) ─────────────────────────

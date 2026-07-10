@@ -230,16 +230,20 @@ def translate_gaps(gaps: list) -> list[str]:
 
 # ── الخلاصة التنفيذية السردية — the 3-paragraph executive summary ───────────
 
-def _top_drivers(top_market: dict) -> list[str]:
-    """أبرز الحقائق المرصودة للسوق الأول — جمل تجارية من أرقام موجودة فقط."""
+def market_component_lines(market: dict) -> list[str]:
+    """جمل تجارية سردية من مكوّنات سوق واحد أياً كان ترتيبه في القائمة —
+    بلا ثقة خام ولا اسم مقياس داخلي؛ سطر واحد لكل حقيقة مرصودة + مصدرها.
+    تعذّر الجلب يُذكر صراحة بدل إسقاطه صامتاً — لا فجوة صامتة."""
     drivers: list[str] = []
     comps = {c.get("name"): c for c in
-             (top_market.get("components_detail") or [])}
+             (market.get("components_detail") or [])}
     ms = comps.get("market_size") or {}
     if ms.get("value") is not None:
         drivers.append(f"يستورد السوق ما قيمته {fmt_money(ms['value'])} سنوياً "
                        f"من هذا المنتج (المصدر: {ms.get('source')})")
-    tr = top_market.get("trend") or {}
+    elif ms.get("status") == "fetch_failed":
+        drivers.append("حجم واردات السوق: تعذّر الجلب — أعد المحاولة")
+    tr = market.get("trend") or {}
     if tr.get("growth_pct") is not None:
         drivers.append(
             growth_phrase(tr.get("cagr_pct"), tr.get("growth_pct"),
@@ -250,6 +254,8 @@ def _top_drivers(top_market: dict) -> list[str]:
         drivers.append(f"المنتجات السعودية حاضرة فعلاً بحصة "
                        f"{fmt_pct(sp['value'])} من واردات السوق "
                        f"(المصدر: {sp.get('source')})")
+    elif sp.get("status") == "fetch_failed":
+        drivers.append("الحصة السعودية: تعذّر الجلب — أعد المحاولة")
     comp = comps.get("competition") or {}
     if comp.get("value") is not None:
         drivers.append(competition_phrase(comp["value"]))
@@ -273,7 +279,7 @@ def exec_summary(view: dict) -> list[str]:
                "الواردة أدناه قبل قرار نهائي.")
 
     # (ب) لماذا — تجارياً، من الأرقام المرصودة فقط.
-    drivers = _top_drivers(top)
+    drivers = market_component_lines(top)
     p2 = ("الأساس التجاري: " + "؛ و".join(drivers) + "."
           if drivers else
           "الأساس التجاري: لم تُرصد بيانات كافية لسوق المنتج بعد — "
