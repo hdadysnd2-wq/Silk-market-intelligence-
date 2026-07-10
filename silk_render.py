@@ -738,6 +738,11 @@ def build_view(result: dict) -> dict:
         # اقتصاد البيانات (persist-5): عدّاد مرصود — مخزن/ذاكرة مقابل جلب حي.
         "data_economics": result.get("data_economics"),
         "note": result.get("note"),
+        # التحليل الاحترافي (silk_ai_judge.ai_report) — يحلّ محل الخلاصة
+        # الحتمية (exec_summary) في التقرير المصدَّر حين يتوفر؛ None = غياب
+        # مفتاح/فشل النداء (ظاهر لا محذوف)، والقالب يرجع حينها لـ exec_summary.
+        "ai_report": result.get("report"),
+        "ai_report_note": result.get("report_note"),
         # الموجة ٤ (V5): مختلف عن row["research"] القائم — راجع تنبيه التسمية
         # أعلى _deep_research_view. None لتحليل /analyze العادي (لا أثر).
         "deep_research": dr_view,

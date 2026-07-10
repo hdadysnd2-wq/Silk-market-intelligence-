@@ -149,3 +149,31 @@ def test_hermetic_artifacts_blocked_in_production_and_bannered_in_test():
     finally:
         os.environ.pop("SILK_HERMETIC", None)
     assert build_view({"markets": []})["test_run"] is False
+
+
+def test_entry_decision_confidence_is_phrase_not_raw_number():
+    """ثقة قرار الدخول (§8) كانت تُطبع رقماً عشرياً خاماً (ثقة: 0.52) في كلا
+    الصيغتين — يجب أن تظهر بصيغة بشرية (confidence_phrase) بدلاً منه."""
+    import re
+    _seed_store()
+    import silk_engine
+    from silk_render import build_view
+    from silk_reports import render_markdown
+    with block_network():
+        res = silk_engine.analyze("تمور",
+                                  countries=[{"iso3": "CHN", "m49": "156"}],
+                                  year=2023, with_research=True)
+    view = build_view(res)
+    ed = view["markets"][0]["entry_decision"]
+    assert ed.get("confidence") is not None
+    md = render_markdown(view)
+    assert not re.search(r"الثقة:\s*0\.\d", md), "raw entry-decision confidence leaked"
+    assert any(b in md for b in ("عالية (", "متوسطة (", "منخفضة ("))
+    pytest.importorskip("docx")
+    import os as _os
+    import tempfile as _tempfile
+    from conftest import docx_all_text
+    from silk_reports import render_docx
+    path = render_docx(view, _os.path.join(_tempfile.mkdtemp(), "r.docx"))
+    texts = docx_all_text(path)
+    assert not re.search(r"الثقة:\s*0\.\d", texts)

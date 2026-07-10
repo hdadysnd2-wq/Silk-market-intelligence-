@@ -327,16 +327,24 @@ def _render_markdown_table(doc, table_lines: list[str]) -> None:
 
 
 def _narrative_exec_summary(view: dict) -> list[str]:
-    """خلاصة تنفيذية سردية — تفويض كامل لطبقة الترجمة (P1، silk_narrative).
+    """خلاصة تنفيذية — التحليل الاحترافي (ai_report) إن توفر، وإلا exec_summary.
 
-    النسخة الأولى هنا كانت تعيد صياغة الحقول لكنها ما تزال تمرّر «السبب
-    التجاري: score 0.636 في النطاق الشرطي» حرفياً — شرط كود على وجه
-    التقرير. exec_summary في silk_narrative يبني الفقرات الثلاث من الأرقام
-    المرصودة نفسها (حجم الاستيراد/النمو/الحصة السعودية/حالة المنافسة)
-    بعربية بشرية، بلا درجة معيارية ولا اسم وكيل ولا شرط كود.
+    `view["ai_report"]` (silk_ai_judge.ai_report، كلود) فقرات سردية احترافية
+    مبنية على حزمة البحث الكاملة للسوق الأول + الأسواق المرتّبة؛ عند غيابه
+    (لا مفتاح/فشل النداء) يُرجَع لـ `exec_summary` الحتمية في silk_narrative
+    (النسخة الأولى هنا كانت تعيد صياغة الحقول لكنها ما تزال تمرّر «السبب
+    التجاري: score 0.636 في النطاق الشرطي» حرفياً — شرط كود على وجه التقرير؛
+    exec_summary تبني الفقرات الثلاث من الأرقام المرصودة نفسها بعربية بشرية،
+    بلا درجة معيارية ولا اسم وكيل ولا شرط كود). كلا المسارين مبنيّ حصراً على
+    حقول محسوبة فعلاً — لا اختلاق.
     """
+    ai_text = view.get("ai_report")
+    if ai_text:
+        return [p.strip() for p in str(ai_text).split("\n") if p.strip()]
     from silk_narrative import exec_summary
-    return exec_summary(view)
+    paras = exec_summary(view)
+    note = view.get("ai_report_note")
+    return paras + [str(note)] if note else paras
 
 
 def _market_scope_paragraph(view: dict) -> str:
@@ -465,13 +473,14 @@ def _f_src_bare(f: dict | None) -> str:
     لخلايا الجداول (`_add_table`) التي تحمل عمود "المصدر" بذاتها — البادئة
     هناك تتكرر ("المصدر: المصدر: ..."). `_f_srcline` تبقى للاستخدام السردي.
     """
+    from silk_narrative import confidence_phrase
     parts = []
     for s in (f or {}).get("sources") or []:
         seg = str(s.get("source") or "غير مرصود")
         if s.get("retrieved_at"):
             seg += f" | سُحب: {s['retrieved_at']}"
         if s.get("confidence") is not None:
-            seg += f" | ثقة: {s['confidence']}"
+            seg += f" | ثقة: {confidence_phrase(s['confidence'])}"
         if s.get("url"):
             seg += f" | {s['url']}"
         parts.append(seg)
@@ -732,8 +741,9 @@ def _docx_entry_decision(doc, m: dict) -> None:
     if ed is None:
         doc.add_paragraph(absent)
         return
+    from silk_narrative import confidence_phrase
     doc.add_paragraph(f"الحكم: {ed.get('verdict')} | النقاط: {_fmt(ed.get('score'))}"
-                      f" | الثقة: {ed.get('confidence')}")
+                      f" | الثقة: {confidence_phrase(ed.get('confidence'))}")
     doc.add_paragraph(f"أساس الثقة: {ed.get('confidence_basis')}")
     sbo = ed.get("scores_by_option") or {}
     doc.add_paragraph(f"خيار الأوزان المعتمد: {ed.get('weights_option')} — "
@@ -1371,22 +1381,20 @@ def render_docx(view: dict, path: str) -> str:
         doc.add_paragraph("لا بيانات تجارة ثنائية مرصودة لهذا التحليل — "
                           "فجوة معلنة (تتطلب with_research/UN Comtrade).")
 
-    # ═══ ٩) التحليل الإقليمي — كل سوق بمكوّناته ومصادرها ═══
+    # ═══ ٩) التحليل الإقليمي — كل سوق بجمل تجارية سردية، لا تفريغ مكوّنات خام ═══
     doc.add_heading("٩. التحليل الإقليمي (الأسواق المرشّحة)", level=1)
+    from silk_narrative import market_component_lines, confidence_phrase
     for i, m in enumerate((view.get("markets") or [])[:8], 1):
         doc.add_heading(f"٩.{i} {m.get('country')}", level=2)
-        for c in m.get("components_detail") or []:
-            from silk_narrative import internal_ar
-            # 1b: تعذّر الجلب ≠ غياب السجل — «أعد المحاولة» بدل «—» الموهمة.
-            shown = ("تعذّر الجلب — أعد المحاولة"
-                     if c.get("status") == "fetch_failed" and c.get("value")
-                     is None else _fmt(c["value"]))
-            doc.add_paragraph(f"{internal_ar(c['name'])}: {shown}")
-            src_line = (f"المصدر: {c.get('source') or '—'}"
-                        + (f" | سُحب: {c['retrieved_at']}"
-                           if c.get("retrieved_at") else "")
-                        + f" | ثقة: {c.get('confidence')}")
-            doc.add_paragraph(src_line, style="Intense Quote")
+        lines = market_component_lines(m)
+        if lines:
+            for line in lines:
+                doc.add_paragraph(line, style="List Bullet")
+        else:
+            doc.add_paragraph("لا مكوّنات مرصودة لهذا السوق — فجوة معلنة")
+        doc.add_paragraph(f"الثقة الإجمالية لهذا التقييم: "
+                          f"{confidence_phrase(m.get('confidence'))}",
+                          style="Intense Quote")
 
     # ═══ ١٠) المشهد التنافسي ═══
     doc.add_heading("١٠. المشهد التنافسي", level=1)
@@ -1598,9 +1606,10 @@ def render_markdown(view: dict) -> str:
     if ed is None:
         L += [ed_absent, ""]
     else:
+        from silk_narrative import confidence_phrase
         sbo = ed.get("scores_by_option") or {}
         L += [f"- الحكم: **{ed.get('verdict')}** | النقاط: {_fmt(ed.get('score'))}"
-              f" | الثقة: {ed.get('confidence')}",
+              f" | الثقة: {confidence_phrase(ed.get('confidence'))}",
               f"- أساس الثقة: {ed.get('confidence_basis')}",
               f"- خيار الأوزان المعتمد: {ed.get('weights_option')} — النقاط "
               f"بالخيارين: A = {_fmt(sbo.get('A'))} | B = {_fmt(sbo.get('B'))}"]
@@ -1668,6 +1677,22 @@ def render_markdown(view: dict) -> str:
         for g in ms.get("gaps") or []:
             L.append(f"- فجوة معلنة: {g}")
         L.append("")
+
+    # ── الأسواق المرشّحة الأخرى — جمل تجارية سردية لا تفريغ مكوّنات خام ──────
+    other_markets = (view.get("markets") or [])[1:8]
+    if other_markets:
+        from silk_narrative import market_component_lines, confidence_phrase
+        L += ["## الأسواق المرشّحة الأخرى", ""]
+        for m in other_markets:
+            L.append(f"### {m.get('country')}")
+            lines = market_component_lines(m)
+            if lines:
+                L += [f"- {line}" for line in lines]
+            else:
+                L.append("- لا مكوّنات مرصودة لهذا السوق — فجوة معلنة")
+            L.append(f"- الثقة الإجمالية لهذا التقييم: "
+                     f"{confidence_phrase(m.get('confidence'))}")
+            L.append("")
 
     # ── المنافسة بطبقتيها — دولية (كومتريد) + شركات بالاسم + طبقة الإثراء ────
     L += ["## المنافسة بطبقتيها", ""]
