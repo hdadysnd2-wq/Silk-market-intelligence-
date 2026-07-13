@@ -33,6 +33,7 @@ import re
 
 from silk_agents import AgentReport, BaseAgent
 from silk_ai_judge import _MODEL, _PRINCIPLE, _call_tools, _isolate
+from silk_ai_judge import failure_reason as _ai_failure_reason
 from silk_data_layer import DataPoint, comtrade_trade, primary_value, world_bank
 from silk_market_resolver import MarketRef
 
@@ -596,13 +597,19 @@ def _mark_cache_boundary(messages: list[dict]) -> None:
         content[-1] = {**content[-1], "cache_control": {"type": "ephemeral"}}
 
 
-def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
+def _run_loop(mission: dict, ctx: dict, budget: dict,
+              timeout: float | None = None) -> dict:
     """الحلقة المحكومة بالميزانية — tool_use/tool_result rounds until a final
     JSON answer or budget exhaustion (then one forced tools-off round).
 
     كل جولة (نداء كلود + كل نداء أداة) تُسجَّل عبر silk_trace.record_event
     إن كان التتبّع مفعَّلاً (silk_trace.trace_context) — no-op بلا تكلفة
     خارج تشغيلة تنقيح صريحة (§docs/TUNING.md، الموجة ٦).
+
+    `timeout`: مهلة نداء كلود لكل جولة — None يترك `_call_tools` يستعمل
+    مهلته الافتراضية (بعثات الأدوات القياسية الاثنتا عشرة). المحلل الشامل
+    (`silk_market_analyst`) يمرّر `silk_ai_judge._LONG_TIMEOUT` صراحة — بلاغ
+    حي إنتاجي: مدخله (نتائج البعثات كاملة) يتجاوز المهلة القياسية بانتظام.
     """
     import time as _time
 
@@ -700,15 +707,16 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
         _mark_cache_boundary(messages)
         t_round = _time.monotonic()
         resp = _call_tools(system, messages, tools=offer_tools,
-                           max_tokens=max_tokens, model=_MODEL)
+                           max_tokens=max_tokens, model=_MODEL, timeout=timeout)
         silk_context.count_data("llm_calls")
         elapsed_ms = round((_time.monotonic() - t_round) * 1000)
         if resp is None:
+            reason = _ai_failure_reason()
             silk_trace.record_event(
                 kind="llm_call", mission=mission_key, round=_round,
                 tools_offered=bool(offer_tools), elapsed_ms=elapsed_ms,
-                result="no_response (no key / call failed)")
-            return {"findings": [], "gaps": ["تعذّر نداء كلود (بلا مفتاح/فشل)"],
+                result=f"no_response ({reason})")
+            return {"findings": [], "gaps": [f"تعذّر نداء كلود ({reason})"],
                     "summary": "", "dropped": [], "registry": registry}
         content = resp.get("content") or []
         silk_trace.record_event(
@@ -779,7 +787,8 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
                   hs_code: str | None = None, budget: dict | None = None,
                   instruction: str = "",
                   extra_findings: list[DataPoint] | None = None,
-                  extra_context: str = "") -> AgentReport:
+                  extra_context: str = "",
+                  timeout: float | None = None) -> AgentReport:
     """شغّل وكيل مهمة كلود — the mission-driven tool-use loop as an AgentReport.
 
     `mission`: {"key","name","instructions","allowed_tools":[...]} — شكل
@@ -791,6 +800,8 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
     `extra_context`: سياق سردي إضافي غير قابل للاستشهاد المباشر (خيوط
     تقاطع محسوبة سابقاً من correlation.py — الموجة ٣) — يُعزَل ويُلحَق
     للاستئناس فقط، لا يفتح مسار استشهاد ثانياً.
+    `timeout`: مهلة نداء كلود صريحة (None = افتراضي `_call_tools`) — راجع
+    تعليق `_run_loop`.
     """
     eff_budget = {**_DEFAULT_BUDGET, **(budget or {})}
     ctx = {"market": market, "product": product, "hs_code": hs_code,
@@ -802,7 +813,7 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
             f"توجيه المستخدم (وجّه التركيز فقط — لا تخترع بيانات): "
             f"{_isolate(instruction)}")
 
-    result = _run_loop(eff_mission, ctx, eff_budget)
+    result = _run_loop(eff_mission, ctx, eff_budget, timeout=timeout)
     today = _today()
     label = eff_mission.get("name") or eff_mission.get("key") or "LLM agent"
     registry = result.get("registry", {})

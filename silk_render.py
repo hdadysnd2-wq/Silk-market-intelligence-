@@ -594,6 +594,8 @@ def _deep_research_view(result: dict) -> dict | None:
                for c in (analyst.get("missing_categories") or [])]
              + [f"ملاحظة مراجع لم تُعالَج: {n}"
                for n in (report_out.get("unresolved_notes") or [])])
+    if not report_out.get("report") and report_out.get("failure_reason"):
+        limits.append(f"التقرير الكامل غائب: {report_out['failure_reason']}")
     if result.get("hs_resolution_note"):
         limits.append(f"تصنيف HS: {result['hs_resolution_note']}")
     if result.get("ai_extras_note"):
@@ -614,7 +616,8 @@ def _deep_research_view(result: dict) -> dict | None:
         "verdict": verdict,
         "report": {"text": report_out.get("report"),
                   "review_cycles": report_out.get("review_cycles", 0),
-                  "unresolved_notes": report_out.get("unresolved_notes") or []},
+                  "unresolved_notes": report_out.get("unresolved_notes") or [],
+                  "failure_reason": report_out.get("failure_reason") or ""},
         "limits": limits,
         "next_step": ("فعّل التعميق (/deepen) للتحقق من المستوردين وجهات "
                      "الاتصال (Volza/Explee)"

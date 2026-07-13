@@ -516,7 +516,7 @@ function renderDeepResearch(v){
   if(rep.text){html+='<div class="bcard" style="margin:18px 0"><h3>التقرير الكامل (كاتب مراجَع، '+(rep.review_cycles||0)+' دورة مراجعة)</h3>'
     +'<div style="font-size:14px;white-space:pre-wrap">'+esc(rep.text)+'</div>'
     +(rep.unresolved_notes&&rep.unresolved_notes.length?('<div class="note" style="margin-top:10px">ملاحظات مراجعة لم تُحلّ:</div>'+rep.unresolved_notes.map(function(n){return '<p style="font-size:12.5px;color:var(--muted)">• '+esc(n)+'</p>'}).join("")):"")+'</div>'}
-  else html+='<div class="bcard" style="margin:18px 0"><h3>التقرير الكامل</h3><p class="gap">يتطلب مفتاح كلود (ANTHROPIC_API_KEY) على الخادم — غير متوفر في هذا التشغيل</p></div>';
+  else html+='<div class="bcard" style="margin:18px 0"><h3>التقرير الكامل</h3><p class="gap">'+esc(rep.failure_reason||"يتطلب مفتاح كلود (ANTHROPIC_API_KEY) على الخادم — غير متوفر في هذا التشغيل")+'</p></div>';
   // الخطوة التالية (تعميق) — فقط عند حكم GO، ملاصقة للتقرير لأنها دعوة الفعل
   if(dr.next_step)html+='<div class="next"><div><h4>الخطوة التالية</h4><p>'+esc(dr.next_step)+'</p></div><button class="cta" id="deepBtn">فعّل التعميق ←</button></div>';
   // الأدلة الخام (البعثات الاثنتا عشرة + تقاطعات المحلل) — قسم ثانوي مطويّ

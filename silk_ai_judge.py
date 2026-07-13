@@ -17,7 +17,12 @@ import re
 log = logging.getLogger(__name__)
 
 _MODEL = os.environ.get("SILK_AI_MODEL", "claude-opus-4-8")
-_TIMEOUT = 60
+_TIMEOUT = float(os.environ.get("SILK_AI_TIMEOUT_S", "60"))
+# مهلة موسّعة للنداءات الثقيلة (المحلل الشامل + كاتب التقرير) — بلاغ حي
+# إنتاجي (تمور/هولندا): مدخلاهما يضمّان نتائج البعثات الاثنتي عشرة كاملة
+# فيتجاوزان بانتظام مهلة ٦٠ث القياسية للبعثة الواحدة، فيعود _call بـNone
+# ويظهر التقاطع "دليل غير كافٍ" رغم توفر أدلة حقيقية في نفس التشغيلة.
+_LONG_TIMEOUT = float(os.environ.get("SILK_AI_LONG_TIMEOUT_S", "300"))
 
 # مبدأ الحَكَم — non-negotiable judging principle handed to the model every call.
 _PRINCIPLE = (
@@ -58,6 +63,21 @@ def available() -> bool:
     if ai_extras_blocked():
         return False
     return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+
+
+def failure_reason() -> str:
+    """سبب فشل نداء كلود المعروض للمستخدم — يميّز غياب المفتاح عن فشل
+    النداء الفعلي (مهلة/خطأ شبكة) بدل نسب كل غياب رد لغياب المفتاح زوراً.
+
+    بلاغ حي إنتاجي (تمور/هولندا): المحلل الشامل وكاتب التقرير أعادا None
+    بسبب تجاوز مهلة ثابتة، والواجهة عرضت "يتطلب مفتاح كلود" رغم نجاح ٢٩
+    نداء كلود آخر في نفس التشغيلة — `available()` عند لحظة الفشل يكفي
+    للتمييز: إن كانت True فالمفتاح موجود وغير محجوب، فالسبب الحقيقي نداء
+    فشل لا غيابه."""
+    if not available():
+        return ("لا مفتاح كلود مُفعّل (ANTHROPIC_API_KEY غير مضبوط على "
+                "الخادم، أو محجوب سياقياً)")
+    return "فشل نداء كلود (مهلة أو خطأ شبكة) — راجع سجلّات الخادم"
 
 
 # نموذج سريع للمهام الخفيفة (تصنيف/فلترة) — Haiku يخفّض زمن التحليل بشدّة
@@ -526,7 +546,8 @@ def ai_report(result: dict) -> str | None:
         "مع مصدره بين قوسين، لا نقطة معزولة ولا سطر استشهاد يتيم؛ ثم فقرة "
         "تحذيرات وفجوات البيانات الصريحة (لا تخمين)؛ ثم فقرة أخيرة بخطوة "
         "تالية عملية مقترحة. لا تخترع رقماً غير وارد أعلاه.")
-    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=1800)
+    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=1800,
+                timeout=_LONG_TIMEOUT)
 
 
 # ── الطبقة ٤ — كاتب التقرير + المراجع (الموجة ٤، V5) ─────────────────────────
@@ -690,7 +711,8 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "كل قسم رئيسي (لا الفرعية) ينتهي بسطر غامق واحد حرفياً بصيغة "
         "'**ماذا يعني هذا لقرارك:** <جملة واحدة>' — خلاصة عملية لا تكرار "
         "للسرد أعلاه.")
-    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=5000)
+    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=5000,
+                timeout=_LONG_TIMEOUT)
 
 
 def _section_order_issues(draft: str) -> list[str]:
@@ -756,12 +778,15 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
 
     يعيد {"report": نص أو None, "review_cycles": عدد الدورات الفعلية,
     "unresolved_notes": ملاحظات لم تُعالَج (تظهر في «حدود هذا التقرير»)}.
-    فشل الكتابة (بلا مفتاح) = تقرير None، لا اختلاق نص بديل.
+    فشل الكتابة (بلا مفتاح أو فشل نداء) = تقرير None، لا اختلاق نص بديل —
+    ويحمل حينها "failure_reason" (`failure_reason()` أعلاه) يميّز غياب
+    المفتاح عن فشل النداء الفعلي (مهلة/شبكة) بدل غموض السببين.
     """
     draft = deep_report(mission_reports, analyst_summary, verdict, product,
                         market_name)
     if not draft:
-        return {"report": None, "review_cycles": 0, "unresolved_notes": []}
+        return {"report": None, "review_cycles": 0, "unresolved_notes": [],
+                "failure_reason": failure_reason()}
 
     notes: list = []
     cycles = 0

@@ -36,10 +36,13 @@ def test_no_key_returns_none_not_fabrication():
     try:
         out = aj.write_reviewed_report(_mission_reports(), "x",
                                        {"verdict": "WATCH"}, "تمور", "نيجيريا")
+        reason = aj.failure_reason()  # نفس السياق (بلا مفتاح) وقت المقارنة
     finally:
         if saved is not None:
             os.environ["ANTHROPIC_API_KEY"] = saved
-    assert out == {"report": None, "review_cycles": 0, "unresolved_notes": []}
+    assert out == {"report": None, "review_cycles": 0, "unresolved_notes": [],
+                   "failure_reason": reason}
+    assert "مفتاح" in reason
 
 
 def test_loop_stops_early_when_reviewer_approves():

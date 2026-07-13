@@ -149,6 +149,30 @@ def _check_agent_health(dr: dict) -> list[dict]:
     return findings
 
 
+def _check_analyst_layer_failure(dr: dict) -> list[dict]:
+    """فشل طبقة المحلل الشامل كاملة — بلاغ حي إنتاجي (تمور/هولندا): نداءا
+    المحلل الشامل وكاتب التقرير تجاوزا مهلة ثابتة فأعادا None، فظهرت
+    التقاطعات الخمسة كلها "دليل غير كافٍ" مع غياب التقرير الكامل — ومرّت
+    البوابة رغم ذلك لأن كل الفحوصات أعلاه تشترط نص تقرير غير فارغ.
+
+    هذا فحص مستقل لا يشترط وجود نص: تشغيلة بلا تقرير كامل **و** بخمس
+    تقاطعات معلنة كلها ناقصة الأدلة معاً = فشل الطبقة كلها، لا نتيجة
+    تحليل حقيقية — لا يجوز أن تمر بحكم PASS/PASS-WITH-WARNINGS."""
+    from silk_market_analyst import REQUIRED_CATEGORIES
+
+    text = ((dr.get("report") or {}).get("text") or "")
+    if text:
+        return []
+    missing = set((dr.get("analyst") or {}).get("missing_categories") or [])
+    if missing >= set(REQUIRED_CATEGORIES):
+        return [{"check": "analyst_layer_failed", "repairable": False,
+                 "note": "طبقة المحلل الشامل فشلت كاملة: التقاطعات الخمسة "
+                        "كلها بلا أدلة كافية والتقرير الكامل غائب — نداء "
+                        "المحلل الشامل و/أو كاتب التقرير فشل (مهلة أو خطأ "
+                        "شبكة)، لا نتيجة تحليل حقيقية لهذه التشغيلة"}]
+    return []
+
+
 _AUDIT_APPENDIX_CAP = 80
 
 
@@ -194,12 +218,13 @@ def run_quality_gate(view: dict) -> dict:
     findings += _check_section_structure(dr)
     findings += _check_agent_health(dr)
     findings += _check_audit_coverage(dr)
+    findings += _check_analyst_layer_failure(dr)
 
     non_repairable = [f for f in findings if not f["repairable"]]
     if not findings:
         verdict = PASS
-    elif any(f["check"] in ("section_structure", "agent_failed") for f in
-             non_repairable):
+    elif any(f["check"] in ("section_structure", "agent_failed",
+                            "analyst_layer_failed") for f in non_repairable):
         verdict = FAIL
     else:
         verdict = WARN

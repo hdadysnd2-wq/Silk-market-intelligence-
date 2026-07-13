@@ -1301,13 +1301,13 @@ def create_app():
         ai_ok, ai_note = _free_ai_extras_allowed()
         if not ai_ok:
             return _json({"answer": None, "note": ai_note})
-        from silk_ai_judge import answer_about_analysis
+        from silk_ai_judge import answer_about_analysis, failure_reason
         from silk_render import analysis_context
         out = answer_about_analysis(req.question, analysis_context(found))
         if out is None:
-            return _json({"answer": None,
-                          "note": "يتطلب مفتاح كلود (ANTHROPIC_API_KEY) — "
-                                  "غير مفعّل على هذا الخادم"})
+            # بلاغ حي (بحث "تمور/هولندا"): None لا يعني بالضرورة غياب
+            # المفتاح — قد يكون فشل نداء فعلي (مهلة/شبكة) رغم مفتاح فعّال.
+            return _json({"answer": None, "note": failure_reason()})
         return _json(out)
 
     class OutcomeRequest(BaseModel):
