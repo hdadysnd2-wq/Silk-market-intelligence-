@@ -756,6 +756,22 @@ def create_app():
                "llm_calls": llm_calls, "llm_cap": llm_cap,
                "tool_calls": tool_calls, "tool_cap": tool_cap}
 
+    def _attach_quality_gate(result: dict, trace_id: str | None) -> None:
+        """شغّل بوابة الجودة على القالب الموحّد وألحِق نتيجتها — الموجة ١٠،
+        مستخرَجة كي يستدعيها كل من مسار /research الكامل ونقطة إعادة توليد
+        التقرير وحدها (POST /analyses/{id}/report) بلا ازدواج منطق."""
+        try:
+            import silk_quality_gate
+            gate_out = silk_quality_gate.run_quality_gate(result["view"])
+            result["view"]["deep_research"]["quality_gate"] = gate_out
+            if trace_id:
+                import silk_trace
+                silk_trace.append_event(
+                    trace_id, event="quality_gate", verdict=gate_out["verdict"],
+                    finding_count=len(gate_out["findings"]))
+        except Exception as e:  # noqa: BLE001 — البوابة تحسين لا شرط تسليم
+            log.warning("quality gate skipped: %s", e)
+
     def _run_research_pipeline(market_ref, product: str, hs_code: str | None,
                                hs_note: str | None, product_card_dict: dict | None,
                                ai_ok: bool, ai_note: str, prefs: dict | None,
@@ -786,9 +802,19 @@ def create_app():
                                          analysis_id=analysis_id,
                                          resume_reports=resume_reports)
             mission_reports = research_run["reports"]
-            analyst_out = analyze_market(
-                market_ref, product, mission_reports, hs_code=hs_code,
-                product_card=product_card_dict)
+            trace_id = research_run.get("trace_id")
+            # بلاغ حي (تمور/هولندا، تشغيلة ثانية): trace_context البعثات
+            # الاثنتي عشرة يُغلَق فور عودة deep_research() أعلاه — نداءا
+            # المحلل الشامل والكاتب/المراجع كانا يجريان **بلا أي تتبّع**،
+            # فحين فشل الكاتب لم يكن هناك أثر يوضّح هل بلغ مهلته الموسّعة
+            # فعلاً أم فشل أسرع بخطأ آخر. إعادة فتح نفس ملف التتبّع (معرّف
+            # واحد، إلحاق فقط — لا تصادم) للمحلل صراحة؛ الكاتب يُمرَّر
+            # trace_id مباشرة (راجع silk_ai_judge._traced_call).
+            import silk_trace
+            with silk_trace.trace_context(trace_id):
+                analyst_out = analyze_market(
+                    market_ref, product, mission_reports, hs_code=hs_code,
+                    product_card=product_card_dict)
             analyst_input = to_synthesis_input(analyst_out)
             verdict = synthesize(
                 list(mission_reports.values()), product=product,
@@ -796,7 +822,7 @@ def create_app():
                 analyst_assessment=analyst_input)
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
-                product, market_ref.name_en) if ai_ok else
+                product, market_ref.name_en, trace_id=trace_id) if ai_ok else
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
             economics = dict(silk_context.data_counter() or {})
 
@@ -846,18 +872,7 @@ def create_app():
         # بوابة الجودة قبل التسليم (الموجة ١٠) — تعمل على القالب الموحّد
         # النهائي **قبل** أي عرض docx، فتلحَق نتيجتها بالتتبّع وبقسم
         # "منهجية البحث ونطاقه" داخل التقرير (طبقة العرض، silk_reports.py).
-        try:
-            import silk_quality_gate
-            gate_out = silk_quality_gate.run_quality_gate(result["view"])
-            result["view"]["deep_research"]["quality_gate"] = gate_out
-            trace_id = research_run.get("trace_id")
-            if trace_id:
-                import silk_trace
-                silk_trace.append_event(
-                    trace_id, event="quality_gate", verdict=gate_out["verdict"],
-                    finding_count=len(gate_out["findings"]))
-        except Exception as e:  # noqa: BLE001 — البوابة تحسين لا شرط تسليم
-            log.warning("quality gate skipped: %s", e)
+        _attach_quality_gate(result, research_run.get("trace_id"))
         return result
 
     def _finish_research_run(analysis_id: int | None, result: dict) -> None:
@@ -1277,6 +1292,58 @@ def create_app():
         from fastapi.responses import PlainTextResponse
         return PlainTextResponse(render_markdown(build_view(found)),
                                  media_type="text/markdown; charset=utf-8")
+
+    @app.post("/analyses/{analysis_id}/report")
+    def regenerate_report(analysis_id: int, request: Request):
+        """أعد توليد التقرير الكامل من بحث محفوظ — نداء كاتب واحد (+مراجع)
+        فقط، بلا إعادة تشغيل أي بعثة من الاثنتي عشرة ولا المحلل الشامل.
+
+        بلاغ حي (تمور/هولندا): كاتب التقرير قد يفشل (مهلة/شبكة) رغم نجاح
+        كل شيء آخر في تشغيلة مكلفة كاملة — هذه النقطة تُنقِذ تلك التشغيلة
+        بتكلفة نداء واحد بدل إعادة البحث كله (§سنتات لا دولارات)، ومصدر
+        اختبار رخيص لإصلاحات مهلة الكاتب. تقرأ نقاط تفتيش البعثات
+        (`silk_storage.load_mission_checkpoints`، مخزَّنة فور اكتمال كل
+        بعثة بصرف النظر عن مصير الكاتب لاحقاً) بدل إعادة بنائها من
+        `json_blob` النهائي — نفس آلية استئناف `/research`، لا منطق موازٍ.
+        تحدّث السجل المخزَّن بالتقرير الجديد وتعيد بناء القالب الموحّد +
+        بوابة الجودة قبل الحفظ.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        found = silk_storage.get_analysis(analysis_id)
+        if found is None:
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        dr = found.get("deep_research")
+        if not dr:
+            raise HTTPException(
+                status_code=400,
+                detail=f"analysis {analysis_id} is not a /research run "
+                       "(no deep_research section) — nothing to regenerate")
+        ai_ok, ai_note = _free_ai_extras_allowed()
+        if not ai_ok:
+            return _json({"report": None, "note": ai_note})
+        mission_reports = silk_storage.load_mission_checkpoints(analysis_id)
+        if not mission_reports:
+            raise HTTPException(
+                status_code=409,
+                detail=f"no mission checkpoints stored for analysis "
+                       f"{analysis_id} — cannot regenerate without them")
+        from silk_ai_judge import write_reviewed_report
+        analyst_summary = ((dr.get("analyst") or {}).get("report") or {}) \
+            .get("summary", "")
+        verdict = dr.get("verdict") or {}
+        market_name = (found.get("market") or {}).get("name_en", "")
+        trace_id = dr.get("trace_id")
+        report_out = write_reviewed_report(
+            mission_reports, analyst_summary, verdict,
+            found.get("product", ""), market_name, trace_id=trace_id)
+        found["deep_research"]["report"] = report_out
+        found["analysis_id"] = analysis_id
+        found["view"] = _view(found)
+        _attach_quality_gate(found, trace_id)
+        silk_storage.save_analysis(found, analysis_id=analysis_id)
+        return _json(found)
 
     class AskRequest(BaseModel):
         """سؤال فوق تحليل قائم (10b) — question over a stored analysis."""
