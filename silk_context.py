@@ -126,10 +126,16 @@ def count_data(kind: str, n: int = 1) -> None:
         c[kind] += n
 
 
-def record_llm_usage(model: str, input_tokens: int, output_tokens: int) -> None:
+def record_llm_usage(model: str, input_tokens: int, output_tokens: int,
+                     cache_read_tokens: int = 0,
+                     cache_creation_tokens: int = 0) -> None:
     """سجّل استهلاك رموز نداء كلود لكل نموذج — silent no-op outside an active
     counter (نفس نمط count_data). يستدعيها `silk_llm_provider` بعد كل رد
-    ناجح يحمل حقل usage — لا يغيّر عقد أي دالة نداء قائمة (قناة جانبية فقط)."""
+    ناجح يحمل حقل usage — لا يغيّر عقد أي دالة نداء قائمة (قناة جانبية فقط).
+
+    `cache_read_tokens`/`cache_creation_tokens` (Prompt Caching): تُقرأان من
+    `usage.cache_read_input_tokens`/`usage.cache_creation_input_tokens` في رد
+    Anthropic — اختياريتان، تبقى القيمة الافتراضية صفراً لأي نداء بلا كاش."""
     c = _data_counter.get()
     if c is None:
         return
@@ -137,6 +143,15 @@ def record_llm_usage(model: str, input_tokens: int, output_tokens: int) -> None:
     row = usage.setdefault(model, {"input_tokens": 0, "output_tokens": 0})
     row["input_tokens"] += int(input_tokens or 0)
     row["output_tokens"] += int(output_tokens or 0)
+    # الحقلان الاختياريان يُضافان فقط عند وجود كاش فعلي — نداء بلا كاش يُبقي
+    # الصف بشكله الأصلي {input_tokens, output_tokens} كي لا يخالف اختبارات
+    # المساواة الحرفية القائمة (regression guard).
+    cr = int(cache_read_tokens or 0)
+    cc = int(cache_creation_tokens or 0)
+    if cr:
+        row["cache_read_tokens"] = row.get("cache_read_tokens", 0) + cr
+    if cc:
+        row["cache_creation_tokens"] = row.get("cache_creation_tokens", 0) + cc
 
 
 def data_counter() -> dict | None:

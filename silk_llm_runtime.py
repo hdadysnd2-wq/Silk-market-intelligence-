@@ -572,6 +572,30 @@ def _parse_output(text: str | None, registry: dict[str, DataPoint]) -> dict:
             "summary": str(obj.get("summary") or "").strip(), "dropped": dropped}
 
 
+def _mark_cache_boundary(messages: list[dict]) -> None:
+    """علّم آخر رسالة في `messages` بـ`cache_control` (ephemeral) — نقطة
+    التخزين المؤقت تتقدّم مع كل جولة فتُخزَّن الجولات السابقة كاملة (المرحلة ٠).
+
+    يزيل الوسم من كل الرسائل أولاً (بما فيها ما عُلِّم في جولة سابقة) قبل
+    وضعه على الأخيرة فقط — Anthropic يسمح بأربع نقاط تخزين كحد أقصى لكل نداء
+    (system + tools + هذه)، وترك وسوم قديمة متراكمة عبر الجولات يتجاوز الحد."""
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    block.pop("cache_control", None)
+    if not messages:
+        return
+    last = messages[-1]
+    content = last.get("content")
+    if isinstance(content, str):
+        last["content"] = [{"type": "text", "text": content,
+                            "cache_control": {"type": "ephemeral"}}]
+    elif isinstance(content, list) and content:
+        content[-1] = {**content[-1], "cache_control": {"type": "ephemeral"}}
+
+
 def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
     """الحلقة المحكومة بالميزانية — tool_use/tool_result rounds until a final
     JSON answer or budget exhaustion (then one forced tools-off round).
@@ -673,6 +697,7 @@ def _run_loop(mission: dict, ctx: dict, budget: dict) -> dict:
                 and not forced_finalization_sent):
             messages.append({"role": "user", "content": _FINALIZE_NUDGE})
             forced_finalization_sent = True
+        _mark_cache_boundary(messages)
         t_round = _time.monotonic()
         resp = _call_tools(system, messages, tools=offer_tools,
                            max_tokens=max_tokens, model=_MODEL)

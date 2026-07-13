@@ -42,6 +42,14 @@ def _findings_json(*rows, gaps=None):
                        "summary": "تحليل"}, ensure_ascii=False)
 
 
+def _msg_text(content):
+    """نص الرسالة سواء كانت سلسلة خام أو كتل محتوى مُعلَّمة بـcache_control
+    (المرحلة ٠ — silk_llm_runtime._mark_cache_boundary)."""
+    if isinstance(content, str):
+        return content
+    return "".join(b.get("text", "") for b in content if isinstance(b, dict))
+
+
 def test_source_reports_are_tagged_by_mission_key():
     import silk_market_analyst as sma
 
@@ -56,7 +64,7 @@ def test_findings_grouped_by_category_and_gaps_declared():
 
     def fake_call_tools(system, messages, tools=None, max_tokens=1600,
                         model=None, timeout=None):
-        text = messages[0]["content"]
+        text = _msg_text(messages[0]["content"])
         did = text[text.find("[dp"):].split("]")[0][1:]  # "dp1"
         rows = [
             {"claim": "طلب استدلالي معقول", "datapoint_ids": [did],
@@ -87,7 +95,7 @@ def test_correlation_threads_passed_as_narrative_context_not_citable():
 
     def fake_call_tools(system, messages, tools=None, max_tokens=1600,
                         model=None, timeout=None):
-        captured.append(messages[0]["content"])
+        captured.append(_msg_text(messages[0]["content"]))
         return {"stop_reason": "end_turn",
                "content": [{"type": "text", "text": _findings_json()}]}
 

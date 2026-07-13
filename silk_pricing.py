@@ -28,11 +28,19 @@ def _pricing_for(model: str) -> dict[str, float] | None:
     return None
 
 
+# مضاعفات تسعير الكاش على سعر الإدخال (توثيق Anthropic الرسمي، Prompt
+# Caching): قراءة من الكاش أرخص، كتابة/إنشاء إدخالة كاش أغلى من الإدخال العادي.
+_CACHE_READ_MULT = 0.1
+_CACHE_CREATION_MULT = 1.25
+
+
 def estimate_cost_usd(llm_usage: dict | None) -> dict:
     """قدّر تكلفة التشغيلة بالدولار من عدّاد الاستهلاك لكل نموذج.
 
     المدخل بشكل `silk_context.record_llm_usage` المتراكم:
-    {model: {"input_tokens": N, "output_tokens": N}}.
+    {model: {"input_tokens": N, "output_tokens": N, "cache_read_tokens": N,
+    "cache_creation_tokens": N}} — حقلا الكاش اختياريان (نداءات بلا كاش تبقى
+    صحيحة بلا تعديل).
     المخرَج: {"total_usd", "by_model", "unpriced_models"} — نموذج بلا سعر
     معروف يُستبعد من المجموع ويُسمّى صراحة في unpriced_models، لا يُصفَّر بصمت.
     """
@@ -45,7 +53,11 @@ def estimate_cost_usd(llm_usage: dict | None) -> dict:
             unpriced.append(model)
             continue
         cost = ((tok.get("input_tokens", 0) or 0) / 1_000_000 * pricing["input"]
-                + (tok.get("output_tokens", 0) or 0) / 1_000_000 * pricing["output"])
+                + (tok.get("output_tokens", 0) or 0) / 1_000_000 * pricing["output"]
+                + (tok.get("cache_read_tokens", 0) or 0) / 1_000_000
+                  * pricing["input"] * _CACHE_READ_MULT
+                + (tok.get("cache_creation_tokens", 0) or 0) / 1_000_000
+                  * pricing["input"] * _CACHE_CREATION_MULT)
         by_model[model] = round(cost, 6)
         total += cost
     return {"total_usd": round(total, 6), "by_model": by_model,
