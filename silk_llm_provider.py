@@ -56,13 +56,19 @@ class AnthropicProvider(LLMProvider):
     @staticmethod
     def _record_usage(model: str, data: dict) -> None:
         """سجّل رموز الرد في عدّاد اقتصاد البيانات — قناة جانبية صامتة (دين ٤)،
-        لا تغيّر عقد complete/complete_tools؛ no-op خارج تحليل نشط أو بلا usage."""
+        لا تغيّر عقد complete/complete_tools؛ no-op خارج تحليل نشط أو بلا usage.
+
+        `cache_read_input_tokens`/`cache_creation_input_tokens` (Prompt
+        Caching، المرحلة ٠): حقلا usage إضافيان من Anthropic حين يُخزَّن
+        `system`/`tools` — غيابهما (نداء بلا كاش) يمرّر صفراً بلا أثر."""
         usage = data.get("usage") if isinstance(data, dict) else None
         if not usage:
             return
         import silk_context  # lazy: keep this module cycle-safe and offline
         silk_context.record_llm_usage(
-            model, usage.get("input_tokens", 0), usage.get("output_tokens", 0))
+            model, usage.get("input_tokens", 0), usage.get("output_tokens", 0),
+            cache_read_tokens=usage.get("cache_read_input_tokens", 0),
+            cache_creation_tokens=usage.get("cache_creation_input_tokens", 0))
 
     def complete(self, system, user, max_tokens, model, timeout):
         key = self._key()
@@ -73,7 +79,9 @@ class AnthropicProvider(LLMProvider):
             resp = requests.post(
                 self._ENDPOINT, timeout=timeout,
                 headers=self._headers(key),
-                json={"model": model, "max_tokens": max_tokens, "system": system,
+                json={"model": model, "max_tokens": max_tokens,
+                     "system": [{"type": "text", "text": system,
+                                "cache_control": {"type": "ephemeral"}}],
                      "messages": [{"role": "user", "content": user}]})
             resp.raise_for_status()
             data = resp.json()
@@ -95,9 +103,16 @@ class AnthropicProvider(LLMProvider):
         try:
             import requests  # lazy: keep core import offline-safe
             payload = {"model": model, "max_tokens": max_tokens,
-                      "system": system, "messages": messages}
+                      "system": [{"type": "text", "text": system,
+                                 "cache_control": {"type": "ephemeral"}}],
+                      "messages": messages}
             if tools:
-                payload["tools"] = tools
+                # علّم آخر أداة فقط — Anthropic يخزّن كل ما قبل نقطة التعليم
+                # (system + tools معاً) ككتلة كاش واحدة مستقرة عبر جولات
+                # الحلقة، إذ لا يتغيّر تعريف الأدوات بين الجولات.
+                payload["tools"] = [*tools[:-1],
+                                    {**tools[-1],
+                                     "cache_control": {"type": "ephemeral"}}]
             resp = requests.post(
                 self._ENDPOINT, timeout=timeout,
                 headers=self._headers(key), json=payload)

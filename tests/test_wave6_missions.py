@@ -22,6 +22,14 @@ def _ref():
     return ref
 
 
+def _msg_text(content):
+    """نص الرسالة سواء كانت سلسلة خام أو كتل محتوى مُعلَّمة بـcache_control
+    (المرحلة ٠ — silk_llm_runtime._mark_cache_boundary)."""
+    if isinstance(content, str):
+        return content
+    return "".join(b.get("text", "") for b in content if isinstance(b, dict))
+
+
 def test_registration_is_additive_no_key_collisions():
     import silk_agents
     import silk_missions  # noqa: F401 — الاستيراد يسجّل الصفوف
@@ -61,7 +69,7 @@ def test_opportunity_gaps_receives_prior_findings_as_citable_datapoints():
 
     def fake_call_tools(system, messages, tools=None, max_tokens=1600,
                         model=None, timeout=None):
-        captured.append(messages[0]["content"] if messages else "")
+        captured.append(_msg_text(messages[0]["content"]) if messages else "")
         return {"stop_reason": "end_turn", "content": [
             {"type": "text", "text": json.dumps(
                 {"findings": [], "gaps": [], "summary": "ok"},
@@ -86,7 +94,7 @@ def test_one_mission_timeout_does_not_block_the_rest(monkeypatch):
 
     def fake_call_tools(system, messages, tools=None, max_tokens=1600,
                         model=None, timeout=None):
-        first_msg = messages[0]["content"] if messages else ""
+        first_msg = _msg_text(messages[0]["content"]) if messages else ""
         if pricing_name in first_msg:  # "المهمة: <اسم>" في مقدمة المستخدم
             time.sleep(0.3)  # يتجاوز المهلة القصيرة عمداً
         return {"stop_reason": "end_turn", "content": [
