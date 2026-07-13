@@ -73,10 +73,23 @@ def failure_reason() -> str:
     بسبب تجاوز مهلة ثابتة، والواجهة عرضت "يتطلب مفتاح كلود" رغم نجاح ٢٩
     نداء كلود آخر في نفس التشغيلة — `available()` عند لحظة الفشل يكفي
     للتمييز: إن كانت True فالمفتاح موجود وغير محجوب، فالسبب الحقيقي نداء
-    فشل لا غيابه."""
+    فشل لا غيابه.
+
+    بلاغ حي (ثالث تشغيلة، كاتب التقرير): "مهلة أو خطأ شبكة" العامة كانت
+    تُخفي نوع الفشل الفعلي — تعذّر معرفة هل بلغ النداء مهلته فعلاً أم فشل
+    أسرع بخطأ آخر بلا الرجوع لسجلات الخادم يدوياً. الآن:
+    `silk_llm_provider.last_error()` يحمل نوع الاستثناء الفعلي (يميّز
+    ConnectTimeout عن ReadTimeout تلقائياً) ورسالته — يُدرَج هنا حين متاح."""
     if not available():
         return ("لا مفتاح كلود مُفعّل (ANTHROPIC_API_KEY غير مضبوط على "
                 "الخادم، أو محجوب سياقياً)")
+    from silk_llm_provider import last_error
+    err = last_error()
+    if err:
+        detail = f"{err['type']}: {err['message']}"
+        if err.get("status_code"):
+            detail += f" (HTTP {err['status_code']}: {err.get('response_body', '')})"
+        return f"فشل نداء كلود ({detail}) — راجع سجلّات الخادم"
     return "فشل نداء كلود (مهلة أو خطأ شبكة) — راجع سجلّات الخادم"
 
 
@@ -598,16 +611,29 @@ def _traced_call(trace_id: str | None, stage: str, timeout: float,
     بعد انتهاء `run_all_missions()` في silk_missions.deep_research — راجع
     api.py) فتستعمل `append_event` مباشرة بمعرّف صريح بدل `record_event`
     (لا سياق نشط). `trace_id=None` (نداء مكتبي مباشر خارج /research) = لا
-    تتبّع، بلا تكلفة."""
+    تتبّع، بلا تكلفة.
+
+    بلاغ حي (ثالثة تشغيلة): الحدث يحمل الآن نوع الاستثناء الفعلي ورسالته
+    (`silk_llm_provider.last_error()`) عند الفشل — لا مزيد من التخمين بين
+    مهلة حقيقية وخطأ شبكة آخر؛ الدليل يصل الملف مباشرة."""
     import time as _time
     t0 = _time.monotonic()
     result = call_fn()
     if trace_id:
         import silk_trace
-        silk_trace.append_event(
-            trace_id, kind="report_call", stage=stage, timeout=timeout,
-            elapsed_ms=round((_time.monotonic() - t0) * 1000),
-            success=bool(result))
+        from silk_llm_provider import last_error
+        event = {"kind": "report_call", "stage": stage, "timeout": timeout,
+                 "elapsed_ms": round((_time.monotonic() - t0) * 1000),
+                 "success": bool(result)}
+        if not result:
+            err = last_error()
+            if err:
+                event["error_type"] = err.get("type")
+                event["error_message"] = err.get("message")
+                if err.get("status_code"):
+                    event["status_code"] = err["status_code"]
+                    event["response_body"] = err.get("response_body")
+        silk_trace.append_event(trace_id, **event)
     return result
 
 

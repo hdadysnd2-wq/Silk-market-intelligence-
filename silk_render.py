@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -528,6 +529,27 @@ _GAPS_RE = re.compile(r"فجوات:\s*([^|]*)")
 # الأرقام: راجع _mission_label/_strip_internal_plumbing تحت.
 _INTERNAL_AGENT_RE = re.compile(r"LLM(?:Mission)?Agent:([A-Za-z_]+)")
 _DP_TAG_RE = re.compile(r"\[?dp\d+\]?")
+_WHOLE_JSON_RE = re.compile(r"^\s*[{\[].*[}\]]\s*$", re.S)
+
+
+def _strip_raw_json_leak(text: str | None) -> str | None:
+    """استبدل نصاً هو بالكامل تفريغ JSON خام بنص عربي مقروء — بلاغ حي
+    (بعثة risk_news أعادت `{"claim": "..."}` حرفياً كملخّص حين فشل
+    `silk_llm_runtime._parse_output` تفسير ردّها كاملاً). يستخرج قيمة
+    مفتاح شائع (claim/summary/value/note) إن أمكن، وإلا يُصرَّح بالفجوة
+    صراحة بدل عرض بنية JSON خام. نص عادي لا يشبه JSON يمر كما هو."""
+    if not text or not _WHOLE_JSON_RE.match(text):
+        return text
+    try:
+        obj = json.loads(text)
+    except Exception:  # noqa: BLE001 — تفريغ مشوَّه أيضاً غير قابل للعرض خاماً
+        return "تعذّر تفسير رد كلود لهذا البند — بيانات غير مقروءة"
+    if isinstance(obj, dict):
+        for key in ("claim", "summary", "value", "note"):
+            val = obj.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    return "تعذّر تفسير رد كلود لهذا البند — بيانات غير مقروءة"
 
 
 def _mission_label(key: str) -> str:
@@ -546,10 +568,13 @@ def _mission_label(key: str) -> str:
 
 def _strip_internal_plumbing(text: str | None) -> str | None:
     """أزل تسريبات السباكة الداخلية من نص معروض للعميل (تقرير مكتوب/حدود
-    بحث) — "LLMAgent:<key>"/"LLMMissionAgent:<key>" تُستبدَل باسم البعثة
-    العربي، ووسوم استشهاد خام "dp7"/"[dp7]" تُحذَف. None/فارغ يمر كما هو."""
+    بحث/ملخّص بعثة) — تفريغ JSON خام كامل يُستبدَل بنص مقروء أو فجوة
+    معلنة (`_strip_raw_json_leak`)، "LLMAgent:<key>"/"LLMMissionAgent:
+    <key>" تُستبدَل باسم البعثة العربي، ووسوم استشهاد خام "dp7"/"[dp7]"
+    تُحذَف. None/فارغ يمر كما هو."""
     if not text:
         return text
+    text = _strip_raw_json_leak(text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
     text = _DP_TAG_RE.sub("", text)
     return re.sub(r"[ \t]{2,}", " ", text)
@@ -599,11 +624,16 @@ def _deep_research_view(result: dict) -> dict | None:
     missions = {}
     for key, rep in (dr.get("missions") or {}).items():
         f = _report_fields(rep)
+        # بلاغ حي (risk_news): بعثة قد تعيد JSON خام كملخّص عند فشل تفسير
+        # ردّها (silk_llm_runtime._parse_output) — يُطبَّع هنا مرة واحدة
+        # فيصل نظيفاً كل مستهلك (جدول الأدلة الخام، حدود البحث، ملخّص
+        # التتبّع أدناه).
+        clean_summary = _strip_internal_plumbing(f["summary"])
         missions[key] = {
             "name": f["agent_name"], "failed": f["failed"],
-            "summary": f["summary"],
+            "summary": clean_summary,
             "findings": [_dp(x) for x in f["findings"]],
-            "trace": _mission_trace_summary(f["failed"], f["summary"]),
+            "trace": _mission_trace_summary(f["failed"], clean_summary),
         }
     analyst = dr.get("analyst") or {}
     analyst_report = _report_fields(analyst.get("report"))
@@ -617,14 +647,14 @@ def _deep_research_view(result: dict) -> dict | None:
                   for cat, dps in (analyst.get("by_category") or {}).items()}
     report_out = dr.get("report") or {}
     verdict = dr.get("verdict") or {}
+    # v["summary"] مُطبَّع أصلاً أعلاه (clean_summary) — لا حاجة لإعادة التنظيف.
     limits = ([f"فرصة {_mission_label(k)} بلا نتائج مبنية على استشهاد: "
-              f"{_strip_internal_plumbing(v['summary'])}"
+              f"{v['summary']}"
               for k, v in missions.items() if v["failed"]]
              # فجوات جزئية داخل بعثات "ناجحة" (نتائج ≥١ لكن ببنود ناقصة
              # معلنة) — كانت هذه تُسقَط صامتة من حدود التقرير قبل هذا الإصلاح.
              + [g for k, v in missions.items()
-               for g in _mission_gap_lines(
-                   _mission_label(k), _strip_internal_plumbing(v["summary"]))]
+               for g in _mission_gap_lines(_mission_label(k), v["summary"])]
              + [f"تقاطع المحلل بلا أدلة كافية: {c}"
                for c in (analyst.get("missing_categories") or [])]
              + [f"ملاحظة مراجع لم تُعالَج: {n}"
