@@ -543,8 +543,22 @@ def _parse_output(text: str | None, registry: dict[str, DataPoint]) -> dict:
             obj = parsed
             break
     if obj is None:
+        # بلاغ حي (risk_news): رد لا يفسَّر كـJSON إطلاقاً كان يضع النص
+        # الخام كـsummary — لو كان هذا النص نفسه يشبه JSON مشوَّهاً
+        # (يبدأ بـ{/[), يتسرّب حرفياً للواجهة/"حدود البحث". لا نص خام
+        # يشبه JSON يُعرَض أبداً؛ نص نثري عادي فشل تفسيره يبقى كتلميح
+        # تشخيصي قصير فقط.
+        stripped = text.strip()
+        safe_summary = "" if stripped[:1] in "{[" else stripped[:300]
         return {"findings": [], "gaps": ["رد كلود غير قابل للتفسير كـ JSON"],
-                "summary": text.strip()[:300], "dropped": []}
+                "summary": safe_summary, "dropped": []}
+    if not any(k in obj for k in _FINAL_ANSWER_KEYS) and "claim" in obj:
+        # رد مشوَّه: بند واحد بلا الغلاف المطلوب ({"findings":[...],...})
+        # — بلاغ حي (risk_news): كان يُرفَض بالكامل ويتسرّب حرفياً كـ
+        # summary رغم كونه JSON صالحاً. الآن يُعامَل كبند وحيد بنفس مسار
+        # الاستخراج القياسي أدناه — يُقبل إن استُشهِد بمعرّف صالح، وإلا
+        # يُسقَط بسبب معلن في dropped (لا اختلاق، ولا تسريب صيغة خام).
+        obj = {"findings": [obj], "gaps": [], "summary": ""}
 
     kept: list[dict] = []
     dropped: list[dict] = []
