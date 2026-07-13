@@ -20,6 +20,7 @@ import json
 import logging
 
 from silk_agents import AgentReport
+from silk_ai_judge import _LONG_TIMEOUT
 from silk_llm_runtime import run_llm_agent
 from silk_market_resolver import MarketRef
 
@@ -120,7 +121,8 @@ def analyze_market(market: MarketRef, product: str,
 
     report = run_llm_agent(
         _ANALYST_MISSION, market, product=product, hs_code=hs_code,
-        budget=budget, extra_findings=tagged, extra_context=extra_context)
+        budget=budget, extra_findings=tagged, extra_context=extra_context,
+        timeout=_LONG_TIMEOUT)
 
     by_category: dict[str, list] = {c: [] for c in REQUIRED_CATEGORIES}
     # بلاغ حي (الموجة ٩): مطابقة حرفية صارمة (cat in by_category) كانت

@@ -93,7 +93,7 @@ class AnthropicProvider(LLMProvider):
                           if b.get("type") == "text").strip()
             return text or None
         except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
-            log.warning("AI judge call failed: %s", e)
+            log.warning("AI judge call failed: %s: %s", type(e).__name__, e)
             return None
 
     def complete_tools(self, system, messages, tools, max_tokens, model, timeout):
@@ -121,7 +121,7 @@ class AnthropicProvider(LLMProvider):
             self._record_usage(model, data)
             return data
         except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
-            log.warning("AI tool call failed: %s", e)
+            log.warning("AI tool call failed: %s: %s", type(e).__name__, e)
             return None
 
 
