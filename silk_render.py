@@ -521,6 +521,39 @@ _TOOL_CALLS_RE = re.compile(r"نداءات أدوات:\s*(\d+)")
 _DROPPED_RE = re.compile(r"أُسقطت\s*(\d+)\s*بند")
 _GAPS_RE = re.compile(r"فجوات:\s*([^|]*)")
 
+# بلاغ منتج من المالك: التقرير المعروض للعميل كان يكشف السباكة الداخلية
+# ("LLMAgent:tariffs_agreements"، وسوم استشهاد خام مثل "dp7") — كلود
+# (الكاتب أو بعثة) يستشهد أحياناً حرفياً بوسوم رآها في مدخلاته الخام بدل
+# تلخيصها بلغة تجارية. الإصلاح تطبيع حتمي في طبقة العرض، لا تعديل على
+# الأرقام: راجع _mission_label/_strip_internal_plumbing تحت.
+_INTERNAL_AGENT_RE = re.compile(r"LLM(?:Mission)?Agent:([A-Za-z_]+)")
+_DP_TAG_RE = re.compile(r"\[?dp\d+\]?")
+
+
+def _mission_label(key: str) -> str:
+    """اسم البعثة التجاري بالعربية — نفس الاسم الذي تعرضه لوحة إعدادات
+    الوكلاء (silk_missions.MISSIONS[key]['name']) بدل المفتاح snake_case
+    الخام أو agent_name الداخلي ("LLMAgent:<key>")."""
+    try:
+        from silk_missions import MISSIONS
+        row = MISSIONS.get(key)
+        if row and row.get("name"):
+            return row["name"]
+    except Exception:  # noqa: BLE001 — تسمية تجميلية لا شرط عرض
+        pass
+    return key.replace("_", " ")
+
+
+def _strip_internal_plumbing(text: str | None) -> str | None:
+    """أزل تسريبات السباكة الداخلية من نص معروض للعميل (تقرير مكتوب/حدود
+    بحث) — "LLMAgent:<key>"/"LLMMissionAgent:<key>" تُستبدَل باسم البعثة
+    العربي، ووسوم استشهاد خام "dp7"/"[dp7]" تُحذَف. None/فارغ يمر كما هو."""
+    if not text:
+        return text
+    text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
+    text = _DP_TAG_RE.sub("", text)
+    return re.sub(r"[ \t]{2,}", " ", text)
+
 
 def _mission_trace_summary(failed: bool, summary: str) -> dict:
     """لوحة تتبّع بلمحة (الموجة ٦، §docs/TUNING.md) — حالة/نداءات أداة/
@@ -584,12 +617,14 @@ def _deep_research_view(result: dict) -> dict | None:
                   for cat, dps in (analyst.get("by_category") or {}).items()}
     report_out = dr.get("report") or {}
     verdict = dr.get("verdict") or {}
-    limits = ([f"فرصة {k} بلا نتائج مبنية على استشهاد: {v['summary']}"
+    limits = ([f"فرصة {_mission_label(k)} بلا نتائج مبنية على استشهاد: "
+              f"{_strip_internal_plumbing(v['summary'])}"
               for k, v in missions.items() if v["failed"]]
              # فجوات جزئية داخل بعثات "ناجحة" (نتائج ≥١ لكن ببنود ناقصة
              # معلنة) — كانت هذه تُسقَط صامتة من حدود التقرير قبل هذا الإصلاح.
              + [g for k, v in missions.items()
-               for g in _mission_gap_lines(v["name"] or k, v["summary"])]
+               for g in _mission_gap_lines(
+                   _mission_label(k), _strip_internal_plumbing(v["summary"]))]
              + [f"تقاطع المحلل بلا أدلة كافية: {c}"
                for c in (analyst.get("missing_categories") or [])]
              + [f"ملاحظة مراجع لم تُعالَج: {n}"
@@ -614,7 +649,7 @@ def _deep_research_view(result: dict) -> dict | None:
                    "missing_categories": analyst.get("missing_categories") or [],
                    "by_category": by_category},
         "verdict": verdict,
-        "report": {"text": report_out.get("report"),
+        "report": {"text": _strip_internal_plumbing(report_out.get("report")),
                   "review_cycles": report_out.get("review_cycles", 0),
                   "unresolved_notes": report_out.get("unresolved_notes") or [],
                   "failure_reason": report_out.get("failure_reason") or ""},

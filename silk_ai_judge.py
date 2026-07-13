@@ -588,16 +588,41 @@ _MISSION_TO_SECTION = {
 }
 
 
+def _traced_call(trace_id: str | None, stage: str, timeout: float,
+                 call_fn) -> str | None:
+    """نفّذ نداء الكاتب/المراجع وسجّل زمنه إن وُجد معرّف تتبّع — بلاغ حي
+    (تمور/هولندا، تشغيلة ثانية): المحلل الشامل نجح بمهلة موسّعة لكن كاتب
+    التقرير استمر يفشل بلا أي أثر يوضّح هل بلغ الـ300s فعلاً أم فشل أسرع
+    بخطأ شبكة حقيقي. `write_reviewed_report()`/`deep_report()`/
+    `review_report()` لا تعمل داخل `silk_trace.trace_context()` (ذاك يُغلَق
+    بعد انتهاء `run_all_missions()` في silk_missions.deep_research — راجع
+    api.py) فتستعمل `append_event` مباشرة بمعرّف صريح بدل `record_event`
+    (لا سياق نشط). `trace_id=None` (نداء مكتبي مباشر خارج /research) = لا
+    تتبّع، بلا تكلفة."""
+    import time as _time
+    t0 = _time.monotonic()
+    result = call_fn()
+    if trace_id:
+        import silk_trace
+        silk_trace.append_event(
+            trace_id, kind="report_call", stage=stage, timeout=timeout,
+            elapsed_ms=round((_time.monotonic() - t0) * 1000),
+            success=bool(result))
+    return result
+
+
 def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
                 product: str, market_name: str,
-                review_notes: list | None = None) -> str | None:
+                review_notes: list | None = None,
+                trace_id: str | None = None) -> str | None:
     """اكتب تقرير البحث العميق — the 11-section international-structure report
     (وكيل الكتابة، الموجة ١٠ — أسلوب Euromonitor/ESOMAR).
 
     مبنيّ حصراً على حقائق البعثات المعزولة + مسوّدة المحلل الشامل + الحكم
     الجاهز من synthesize — لا يُصدر حكماً بنفسه (نقطة الحكم الوحيدة تبقى
     synthesize). `review_notes`: ملاحظات المراجع من دورة سابقة (إن وُجدت)
-    تُطلب معالجتها صراحة. None بلا مفتاح/فشل النداء.
+    تُطلب معالجتها صراحة. `trace_id`: يسجّل زمن هذا النداء عبر
+    `_traced_call` إن مُرِّر (راجع تعليقها). None بلا مفتاح/فشل النداء.
     """
     if not available():
         return None
@@ -711,8 +736,10 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "كل قسم رئيسي (لا الفرعية) ينتهي بسطر غامق واحد حرفياً بصيغة "
         "'**ماذا يعني هذا لقرارك:** <جملة واحدة>' — خلاصة عملية لا تكرار "
         "للسرد أعلاه.")
-    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=5000,
-                timeout=_LONG_TIMEOUT)
+    return _traced_call(
+        trace_id, "revision" if review_notes else "draft", _LONG_TIMEOUT,
+        lambda: _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=5000,
+                     timeout=_LONG_TIMEOUT))
 
 
 def _section_order_issues(draft: str) -> list[str]:
@@ -732,9 +759,11 @@ def _section_order_issues(draft: str) -> list[str]:
     return issues
 
 
-def review_report(draft: str, mission_reports: dict) -> dict | None:
+def review_report(draft: str, mission_reports: dict,
+                  trace_id: str | None = None) -> dict | None:
     """راجع مسوّدة التقرير — المراجع (نموذج سريع): هل كل رقم مسنود؟ تناقضات؟
-    ادّعاءات بلا سند؟ يعيد {"issues":[...], "approved": bool} أو None."""
+    ادّعاءات بلا سند؟ يعيد {"issues":[...], "approved": bool} أو None.
+    `trace_id`: يسجّل زمن نداء المراجع عبر `_traced_call` إن مُرِّر."""
     if not available() or not (draft or "").strip():
         return None
     structural_issues = _section_order_issues(draft)
@@ -758,7 +787,10 @@ def review_report(draft: str, mission_reports: dict) -> dict | None:
         "غياب من هذه كمشكلة صريحة في issues.\n"
         'أعِد JSON فقط: {"issues":["مشكلة محددة قابلة للإصلاح", ...], "approved":'
         'true|false}. "approved":true فقط إن لم توجد مشاكل جوهرية.')
-    raw = _call(_PRINCIPLE, user, max_tokens=900, model=_FAST_MODEL, timeout=30)
+    raw = _traced_call(
+        trace_id, "review", 30,
+        lambda: _call(_PRINCIPLE, user, max_tokens=900, model=_FAST_MODEL,
+                     timeout=30))
     if not raw:
         return {"issues": structural_issues,
                "approved": not structural_issues} if structural_issues else None
@@ -773,7 +805,8 @@ def review_report(draft: str, mission_reports: dict) -> dict | None:
 
 def write_reviewed_report(mission_reports: dict, analyst_summary: str,
                           verdict: dict, product: str, market_name: str,
-                          max_cycles: int = 2) -> dict:
+                          max_cycles: int = 2,
+                          trace_id: str | None = None) -> dict:
     """حلقة الكتابة والمراجعة — Writer → Reviewer، أقصى دورتين (التكليف).
 
     يعيد {"report": نص أو None, "review_cycles": عدد الدورات الفعلية,
@@ -781,9 +814,10 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
     فشل الكتابة (بلا مفتاح أو فشل نداء) = تقرير None، لا اختلاق نص بديل —
     ويحمل حينها "failure_reason" (`failure_reason()` أعلاه) يميّز غياب
     المفتاح عن فشل النداء الفعلي (مهلة/شبكة) بدل غموض السببين.
+    `trace_id`: يمرَّر لكل نداء داخلي (كاتب/مراجع) — راجع `_traced_call`.
     """
     draft = deep_report(mission_reports, analyst_summary, verdict, product,
-                        market_name)
+                        market_name, trace_id=trace_id)
     if not draft:
         return {"report": None, "review_cycles": 0, "unresolved_notes": [],
                 "failure_reason": failure_reason()}
@@ -791,7 +825,7 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
     notes: list = []
     cycles = 0
     for cycles in range(1, max(1, max_cycles) + 1):
-        review = review_report(draft, mission_reports)
+        review = review_report(draft, mission_reports, trace_id=trace_id)
         if not review or review["approved"]:
             notes = []
             break
@@ -799,7 +833,8 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
         if cycles >= max_cycles:
             break
         fixed = deep_report(mission_reports, analyst_summary, verdict,
-                            product, market_name, review_notes=notes)
+                            product, market_name, review_notes=notes,
+                            trace_id=trace_id)
         if fixed:
             draft = fixed
     return {"report": draft, "review_cycles": cycles, "unresolved_notes": notes}

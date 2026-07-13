@@ -329,10 +329,14 @@ def test_quality_gate_flags_insufficiency_despite_evidence():
 
 
 def test_quality_gate_flags_agent_health_zero_findings_mission():
+    """بلاغ منتج من المالك: الملاحظة تحمل اسم البعثة التجاري بالعربية
+    (وكيل المخاطر والأخبار) لا المفتاح snake_case الخام (risk_news) —
+    سباكة داخلية لا يجوز أن تصل نصاً معروضاً للعميل."""
     import silk_quality_gate as qg
     out = qg.run_quality_gate(_defective_view())
     notes = " ".join(f["note"] for f in out["findings"])
-    assert "risk_news" in notes
+    assert "risk_news" not in notes
+    assert "وكيل المخاطر والأخبار" in notes
 
 
 def test_quality_gate_flags_markdown_and_raw_json_and_raw_confidence():
@@ -394,7 +398,8 @@ def test_quality_gate_repairable_findings_do_not_leak_into_methodology_notes():
     # القابلة للإصلاح (markdown/ثقة خام/تقطيع) لا تظهر كملاحظة منهجية —
     # طبقة العرض تُصلحها فعلاً؛ فقط البنيوية غير القابلة للإصلاح تظهر.
     assert "899" in notes_text or "شريك" in notes_text
-    assert "risk_news" in notes_text
+    assert "risk_news" not in notes_text
+    assert "وكيل المخاطر والأخبار" in notes_text
 
 
 def test_research_endpoint_attaches_quality_gate_to_view(monkeypatch):

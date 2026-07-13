@@ -3,14 +3,16 @@
 تشغَّل تلقائياً في نهاية كل `/research`، **قبل** أن يُعرَض DOCX — فحوصات
 حتمية (لا كلود) على `view["deep_research"]` النهائي: لا رموز شركاء خامة،
 لا تقطيع منتصف كلمة، لا تسريب Markdown/JSON خام، لا أرقام ثقة خامة في
-المتن، تغطية الملحق التقني، عدم إعلان "دليل غير كافٍ" حين توجد أدلة كافية،
-ترتيب/اكتمال الأقسام الأحد عشر (§10.3)، وصحة البعثات (بعثة بلا نتائج
-مستشهَد بها). حكم PASS / PASS-WITH-WARNINGS / FAIL؛ النتائج القابلة
-للإصلاح (Markdown/ثقة خام/تقطيع) تُصلَح آلياً بالفعل في طبقة العرض
-(`silk_reports._strip_inline_markdown`/`_evidence_badge`/`_truncate_at_word`)
-— هذه البوابة حارس انحدار يتأكد أنها فعلاً أُصلحت، لا مصلح مستقل. النتائج
-غير القابلة للإصلاح (بنيوية/بيانات) تُبنى كملاحظات تُعرَض داخل قسم
-"منهجية البحث ونطاقه" (٢) — لا لافتة تحذير على الغلاف، ولا صمت.
+المتن، لا تسريب سباكة داخلية (LLMAgent:*/وسوم dp)، تغطية الملحق التقني،
+عدم إعلان "دليل غير كافٍ" حين توجد أدلة كافية، ترتيب/اكتمال الأقسام
+الأحد عشر (§10.3)، وصحة البعثات (بعثة بلا نتائج مستشهَد بها). حكم PASS /
+PASS-WITH-WARNINGS / FAIL؛ النتائج القابلة للإصلاح (Markdown/ثقة خام/
+تقطيع/سباكة داخلية) تُصلَح آلياً بالفعل في طبقة العرض
+(`silk_reports._strip_inline_markdown`/`_evidence_badge`/`_truncate_at_word`،
+`silk_render._strip_internal_plumbing`) — هذه البوابة حارس انحدار يتأكد
+أنها فعلاً أُصلحت، لا مصلح مستقل. النتائج غير القابلة للإصلاح (بنيوية/
+بيانات) تُبنى كملاحظات تُعرَض داخل قسم "منهجية البحث ونطاقه" (٢) — لا
+لافتة تحذير على الغلاف، ولا صمت.
 
 منطق فحص صرف: صفر شبكة، صفر تعديل على الأرقام — قراءة وتشكيل فقط، مثل
 `silk_render.py` تماماً.
@@ -28,6 +30,11 @@ _MARKDOWN_RE = re.compile(r"(^#{1,6}\s)|(```)|(\*\*)", re.M)
 _RAW_JSON_RE = re.compile(r'[{]\s*"[a-zA-Z_]+"\s*:', re.M)
 _RAW_CONFIDENCE_RE = re.compile(r"\(?ثقة\s*0")
 _TERMINAL_PUNCT = ".!?:؛،؟…\"'”)"
+# بلاغ منتج من المالك: التقرير المعروض للعميل كشف السباكة الداخلية
+# ("LLMAgent:tariffs_agreements"، وسوم استشهاد خام "dp7") — كلود يستشهد
+# أحياناً حرفياً بوسوم رآها في مدخلاته. طبقة العرض تُصلح هذا فعلاً
+# (silk_render._strip_internal_plumbing)؛ هذا الفحص حارس انحدار.
+_INTERNAL_PLUMBING_RE = re.compile(r"LLM(?:Mission)?Agent:[A-Za-z_]+|\[?dp\d+\]?")
 
 
 def _check_markdown_and_raw_json(text: str) -> list[dict]:
@@ -74,6 +81,20 @@ def _check_mid_word_truncation(text: str) -> list[dict]:
                              "note": f"فقرة تنتهي بلا علامة ترقيم ختامية: "
                                      f"'...{s[-40:]}'"})
     return findings
+
+
+def _check_internal_plumbing_leak(text: str) -> list[dict]:
+    """تسريب سباكة داخلية (اسم وكيل خام/وسم استشهاد dp) في نص التقرير
+    المصدَر — بلاغ منتج من المالك. حارس انحدار: طبقة العرض
+    (`silk_render._strip_internal_plumbing`) تُصلح هذا فعلاً قبل وصول
+    النص هنا؛ ظهوره يعني ثغرة في التطبيع لا حالة طبيعية."""
+    if not text:
+        return []
+    if _INTERNAL_PLUMBING_RE.search(text):
+        return [{"check": "internal_plumbing_leak", "repairable": True,
+                 "note": "تسريب سباكة داخلية (اسم وكيل/وسم استشهاد خام) "
+                        "في نص التقرير المصدَر"}]
+    return []
 
 
 def _check_bare_partner_codes(dr: dict) -> list[dict]:
@@ -127,6 +148,21 @@ def _check_section_structure(dr: dict) -> list[dict]:
            for issue in _section_order_issues(text)]
 
 
+def _mission_label(key: str) -> str:
+    """اسم البعثة التجاري بالعربية — بلاغ منتج من المالك: ملاحظات هذه
+    البوابة تصل قسم "حدود المنهجية وجودة البيانات" في التقرير المعروض
+    للعميل مباشرة؛ المفتاح snake_case الخام (مثل "tariffs_agreements")
+    سباكة داخلية لا لغة تجارية."""
+    try:
+        from silk_missions import MISSIONS
+        row = MISSIONS.get(key)
+        if row and row.get("name"):
+            return row["name"]
+    except Exception:  # noqa: BLE001 — تسمية تجميلية لا شرط فحص
+        pass
+    return key.replace("_", " ")
+
+
 def _check_agent_health(dr: dict) -> list[dict]:
     """بعثات بلا أي نتيجة مستشهَد بها — تُسرَد صراحة، لا تُخفى داخل ملخّص.
 
@@ -136,15 +172,16 @@ def _check_agent_health(dr: dict) -> list[dict]:
     `agent_empty` (ملاحظة منهجية فقط، لا تُفشِل الحكم وحدها)."""
     findings = []
     for key, m in (dr.get("missions") or {}).items():
+        label = _mission_label(key)
         if m.get("failed"):
             findings.append({
                 "check": "agent_failed", "repairable": False,
-                "note": f"البعثة '{key}' فشلت بلا نتائج مستشهَد بها — "
+                "note": f"بعثة '{label}' فشلت بلا نتائج مستشهَد بها — "
                        f"{m.get('summary') or 'بلا ملخّص'}"})
         elif not (m.get("findings") or []):
             findings.append({
                 "check": "agent_empty", "repairable": False,
-                "note": f"البعثة '{key}' نجحت لكن بلا نتائج مستشهَد بها — "
+                "note": f"بعثة '{label}' نجحت لكن بلا نتائج مستشهَد بها — "
                        f"{m.get('summary') or 'بلا ملخّص'}"})
     return findings
 
@@ -213,6 +250,7 @@ def run_quality_gate(view: dict) -> dict:
     # (راجع أي AgentReport.summary في المشروع) — فحص التقطيع يقتصر على نص
     # التقرير السردي الكامل (كاتب التقرير) حيث التقطيع الحقيقي مرصود فعلاً.
     findings += _check_mid_word_truncation(text)
+    findings += _check_internal_plumbing_leak(text)
     findings += _check_bare_partner_codes(dr)
     findings += _check_intersection_insufficiency(dr)
     findings += _check_section_structure(dr)
