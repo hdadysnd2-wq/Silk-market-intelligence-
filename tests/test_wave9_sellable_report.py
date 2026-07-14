@@ -93,7 +93,10 @@ def test_deep_research_missions_get_a_higher_tool_budget():
     for key in _DEEP_RESEARCH_MISSIONS:
         b = _budget_for(key)
         assert b["tool_calls"] > _MISSION_BUDGET["tool_calls"]
-    assert _budget_for("trade_flow") == _MISSION_BUDGET
+    # ترقية المرحلة ٢ب: trade_flow انضم لمجموعة الميزانية الأعمق (خمس
+    # نداءات comtrade_imports صريحة تستهلك الميزانية الافتراضية بالكاد) —
+    # customs_requirements يبقى الشاهد على الميزانية الافتراضية غير المتأثرة.
+    assert _budget_for("customs_requirements") == _MISSION_BUDGET
 
 
 def test_demand_trends_instructions_require_multi_term_multi_timeframe():

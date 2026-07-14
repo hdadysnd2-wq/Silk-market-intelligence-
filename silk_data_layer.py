@@ -255,6 +255,25 @@ def primary_value(rec: dict) -> float | None:
         return None
 
 
+def primary_qty(rec: dict) -> float | None:
+    """الوزن الصافي بالكيلوغرام لسجل كومتريد — the record's numeric
+    'netWgt' (kg), or None.
+
+    ترقية المرحلة ٢ب: كومتريد يعيد هذا الحقل مع كل سجل تجارة فعلي ولم يكن
+    يُستخرَج إطلاقاً — سطر سعر استيراد مرجعي (القيمة/الوزن) كان بالإمكان
+    حسابه من مصدر مُستَجلَب أصلاً بلا نداء إضافي. نفس منطق primary_value:
+    سجل بلا وزن صافٍ رقمي حقيقي (أو وزن صفري/سالب) **ليس صفراً** — يعيد
+    None ليُسقِطه المستهلك بدل قسمة على صفر مختلَق."""
+    v = rec.get("netWgt")
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f > 0 else None
+
+
 def comtrade_trade(
     hs_code: str,
     reporter_m49: object,
