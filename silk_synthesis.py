@@ -21,7 +21,7 @@ import json
 import logging
 
 from silk_agents import JuryCommittee
-from silk_ai_judge import _call, _facts, _isolate, _user_steer, _MODEL, _PRINCIPLE
+from silk_ai_judge import _call, _facts, _isolate, _user_steer, _PRINCIPLE
 
 log = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def _stage2(product: str, market: str, reports: list,
         "verdict": obj.get("verdict"),
         "confidence": obj.get("confidence"),
         "reasoning": obj.get("reasoning", ""),
-        "by": f"Claude ({_MODEL})",
+        "by": "تقييم الذكاء الاصطناعي",
         "preliminary": True,
         "grounded_in_threads": bool(threads),
         "grounded_in_analyst": bool(analyst_assessment),
