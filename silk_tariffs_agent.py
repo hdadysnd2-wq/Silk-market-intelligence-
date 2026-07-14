@@ -18,10 +18,37 @@ from silk_agents import BaseAgent, AgentReport
 
 log = logging.getLogger(__name__)
 
-# WITS SDMX REST — applied (AHS) tariff, simple average, by product/year.
-# Path: .../TRN/reporter_partner_product_year_indicator/...
+# WITS SDMX REST — reported tariff by reporter/partner/product/year.
+# Path: .../TRN/reporter/{num}/partner/{num}/product/{hs6}/year/{y}/datatype/reported
 _WITS_BASE = "https://wits.worldbank.org/API/V1/SDMX/V21/datasource/TRN/reporter"
 _TIMEOUT = 30
+
+# أعضاء الاتحاد الأوروبي — تعريفاتهم تُبلَّغ لـWITS تحت مُبلِّغ واحد هو
+# الاتحاد الأوروبي (رمز 918) لأن التعريفة الخارجية موحّدة؛ الاستعلام برمز
+# العضو الفردي (هولندا 528 مثلاً) لا يعيد صفوف TRN — هذا أصل فجوة التعريفة
+# المزمنة في تقارير الأسواق الأوروبية (بلاغ حي، تشغيلة تمور/هولندا الثالثة).
+_EU_ISO3 = frozenset({
+    "AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA",
+    "DEU", "GRC", "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD",
+    "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE"})
+_EU_WITS_CODE = "918"
+
+
+def _wits_reporter_code(iso3: str) -> tuple[str | None, bool]:
+    """رمز المُبلِّغ الرقمي لـWITS — (الرمز، هل هو الاتحاد الأوروبي؟).
+
+    بلاغ حي (تشغيلة ثالثة): WITS كان يرفض الطلب بـ"400 WITSAPIError/
+    Invalid_Reporter" لأن الكود أرسل ISO3 الأبجدي ("NLD") بينما واجهة
+    WITS SDMX تتوقع رموز الأمم المتحدة الرقمية (528 لهولندا، 000 للعالم
+    — راجع أمثلة توثيق WITS نفسها: reporter/840/partner/000/...).
+    عضو الاتحاد الأوروبي يُحوَّل لرمز الاتحاد (918) لأن تعريفته تُبلَّغ
+    على مستوى الاتحاد حصراً. None = لا رمز رقمي معروف (فجوة معلنة، لا
+    تخمين)."""
+    iso3 = (iso3 or "").upper()
+    if iso3 in _EU_ISO3:
+        return _EU_WITS_CODE, True
+    m49 = ISO3_TO_M49.get(iso3)
+    return (m49.zfill(3) if m49 else None), False
 
 
 def _default_year() -> int:
@@ -52,9 +79,22 @@ def applied_tariff(
         return DataPoint(None, "World Bank WITS", 0.0,
                          f"invalid HS code {hs_code!r}", _today())
     year = year or _default_year()
-    # SDMX key: reporter/partner/product/year/AHS (applied, simple average).
-    url = (f"{_WITS_BASE}/{market_iso3}/partner/{partner_iso3}"
-           f"/product/{hs6}/year/{year}/datatype/AHS")
+    # رموز رقمية إلزامية (بلاغ حي: Invalid_Reporter مع ISO3 الأبجدي) —
+    # المُبلِّغ عبر _wits_reporter_code (يشمل تحويل عضو الاتحاد الأوروبي
+    # إلى 918)، والشريك عبر ISO3_TO_M49 مباشرة.
+    reporter_code, is_eu = _wits_reporter_code(market_iso3)
+    partner_m49 = ISO3_TO_M49.get((partner_iso3 or "").upper())
+    if not reporter_code or not partner_m49:
+        missing = market_iso3 if not reporter_code else partner_iso3
+        return DataPoint(
+            None, "World Bank WITS", 0.0,
+            f"لا رمز رقمي معروف لـ{missing!r} في فهرس WITS — فجوة معلنة "
+            "(لا استعلام بلا رمز صحيح)", _today())
+    # datatype=reported: قيم التعريفة المُبلَّغة فعلاً — القيمتان الصالحتان
+    # في واجهة WITS SDMX هما reported/aveestimated لا "AHS" (كانت خطأً
+    # ثانياً كامناً خلف Invalid_Reporter).
+    url = (f"{_WITS_BASE}/{reporter_code}/partner/{partner_m49.zfill(3)}"
+           f"/product/{hs6}/year/{year}/datatype/reported")
     params = {"format": "JSON"}
     try:
         r = requests.get(url, params=params, timeout=_TIMEOUT)
@@ -90,10 +130,12 @@ def applied_tariff(
         log.warning("WITS: no applied rate parsed for HS%s %s->%s %s",
                    hs6, partner_iso3, market_iso3, year)
         return DataPoint(None, "World Bank WITS", 0.0, note, _today())
+    eu_note = (" — تعريفة الاتحاد الأوروبي الموحّدة (تشمل هذا السوق؛ "
+               f"المُبلِّغ WITS: EU/918)" if is_eu else "")
     return DataPoint(
         round(rate, 2), "World Bank WITS", 0.9,
-        f"applied import tariff % (AHS simple avg) HS{hs6} "
-        f"{partner_iso3}->{market_iso3} {year}", _today())
+        f"reported import tariff % HS{hs6} "
+        f"{partner_iso3}->{market_iso3} {year}{eu_note}", _today())
 
 
 def _parse_rate(resp: requests.Response) -> float | None:

@@ -122,8 +122,19 @@ class AnthropicProvider(LLMProvider):
                 return None
             text = "".join(b.get("text", "") for b in data.get("content", [])
                           if b.get("type") == "text").strip()
+            if not text:
+                # بلاغ حي (تشغيلة ثالثة): هذا كان مسار الفشل الصامت الوحيد —
+                # رد HTTP ناجح بلا كتل نصية (stop_reason=max_tokens مثلاً)
+                # يعيد None بلا أي سطر سجل ولا last_error، فتظهر الواجهة
+                # "مهلة أو خطأ شبكة" زوراً وسجل Railway خالٍ من أي أثر.
+                detail = {"type": "empty_response",
+                          "message": f"HTTP 200 بلا كتل نصية — "
+                                     f"stop_reason={data.get('stop_reason')!r}"}
+                log.warning("AI judge call returned no text: %s", detail["message"])
+                _last_error.set(detail)
+                return None
             _last_error.set(None)
-            return text or None
+            return text
         except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
             log.warning("AI judge call failed: %s: %s", type(e).__name__, e)
             _last_error.set(self._error_detail(e))

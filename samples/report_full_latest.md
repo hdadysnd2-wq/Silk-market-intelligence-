@@ -175,7 +175,7 @@
 - Silk L1 requirements reference (official portals / EUR-Lex): أسهم 16 من 17 محاولة
   - فشل مُسجَّل: سوق CHN (موثّق جزئياً) غير مغطى بالمرجع الثابت بعد — تحقق محلياً (verify locally)
 - UN Comtrade (مخزن الحقائق): أسهم 14 من 14 محاولة
-- Pew Research Center (لقطة ساكنة مقرّبة): أسهم 2 من 2 محاولة
+- Pew Research Center (لقطة ساكنة مقرّبة): أسهم 4 من 4 محاولة
 - World Bank: أسهم 0 من 10 محاولة
   - فشل مُسجَّل: no income data for CHN 2023
   - فشل مُسجَّل: الاستقرار السياسي (WGI) — PV.EST fetch failed for CHN: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with ur
