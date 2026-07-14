@@ -105,6 +105,100 @@ def trends_series(keyword: str, geo: str | None = None,
                 "note": f"pytrends unavailable / no network: {e}"}
 
 
+def _coerce_trend_value(v: object) -> object:
+    """قيمة صف تريندز كما هي — رقم يبقى رقماً، و'Breakout' الصاعدة تبقى نصاً
+    (لا تحويلها لرقم مختلَق). None يبقى None."""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return v
+    s = str(v).strip()
+    return s or None
+
+
+def trends_context(keyword: str, geo: str | None = None,
+                   timeframe: str = "today 12-m") -> dict:
+    """سياق طلب أغنى من بناء حمولة pytrends واحد — R3 (ثقافة المستهلك الأعمق):
+    الاستعلامات المرتبطة (الشائعة والصاعدة)، المواضيع الصاعدة، والتوزيع
+    الإقليمي للاهتمام.
+
+    كلها من `build_payload` واحد ثم ثلاث قراءات (related_queries/
+    related_topics/interest_by_region) — كل قسم مُغلَّف باستثنائه فيتدهور
+    **مستقلاً** إلى قائمة فارغة بملاحظة السبب عند غيابه؛ لا اختلاق قط
+    (المبدأ المؤسِّس). فشل/غياب pytrends => كل الأقسام فارغة بملاحظة السبب.
+    يعيد {"related_top", "related_rising", "topics_rising", "regions",
+          "confidence", "note"} — كل بند {"label", "value"}.
+    """
+    empty = {"related_top": [], "related_rising": [], "topics_rising": [],
+             "regions": [], "confidence": 0.0, "note": ""}
+    try:
+        from pytrends.request import TrendReq  # lazy: optional dep
+    except ImportError:
+        return {**empty, "note": "pytrends unavailable / no network"}
+    kw = (keyword or "").strip()
+    if not kw:
+        return {**empty, "note": "empty keyword — no query"}
+    try:
+        py = TrendReq(timeout=(10, 30))
+        py.build_payload([kw], timeframe=timeframe, geo=(geo or ""))
+    except Exception as e:  # noqa: BLE001 — never raise to caller
+        log.warning("Trends context payload failed ('%s', geo=%s): %s",
+                    keyword, geo, e)
+        return {**empty, "note": f"pytrends unavailable / no network: {e}"}
+
+    def _rows(df, label_col: str, n: int = 6) -> list[dict]:
+        rows: list[dict] = []
+        try:
+            if df is None or df.empty:
+                return rows
+            for _, r in df.head(n).iterrows():
+                label = r.get(label_col)
+                if label is None:
+                    continue
+                rows.append({"label": str(label),
+                             "value": _coerce_trend_value(r.get("value"))})
+        except Exception:  # noqa: BLE001 — قسم واحد يفشل لا يُسقِط البقية
+            return []
+        return rows
+
+    out = {**empty, "confidence": 0.6}
+    found = False
+    try:
+        rq = (py.related_queries() or {}).get(kw) or {}
+        out["related_top"] = _rows(rq.get("top"), "query")
+        out["related_rising"] = _rows(rq.get("rising"), "query")
+        found = found or bool(out["related_top"] or out["related_rising"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("related_queries failed ('%s'): %s", kw, e)
+    try:
+        rt = (py.related_topics() or {}).get(kw) or {}
+        out["topics_rising"] = _rows(rt.get("rising"), "topic_title")
+        found = found or bool(out["topics_rising"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("related_topics failed ('%s'): %s", kw, e)
+    try:
+        reg = py.interest_by_region(resolution="REGION")
+        if reg is not None and not reg.empty and kw in reg.columns:
+            top = reg.sort_values(kw, ascending=False).head(6)
+            out["regions"] = [{"label": str(idx),
+                               "value": _coerce_trend_value(row[kw])}
+                              for idx, row in top.iterrows()
+                              if row[kw]]
+            found = found or bool(out["regions"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("interest_by_region failed ('%s'): %s", kw, e)
+
+    if not found:
+        return {**empty, "note":
+                f"لا سياق اتجاهات مرتبط لـ'{kw}' (geo={geo or 'WW'})"}
+    out["note"] = (f"سياق اتجاهات لـ'{kw}' geo={geo or 'WW'}: "
+                   f"{len(out['related_top'])} استعلام شائع، "
+                   f"{len(out['related_rising'])} صاعد، "
+                   f"{len(out['topics_rising'])} موضوع صاعد، "
+                   f"{len(out['regions'])} إقليم")
+    return out
+
+
 def _seasonality(keyword: str, geo: str | None, timeframe: str) -> DataPoint:
     """موسمية بسيطة — peak month of search interest over the timeframe."""
     try:

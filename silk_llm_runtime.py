@@ -284,6 +284,42 @@ def _tool_trends_interest(args: dict, ctx: dict) -> list[DataPoint]:
     return [trends_interest(term, geo=(market.iso2 or None), timeframe=timeframe)]
 
 
+def _tool_trends_context(args: dict, ctx: dict) -> list[DataPoint]:
+    """R3: سياق طلب أغنى — استعلامات مرتبطة (شائعة/صاعدة)، مواضيع صاعدة،
+    وتوزيع إقليمي. كل بند نقطة بيانات قابلة للاستشهاد؛ لا شيء => فجوة معلنة."""
+    from silk_trends_agent import trends_context
+    term = str(args.get("term") or ctx.get("product") or "").strip()
+    if not term:
+        return [DataPoint(None, "Google Trends", 0.0, "لا كلمة بحث", _today())]
+    market = ctx["market"]
+    geo = market.iso2 or None
+    timeframe = str(args.get("timeframe") or "today 12-m")
+    data = trends_context(term, geo=geo, timeframe=timeframe)
+    conf = float(data.get("confidence") or 0.6)
+    geo_txt = market.iso2 or "WW"
+    dps: list[DataPoint] = []
+    for it in data.get("related_top", []):
+        dps.append(DataPoint({"related_query": it["label"], "interest": it["value"]},
+                             "Google Trends", conf,
+                             f"استعلام مرتبط شائع بـ'{term}' (geo={geo_txt})", _today()))
+    for it in data.get("related_rising", []):
+        dps.append(DataPoint({"rising_query": it["label"], "growth": it["value"]},
+                             "Google Trends", conf,
+                             f"استعلام مرتبط صاعد بـ'{term}' (geo={geo_txt})", _today()))
+    for it in data.get("topics_rising", []):
+        dps.append(DataPoint({"rising_topic": it["label"], "growth": it["value"]},
+                             "Google Trends", conf,
+                             f"موضوع صاعد مرتبط بـ'{term}' (geo={geo_txt})", _today()))
+    for it in data.get("regions", []):
+        dps.append(DataPoint({"region": it["label"], "interest": it["value"]},
+                             "Google Trends", conf,
+                             f"توزيع إقليمي لاهتمام '{term}' (geo={geo_txt})", _today()))
+    if not dps:
+        return [DataPoint(None, "Google Trends", 0.0,
+                          data.get("note") or "لا سياق اتجاهات مرتبط", _today())]
+    return dps
+
+
 def _tool_faostat_supply(args: dict, ctx: dict) -> list[DataPoint]:
     from silk_faostat_agent import per_capita_supply
     item = str(args.get("item") or ctx.get("product") or "").strip()
@@ -461,6 +497,23 @@ TOOLS: dict[str, dict] = {
                              "description": "e.g. 'today 12-m' (default, "
                                             "seasonality) or 'today 5-y' "
                                             "(long-run trend)"}}},
+        },
+    },
+    "trends_context": {
+        "fn": _tool_trends_context,
+        "spec": {
+            "name": "trends_context",
+            "description": "سياق طلب أغنى من جوجل تريندز للسوق المستهدف: "
+                           "الاستعلامات المرتبطة (الشائعة والصاعدة)، المواضيع "
+                           "الصاعدة، والتوزيع الإقليمي للاهتمام — لفهم ماذا "
+                           "يبحث المستهلك المحلي فعلاً حول الفئة (لا مجرد رقم "
+                           "اهتمام واحد). نداء واحد يعيد الحزمة كاملة؛ ما لا "
+                           "يتوفّر يُعلَن فجوة لا يُختلَق.",
+            "input_schema": {"type": "object", "properties": {
+                "term": {"type": "string"},
+                "timeframe": {"type": "string",
+                             "description": "e.g. 'today 12-m' (default) or "
+                                            "'today 5-y'"}}},
         },
     },
     "faostat_supply": {
