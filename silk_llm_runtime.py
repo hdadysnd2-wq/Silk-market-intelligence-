@@ -34,7 +34,8 @@ import re
 from silk_agents import AgentReport, BaseAgent
 from silk_ai_judge import _MODEL, _PRINCIPLE, _call_tools, _isolate
 from silk_ai_judge import failure_reason as _ai_failure_reason
-from silk_data_layer import DataPoint, comtrade_trade, primary_value, world_bank
+from silk_data_layer import (
+    DataPoint, comtrade_trade, primary_qty, primary_value, world_bank)
 from silk_market_resolver import MarketRef
 
 log = logging.getLogger(__name__)
@@ -61,6 +62,11 @@ _WB_INDICATORS = {
     # risk_news كان بلا مصدر بيانات فعلي. نداءات متعددة بسنوات مختلفة
     # (نفس نمط demand_trends) تعطي سلسلة يُحسب منها التقلّب.
     "exchange_rate": "PA.NUS.FCRF",
+    # نسبة السكان في سنّ العمل ١٥-٦٤ — ترقية المرحلة ٢ب: تعليمات
+    # demographics_economy كانت تطلب "نسبة الشباب إن أمكن" بلا أي مؤشر
+    # يوفّرها فعلياً (فجوة ميتة بلا web_search بديل لهذه المهمة) رغم أن
+    # البنك الدولي يوفّرها مجاناً عبر نفس الأداة المستَخدَمة أصلاً.
+    "youth_population_pct": "SP.POP.1564.TO.ZS",
 }
 
 _REF_TABLES = {
@@ -130,6 +136,21 @@ def _tool_comtrade_imports(args: dict, ctx: dict) -> list[DataPoint]:
             sum(vals), "UN Comtrade", 0.9,
             f"HS{hs} إجمالي استيراد {market.name_en} من العالم {year}, USD",
             _today()))
+        # ترقية المرحلة ٢ب: متوسط سعر استيراد مرجعي (القيمة/الوزن الصافي)
+        # — حقل netWgt يعود مع نفس السجلات المُستجلَبة أعلاه أصلاً بلا
+        # نداء إضافي؛ لم يكن يُستخرَج. ثقة أدنى من إجمالي الاستيراد لأنه
+        # متوسط عبر مزيج منتجات داخل رمز HS قد يشمل درجات جودة مختلفة —
+        # نطاق جملة مرجعي واسع، لا سعر تجزئة فعلياً (راجع تعليمات
+        # pricing_scout لصيغة العرض للعميل).
+        qtys = [q for q in (primary_qty(r) for r in recs) if q is not None]
+        total_qty = sum(qtys)
+        if total_qty > 0:
+            out.append(DataPoint(
+                round(sum(vals) / total_qty, 4), "UN Comtrade", 0.7,
+                f"HS{hs} متوسط سعر استيراد {market.name_en} {year} "
+                "(القيمة الإجمالية ÷ الوزن الصافي بالكجم) — نطاق جملة "
+                "مرجعي من كومتريد، لا سعر تجزئة فعلياً",
+                _today()))
     return out
 
 
