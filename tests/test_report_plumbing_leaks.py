@@ -286,3 +286,60 @@ def test_deep_research_view_exposes_verdict_tone_and_label_not_raw_token():
     assert dr["verdict_label"] == "مراقبة السوق"
     assert "CONDITIONAL-GO" not in dr["verdict"]["ai"]["reasoning"]
     assert "دخول مشروط" in dr["verdict"]["ai"]["reasoning"]
+
+
+# ── 7) الطبقة ٧ — مفارقة بوابة الجودة: البوابة نفسها كانت تسرّب ───────────
+
+def test_bare_partner_code_note_uses_mission_label_not_raw_key_or_repr():
+    """بلاغ تدقيق: ملاحظة `_check_bare_partner_codes` (تُحقَن في قسم
+    "منهجية البحث ونطاقه" المعروض للعميل) كانت تحمل مفتاح البعثة الخام
+    ("tariffs_agreements") وتنسيق repr بايثون الخام ('042') — البوابة
+    التي تكتشف تسريبات كانت تُصدر تسريباً موازياً بنفسها."""
+    from silk_quality_gate import run_quality_gate
+    view = {"deep_research": {
+        "report": {"text": ""},
+        "missions": {"tariffs_agreements": {
+            "failed": False,
+            "findings": [{"value": {"partner": "042"}}]}},
+        "analyst": {}}}
+    out = run_quality_gate(view)
+    notes = " ".join(out["methodology_notes"])
+    assert "tariffs_agreements" not in notes
+    assert "'042'" not in notes                 # لا علامات اقتباس بايثون
+    assert "«042»" in notes
+
+
+def _sectioned_report_text(extra: str = "") -> str:
+    from silk_ai_judge import _REPORT_SECTIONS
+    body = "\n\n".join(
+        f"## {i}. {s}\nنص هذا القسم عربي سليم بلا أي مشكلة هنا إطلاقاً."
+        for i, s in enumerate(_REPORT_SECTIONS, 1))
+    return body + extra
+
+
+def test_quality_gate_elevates_to_fail_when_a_supposedly_repaired_leak_fires():
+    """مفارقة البوابة (بلاغ تدقيق): فحوصات مثل internal_plumbing_leak
+    مُعلَّمة repairable=True لأن صنفها يُصلَح عادة في طبقة العرض قبل وصول
+    النص هنا — لكن حين تُطلِق فعلياً، فهذا يعني الإصلاح فشل في هذه
+    التشغيلة تحديداً والتسريب وصل للعميل بالفعل (البوابة تُشغَّل بعد بناء
+    DOCX لا قبله) — يجب أن يُصعَّد الحكم لـFAIL لا أن يُخفَّض صمتاً لـWARN."""
+    from silk_quality_gate import run_quality_gate
+    text = _sectioned_report_text(" [dp7]")     # وسم استشهاد خام مسرَّب فعلياً
+    out = run_quality_gate({"deep_research": {"report": {"text": text},
+                                              "missions": {}, "analyst": {}}})
+    assert "internal_plumbing_leak" in {f["check"] for f in out["findings"]}
+    assert out["verdict"] == "FAIL"
+    assert any("سباكة داخلية" in n for n in out["methodology_notes"])
+
+
+def test_quality_gate_stays_warn_for_ordinary_repairable_findings():
+    """حارس مضاد: الترقية لـFAIL خاصة بفحوصات الانحدار الأربعة فقط
+    (تسريب سباكة/حقل إنجليزي/مفتاح بعثة/ثقة خام) — بقية القابل للإصلاح
+    (Markdown/تقطيع) يبقى WARN كسابقاً، لا ترقية عامة لكل شيء."""
+    from silk_quality_gate import run_quality_gate
+    text = _sectioned_report_text()             # ## يطابق markdown_artifacts فقط
+    out = run_quality_gate({"deep_research": {"report": {"text": text},
+                                              "missions": {}, "analyst": {}}})
+    checks = {f["check"] for f in out["findings"]}
+    assert checks == {"markdown_artifacts"}
+    assert out["verdict"] == "PASS-WITH-WARNINGS"
