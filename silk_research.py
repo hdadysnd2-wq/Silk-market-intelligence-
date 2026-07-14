@@ -534,10 +534,10 @@ class CompetitorAgent(ResearchAgent):
                      if dropped else "")
         if named:
             F.append(_f("named_companies", named, refs,
-                        note="كيانات Google Maps بالاسم (غير موثَّقة، ثقة 0.4) "
+                        note="كيانات Google Maps بالاسم (○ غير متحقق) "
                              "+ مراجع ويب للمراجعة اليدوية — أكّدها قبل "
-                             "الاعتماد؛ الترقية الموثّقة عبر /deepen (Volza/Explee)"
-                             + drop_note))
+                             "الاعتماد؛ الترقية الموثّقة عبر خدمة التعميق "
+                             "المدفوعة (Volza/Explee)" + drop_note))
         else:
             gaps.append(
                 "الطبقة الاسمية (شركات): "

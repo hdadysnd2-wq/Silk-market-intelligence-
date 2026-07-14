@@ -78,7 +78,11 @@ def test_deep_research_docx_has_missions_table_intersections_and_report(
     render_docx(view, path)
     text = docx_all_text(path)
     assert "قسم البحث العميق" in text
-    assert "trade_flow" in text
+    # إصلاح تسريب السباكة: الاسم التجاري العربي (label) بدل مفتاح snake_case
+    # الخام — راجع tests/test_report_plumbing_leaks.py
+    from silk_missions import MISSIONS
+    assert MISSIONS["trade_flow"]["name"] in text
+    assert "trade_flow" not in text
     assert "الطلب الفعلي القابل للتوجيه" in text
     assert "نص تجريبي" in text
     assert "نص آخر" in text
