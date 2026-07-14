@@ -1,5 +1,12 @@
 # Source-Utilization Audit — تدقيق استغلال المصادر (Stage 1A)
 
+> **Snapshot note (added 2026-07-14).** §1–§4 are the **Stage-1** state; §5 (AFTER)
+> and later PRs resolved most gaps. Do NOT read §1–§4 as current — the "WGI/LPI/FX
+> collected but never read" gap in particular is **RESOLVED** (annotated inline below;
+> the consumer is `silk_engine._enrich_risk` + the `with_research` RiskAgent, guard-tested).
+> Same discipline as `docs/AUDIT_STATUS.md`: read for method, verify claims against
+> current code. Current full reference: `docs/PLATFORM_ANALYSIS.md`.
+
 **Method:** static call-site trace of every configured source through `analyze → ranker → agents → synthesis → view/report`, gates traced through `api.AnalyzeRequest` defaults and `web/index.html buildBody()` — plus **three instrumented end-to-end runs** (per-host HTTP attempt counters wrapped around both `requests.*` and the pooled session): default `/analyze` (dates→CHN), all-free-flags (dates→CHN), all-free-flags (honey→DEU). Sandbox note: external data hosts are policy-blocked here (403) — attempts and short-circuits are still fully measurable; production behavior noted per source.
 
 ## 1. The call-site truth table
@@ -17,7 +24,7 @@
 | SerpApi prices | `_enrich_localprice` (deepen-only; field absent from AnalyzeRequest) | `/deepen` + key | NO (structural) | NO | pricing | deepen-only by design; **`LOCALPRICE_API_KEY` undocumented in .env.example** |
 | Volza / Explee | `_enrich_volza/_explee` (deepen-only) | `/deepen` + keys | NO (structural) | NO | importers/buyers | deepen-only by design |
 | Claude | synthesis stage-2 + `ai_report` | `/deepen` + `with_ai` + key | NO (structural) | NO | verdict narrative | deepen-only by design |
-| **WGI/LPI/FX (M2)** | **collected** (silk_collectors.py:106) → fact store; **no reader anywhere** (`get_indicator` has zero production callers) | n/a | NO | NO | Risk section/pillar | **missing integration — collected but never consumed** (Risk Agent = unbuilt M3a) |
+| **WGI/LPI/FX (M2)** | **collected** (silk_collectors.py:106) → fact store; ~~no reader anywhere~~ | n/a | NO | NO | Risk section/pillar | ~~missing integration~~ **✅ RESOLVED (Stage 2A, see §5)** — the reader was built: `silk_engine._enrich_risk` (silk_engine.py:316, store-first via `get_indicator`) and the `with_research` RiskAgent (silk_research.py:921) both consume these; the decision pillar reads them via `_pillar_inputs` → `silk_decision._pillar_risk` (silk_decision.py:159). Enabled by default (`with_risk`/`with_research` in the server policy, api.py:474). Guards: `test_stage2a.py::test_risk_reader_serves_real_store_facts_and_fx_volatility` (store-first), `test_stage2a.py::test_source_policy_is_server_decided_and_client_cannot_disable` (policy enables both), `test_risk_pillar_and_logistics.py`, `test_project_review_fixes.py::test_risk_error_path_returns_tagged_datapoint_not_typeerror` |
 
 ## 2. Instrumented runs — sources actually hit & facts contributed
 
@@ -40,7 +47,7 @@
 1. **Only 2 of 12 sources run on a bare `/analyze`** (Comtrade + World Bank). The UI raises that to ~4.5 (adds L1, trend, and a keyless-degrading Serper attempt).
 2. **Three free sources are dark for a pure UI-model bug** (FAOSTAT, WITS behind nonexistent key boxes; Trends behind a default-off toggle) — the engine wiring for all three is complete and correct.
 3. **Five sections silently show "غير مرصود" because the server key was never consulted** — the UI's localStorage keys panel never transmits anything; flags derived from it are the only trigger.
-4. **The M2 risk indicators (WGI/LPI/FX) are collected and never read** — awaiting their M3a consumer (Risk Agent).
+4. ~~**The M2 risk indicators (WGI/LPI/FX) are collected and never read**~~ — **✅ RESOLVED in Stage 2A**: the consumer was built (`silk_engine._enrich_risk`, silk_engine.py:316) and reads them store-first, plus the decision pillar consumes them via the `with_research` RiskAgent. This line is kept for the historical Stage-1 record; see §5 and the WGI/LPI/FX row in §1 for the resolution anchors and guard tests. (⚠ Anyone re-grading current state from this Stage-1 section: this specific gap is closed.)
 5. No source is fabricating; every failure is provenance-tagged (verified in all runs). The failure is **utilization**, not honesty.
 6. Doc bug: `LOCALPRICE_API_KEY` missing from `.env.example`.
 
@@ -49,7 +56,7 @@
 - Server-side source policy: agents attempt **all mapped sources unconditionally** when the server env allows; kill key-derived UI flags as the gate.
 - Fix the UI gating model (FAOSTAT/WITS/Trends are free — always on; keys panel becomes a read-only server-status view).
 - Wire `with_importers`/`with_channels` (currently unreachable from UI).
-- Add the WGI/LPI/FX reader (Risk Agent, M3a §4b).
+- ~~Add the WGI/LPI/FX reader (Risk Agent, M3a §4b).~~ **✅ DONE** — `silk_engine._enrich_risk` + the `with_research` RiskAgent (anchors and guard tests in §1).
 - Document `LOCALPRICE_API_KEY`.
 - Per-section source-coverage score + provenance appendix (2A spec).
 
