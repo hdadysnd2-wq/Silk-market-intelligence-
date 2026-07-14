@@ -1402,6 +1402,81 @@ def create_app():
             out["answer"] = _strip_internal_plumbing(out["answer"])
         return _json(out)
 
+    class SnapshotRequest(BaseModel):
+        """لقطة سريعة لمنتج جديد (R4) — هل يستحق دراسة كاملة؟"""
+        product: str
+        hs_code: "str | None" = None
+        market: "str | None" = None
+        refresh: bool = False
+        confirm: bool = False
+
+    @app.post("/products/snapshot")
+    def product_snapshot(req: SnapshotRequest, request: Request):
+        """لقطة سريعة لمنتج × سوق (R4) — تعيد استخدام بعثة الأسعار مقيَّدةً.
+
+        التدفق: (١) المخزن أولاً ما لم يُطلب تحديث — تكرار السؤال مجاني بلا
+        حرق أرصدة. (٢) بلا confirm=true تُعيد التكلفة المقدَّرة فقط ولا تشغّل
+        (التكلفة تُعرَض قبل التشغيل). (٣) مع confirm تمرّ بنفس حارس إضافات
+        كلود المجانية (_free_ai_extras_allowed): تحجز تفعيلة واحدة من السقف
+        اليومي، وتُحجَب على النشر غير المحمي، وتتدهور معلنةً عند النفاد —
+        ثم تشغّل وتخزّن. لا اختلاق: فجوات معلنة بلا مفتاح/شبكة.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        import silk_snapshot
+        product = (req.product or "").strip()
+        if not product:
+            raise HTTPException(status_code=422, detail="product required")
+
+        from silk_market_resolver import resolve_market
+        market_ref, suggestions = resolve_market(
+            req.market or silk_snapshot._DEFAULT_PROBE_MARKET)
+        if market_ref is None:
+            raise HTTPException(status_code=422, detail={
+                "error": f"unknown or ambiguous market {req.market!r}",
+                "suggestions": suggestions})
+
+        hs_code = (req.hs_code or "").strip() or None
+        hs_note = None
+        if not hs_code:
+            from silk_hs_resolver import resolve as resolve_hs
+            dp = resolve_hs(product)
+            hs_code = dp.value
+            if hs_code is None:
+                hs_note = dp.note   # فجوة معلنة — لا اختلاق رمز HS
+
+        # (١) المخزن أولاً — تكرار مجاني بلا حجز
+        if not req.refresh:
+            cached = silk_storage.get_product_snapshot(hs_code, market_ref.iso3)
+            if cached is not None:
+                return _json({"snapshot": cached, "cached": True,
+                              "cost": {"claude_activations": 0,
+                                       "note": "من المخزن — بلا تكلفة"}})
+
+        est = {"claude_activations": 1,
+               "note": "لقطة سريعة = تفعيلة كلود واحدة (بعثة الأسعار مقيَّدة "
+                       "الميزانية) — تُحتسب من السقف اليومي"}
+
+        # (٢) التكلفة قبل التشغيل — بلا confirm لا تشغيل ولا حجز
+        if not req.confirm:
+            return _json({"snapshot": None, "cached": False, "cost": est,
+                          "would_exceed_cap": silk_usage.would_exceed_cap(1),
+                          "hs_note": hs_note,
+                          "note": "أكّد بإرسال confirm=true للتشغيل — تُحتسب "
+                                  "تفعيلة واحدة من السقف اليومي"})
+
+        # (٣) confirm — نفس حارس المدفوع المجاني (حجز/حجب/تدهور معلن)
+        ai_ok, ai_note = _free_ai_extras_allowed()
+        if not ai_ok:
+            return _json({"snapshot": None, "cached": False, "cost": est,
+                          "blocked_note": ai_note})
+
+        snap = silk_snapshot.quick_snapshot(product, hs_code, market_ref)
+        if hs_note:
+            snap["hs_note"] = hs_note
+        silk_storage.save_product_snapshot(hs_code, market_ref.iso3, snap)
+        return _json({"snapshot": snap, "cached": False, "cost": est})
+
     class OutcomeRequest(BaseModel):
         """جسم تسجيل النتيجة الفعلية — actual-outcome body (wave 1)."""
         outcome: str

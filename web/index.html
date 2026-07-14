@@ -240,9 +240,11 @@
         </div>
         <div class="runbar">
           <div class="rsum" id="runSum">اختر منتجاً للبدء</div>
+          <button class="runbtn" id="snapBtn" disabled title="لقطة سريعة رخيصة: منتجات منافِسة ونطاق سعر ومورّدون — هل يستحق دراسة كاملة؟ (تفعيلة كلود واحدة، تُعرَض التكلفة قبل التشغيل)">لقطة سريعة</button>
           <button class="runbtn" id="researchBtn" disabled title="يتطلب اختيار سوق واحد — ١٢ بعثة كلود + محلل شامل + تقرير مراجَع">بحث عميق (كلود) ←</button>
           <button class="runbtn" id="runBtn" disabled data-t="run">حلّل السوق ←</button>
         </div>
+        <div id="snapOut" style="margin-top:12px"></div>
       </div>
     </div>
 
@@ -421,6 +423,7 @@ function years(){var to=CURY-1,from=to-S.span+1;return[from,to]}
 function sync(){var y=years();$("#yearLabel").textContent=y[0]+" – "+y[1];$("#yearSpanLbl").textContent=S.span+" "+(S.span>2?t("yearsWord"):t("yearWord"));
   $("#runBtn").disabled=!S.product||S.busy;
   $("#researchBtn").disabled=!S.product||!S.market||S.busy;
+  var sb=$("#snapBtn");if(sb)sb.disabled=!S.product||S.busy;
   $("#runSum").innerHTML=S.product?(t("readyFor")+" <b>"+esc(S.product)+"</b> "+t("inM")+" <b>"+esc(S.market?S.market.name:t("allM"))+"</b> "+t("over")+" <b>"+y[0]+"–"+y[1]+"</b>"):t("pickFirst")}
 applyLang();sync();
 
@@ -437,6 +440,43 @@ function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#r
     pushHist();renderBoard();if(then)then(res);else nav("board")})
   .catch(function(e){S.busy=false;$("#runBtn").textContent=t("run");sync();toast("فشل الطلب: "+e.message)})}
 $("#runBtn").addEventListener("click",function(){runAnalysis()});
+/* R4 — لقطة سريعة لمنتج جديد: التكلفة قبل التشغيل، ثم من المخزن عند التكرار. */
+function quickSnapshot(){
+  if(!S.product)return;var out=$("#snapOut");
+  var body={product:S.product,hs_code:S.hs||null,market:S.market?S.market.name:null};
+  out.innerHTML='<div class="note">…جارٍ التحقق من المخزن والتكلفة</div>';
+  post("/products/snapshot",body).then(function(d){
+    if(d&&(d.snapshot||d.cached)){renderSnap(d);return}   // خُدِمت من المخزن
+    var cap=d&&d.would_exceed_cap?' <b style="color:#c00">تحذير: قد يتجاوز السقف اليومي</b>':'';
+    out.innerHTML='<div class="bcard" style="padding:12px"><b>لقطة سريعة — هل يستحق دراسة كاملة؟</b>'
+      +'<p class="note">التكلفة: تفعيلة كلود واحدة (بعثة الأسعار مقيَّدة) تُحتسب من السقف اليومي.'+cap+'</p>'
+      +'<button class="runbtn" id="snapConfirm">تأكيد التشغيل ←</button> '
+      +'<button class="runbtn" id="snapCancel" style="background:transparent">إلغاء</button></div>';
+    $("#snapConfirm").addEventListener("click",function(){
+      out.innerHTML='<div class="note">…جارٍ اللقطة السريعة</div>';
+      post("/products/snapshot",{product:body.product,hs_code:body.hs_code,market:body.market,confirm:true})
+        .then(renderSnap).catch(function(e){out.innerHTML='<div class="gap">تعذّر: '+esc(e.message)+'</div>'})});
+    $("#snapCancel").addEventListener("click",function(){out.innerHTML=""});
+  }).catch(function(e){out.innerHTML='<div class="gap">تعذّر: '+esc(e.message)+'</div>'})}
+function renderSnap(d){
+  var out=$("#snapOut");
+  if(d&&d.blocked_note&&!d.snapshot){out.innerHTML='<div class="gap">'+esc(d.blocked_note)+'</div>';return}
+  var s=d&&d.snapshot;if(!s){out.innerHTML='<div class="gap">لا نتيجة</div>';return}
+  var w=s.worth_full_study||{};
+  var badge=w.worth===true?'<span class="state s-good">يستحق دراسة كاملة</span>':'<span class="state s-warn">لا حسم — فجوة معلنة</span>';
+  var comp=(s.competing_products||[]),sup=(s.top_suppliers||[]);
+  var html='<div class="bcard" style="padding:14px"><h3>لقطة سريعة'+(d.cached?' <span class="note">(من المخزن — بلا تكلفة)</span>':'')+'</h3>'
+    +'<p>'+badge+' — '+esc(w.why||"")+'</p>'
+    +'<p class="note">منتجات منافِسة مرصودة: '+comp.length+' · مورّدون: '+sup.length+'</p>';
+  if(comp.length)html+='<ul style="font-size:13px;padding-inline-start:18px">'+comp.slice(0,6).map(function(c){return '<li>'+esc(c.item||"")+' <span class="note">'+esc(c.evidence||"")+' '+esc(c.source||"")+'</span></li>'}).join("")+'</ul>';
+  if(sup.length)html+='<p class="note">أبرز المورّدين: '+sup.slice(0,5).map(function(x){return esc(x.partner||"")+(x.share!=null?(' '+x.share+'%'):'')}).join("، ")+'</p>';
+  html+='<button class="runbtn" id="snapRefresh" style="background:transparent">تحديث اللقطة</button></div>';
+  out.innerHTML=html;
+  var rf=$("#snapRefresh");if(rf)rf.addEventListener("click",function(){
+    out.innerHTML='<div class="note">…جارٍ التحديث</div>';
+    post("/products/snapshot",{product:s.product,hs_code:s.hs_code,market:(s.market||{}).name_en||null,refresh:true,confirm:true})
+      .then(renderSnap).catch(function(e){out.innerHTML='<div class="gap">تعذّر: '+esc(e.message)+'</div>'})})}
+var snb=$("#snapBtn");if(snb)snb.addEventListener("click",quickSnapshot);
 
 /* بحث عميق — ١٢ بعثة كلود + محلل شامل + كاتب/مراجع (POST /research، لا
    /analyze). يتطلب سوقاً واحداً محدداً (S.market) — البحث العميق يحلّل سوقاً
