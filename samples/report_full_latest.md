@@ -178,8 +178,8 @@
 - Pew Research Center (لقطة ساكنة مقرّبة): أسهم 4 من 4 محاولة
 - World Bank: أسهم 0 من 10 محاولة
   - فشل مُسجَّل: no income data for CHN 2023
-  - فشل مُسجَّل: الاستقرار السياسي (WGI) — PV.EST fetch failed for CHN: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with ur
-  - فشل مُسجَّل: جودة التنظيم (WGI) — RQ.EST fetch failed for CHN: HTTPSConnectionPool(host='api.worldbank.org', port=443): Max retries exceeded with url: /v
+  - فشل مُسجَّل: الاستقرار السياسي (WGI) — الاستقرار السياسي (CHN): تعذّر الجلب — أعد المحاولة
+  - فشل مُسجَّل: جودة التنظيم (WGI) — الجودة التنظيمية (CHN): تعذّر الجلب — أعد المحاولة
 
 ## حدود هذا التقرير
 

@@ -239,7 +239,8 @@ def _consumer_culture(result: dict) -> dict:
     cc = result.get("consumer_culture")
     raw = _culture(result)
     if isinstance(cc, dict) and cc.get("insights"):
-        return {"insights": cc.get("insights"), "note": cc.get("note", ""),
+        return {"insights": _sanitize_points(cc.get("insights")),
+                "note": _strip_internal_plumbing(cc.get("note", "")),
                 "grounded": True, "raw": raw}
     return {"insights": [], "note": "", "grounded": False, "raw": raw}
 
@@ -346,7 +347,12 @@ def _provenance(result: dict) -> list[dict]:
         if d.get("value") is not None:
             b["contributed"] += 1
         elif len(b["failures"]) < 3 and d.get("note"):
-            b["failures"].append(str(d.get("note"))[:140])
+            # سدّ تسريب: ملاحظة DataPoint فاشلة خام (مثل "PV.EST fetch
+            # failed for CHN: HTTPSConnectionPool(...)") كانت تصل ملحق
+            # الأثر — أضمن ملحق ظهوراً بنيوياً (كل DataPoint فاشل في شجرة
+            # النتيجة كلها يمرّ هنا) فتُعرَّب عند الجمع لا عند كل مستهلك.
+            failure = _strip_internal_plumbing(str(d.get("note")))
+            b["failures"].append(failure[:140])
     return sorted(by.values(), key=lambda b: -b["contributed"])
 
 
@@ -598,16 +604,40 @@ def _humanize_gap_note(text: object) -> str:
     return translate_gaps([text])[0]
 
 
+_MISSION_KEY_PREFIX_RE = re.compile(r"^([a-z][a-z_]*)(:\s*)")
+
+
+def _strip_mission_key_prefix(text: str) -> str:
+    """بادئة مفتاح بعثة خام أول السطر ("pricing_scout: ...") → الاسم
+    التجاري العربي — بلاغ تدقيق: انهيار خيط بعثة يبني الملخّص بـ
+    `f"{key}: خطأ غير متوقع: ..."` (silk_missions.py) وهذه البادئة لا
+    يلتقطها `_INTERNAL_AGENT_RE` (يطابق "LLMAgent:key" فقط، لا "key:" مجرّدة)."""
+    m = _MISSION_KEY_PREFIX_RE.match(text)
+    if not m:
+        return text
+    try:
+        from silk_missions import MISSIONS
+        if m.group(1) in MISSIONS:
+            return _mission_label(m.group(1)) + m.group(2) + text[m.end():]
+    except Exception:  # noqa: BLE001 — تسمية تجميلية لا شرط عرض
+        pass
+    return text
+
+
 def _strip_internal_plumbing(text: str | None) -> str | None:
     """أزل تسريبات السباكة الداخلية من نص معروض للعميل (تقرير مكتوب/حدود
     بحث/ملخّص بعثة) — تفريغ JSON خام كامل يُستبدَل بنص مقروء أو فجوة
     معلنة (`_strip_raw_json_leak`)، "LLMAgent:<key>"/"LLMMissionAgent:
-    <key>" تُستبدَل باسم البعثة العربي، ووسوم استشهاد خام "dp7"/"[dp7]"
-    تُحذَف، وأسماء الحقول الداخلية الإنجليزية (verdict/confidence مع
-    قيمتها العشرية الخامة) تُعرَّب وتُصاغ بشرياً. None/فارغ يمر كما هو."""
+    <key>" وبادئة "<key>: " المجرّدة تُستبدَلان باسم البعثة العربي، ووسوم
+    استشهاد خام "dp7"/"[dp7]" تُحذَف، وأسماء الحقول الداخلية الإنجليزية
+    (verdict/confidence مع قيمتها العشرية الخامة) تُعرَّب وتُصاغ بشرياً،
+    ثم يمرّ النص على `silk_narrative.humanize_technical_note` (نقطة
+    التعريب المركزية) لالتقاط أي استثناء بايثون/خطأ HTTP/قالب مصدر متبقٍّ
+    لم تلتقطه الأنماط أعلاه. None/فارغ يمر كما هو."""
     if not text:
         return text
     text = _strip_raw_json_leak(text)
+    text = _strip_mission_key_prefix(text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
     text = _DP_TAG_RE.sub("", text)
 
@@ -616,9 +646,52 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
         return f"درجة الثقة{m.group(1)}{confidence_phrase(float(m.group(2)))}"
     text = _EN_CONF_VALUE_RE.sub(_conf_value, text)
     text = _EN_FIELD_RE.sub(lambda m: _EN_FIELD_AR[m.group(1)], text)
-    from silk_narrative import verdict_ar
+    from silk_narrative import humanize_technical_note, verdict_ar
     text = _RAW_VERDICT_RE.sub(lambda m: verdict_ar(m.group(1)), text)
+    text = humanize_technical_note(text)
     return re.sub(r"[ \t]{2,}", " ", text)
+
+
+def _sanitize_points(items: list, extra_key: str | None = None) -> list:
+    """طهّر قائمة {point, evidence, [extra_key]} — استخلاصات كلود الحرّة
+    (ثقافة المستهلك P1، ديناميكيات السوق P2-8) لم تكن تمرّ عبر
+    `_strip_internal_plumbing` إطلاقاً رغم أنها نفس نوع النص الحرّ الذي
+    قد يردّد وسماً داخلياً رآه كلود في مدخلاته (تسريب تدقيق). `evidence`
+    عناوين ويب خارجية مقتبَسة حرفياً — لا تُعدَّل، ليست سباكة داخلية."""
+    out = []
+    for it in items or []:
+        if not isinstance(it, dict):
+            continue
+        row = dict(it)
+        if "point" in row:
+            row["point"] = _strip_internal_plumbing(row.get("point"))
+        if extra_key and extra_key in row:
+            row[extra_key] = _strip_internal_plumbing(row.get(extra_key))
+        out.append(row)
+    return out
+
+
+def _sanitized_dynamics(dynamics: object) -> dict | None:
+    """ديناميكيات السوق (P2-8، `silk_ai_judge.classify_dynamics`) مطهَّرة —
+    نفس القصور الذي كان في _consumer_culture: قوائم point/evidence حرّة لم
+    تمرّ عبر `_strip_internal_plumbing` قط في هذا المسار."""
+    if dynamics is None:
+        return None
+    d = _dp(dynamics)
+    v = d.get("value")
+    if isinstance(v, dict):
+        v = dict(v)
+        for key in ("drivers", "restraints", "opportunities", "threats"):
+            if key in v:
+                v[key] = _sanitize_points(v.get(key))
+        if "porter" in v:
+            v["porter"] = _sanitize_points(v.get("porter"), extra_key="force")
+        if "pestel" in v:
+            v["pestel"] = _sanitize_points(v.get("pestel"), extra_key="dimension")
+        if v.get("note"):
+            v["note"] = _strip_internal_plumbing(v["note"])
+        d = {**d, "value": v}
+    return d
 
 
 def _mission_trace_summary(failed: bool, summary: str) -> dict:
@@ -682,6 +755,11 @@ def _deep_research_view(result: dict) -> dict | None:
         }
     analyst = dr.get("analyst") or {}
     analyst_report = _report_fields(analyst.get("report"))
+    # سدّ تسريب: ملخّص المحلل الشامل نص كلود حرّ فوق نفس الحقائق المعزولة
+    # التي يقرأها ملخّص كل بعثة — كان الأخير وحده يمرّ عبر التطهير، تاركاً
+    # ثغرة مطابقة (نفس نوع النص، لا سبب لتمييزه).
+    analyst_report = {**analyst_report,
+                      "summary": _strip_internal_plumbing(analyst_report["summary"])}
     # P2: شارة أدلة ثلاثية (✓/◐/○) محسوبة هنا مرة واحدة في النموذج القانوني —
     # لا رقم ثقة خام يصل الواجهة، ولا منطق تصنيف مكرَّر في JS العميل.
     from silk_narrative import evidence_badge
@@ -692,6 +770,16 @@ def _deep_research_view(result: dict) -> dict | None:
                   for cat, dps in (analyst.get("by_category") or {}).items()}
     report_out = dr.get("report") or {}
     verdict = dr.get("verdict") or {}
+    # سدّ تسريب: ملاحظات المراجعة غير المحلولة نص كلود حرّ (المراجِع) —
+    # كانت تصل limits وview["deep_research"]["report"] خامة تماماً؛ وسبب
+    # فشل التقرير (failure_reason) يحمل تفصيل استثناء/HTTP خام متعمَّد
+    # لأغراض تشخيص المطوّرين (silk_ai_judge.failure_reason) لكن كان يصل
+    # العميل حرفياً بما فيه توجيه تشغيلي ("راجع سجلّات الخادم") — العقد
+    # الخام يبقى في `report_out` كما هو؛ التطهير هنا للعرض فقط.
+    clean_unresolved = [_strip_internal_plumbing(n)
+                        for n in (report_out.get("unresolved_notes") or [])]
+    clean_failure_reason = (_strip_internal_plumbing(report_out.get("failure_reason"))
+                            if report_out.get("failure_reason") else "")
     # v["summary"] مُطبَّع أصلاً أعلاه (clean_summary) — لا حاجة لإعادة التنظيف.
     limits = ([f"فرصة {_mission_label(k)} بلا نتائج مبنية على استشهاد: "
               f"{v['summary']}"
@@ -702,16 +790,16 @@ def _deep_research_view(result: dict) -> dict | None:
                for g in _mission_gap_lines(_mission_label(k), v["summary"])]
              + [f"تقاطع المحلل بلا أدلة كافية: {c}"
                for c in (analyst.get("missing_categories") or [])]
-             + [f"ملاحظة مراجع لم تُعالَج: {n}"
-               for n in (report_out.get("unresolved_notes") or [])])
-    if not report_out.get("report") and report_out.get("failure_reason"):
-        limits.append(f"التقرير الكامل غائب: {report_out['failure_reason']}")
+             + [f"ملاحظة مراجع لم تُعالَج: {n}" for n in clean_unresolved])
+    if not report_out.get("report") and clean_failure_reason:
+        limits.append(f"التقرير الكامل غائب: {clean_failure_reason}")
     if result.get("hs_resolution_note"):
-        limits.append(f"تصنيف HS: {result['hs_resolution_note']}")
+        limits.append(f"تصنيف HS: {_humanize_gap_note(result['hs_resolution_note'])}")
     if result.get("ai_extras_note"):
-        limits.append(f"طبقة كلود: {result['ai_extras_note']}")
+        limits.append(f"طبقة كلود: {_humanize_gap_note(result['ai_extras_note'])}")
     if verdict.get("ai_note"):
-        limits.append(f"حكم كلود (مرحلة ٢): {verdict['ai_note']}")
+        limits.append(f"حكم كلود (مرحلة ٢): "
+                      f"{_strip_internal_plumbing(verdict['ai_note'])}")
     return {
         "market": result.get("market"),
         "trace_id": dr.get("trace_id"),
@@ -726,8 +814,8 @@ def _deep_research_view(result: dict) -> dict | None:
         "verdict": verdict,
         "report": {"text": _strip_internal_plumbing(report_out.get("report")),
                   "review_cycles": report_out.get("review_cycles", 0),
-                  "unresolved_notes": report_out.get("unresolved_notes") or [],
-                  "failure_reason": report_out.get("failure_reason") or ""},
+                  "unresolved_notes": clean_unresolved,
+                  "failure_reason": clean_failure_reason},
         "limits": limits,
         "next_step": ("فعّل خدمة التعميق المدفوعة للتحقق من المستوردين "
                      "وجهات الاتصال (Volza/Explee)"
@@ -781,7 +869,12 @@ def build_view(result: dict) -> dict:
                  "source": _dp(c).get("source"),
                  "confidence": _dp(c).get("confidence"),
                  "retrieved_at": _dp(c).get("retrieved_at", ""),
-                 "note": _dp(c).get("note", ""),
+                 # سدّ تسريب: ملاحظة DataPoint خام (نجاح إنجليزي مثل "HS…
+                 # total World… USD" أو فشل يضمّ استثناء) لم تكن تمرّ عبر
+                 # أي مُطهِّر رغم وصولها مباشرة لهذا الحقل في نموذج العرض
+                 # القانوني — أي مستهلك مستقبلي (JSON خام، ودجت جديد) يرث
+                 # النص المُعرَّب الآن، لا الخام.
+                 "note": _strip_internal_plumbing(_dp(c).get("note", "")),
                  "status": _dp(c).get("status", "")}
                 for name, c in comps.items()],
             "recommendation": row.get("recommendation"),
@@ -811,7 +904,8 @@ def build_view(result: dict) -> dict:
     limits = [f"{m['country']}: {_humanize_gap_note(f)}" for m in markets[:5]
               for f in (m.get("quality_flags") or [])]
     if not result.get("classified"):
-        limits.insert(0, result.get("hs_note") or "تعذّر التصنيف")
+        limits.insert(0, _humanize_gap_note(result.get("hs_note"))
+                     if result.get("hs_note") else "تعذّر التصنيف")
     # قسم البحث العميق (الموجة ٤، V5) — إضافي بحت؛ None لتحليل /analyze عادي.
     dr_view = _deep_research_view(result)
     if dr_view:
@@ -846,7 +940,7 @@ def build_view(result: dict) -> dict:
         "year_fell_back": bool(result.get("year_fell_back")),
         "classified": result.get("classified", False),
         "decision": decision,
-        "dynamics": _dp(result.get("dynamics")) if result.get("dynamics") is not None else None,
+        "dynamics": _sanitized_dynamics(result.get("dynamics")),
         "competitive_position": cp,
         "completeness": _completeness(markets),
         "markets": view_markets,
