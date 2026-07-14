@@ -71,6 +71,16 @@ INTERNAL_AR: dict[str, str] = {
     "saudi_position": "الحصة السعودية",
     "demand_capacity": "دخل الفرد",
     "competition": "تركّز الموردين",
+    # مفاتيح حزمة وكلاء البحث الثمانية الحتمية (silk_research.py، row["research"])
+    # — نفس التسمية المستخدَمة في لوحة العميل (web/index.html AGENT_AR) كي لا
+    # يختلف اسم نفس الوكيل بين الدردشة السياقية (analysis_context) واللوحة.
+    "competitor": "المنافسة",
+    "regulatory": "الاشتراطات",
+    "pricing": "التسعير",
+    "risk": "المخاطر",
+    "consumer_demand": "ثقافة المستهلك",
+    "supplier": "المورّدون",
+    "logistics": "اللوجستيات",
     "tam_usd": "إجمالي واردات السوق (TAM)",
     "sam_usd": "السوق القابل للخدمة (SAM)",
     "som_usd": "الحصة القابلة للتحصيل (SOM)",
@@ -91,7 +101,16 @@ INTERNAL_AR: dict[str, str] = {
     "gdp_per_capita_usd": "دخل الفرد",
     "population": "عدد السكان",
     "requirements_count": "عدد الاشتراطات",
+    "entry_requirements_count": "عدد اشتراطات الدخول",
     "eligibility_gate": "بوابة الأهلية الأوروبية",
+    "saudi_suppliers": "مرشّحو الموردين السعوديين",
+    "target_distributors": "مرشّحو الموزّعين المستهدفين",
+    "retail_references": "مراجع أسعار التجزئة",
+    "(SEARCH_API_KEY / الشبكة)": "(مفتاح خدمة البحث / الشبكة)",
+    "ramadan_seasonality": "موسمية رمضان",
+    "muslim_share_pct": "حصة السكان المسلمين",
+    "lpi_timeliness": "الالتزام بمواعيد الشحن",
+    "lpi_intl_shipments": "جودة الشحن الدولي",
     # ملاحظات الحُرّاس الداخلية (عقود إنجليزية مثبَّتة بالاختبارات في طبقة
     # البيانات) وأسماء مسارات/مفاتيح داخلية — تسريب سباكة إن وصلت العميل
     # حرفياً. الأطول أولاً: الاستبدال حرفي متسلسل والقصير جزء من الطويل.
@@ -101,6 +120,10 @@ INTERNAL_AR: dict[str, str] = {
         "بلا أي نداء",
     "requires SEARCH_API_KEY (or SERPER_API_KEY)":
         "يتطلب تهيئة مفتاح خدمة البحث (Serper)",
+    "تتطلب SEARCH_API_KEY و/أو GOOGLE_MAPS_API_KEY في بيئة الخادم":
+        "يتطلب تهيئة مفاتيح البحث/الخرائط في بيئة الخادم",
+    "يتطلب SEARCH_API_KEY / GOOGLE_MAPS_API_KEY":
+        "يتطلب تهيئة مفاتيح البحث/الخرائط",
     "عبر /deepen": "عبر خدمة التعميق المدفوعة",
     "LocalPriceAgent": "وكيل أسعار التجزئة المدفوع",
     "retail_prices": "أسعار التجزئة",
@@ -194,6 +217,24 @@ _EXC_CLASS_RE = re.compile(
 _CONN_POOL_RE = re.compile(r"\b\w*ConnectionPool\([^)]*\)[^.؛]*")
 _HTTP_STATUS_RE = re.compile(r"\bHTTP\s*\d{3}\b:?\s*")
 
+# رمز بسيط (حروف/أرقام/شرطة سفلية فقط، مثل "supplier" أو "market_size") —
+# يُستبدل بحدود كلمة \b كي لا يخترق كلمة أطول تحتويه حرفياً (بلاغ: مفتاح
+# "supplier" الجديد كان يفسد "saudi_suppliers" إلى "saudi_المورّدونs" عبر
+# استبدال حرفي أعمى). القوالب الإنجليزية الطويلة (جمل/عبارات حراس) تبقى
+# على الاستبدال الحرفي كسابقاً — لا حدود كلمة لها أصلاً لأنها ليست رمزاً واحداً.
+_SIMPLE_TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+_word_token_cache: dict[str, re.Pattern] = {}
+
+
+def _replace_token(s: str, token: str, ar: str) -> str:
+    if _SIMPLE_TOKEN_RE.match(token):
+        rx = _word_token_cache.get(token)
+        if rx is None:
+            rx = re.compile(r"\b" + re.escape(token) + r"\b")
+            _word_token_cache[token] = rx
+        return rx.sub(ar, s)
+    return s.replace(token, ar)
+
 
 def humanize_technical_note(text: object) -> str:
     """حوّل ملاحظة تقنية خام (استثناء بايثون/خطأ HTTP/قالب مصدر داخلي)
@@ -209,7 +250,7 @@ def humanize_technical_note(text: object) -> str:
     if not s:
         return s
     for token, ar in INTERNAL_AR.items():
-        s = s.replace(token, ar)
+        s = _replace_token(s, token, ar)
     for en, ar in _EN_COUNTRY_AR.items():
         s = s.replace(en, ar)
     for rx, repl in _TECH_PATTERNS:

@@ -109,3 +109,63 @@ def test_ask_endpoint_returns_grounded_answer_with_key():
     ctx = fn.call_args.args[1]
     assert "UN Comtrade" in ctx                # الأرضية سياق التحليل نفسه
     os.environ.pop("SILK_RATE_LIMIT", None)
+
+
+# ── سدّ تسريب (الطبقة ٥): جواب الدردشة يمرّ بلا مُطهِّر + سياقها يحمل ────────
+# مفاتيح وكلاء/مقاييس خام قابلة للاقتباس الحرفي من كلود.
+
+def test_ask_endpoint_sanitizes_a_leaky_answer_before_returning_it():
+    """كلود قد يقتبس رمز حكم خام أو مفتاحاً داخلياً من سياقه رغم تعريب
+    السياق — خط الدفاع الأخير هو تطهير الجواب نفسه قبل مغادرة الخادم."""
+    import pytest
+    pytest.importorskip("fastapi"); pytest.importorskip("httpx")
+    import importlib
+    import api
+    from fastapi.testclient import TestClient
+    os.environ.pop("SILK_API_KEY", None)
+    os.environ["SILK_RATE_LIMIT"] = "0"
+    importlib.reload(api)
+    client = TestClient(api.create_app())
+    leaky = "الحكم الحالي WATCH — راجع verdict و confidence 0.64 في التحليل."
+    with mock.patch("silk_storage.get_analysis", return_value=_result()), \
+         mock.patch("silk_ai_judge.answer_about_analysis",
+                    return_value={"answer": leaky, "grounded": True}):
+        r = client.post("/analyses/1/ask", json={"question": "الحكم؟"})
+    assert r.status_code == 200
+    answer = r.json()["answer"]
+    assert "WATCH" not in answer and "verdict" not in answer
+    assert "0.64" not in answer
+    assert "مراقبة السوق" in answer
+    os.environ.pop("SILK_RATE_LIMIT", None)
+
+
+def test_analysis_context_translates_classic_agent_keys_and_gap_notes():
+    """بلاغ تدقيق (الطبقة ٥): مفاتيح حزمة الوكلاء الثمانية الحتمية
+    (competitor/supplier/…) وأسماء المقاييس داخل `research.agents` كانت
+    تصل خامة لسياق الدردشة — يقتبسها كلود حرفياً في جوابه. كذلك فجوات
+    الوكلاء (`gaps`) كانت تمر بلا أي تطهير: مفاتيح بيئة خام
+    (SEARCH_API_KEY) واستثناءات بايثون خام (ConnectionPool/ProxyError)."""
+    from silk_render import analysis_context
+    result = {
+        "product": "تمور", "hs_code": "080410", "hs_confidence": 1.0,
+        "year": 2025, "classified": True,
+        "markets": [{"country": "China", "iso3": "CHN", "m49": "156",
+                     "total_score": 0.5, "confidence": 0.5,
+                     "components": {},
+                     "research": {"agents": {
+                         "supplier": {
+                             "findings": [],
+                             "gaps": ["saudi_suppliers: يتطلب SEARCH_API_KEY "
+                                     "/ GOOGLE_MAPS_API_KEY — لا أسماء "
+                                     "مخترعة"]},
+                     }}}],
+    }
+    ctx = analysis_context(result)
+    assert "saudi_suppliers" not in ctx
+    assert "SEARCH_API_KEY" not in ctx and "GOOGLE_MAPS_API_KEY" not in ctx
+    assert "المورّدون" in ctx                    # اسم الوكيل مُعرَّب
+    assert "مرشّحو الموردين السعوديين" in ctx    # اسم المقياس مُعرَّب
+    # بلاغ التصحيح: الاستبدال الحرفي القديم كان يفسد "saudi_suppliers" إلى
+    # "saudi_المورّدونs" لأن "supplier" رمز فرعي من "suppliers" — حدود
+    # الكلمة (\b) في الترجمة تمنع هذا الآن.
+    assert "المورّدونs" not in ctx and "saudi_المورّدون" not in ctx

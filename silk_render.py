@@ -550,7 +550,10 @@ _WHOLE_JSON_RE = re.compile(r"^\s*[{\[].*[}\]]\s*$", re.S)
 # "confidence 0.64" وصلا جدولاً في متن تقرير العميل) — الكاتب يردّد أحياناً
 # أسماء حقول رآها في مدخلاته. القيمة العشرية بعد confidence تُصاغ بشرياً
 # (confidence_phrase) والوسمان يُعرَّبان؛ لا تعديل على أي رقم آخر.
-_EN_CONF_VALUE_RE = re.compile(r"\bconfidence\b(\s*[|:：]\s*)(\d?\.\d{1,4})")
+# سدّ تسريب (الطبقة ٥): الفاصل الأصلي [|:：] يطابق خلية جدول ("| confidence
+# | 0.64 |") لكن ليس نثراً حرّاً بفاصلة فراغ ("confidence 0.64") — الشكل
+# الذي ظهر فعلياً في جواب الدردشة السياقية الحرّ (سطح جديد لهذا المُطهِّر).
+_EN_CONF_VALUE_RE = re.compile(r"\bconfidence\b(\s*[|:：]?\s*)(\d?\.\d{1,4})")
 _EN_FIELD_RE = re.compile(r"\b(verdict|confidence)\b")
 _EN_FIELD_AR = {"verdict": "الحكم", "confidence": "درجة الثقة"}
 # رمز حكم آلة خام (GO/WATCH/NO-GO/CONDITIONAL-GO) داخل نثر حرّ كتبه الكاتب
@@ -1044,6 +1047,11 @@ def analysis_context(result: dict, max_chars: int = 6000) -> str:
     كل رقم يُذكر بمصدره؛ الفجوات تُذكر كما هي كي يجيب كلود «غير متوفر في
     هذا التحليل» بدل الاختلاق.
     """
+    # سدّ تسريب: هذا السياق يُغذّى مباشرة لبرومبت الدردشة السياقية
+    # (silk_ai_judge.answer_about_analysis) — كلود مُطالَب بالاستشهاد حرفياً
+    # من هذا النص، فأي مفتاح داخلي خام هنا (اسم مكوّن snake_case، مفتاح وكيل)
+    # قابل للظهور حرفياً في جواب يصل العميل مباشرة.
+    from silk_narrative import internal_ar
     view = result.get("view") if isinstance(result.get("view"), dict) else None
     view = view or build_view(result)
     L: list[str] = []
@@ -1055,28 +1063,30 @@ def analysis_context(result: dict, max_chars: int = 6000) -> str:
         L.append(f"الخلاصة: {b}")
     top = (view.get("markets") or [{}])[0]
     for c in top.get("components_detail") or []:
+        name_ar = internal_ar(c.get("name"))
         if c.get("value") is not None:
-            L.append(f"{c['name']} = {c['value']} [المصدر: {c.get('source')}]")
+            L.append(f"{name_ar} = {c['value']} [المصدر: {c.get('source')}]")
         else:
             why = ("تعذّر الجلب — أعد المحاولة"
                    if c.get("status") == "fetch_failed" else "غير متوفر")
-            L.append(f"{c['name']}: {why}")
+            L.append(f"{name_ar}: {why}")
     for sc in (top.get("supplier_countries") or [])[:6]:
         L.append(f"مورّد: {sc.get('partner')} — حصة {sc.get('share')}% "
                  f"({sc.get('value_usd')}$) [UN Comtrade]")
     ag = ((top.get("research") or {}).get("agents")) or {}
     for k, a in ag.items():
+        k_ar = internal_ar(k)
         for f in (a.get("findings") or [])[:4]:
             if f.get("value") is None or isinstance(f.get("value"),
                                                     (list, dict)):
                 continue
             srcs = "، ".join(str(x.get("source")) for x in
                              (f.get("sources") or []) if isinstance(x, dict))
-            L.append(f"{k}.{f.get('metric')} = {f['value']}"
+            L.append(f"{k_ar} — {internal_ar(f.get('metric'))} = {f['value']}"
                      f"{(' ' + f['unit']) if f.get('unit') else ''}"
                      f" [المصدر: {srcs or '؟'}]")
         for g in (a.get("gaps") or [])[:2]:
-            L.append(f"فجوة {k}: {g}")
+            L.append(f"فجوة {k_ar}: {_humanize_gap_note(g)}")
     ed = top.get("entry_decision") or {}
     for cnd in (ed.get("conditions") or [])[:4]:
         L.append(f"شرط مفتوح: {cnd}")
