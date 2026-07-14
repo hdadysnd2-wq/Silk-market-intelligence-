@@ -751,20 +751,33 @@ def _mission_gap_lines(name: str, summary: str) -> list[str]:
 # تحسب تصنيفها الخاص من رمز الحكم الإنجليزي الخام وتعرض الرمز نفسه كنص
 # ظاهر — silk_reports._verdict_tone/_VERDICT_LABELS_AR كانتا نسخة موازية).
 def _verdict_tone(vtxt: object) -> str:
-    """تصنيف لون شارة الحكم — go (أخضر)/watch (كهرماني)/nogo (أحمر)/
-    unknown (رمادي)."""
+    """تصنيف لون شارة الحكم — go (أخضر)/conditional (مشروط، أخضر مزرقّ)/
+    watch (كهرماني)/nogo (أحمر)/unknown (رمادي).
+
+    بلاغ حي (مراجعة المالك على نموذج تقرير العميل): CONDITIONAL-GO كان
+    ينهار إلى tone=watch فتعرض الشارة «مراقبة السوق» بينما متن التقرير
+    يقول «دخول مشروط» — تناقض على الصفحة الأولى. صار للحكم المشروط tone
+    مستقل بتسميته الخاصة («دخول مشروط»، مطابقة لـsilk_narrative.VERDICT_AR)
+    فتتّفق الشارة مع المتن. CONDITIONAL قبل GO (يحوي الرمز كليهما) وقبل
+    WATCH (لا يحوي WATCH أصلاً)."""
     t = str(vtxt or "").upper()
     if "NO-GO" in t or "NO GO" in t:
         return "nogo"
-    if "WATCH" in t or "CONDITIONAL" in t:
+    if "CONDITIONAL" in t:
+        return "conditional"
+    if "WATCH" in t:
         return "watch"
     if "GO" in t:
         return "go"
     return "unknown"
 
 
-_VERDICT_LABELS_AR = {"go": "التوصية بالدخول", "watch": "مراقبة السوق",
-                      "nogo": "عدم الدخول حالياً", "unknown": "تعذّر إصدار توصية"}
+# تسميات الحكم بالعربية مصنَّفةً بالـtone — مطابقة لـsilk_narrative.VERDICT_AR
+# (المترجم القانوني الواحد): conditional=«دخول مشروط» تحديداً، لا «مراقبة
+# السوق» (بلاغ مراجعة المالك: الشارة كانت تخالف المتن).
+_VERDICT_LABELS_AR = {"go": "التوصية بالدخول", "conditional": "دخول مشروط",
+                      "watch": "مراقبة السوق", "nogo": "عدم الدخول حالياً",
+                      "unknown": "تعذّر إصدار توصية"}
 
 
 def _deep_research_view(result: dict) -> dict | None:

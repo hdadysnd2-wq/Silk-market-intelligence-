@@ -260,6 +260,23 @@ def _store_deep_research(db):
     return storage.save_analysis(result, db)
 
 
+def test_conditional_go_badge_agrees_with_body_label(tmp_path):
+    """بلاغ مراجعة المالك (تناقض الحكم صفحة ١): شارة الغلاف كانت «مراقبة
+    السوق» بينما المتن «دخول مشروط». الآن CONDITIONAL-GO له tone وتسمية
+    مستقلّان، فتتّفق الشارة مع المتن."""
+    from silk_render import _VERDICT_LABELS_AR, _verdict_tone
+    assert _verdict_tone("CONDITIONAL-GO") == "conditional"
+    assert _VERDICT_LABELS_AR["conditional"] == "دخول مشروط"
+    view = _mock_view()
+    view["deep_research"]["verdict"]["ai"]["verdict"] = "CONDITIONAL-GO"
+    view["deep_research"]["verdict"]["verdict"] = "CONDITIONAL-GO"
+    with block_network():
+        out = _render(view, tmp_path)
+    text = docx_all_text(out)
+    assert "دخول مشروط" in text          # المتن + الشارة متطابقان
+    assert "مراقبة السوق" not in text     # لا تسمية watch مخالفة
+
+
 def test_committed_client_sample_is_clean_and_structured():
     """قاعدة ١٠.٦: نموذج تقرير العميل محفوظ بالمستودع، ويجب أن يظل خالياً
     من أيّ مصطلح ممنوع وكامل البنية (يُعاد توليده عبر
