@@ -51,6 +51,16 @@ def _clip(x: float) -> float:
     return max(0.0, min(1.0, x))
 
 
+def _conf_phrase(c: object) -> str:
+    """ثقة بصيغة بشرية على وجه التقرير — silk_narrative.confidence_phrase
+    (استيراد كسول: الوحدة تبقى مستوردة بلا تبعيات عرض عند فشل غير متوقع)."""
+    try:
+        from silk_narrative import confidence_phrase
+        return confidence_phrase(c)
+    except Exception:  # noqa: BLE001 — صياغة تجميلية لا شرط حساب
+        return str(c)
+
+
 def _mean_available(parts: dict[str, float | None]) -> tuple[float | None, list]:
     """متوسط المكوّنات المتاحة + قائمة الغائبة — never a guessed component."""
     have = {k: v for k, v in parts.items() if v is not None}
@@ -259,21 +269,28 @@ def decide(bundle: dict, weights_option: str | None = None) -> dict:
         why = "بوابة خطر حرجة: PV.EST < −1.5 (قاعدة §8 المعلنة)"
     elif score >= _GO and confidence >= _MIN_CONF_GO and not conditions:
         verdict = "GO"
-        why = f"score {score} ≥ {_GO} وثقة {confidence} ≥ {_MIN_CONF_GO}"
+        why = (f"الدرجة الموزونة {score} بلغت عتبة المضي ({_GO}) والثقة "
+               f"{_conf_phrase(confidence)} فوق الحد الأدنى "
+               f"({round(_MIN_CONF_GO * 100)}%)")
     elif score < _NOGO:
         verdict = "NO-GO"
-        why = f"score {score} < {_NOGO}"
+        why = f"الدرجة الموزونة {score} دون عتبة الرفض ({_NOGO})"
     else:
         verdict = "CONDITIONAL-GO"
         # أسباب فعلية فقط (إصلاح P0-1): القالب القديم "X أو Y أو Z" كان يطبع
         # الأسباب الثلاثة دوماً — فظهر «الثقة 0.91 دون 0.6» وهي ليست دونها،
         # وقرأه المالك تناقضاً في أرقام الثقة بين المشتقات. الآن تُسرد
         # الأسباب المتحقّقة حصراً.
+        # سطر «لماذا» يظهر حرفياً على وجه التقرير (docx/markdown) — عربية
+        # بشرية بلا رطانة كود: "score 0.64" الإنجليزية الخام كانت تصل
+        # العميل، والثقة العشرية الخامة تصاغ عبر confidence_phrase
+        # (نفس قاعدة إصلاح المرحلة ٥: لا كسر عشري خام على وجه التقرير).
         reasons = []
         if score < _GO:
-            reasons.append(f"score {score} في النطاق الشرطي")
+            reasons.append(f"الدرجة الموزونة {score} في النطاق الشرطي")
         if confidence < _MIN_CONF_GO:
-            reasons.append(f"الثقة {confidence} دون {_MIN_CONF_GO}")
+            reasons.append(f"الثقة {_conf_phrase(confidence)} دون الحد "
+                           f"الأدنى ({round(_MIN_CONF_GO * 100)}%)")
         if conditions:
             reasons.append(f"شروط مفتوحة ({len(conditions)})")
         why = " و".join(reasons)

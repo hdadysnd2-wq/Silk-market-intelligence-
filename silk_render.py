@@ -501,8 +501,11 @@ def _supplier_directory(research: dict | None) -> dict:
     return {"saudi": _rmetric(research, "supplier", "saudi_suppliers") or [],
             "target": _rmetric(research, "supplier", "target_distributors")
                       or [],
-            "note": "مرشّحون غير موثَّقين (ثقة 0.4) — أكّدهم قبل التعاقد؛ "
-                    "الترقية الموثّقة عبر /deepen"}
+            # بلا كسر ثقة خام ولا اسم مسار API داخلي على وجه التقرير
+            # (تسريب سباكة): الشارة الثلاثية بدل "(ثقة 0.4)"، و«خدمة
+            # التعميق المدفوعة» بدل "/deepen".
+            "note": "مرشّحون غير موثَّقين (○ غير متحقق) — أكّدهم قبل "
+                    "التعاقد؛ الترقية الموثّقة عبر خدمة التعميق المدفوعة"}
 
 
 def _report_fields(rep: object) -> dict:
@@ -530,6 +533,13 @@ _GAPS_RE = re.compile(r"فجوات:\s*([^|]*)")
 _INTERNAL_AGENT_RE = re.compile(r"LLM(?:Mission)?Agent:([A-Za-z_]+)")
 _DP_TAG_RE = re.compile(r"\[?dp\d+\]?")
 _WHOLE_JSON_RE = re.compile(r"^\s*[{\[].*[}\]]\s*$", re.S)
+# تسريب حقول داخلية إنجليزية في نص معروض (بلاغ مالك: "verdict" و
+# "confidence 0.64" وصلا جدولاً في متن تقرير العميل) — الكاتب يردّد أحياناً
+# أسماء حقول رآها في مدخلاته. القيمة العشرية بعد confidence تُصاغ بشرياً
+# (confidence_phrase) والوسمان يُعرَّبان؛ لا تعديل على أي رقم آخر.
+_EN_CONF_VALUE_RE = re.compile(r"\bconfidence\b(\s*[|:：]\s*)(\d?\.\d{1,4})")
+_EN_FIELD_RE = re.compile(r"\b(verdict|confidence)\b")
+_EN_FIELD_AR = {"verdict": "الحكم", "confidence": "درجة الثقة"}
 
 
 def _strip_raw_json_leak(text: str | None) -> str | None:
@@ -566,17 +576,33 @@ def _mission_label(key: str) -> str:
     return key.replace("_", " ")
 
 
+def _humanize_gap_note(text: object) -> str:
+    """عرّب ملاحظات الحُرّاس/الفجوات الداخلية في سطر حدّ معروض للعميل —
+    تفويض للمترجم القانوني الواحد (silk_narrative.translate_gaps /
+    INTERNAL_AR): العقود الإنجليزية تبقى كما هي في طبقة البيانات؛
+    الترجمة للعرض فقط، لا إعادة صياغة ولا مسّ بالأرقام."""
+    from silk_narrative import translate_gaps
+    return translate_gaps([text])[0]
+
+
 def _strip_internal_plumbing(text: str | None) -> str | None:
     """أزل تسريبات السباكة الداخلية من نص معروض للعميل (تقرير مكتوب/حدود
     بحث/ملخّص بعثة) — تفريغ JSON خام كامل يُستبدَل بنص مقروء أو فجوة
     معلنة (`_strip_raw_json_leak`)، "LLMAgent:<key>"/"LLMMissionAgent:
     <key>" تُستبدَل باسم البعثة العربي، ووسوم استشهاد خام "dp7"/"[dp7]"
-    تُحذَف. None/فارغ يمر كما هو."""
+    تُحذَف، وأسماء الحقول الداخلية الإنجليزية (verdict/confidence مع
+    قيمتها العشرية الخامة) تُعرَّب وتُصاغ بشرياً. None/فارغ يمر كما هو."""
     if not text:
         return text
     text = _strip_raw_json_leak(text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
     text = _DP_TAG_RE.sub("", text)
+
+    def _conf_value(m: "re.Match") -> str:
+        from silk_narrative import confidence_phrase
+        return f"درجة الثقة{m.group(1)}{confidence_phrase(float(m.group(2)))}"
+    text = _EN_CONF_VALUE_RE.sub(_conf_value, text)
+    text = _EN_FIELD_RE.sub(lambda m: _EN_FIELD_AR[m.group(1)], text)
     return re.sub(r"[ \t]{2,}", " ", text)
 
 
@@ -631,6 +657,10 @@ def _deep_research_view(result: dict) -> dict | None:
         clean_summary = _strip_internal_plumbing(f["summary"])
         missions[key] = {
             "name": f["agent_name"], "failed": f["failed"],
+            # الاسم التجاري العربي للبعثة — كل مستهلك (جدول docx، لوحة
+            # الويب، الملحق التقني) يعرضه بدل مفتاح snake_case الخام
+            # (بلاغ مالك: "pricing_scout"/"risk_news" ظهرت حرفياً للعميل).
+            "label": _mission_label(key),
             "summary": clean_summary,
             "findings": [_dp(x) for x in f["findings"]],
             "trace": _mission_trace_summary(f["failed"], clean_summary),
@@ -684,8 +714,8 @@ def _deep_research_view(result: dict) -> dict | None:
                   "unresolved_notes": report_out.get("unresolved_notes") or [],
                   "failure_reason": report_out.get("failure_reason") or ""},
         "limits": limits,
-        "next_step": ("فعّل التعميق (/deepen) للتحقق من المستوردين وجهات "
-                     "الاتصال (Volza/Explee)"
+        "next_step": ("فعّل خدمة التعميق المدفوعة للتحقق من المستوردين "
+                     "وجهات الاتصال (Volza/Explee)"
                      if str(verdict.get("verdict") or
                            (verdict.get("ai") or {}).get("verdict") or "")
                         .upper().startswith(("GO", "PRELIMINARY GO")) else None),
@@ -761,7 +791,7 @@ def build_view(result: dict) -> dict:
             "segments": _segments(row.get("research")),
             "supplier_directory": _supplier_directory(row.get("research")),
         })
-    limits = [f"{m['country']}: {f}" for m in markets[:5]
+    limits = [f"{m['country']}: {_humanize_gap_note(f)}" for m in markets[:5]
               for f in (m.get("quality_flags") or [])]
     if not result.get("classified"):
         limits.insert(0, result.get("hs_note") or "تعذّر التصنيف")

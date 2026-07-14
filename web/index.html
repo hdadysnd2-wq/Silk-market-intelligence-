@@ -528,7 +528,8 @@ function renderDeepResearch(v){
     +'<div class="note" style="margin-top:10px">كل بعثة وكيل كلود بأدوات — الحالة والملخّص</div>'
     +'<table><thead><tr><th>البعثة</th><th>الحالة</th><th>الملخّص</th></tr></thead><tbody>'
     +mkeys.map(function(k){var mm=missions[k];var ok=!mm.failed;
-      return '<tr><td class="rowname">'+esc(k)+'</td><td><span class="state '+(ok?"s-good":"s-warn")+'">'+(ok?"ناجحة":"بلا أدلة")+'</span></td><td style="font-size:13px">'+esc((mm.summary||"").slice(0,140))+'</td></tr>'}).join("")
+      /* الاسم العربي من النموذج القانوني (label) بدل المفتاح الداخلي الخام */
+      return '<tr><td class="rowname">'+esc(mm.label||k)+'</td><td><span class="state '+(ok?"s-good":"s-warn")+'">'+(ok?"ناجحة":"بلا أدلة")+'</span></td><td style="font-size:13px">'+esc((mm.summary||"").slice(0,140))+'</td></tr>'}).join("")
     +'</tbody></table>'
     +'<div class="grid" style="margin-top:14px">'+Object.keys(CAT_AR).map(function(cat){
       var items=byCat[cat]||[];

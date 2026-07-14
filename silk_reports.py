@@ -349,7 +349,7 @@ def _market_scope_paragraph(view: dict) -> str:
             f"العربية السعودية، مُقيَّمة عبر {scope_txt}، "
             f"ومفصَّلة بعمق للسوق الأعلى ترتيباً ({top_market}). يستثني "
             "هذا التقرير: التسعير التفصيلي بالتجزئة والملفات المالية "
-            "للمنافسين (تتطلبان تعميقاً مدفوعاً عبر /deepen)، وتحليل "
+            "للمنافسين (تتطلبان خدمة التعميق المدفوعة)، وتحليل "
             "الشرائح السلوكية للعملاء واستخبارات الطلب المباشرة (تتطلبان "
             "بحثاً أولياً — مقابلات أو استبيانات — لم يُجرَ بعد).")
 
@@ -875,10 +875,11 @@ def _docx_pricing_layers(doc, m: dict) -> None:
             doc.add_paragraph(_listing_text(v), style="List Bullet")
         doc.add_paragraph(_f_srcline(rp), style="Intense Quote")
     else:
-        # فجوة القسم المعلنة تُطبع بنصّها — the section's declared gap, verbatim.
+        # فجوة القسم المعلنة تُطبع مترجمةً للعرض (_gap_ar) — لا سباكة
+        # إنجليزية (ملاحظة الحارس المدفوع/أسماء المفاتيح) على وجه التقرير.
         gap = next((g for g in (ag.get("gaps") or []) if "retail_prices" in g),
                    "أسعار التجزئة: غير متوفرة في هذا التشغيل")
-        doc.add_paragraph(gap, style="List Bullet")
+        doc.add_paragraph(_gap_ar(gap), style="List Bullet")
     # نقاطُ الأسعار المُستخلَصة (كلود) — أرقامٌ مذكورةٌ صراحةً، لا روابط.
     points = (_rfind(ag, "retail_price_points") or {}).get("value") or []
     if points:
@@ -1026,8 +1027,11 @@ def _docx_deep_research(doc, view: dict) -> None:
     doc.add_heading("البعثات الاثنتا عشرة — ملخّص", level=2)
     _stamp_degraded_banner(doc, view)
     missions = dr.get("missions") or {}
+    # الاسم التجاري العربي (view label) بدل مفتاح snake_case الداخلي —
+    # بلاغ مالك: "pricing_scout" وأخواتها ظهرت حرفياً في جدول العميل.
     _add_table(doc, ["البعثة", "الحالة", "الملخّص"], [
-        [key, "فشلت/بلا أدلة" if m.get("failed") else "ناجحة",
+        [m.get("label") or key,
+         "فشلت/بلا أدلة" if m.get("failed") else "ناجحة",
          _clean_report_text(m.get("summary"))]
         for key, m in missions.items()])
 
@@ -1130,9 +1134,10 @@ def _docx_technical_appendix(doc, dr: dict) -> None:
     rows = []
     for key, m in (dr.get("missions") or {}).items():
         findings = m.get("findings") if isinstance(m, dict) else None
+        label = (m.get("label") if isinstance(m, dict) else None) or key
         for f in (findings or []):
             rows.append([
-                key, _clean_report_text(f.get("value"), max_len=120),
+                label, _clean_report_text(f.get("value"), max_len=120),
                 f.get("source") or "—",
                 f.get("retrieved_at") or "—",
                 f"{f.get('confidence')} ({_evidence_badge(f.get('confidence'))})"])
@@ -1171,8 +1176,8 @@ def _render_research_docx(doc, view: dict) -> None:
     doc.add_heading(f"سِلك — تقرير بحث عميق: {view.get('product')}", 0)
     doc.add_paragraph("أُعد بواسطة منصة سِلك لذكاء الأسواق", style="Intense Quote")
     if view.get("test_run"):
-        doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة "
-                          "(SILK_HERMETIC)، ليس تقريراً إنتاجياً")
+        doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة، "
+                          "ليس تقريراً إنتاجياً")
     _stamp_degraded_banner(doc, view)
     _add_verdict_badge(doc, vtxt)
     _add_table(doc, ["البند", "القيمة"], [
@@ -1243,8 +1248,8 @@ def render_docx(view: dict, path: str) -> str:
     _add_cover_wordmark(doc, _load_branding())
     doc.add_heading(f"سِلك — تقرير بحث سوق: {view.get('product')}", 0)
     if view.get("test_run"):
-        doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة "
-                          "(SILK_HERMETIC)، ليس تقريراً إنتاجياً")
+        doc.add_paragraph("⚠ TEST RUN — تشغيل برهاني ببدائل موسومة، "
+                          "ليس تقريراً إنتاجياً")
     _stamp_degraded_banner(doc, view)  # لافتة الغلاف — بلاغ حي
     h = view.get("header") or {}
     _add_table(doc, ["البند", "القيمة"], [
@@ -1558,7 +1563,9 @@ def render_markdown(view: dict) -> str:
     st_all = top_m.get("section_status") or {}
     L: list[str] = []
     if view.get("test_run"):
-        L += ["> ⚠ **TEST RUN** — تشغيل برهاني ببدائل موسومة (SILK_HERMETIC)، "
+        # بلا اسم متغيّر البيئة على وجه التقرير — نفس صياغة render_text
+        # و render_brief (اتساق المشتقات، وإزالة سباكة داخلية من نص عميل).
+        L += ["> ⚠ **TEST RUN** — تشغيل برهاني ببدائل موسومة، "
               "ليس تقريراً إنتاجياً", ""]
 
     # ── الترويسة كجدول — header table ────────────────────────────────────────
@@ -1663,7 +1670,7 @@ def render_markdown(view: dict) -> str:
         if not shown:
             L.append("- لا اكتشافات مرصودة لحجم السوق")
         for g in ms.get("gaps") or []:
-            L.append(f"- فجوة معلنة: {g}")
+            L.append(f"- فجوة معلنة: {_gap_ar(g)}")
         L.append("")
 
     # ── الأسواق المرشّحة الأخرى — جمل تجارية سردية لا تفريغ مكوّنات خام ──────
@@ -1761,7 +1768,7 @@ def render_markdown(view: dict) -> str:
             gap = next((g for g in (pr.get("gaps") or [])
                         if "retail_prices" in g), None)
             if gap:
-                L.append(f"- فجوة معلنة: {gap}")
+                L.append(f"- فجوة معلنة: {_gap_ar(gap)}")
         else:
             for p in top_m.get("prices") or []:
                 L.append(f"- {_listing_text(p)}")
@@ -1769,7 +1776,7 @@ def render_markdown(view: dict) -> str:
                 gap = next((g for g in (pr.get("gaps") or [])
                             if "retail_prices" in g),
                            "retail_prices: غير مرصود — فجوة معلنة")
-                L.append(f"- {gap}")
+                L.append(f"- {_gap_ar(gap)}")
         points = (_rfind(pr, "retail_price_points") or {}).get("value") or []
         if points:
             L += ["", "**أسعار مُستخلَصة (مذكورة صراحةً في عناوين الويب — مؤشِّر لا "
@@ -1855,7 +1862,7 @@ def render_markdown(view: dict) -> str:
         if tf and tf.get("value") is not None:
             L.append(f"- {_f_text(tf)} ({_f_srcline(tf)})")
         for g in reg.get("gaps") or []:
-            L.append(f"- فجوة معلنة: {g}")
+            L.append(f"- فجوة معلنة: {_gap_ar(g)}")
         L.append("")
 
     # ── سجل المخاطر — decision risks + raw WGI/LPI datapoints ───────────────

@@ -35,6 +35,11 @@ _TERMINAL_PUNCT = ".!?:؛،؟…\"'”)"
 # أحياناً حرفياً بوسوم رآها في مدخلاته. طبقة العرض تُصلح هذا فعلاً
 # (silk_render._strip_internal_plumbing)؛ هذا الفحص حارس انحدار.
 _INTERNAL_PLUMBING_RE = re.compile(r"LLM(?:Mission)?Agent:[A-Za-z_]+|\[?dp\d+\]?")
+# بلاغ مالك (تسريب سباكة ٢): أسماء حقول داخلية إنجليزية ("verdict"،
+# "confidence 0.64") ومفاتيح بعثات snake_case خام ("pricing_scout") ظهرت في
+# نص معروض للعميل. طبقة العرض تُصلح فعلاً (_strip_internal_plumbing يعرّب
+# الحقول، وlabel العربي يحل محل المفتاح) — هذان حارسا انحدار حتميان.
+_EN_FIELD_LEAK_RE = re.compile(r"\b(?:verdict|confidence)\b")
 
 
 def _check_markdown_and_raw_json(text: str) -> list[dict]:
@@ -95,6 +100,33 @@ def _check_internal_plumbing_leak(text: str) -> list[dict]:
                  "note": "تسريب سباكة داخلية (اسم وكيل/وسم استشهاد خام) "
                         "في نص التقرير المصدَر"}]
     return []
+
+
+def _check_english_field_and_mission_key_leak(text: str) -> list[dict]:
+    """حقول داخلية إنجليزية (verdict/confidence) أو مفاتيح بعثات snake_case
+    خام (pricing_scout وأخواتها) في نص معروض للعميل — حارس انحدار: طبقة
+    العرض تعرّب الحقول (`_strip_internal_plumbing`) وتستبدل المفتاح بالاسم
+    العربي (`label` في النموذج القانوني)؛ ظهور أيٍّ منها يعني ثغرة تطبيع.
+    مفاتيح البعثات تُستورد كسولاً من السجل الواحد (silk_missions.MISSIONS)
+    — لا قائمة يدوية تتقادم؛ فشل الاستيراد يمرّر فحص الحقول وحده."""
+    findings = []
+    if not text:
+        return findings
+    if _EN_FIELD_LEAK_RE.search(text):
+        findings.append({"check": "english_field_leak", "repairable": True,
+                         "note": "اسم حقل داخلي إنجليزي (verdict/confidence) "
+                                "مسرَّب في النص المصدَر"})
+    try:
+        from silk_missions import MISSIONS
+        keys_re = re.compile(
+            r"\b(?:" + "|".join(re.escape(k) for k in MISSIONS) + r")\b")
+        if keys_re.search(text):
+            findings.append({"check": "mission_key_leak", "repairable": True,
+                             "note": "مفتاح بعثة داخلي خام (snake_case) "
+                                    "مسرَّب في النص المصدَر"})
+    except Exception:  # noqa: BLE001 — حارس ثانوي، لا يعطّل البوابة
+        pass
+    return findings
 
 
 def _check_bare_partner_codes(dr: dict) -> list[dict]:
@@ -251,6 +283,7 @@ def run_quality_gate(view: dict) -> dict:
     # التقرير السردي الكامل (كاتب التقرير) حيث التقطيع الحقيقي مرصود فعلاً.
     findings += _check_mid_word_truncation(text)
     findings += _check_internal_plumbing_leak(text)
+    findings += _check_english_field_and_mission_key_leak(text)
     findings += _check_bare_partner_codes(dr)
     findings += _check_intersection_insufficiency(dr)
     findings += _check_section_structure(dr)

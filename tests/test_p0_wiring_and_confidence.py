@@ -36,8 +36,11 @@ def test_conditional_go_why_lists_only_true_reasons():
     assert d["verdict"] == "CONDITIONAL-GO"
     why = d["why"]
     # الثقة هنا 0.2 (تغطية 1.0 × عمود واحد من 5) — دون 0.6 فعلاً، فذكرها صادق.
+    # (إصلاح تسريب السباكة: تُذكر بصيغة بشرية confidence_phrase لا كسراً
+    # عشرياً خاماً — راجع tests/test_report_plumbing_leaks.py)
+    from silk_narrative import confidence_phrase
     assert d["confidence"] < 0.6
-    assert f"الثقة {d['confidence']}" in why
+    assert f"الثقة {confidence_phrase(d['confidence'])}" in why
     # score عمود السوق وحده مرتفع (≥ 0.65) — «النطاق الشرطي» ادعاء كاذب فلا يُطبع.
     if d["score"] >= 0.65:
         assert "النطاق الشرطي" not in why
@@ -56,7 +59,8 @@ def test_conditional_go_why_never_claims_high_confidence_is_low():
         "risk": {"political_stability_wgi": 0.5}}}
     d = D.decide(full)
     if d["verdict"] == "CONDITIONAL-GO" and d["confidence"] >= 0.6:
-        assert f"الثقة {d['confidence']} دون" not in d["why"]
+        # الصيغة الجديدة البشرية أيضاً — لا سبب ثقة يُطبع حين الثقة كافية
+        assert "الثقة" not in d["why"]
 
 
 # ── (٢) iso2 على كل صف مرتَّب — يغذي Trends geo وبحث التسوّق gl ─────────────
