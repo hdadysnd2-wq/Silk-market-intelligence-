@@ -78,8 +78,20 @@ _last_hit: dict[str, float] = {}
 _RETRYABLE = (429, 500, 502, 503, 504)
 
 
+def _min_gap_ms(host: str) -> float:
+    """نافذة التباعد الدنيا بين نداءات نفس المضيف — بلاغ حي (تشغيلة تمور/
+    هولندا الثالثة، 429 متكرر من كومتريد): البعثات المتوازية الاثنتا عشرة
+    تتشارك نفس المضيف، والنافذة العامة (250مث) أسرع من حد كومتريد الفعلي
+    (~نداء/ثانية على سطح المعاينة). كومتريد يحصل على نافذة أوسع خاصة به
+    (SILK_COMTRADE_MIN_GAP_MS، افتراضي 1100مث)؛ بقية المضيفين على النافذة
+    العامة (SILK_HTTP_MIN_GAP_MS، افتراضي 250مث)."""
+    if "comtradeapi.un.org" in host:
+        return float(os.environ.get("SILK_COMTRADE_MIN_GAP_MS", "1100"))
+    return float(os.environ.get("SILK_HTTP_MIN_GAP_MS", "250"))
+
+
 def _throttle(host: str) -> None:
-    gap = float(os.environ.get("SILK_HTTP_MIN_GAP_MS", "250")) / 1000.0
+    gap = _min_gap_ms(host) / 1000.0
     if gap <= 0:
         return
     with _host_lock:
@@ -87,6 +99,19 @@ def _throttle(host: str) -> None:
         _last_hit[host] = max(_time.monotonic(), _last_hit.get(host, 0.0) + gap)
     if wait > 0:
         _time.sleep(min(wait, 5.0))
+
+
+def _backoff_delay(attempt: int, retry_after: str = "") -> float:
+    """مهلة إعادة المحاولة — تراجُع أسّي مع تشويش عشوائي (jitter)، بلاغ حي
+    (429 متكرر): مهلة حتمية بلا تشويش تجعل النداءات المتوازية الفاشلة معاً
+    تعيد المحاولة معاً فتضرب حد المعدل معاً مجدداً. Retry-After من الخادم
+    يُحترم كأساس ويُضاف فوقه تشويش صغير يفكّ التزامن."""
+    import random
+    ra = str(retry_after or "").strip()
+    if ra.replace(".", "", 1).isdigit():
+        return min(float(ra) + random.uniform(0.0, 0.5), 30.0)
+    base = 1.0 * (2 ** attempt)
+    return min(base + random.uniform(0.0, base), 30.0)
 
 
 def _http_get(url: str, params: dict | None = None):
@@ -99,11 +124,10 @@ def _http_get(url: str, params: dict | None = None):
         resp = _session.get(url, params=params, timeout=_TIMEOUT)
         if resp.status_code not in _RETRYABLE or attempt >= retries:
             return resp
-        ra = str(resp.headers.get("Retry-After") or "").strip()
-        delay = float(ra) if ra.replace(".", "", 1).isdigit() else 1.0 * (2 ** attempt)
+        delay = _backoff_delay(attempt, resp.headers.get("Retry-After") or "")
         log.warning("HTTP %s from %s — retry %d/%d in %.1fs",
-                    resp.status_code, host, attempt + 1, retries, min(delay, 30))
-        _time.sleep(min(delay, 30.0))
+                    resp.status_code, host, attempt + 1, retries, delay)
+        _time.sleep(delay)
     return resp
 
 
@@ -306,6 +330,17 @@ def world_bank(iso3: str, indicator: str, year: int | None = None) -> DataPoint:
     return dp
 
 
+# مؤشرات الحوكمة العالمية (WGI) — بلاغ حي (تشغيلة تمور/هولندا الثالثة):
+# PV.EST/RL.EST/RQ.EST صارت "مؤرشفة" في قاعدة WDI الافتراضية (source=2،
+# ما يخدمه /v2/country/{iso3}/indicator/{code} بلا معامل source) — موطن
+# WGI الحالي هو قاعدتها المستقلة source=3؛ الرموز نفسها تعمل هناك.
+# التمرير الصريح للمصدر يعيد البيانات الحية بدل خطأ الأرشفة.
+_WB_INDICATOR_SOURCE = {
+    "PV.EST": "3", "RL.EST": "3", "RQ.EST": "3",
+    "GE.EST": "3", "CC.EST": "3", "VA.EST": "3",
+}
+
+
 def _wb_shape_error(payload: object) -> str | None:
     """تحقّق من شكل ردّ البنك الدولي — الموجة ١٠ (بلاغ حي: WGI فارغ لهولندا
     ثم إسبانيا كان يتدهور بصمت لملاحظة عامة عبر except الشامل بدل تشخيص
@@ -340,6 +375,9 @@ def _world_bank_for_year(iso3: str, indicator: str,
     واضحة بدل السقوط في except الشامل برسالة استثناء غامضة."""
     url = f"{ENDPOINTS['world_bank']}/country/{iso3}/indicator/{indicator}"
     params = {"format": "json", "per_page": "100"}
+    src = _WB_INDICATOR_SOURCE.get(indicator)
+    if src:  # WGI تعيش في source=3 — راجع تعليق _WB_INDICATOR_SOURCE
+        params["source"] = src
     if year is not None:
         params["date"] = str(year)
     try:

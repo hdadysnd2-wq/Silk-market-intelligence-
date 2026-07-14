@@ -48,7 +48,11 @@ def test_http_get_retries_429_then_succeeds_and_honors_retry_after():
          mock.patch.object(DL._time, "sleep", side_effect=slept.append):
         r = DL._http_get("https://comtradeapi.un.org/x")
     assert r.status_code == 200 and calls["n"] == 3
-    assert slept == [0.0, 0.0]        # احترم Retry-After: 0 (لا تراجع أسّي)
+    # احترم Retry-After: 0 كأساس (لا تراجع أسّي 1.0/2.0) — منذ بلاغ 429
+    # (الموجة p4) يُضاف تشويش صغير ≤0.5ث فوق الأساس لفكّ تزامن النداءات
+    # المتوازية، فالمساواة الحرفية بالصفر لم تعد الشكل الصحيح للقصد نفسه.
+    assert len(slept) == 2
+    assert all(0.0 <= s <= 0.5 for s in slept), slept
 
 
 def test_http_get_gives_up_after_retries_returns_last_response():

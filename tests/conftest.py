@@ -60,6 +60,10 @@ def _isolated_fact_store(monkeypatch):
     # 1b: عطّل مباعدة النداءات في الاختبارات — الشبكة مقطوعة أصلاً، والمباعدة
     # 250ms × مئات النداءات الفاشلة كانت ستبطئ الحزمة بلا فائدة.
     monkeypatch.setenv("SILK_HTTP_MIN_GAP_MS", "0")
+    # نافذة كومتريد الخاصة (بلاغ 429، افتراضي 1100ms) تُصفَّر أيضاً — بلا
+    # هذا نامت الحزمة الهيرمتية ~ساعتين فعلياً (1.1ث × مئات نداءات كومتريد
+    # المقطوعة الشبكة) — اكتُشف حياً عند إضافة النافذة.
+    monkeypatch.setenv("SILK_COMTRADE_MIN_GAP_MS", "0")
     # الموجة ٦ (V5): عزل ملفات التتبّع أيضاً — بلا هذا، اختبارات /research
     # الحقيقية (TestClient) تكتب data/traces/*.jsonl فعلياً على القرص.
     monkeypatch.setenv("SILK_TRACE_DIR", tempfile.mkdtemp())

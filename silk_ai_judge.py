@@ -559,8 +559,11 @@ def ai_report(result: dict) -> str | None:
         "مع مصدره بين قوسين، لا نقطة معزولة ولا سطر استشهاد يتيم؛ ثم فقرة "
         "تحذيرات وفجوات البيانات الصريحة (لا تخمين)؛ ثم فقرة أخيرة بخطوة "
         "تالية عملية مقترحة. لا تخترع رقماً غير وارد أعلاه.")
-    return _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=1800,
-                timeout=_LONG_TIMEOUT)
+    # نفس آلية _traced_call (سطر سجل صريح عند الفشل) لمسار /analyze —
+    # بلاغ حي (تشغيلة ثالثة): "تأكد أن فشل ai_report يُسجَّل بسطر واضح".
+    return _traced_call(None, "analyze_report", _LONG_TIMEOUT,
+                        lambda: _call(_PRINCIPLE, "\n\n".join(parts),
+                                     max_tokens=1800, timeout=_LONG_TIMEOUT))
 
 
 # ── الطبقة ٤ — كاتب التقرير + المراجع (الموجة ٤، V5) ─────────────────────────
@@ -619,20 +622,28 @@ def _traced_call(trace_id: str | None, stage: str, timeout: float,
     import time as _time
     t0 = _time.monotonic()
     result = call_fn()
+    elapsed_ms = round((_time.monotonic() - t0) * 1000)
+    err = None
+    if not result:
+        from silk_llm_provider import last_error
+        err = last_error()
+        # سطر سجل صريح غير مشروط بالتتبّع — بلاغ حي (تشغيلة ثالثة): سجل
+        # Railway لم يحمل أي أثر لفشل الكاتب لأن التسجيل كان مربوطاً
+        # بوجود trace_id فقط. greppable: "report_call_failed".
+        log.error("report_call_failed stage=%s timeout=%ss elapsed_ms=%s "
+                  "error=%s: %s", stage, timeout, elapsed_ms,
+                  (err or {}).get("type", "unknown"),
+                  (err or {}).get("message", "لا تفصيل — راجع available()"))
     if trace_id:
         import silk_trace
-        from silk_llm_provider import last_error
         event = {"kind": "report_call", "stage": stage, "timeout": timeout,
-                 "elapsed_ms": round((_time.monotonic() - t0) * 1000),
-                 "success": bool(result)}
-        if not result:
-            err = last_error()
-            if err:
-                event["error_type"] = err.get("type")
-                event["error_message"] = err.get("message")
-                if err.get("status_code"):
-                    event["status_code"] = err["status_code"]
-                    event["response_body"] = err.get("response_body")
+                 "elapsed_ms": elapsed_ms, "success": bool(result)}
+        if err:
+            event["error_type"] = err.get("type")
+            event["error_message"] = err.get("message")
+            if err.get("status_code"):
+                event["status_code"] = err["status_code"]
+                event["response_body"] = err.get("response_body")
         silk_trace.append_event(trace_id, **event)
     return result
 
