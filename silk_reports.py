@@ -1505,31 +1505,111 @@ def _client_gaps_section(doc, dr: dict) -> None:
     doc.add_heading("ما لم يكتمل للقرار، والخطوة التالية", level=1)
     analyst = dr.get("analyst") or {}
     missing = analyst.get("missing_categories") or []
-    if missing:
+    by_cat = analyst.get("by_category") or {}
+
+    gap_lines: list[str] = []
+    for cat in missing:
+        what, how = _CLIENT_GAP_WHAT.get(
+            cat, ("بند تحليلي إضافي", "بحثاً تكميلياً موجّهاً"))
+        gap_lines.append(_CLIENT_GAP_TEMPLATE.format(what=what, how=how))
+    # بلاغ مراجعة المالك (منطق قسم الفجوات): بند حاسم للقرار موسوم ○ غير
+    # متحقق (قناة الدخول الأولى) يجب أن يظهر هنا حتى لو اكتملت التقاطعات —
+    # لا يُقال «لا فجوة جوهرية» بينما الموزّع الأول غير مؤكَّد. باب الدخول
+    # المرصود بثقة دون عتبة «الثانوي» (0.5) = مرشّح غير محقَّق، لا حقيقة.
+    if "entry_door" not in missing:
+        from silk_narrative import EVIDENCE_SECONDARY_MIN
+        unverified_doors = [
+            f for f in (by_cat.get("entry_door") or [])
+            if _dp_conf(f) is not None and _dp_conf(f) < EVIDENCE_SECONDARY_MIN]
+        if unverified_doors:
+            names = "، ".join(
+                _client_sanitize(_clean_report_text(f.get("value"), 80))
+                for f in unverified_doors[:2])
+            gap_lines.append(
+                f"لم نتمكّن من تأكيد قناة الدخول الأولى ({names}) من مصدر "
+                "موثّق — إغلاق هذه الفجوة يتطلّب خدمة تحقّق جهات اتصال مدفوعة "
+                "(قواعد بيانات تجارية) قبل الالتزام بالموزّع.")
+
+    if gap_lines:
         doc.add_paragraph(
             "النقاط التالية لم تكتمل توثيقاً ضمن هذا التقرير؛ هي ما يفصل "
             "التوصية الحالية عن قرار نهائي كامل، وكلٌّ منها قابل للإغلاق "
             "بخطوة محدّدة:")
-        for cat in missing:
-            what, how = _CLIENT_GAP_WHAT.get(
-                cat, ("بند تحليلي إضافي", "بحثاً تكميلياً موجّهاً"))
-            doc.add_paragraph(
-                _CLIENT_GAP_TEMPLATE.format(what=what, how=how),
-                style="List Bullet")
+        for line in gap_lines:
+            doc.add_paragraph(line, style="List Bullet")
     else:
         doc.add_paragraph(
-            "اكتملت التقاطعات التحليلية الأساسية بأدلة موثّقة بمصادرها؛ لا "
-            "فجوة جوهرية تمنع اتخاذ القرار ضمن نطاق هذا التقرير.")
+            "اكتملت التقاطعات التحليلية الأساسية بأدلة موثّقة بمصادرها، ولا "
+            "بند حاسم للقرار موسوم بأنه غير محقَّق؛ لا فجوة جوهرية تمنع "
+            "اتخاذ القرار ضمن نطاق هذا التقرير.")
     nxt = dr.get("next_step")
     if nxt:
         doc.add_heading("الخطوة التالية المقترحة", level=2)
         doc.add_paragraph(_client_sanitize(nxt))
 
 
+_CAT_TAG_RE = re.compile(
+    r"^\[(?:demand|price_competitiveness|entry_cost|entry_door|swot|[a-z_]+)\]\s*")
+
+
+def _dp_conf(f: object) -> "float | None":
+    """درجة الثقة لبند أدلة (dict أو DataPoint) — None إن تعذّر."""
+    if isinstance(f, dict):
+        c = f.get("confidence")
+    else:
+        c = getattr(f, "confidence", None)
+    try:
+        return float(c)
+    except (TypeError, ValueError):
+        return None
+
+
+def _readable_number(v: object) -> str:
+    """رقم بصيغة عربية مقروءة — 38000000.0 → «38 مليون» (بلاغ مراجعة المالك:
+    عشريات خام في سجل الأدلة). الوحدة (دولار/نسمة/…) تأتي من الملاحظة لا
+    تُختلَق هنا."""
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    a = abs(n)
+    if a >= 1e9:
+        return f"{n / 1e9:.1f} مليار".replace(".0 ", " ")
+    if a >= 1e6:
+        return f"{n / 1e6:.1f} مليون".replace(".0 ", " ")
+    if a >= 1e3:
+        return f"{n:,.0f}"
+    return f"{n:g}"
+
+
+def _client_readable_fact(value: object, note: object) -> "str | None":
+    """حوّل قيمة أدلة إلى حقيقة مقروءة لعمود «الحقيقة» — بلاغ مراجعة المالك
+    (النقطة ٤): (أ) البنود التي لا تُعرَض مباشرة (قيمة dict غير معروفة/رد
+    خام) تُسقَط (None) بدل سطر «بند تقني غير قابل للعرض» عديم المعنى؛ (ب)
+    العشريات الخام تُنسَّق مقروءةً مع سياق ملاحظتها. لا اختلاق وحدة."""
+    clean_note = _client_sanitize(_CAT_TAG_RE.sub("", str(note or "")).strip())
+    if isinstance(value, dict):
+        if value.get("partner") is not None and value.get("share") is not None:
+            return f"{value['partner']}: حصة {value['share']}%"
+        if value.get("hhi") is not None:
+            return f"مؤشر تركّز المورّدين HHI={value['hhi']}"
+        return None  # بنية غير معروفة — لا سطر عديم المعنى
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        num = _readable_number(value)
+        return f"{num} — {clean_note}" if clean_note else num
+    txt = _client_sanitize(_clean_report_text(value, max_len=140))
+    if not txt or txt.startswith("بند تقني غير قابل للعرض"):
+        return None  # بند لا يُعرَض — يُسقَط بدل ضجيج للمدقّق
+    return txt
+
+
 def _client_evidence_appendix(doc, dr: dict) -> None:
     """سجل الأدلة للمدققين (بلاغ المالك النقطة ٤) — جدول الأدلة الكامل ينتقل
     لملحق ختامي بهذا العنوان، بمفردات محايدة (المصدر البشري، لا اسم الأداة).
-    يبدأ بفقرة المنهجية المضبوطة (٣ أسطر)."""
+    يبدأ بفقرة المنهجية المضبوطة (٣ أسطر). البنود عديمة المعنى تُسقَط،
+    والعشريات الخام تُنسَّق مقروءةً."""
     doc.add_heading("المنهجية وسجل الأدلة للمدققين", level=1)
     doc.add_paragraph(_client_methodology_paragraph(dr))
     doc.add_heading("سجل الأدلة للمدققين", level=2)
@@ -1538,13 +1618,14 @@ def _client_evidence_appendix(doc, dr: dict) -> None:
         if not isinstance(m, dict):
             continue
         for f in (m.get("findings") or []):
+            fact = _client_readable_fact(f.get("value"), f.get("note"))
+            if fact is None:  # بند عديم المعنى/غير قابل للعرض — يُسقَط
+                continue
             src = str(f.get("source") or "—")
             if _client_forbidden_hits(src):  # لا اسم أداة في عمود المصدر
                 src = "سجلّات رسمية"
-            rows.append([
-                _client_sanitize(_clean_report_text(f.get("value"), max_len=110)),
-                src, f.get("retrieved_at") or "—",
-                _evidence_badge(f.get("confidence"))])
+            rows.append([fact, src, f.get("retrieved_at") or "—",
+                        _evidence_badge(f.get("confidence"))])
     if not rows:
         doc.add_paragraph("لا بنود أدلة مفصّلة في هذا التقرير.")
         return

@@ -214,10 +214,11 @@ analyst_report = AgentReport(
 
 missions = {
     "trade_flow": _rep("trade_flow", [
-        _f(38_000_000.0, "UN Comtrade", 0.9, "واردات 2023")],
+        _f(38_000_000.0, "UN Comtrade", 0.9,
+           "إجمالي واردات هولندا من التمور من العالم، دولار، 2023")],
         "تدفقات تجارية مؤكَّدة"),
     "demographics_economy": _rep("demographics_economy", [
-        _f(17_800_000.0, "World Bank", 0.95, "SP.POP.TOTL year=2023")],
+        _f(17_800_000.0, "World Bank", 0.95, "عدد سكان هولندا، نسمة، 2023")],
         "مؤشرات مستقرة"),
     "pricing_scout": _rep("pricing_scout", price, "سلّم أسعار مرصود"),
     "competitors": _rep("competitors", [

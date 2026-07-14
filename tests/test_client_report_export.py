@@ -277,6 +277,50 @@ def test_conditional_go_badge_agrees_with_body_label(tmp_path):
     assert "مراقبة السوق" not in text     # لا تسمية watch مخالفة
 
 
+def test_evidence_log_formats_numbers_and_drops_meaningless_rows(tmp_path):
+    """بلاغ مراجعة المالك (النقطة ٤): العشريات الخام تُنسَّق مقروءةً، والبنود
+    عديمة المعنى (قيمة dict غير معروفة/رد خام) تُسقَط بدل «بند تقني غير قابل
+    للعرض»."""
+    import silk_reports as R
+    from silk_data_layer import DataPoint
+    # رقم خام + ملاحظة سياقية → «X مليون — <سياق>»
+    assert R._client_readable_fact(38_000_000.0, "[demand] واردات، دولار، 2023") \
+        == "38 مليون — واردات، دولار، 2023"
+    # قيمة dict منافس → مقروءة، لا placeholder
+    assert R._client_readable_fact(
+        {"partner": "تونس", "share": 31.0}, "n") == "تونس: حصة 31.0%"
+    assert R._client_readable_fact({"hhi": 2100.0}, "n").startswith(
+        "مؤشر تركّز المورّدين HHI=")
+    # قيمة غير قابلة للعرض → تُسقَط (None)
+    assert R._client_readable_fact({"weird": 1}, "n") is None
+    with block_network():
+        out = _render(_mock_view(), tmp_path)
+    text = docx_all_text(out)
+    assert "بند تقني غير قابل للعرض" not in text
+    assert "38000000" not in text  # لا عشري خام
+
+
+def test_unverified_first_door_surfaces_in_gap_section(tmp_path):
+    """بلاغ مراجعة المالك (النقطة ٥): موزّع الباب الأول موسوم ○ غير متحقق =
+    بند حاسم للقرار؛ يجب أن يظهر في «ما لم يكتمل للقرار» بالصياغة التجارية
+    حتى لو اكتملت التقاطعات، لا أن يُقال «لا فجوة جوهرية»."""
+    from silk_data_layer import DataPoint
+    view = _mock_view(missing_categories=[])
+    # أدرِج مرشّح باب دخول غير متحقق (ثقة 0.35 < 0.5 = ○)
+    door = DataPoint("موزّع حلال في أمستردام — مرشّح", "بحث ويب (غير مؤكَّد)",
+                     0.35, "[entry_door] مرشّح", "2026-07-02")
+    view["deep_research"]["analyst"]["by_category"]["entry_door"] = [
+        {"value": door.value, "source": door.source,
+         "confidence": door.confidence, "note": door.note,
+         "retrieved_at": door.retrieved_at}]
+    with block_network():
+        out = _render(view, tmp_path)
+    text = docx_all_text(out)
+    assert "قناة الدخول الأولى" in text          # الفجوة الحاسمة ظهرت
+    assert "لم نتمكّن من تأكيد" in text            # بالصياغة التجارية
+    assert "لا فجوة جوهرية" not in text            # لا نفي كاذب للفجوة
+
+
 def test_committed_client_sample_is_clean_and_structured():
     """قاعدة ١٠.٦: نموذج تقرير العميل محفوظ بالمستودع، ويجب أن يظل خالياً
     من أيّ مصطلح ممنوع وكامل البنية (يُعاد توليده عبر
