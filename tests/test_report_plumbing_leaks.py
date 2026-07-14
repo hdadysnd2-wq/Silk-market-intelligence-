@@ -256,7 +256,9 @@ def test_build_view_exposes_server_computed_verdict_tone_classic_path():
                                 "confidence": 0.31, "score": 0.636,
                                 "why": "..."}}],
         "classified": True, "product": "تمور"})
-    assert view["decision"]["tone"] == "watch"
+    # بلاغ مراجعة المالك: CONDITIONAL-GO صار له tone مستقل «conditional»
+    # (كان ينهار إلى watch فتخالف الشارة المتن). راجع _verdict_tone.
+    assert view["decision"]["tone"] == "conditional"
 
 
 def test_deep_research_view_exposes_verdict_tone_and_label_not_raw_token():
@@ -282,8 +284,11 @@ def test_deep_research_view_exposes_verdict_tone_and_label_not_raw_token():
     }
     view = build_view(result)
     dr = view["deep_research"]
-    assert dr["verdict_tone"] == "watch"
-    assert dr["verdict_label"] == "مراقبة السوق"
+    # بلاغ مراجعة المالك على نموذج تقرير العميل: الشارة كانت «مراقبة السوق»
+    # بينما المتن «دخول مشروط» — تناقض. CONDITIONAL-GO صار له tone وتسمية
+    # مستقلّان يطابقان المتن (silk_narrative.VERDICT_AR).
+    assert dr["verdict_tone"] == "conditional"
+    assert dr["verdict_label"] == "دخول مشروط"
     assert "CONDITIONAL-GO" not in dr["verdict"]["ai"]["reasoning"]
     assert "دخول مشروط" in dr["verdict"]["ai"]["reasoning"]
 

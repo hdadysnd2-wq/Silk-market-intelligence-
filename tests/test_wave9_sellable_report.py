@@ -597,7 +597,12 @@ def test_writer_prompt_requires_thesis_and_roadmap_and_takeaway():
     src = inspect.getsource(silk_ai_judge.deep_report)
     assert "أطروحة" in src
     assert "خارطة طريق الدخول" in src
-    assert "ماذا يعني هذا لقرارك" in src
+    # بلاغ مراجعة المالك: العبارة كانت تُذيّل كل قسم (~١٠ مرات) فبدا آلياً.
+    # العقد الجديد: أثر القرار منسوجٌ في السرد، والعبارة الحرفية مرّتين على
+    # الأكثر — البرومبت يذكرها كقاعدة سقف لا كإلزام تذييل لكل قسم.
+    assert "ماذا يعني هذا لقرارك" in src        # ما تزال مذكورة (كسقف)
+    assert "مرّتين على الأكثر" in src            # العقد الجديد صريح
+    assert "انسِج" in src                         # النسج بدل التذييل
     # الموجة ١٠: الخارطة أصبحت فرعاً داخل "التوصيات الاستراتيجية" (البنية
     # الدولية بأحد عشر قسماً) لا قسماً مستقلاً — راجع test_wave10_*.
     assert "التوصيات الاستراتيجية" in silk_ai_judge._REPORT_SECTIONS
@@ -651,7 +656,9 @@ def test_reviewer_rubric_checks_thesis_roadmap_takeaway_and_arithmetic():
     src = inspect.getsource(silk_ai_judge.review_report)
     assert "أطروحة" in src
     assert "خارطة طريق الدخول" in src
+    # العقد الجديد: المراجع يعدّ تكرار العبارة ويعلن مشكلة إن تجاوز مرّتين.
     assert "ماذا يعني هذا لقرارك" in src
+    assert "تجاوزت مرّتين" in src
     assert "حساب حسابي صريح" in src
 
 
@@ -671,7 +678,9 @@ def test_research_sample_docx_meets_wave9_delivery_gate():
     for raw in ("CONDITIONAL-GO", "NO-GO", "WATCH"):
         assert raw not in text
     assert "خارطة طريق الدخول" in text  # قسم ٩٠ يوماً
-    assert "ماذا يعني هذا لقرارك" in text  # سطور الخلاصة
+    # بلاغ مراجعة المالك: العبارة كانت تتكرّر ~١٠ مرات فبدا التقرير آلياً.
+    # العقد الجديد: مرّتان على الأكثر (الخلاصة + خارطة الطريق).
+    assert 1 <= text.count("ماذا يعني هذا لقرارك") <= 2
     assert "##" not in text and "**" not in text and "```" not in text
     assert "ثقة 0" not in text  # لا رقم ثقة خام مسرَّب للسرد
     assert "ملحق تقني" in text  # الأرقام الكاملة انتقلت للملحق

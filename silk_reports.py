@@ -259,9 +259,13 @@ def _add_page_header_footer(doc, title: str) -> None:
     _add_page_number_field(fp)
 
 
-_VERDICT_TEXT_COLORS = {"go": (0x1E, 0x7D, 0x32), "watch": (0xB8, 0x86, 0x0B),
+# لون شارة الحكم بالـtone — conditional (دخول مشروط) لون مستقل (أخضر مزرقّ)
+# يميّزه عن go الأخضر وwatch الكهرماني (بلاغ مراجعة المالك على النموذج).
+_VERDICT_TEXT_COLORS = {"go": (0x1E, 0x7D, 0x32), "conditional": (0x00, 0x69, 0x5C),
+                        "watch": (0xB8, 0x86, 0x0B),
                         "nogo": (0xC0, 0x00, 0x00), "unknown": (0x60, 0x60, 0x60)}
-_VERDICT_HIGHLIGHTS = {"go": "BRIGHT_GREEN", "watch": "YELLOW", "nogo": "RED"}
+_VERDICT_HIGHLIGHTS = {"go": "BRIGHT_GREEN", "conditional": "TEAL",
+                       "watch": "YELLOW", "nogo": "RED"}
 
 
 def _add_verdict_badge(doc, vtxt: str) -> None:
@@ -1246,6 +1250,515 @@ def _render_research_docx(doc, view: dict) -> None:
                       "أدناه لكل فجوة معلنة).")
 
     _docx_deep_research(doc, view)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# تقرير العميل (Word) — القالب الثاني (فصل الجمهور)
+# ══════════════════════════════════════════════════════════════════════════
+# البصيرة الجوهرية (بلاغ المالك): التصدير الحالي (_render_research_docx) يعرض
+# تِلِمِتري النظام لقارئ نهائي — خطأ جمهور لا خطأ كود. اللوحة (web/index.html)
+# تبقى جمهور المشغّل (بعثات، حالات، اقتصاد بيانات). هذا القالب هو جمهور
+# العميل: مفردات تجارية بحتة، بلا أي مصطلح تشغيلي. حارس نصّي يرفض التصدير
+# إن تسرّب أيّ مصطلح ممنوع (نفس نمط _assert_production_clean).
+#
+# لا مسار عرض جديد: هذا مُشتقّ آخر فوق build_view (كـrender_docx/render_brief/
+# render_markdown) — يستهلك view["deep_research"] نفسه، لا يحسب رقماً جديداً.
+
+# المصطلحات الممنوعة في تصدير العميل — الطبقة ١: قائمة المالك الصريحة
+# (mission/status/successful/run/call/declared gap/tool names). الطبقة ٢:
+# لغة الخوارزمية (score/confidence/verdict-token/الدرجة) — ممنوعة أيضاً في
+# متن العميل (متطلَّب المرحلة ١: لا لغة نظام تصنيف، الأحكام الرقمية للملحق).
+_CLIENT_TOOL_NAMES = (
+    "comtrade_imports", "comtrade_competitors", "worldbank_indicator",
+    "wits_tariff", "trends_interest", "faostat_supply", "web_search",
+    "gdelt_news", "openalex_search", "channels_importers", "lookup_reference",
+    "eurostat_eu_signals")
+
+# أنماط الرفض — كلٌّ يُطابَق ضد نص التصدير المُجمَّع كاملاً (فقرات + خلايا
+# جداول). عربية تشغيلية + أسماء أدوات snake_case + كلمات إنجليزية تشغيلية
+# ككلمات كاملة (لا تظهر في نثر عربي إلا تسرّباً). أسماء المصادر البشرية
+# (UN Comtrade/World Bank/Eurostat...) مسموحة — استشهاد مشروع لا أداة داخلية.
+_CLIENT_FORBIDDEN_PATTERNS = [
+    ("mission", re.compile(r"بعث(?:ة|ات)|\bmissions?\b", re.I)),
+    ("status", re.compile(r"\bstatus\b", re.I)),
+    ("successful", re.compile(r"ناجحة|نجحت|\bsuccessful\b", re.I)),
+    ("run", re.compile(r"تشغيلة|\brun\b", re.I)),
+    ("call", re.compile(r"نداء(?:ات)?\s+أدوات?|استدعاء\s+أداة|\bcall\b", re.I)),
+    ("declared_gap", re.compile(r"فجوة معلنة|فجوات معلنة")),
+    ("tool_name", re.compile(
+        r"\b(?:" + "|".join(_CLIENT_TOOL_NAMES) + r")\b")),
+    ("agent_role", re.compile(
+        r"المحلل الشامل|كاتب التقرير|بوابة الجودة|LLMMissionAgent|LLMAgent")),
+    ("citation_plumbing", re.compile(r"مبنيّ?ة?\s+على استشهاد|بلا استشهاد|"
+                                     r"\bdatapoint\b|\bdp\d+\b", re.I)),
+    # الطبقة ٢ — لغة الخوارزمية في المتن (الأحكام الرقمية تعيش في الملحق فقط).
+    ("algorithm_language", re.compile(
+        r"\bverdict\b|\bconfidence\b|\bscore\b|الدرجة الرقمية|درجة الثقة|"
+        r"النتيجة الرقمية", re.I)),
+]
+
+# استبدالات التطهير — تُطبَّق على كل كتلة نص من سرد الكاتب قبل عرضها، فتحوّل
+# أيّ مصطلح تشغيلي تسرّب من الكاتب إلى مفردة تجارية. الحارس النهائي يلتقط ما
+# فات. الترتيب مهم (الأطول أولاً).
+_CLIENT_SANITIZE = [
+    (re.compile(r"\b(?:" + "|".join(_CLIENT_TOOL_NAMES) + r")\b"),
+     "السجلّات الرسمية"),
+    (re.compile(r"من\s+السجلّات الرسمية"), "من السجلّات الرسمية"),
+    (re.compile(r"LLMMissionAgent|LLMAgent"), "مسار البحث"),
+    (re.compile(r"بعثات"), "مسارات البحث"),
+    (re.compile(r"بعثة"), "مسار بحث"),
+    (re.compile(r"نجحت في جمع"), "أنتجت"),
+    (re.compile(r"ناجحة"), "مكتملة"),
+    (re.compile(r"نجحت"), "اكتملت"),
+    (re.compile(r"فشلت"), "لم تكتمل"),
+    (re.compile(r"فجوات معلنة"), "بنود تحتاج تحققاً"),
+    (re.compile(r"فجوة معلنة"), "بند يحتاج تحققاً"),
+    (re.compile(r"تشغيلة"), "دورة تحليل"),
+    (re.compile(r"مبنيّة على استشهاد|مبني على استشهاد"), "موثّقة بمصادرها"),
+    (re.compile(r"المحلل الشامل"), "فريق التحليل"),
+    (re.compile(r"كاتب التقرير"), "فريق الإعداد"),
+]
+
+
+def _client_sanitize(text: object) -> str:
+    """طهّر كتلة نص من سرد الكاتب لجمهور العميل — يحوّل المصطلحات التشغيلية
+    المتسرّبة لمفردات تجارية. الحارس النهائي (_client_assert_clean) يرفض أي
+    بقايا. لا يمسّ الأرقام ولا المصادر البشرية."""
+    s = str(text or "")
+    for pat, repl in _CLIENT_SANITIZE:
+        s = pat.sub(repl, s)
+    return re.sub(r"[ \t]{2,}", " ", s).strip()
+
+
+def _client_forbidden_hits(blob: str) -> list[str]:
+    """أرجع كل مصطلح ممنوع ظهر في نص التصدير — للاختبار وللحارس."""
+    hits = []
+    for label, pat in _CLIENT_FORBIDDEN_PATTERNS:
+        m = pat.search(blob or "")
+        if m:
+            hits.append(f"{label}: «{m.group(0)}»")
+    return hits
+
+
+def _client_assert_clean(doc) -> None:
+    """حارس تصدير العميل — يرفض المستند إن تسرّب أيّ مصطلح تشغيلي/خوارزمي
+    (نفس نمط _assert_production_clean: رفض بصوت عالٍ لا تسليم مسموم). يمسح
+    كل الفقرات وخلايا الجداول المُجمَّعة."""
+    parts = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                parts.append(cell.text)
+    blob = "\n".join(parts)
+    hits = _client_forbidden_hits(blob)
+    if hits:
+        raise RuntimeError(
+            "تصدير العميل يحوي مصطلحات ممنوعة (تسريب تِلِمِتري لجمهور "
+            "العميل) — رُفض التوليد: " + "؛ ".join(hits[:8]))
+
+
+# خريطة أقسام الكاتب (البنية الدولية بأحد عشر قسماً) → أقسام تقرير العميل
+# السبعة. أقسام "منهجية البحث ونطاقه" و"الملاحق" تُسقَط (تُستبدَل بفقرة
+# منهجية مضبوطة وملحق أدلة). الترتيب النهائي للعميل يُبنى صراحة في المُصيّر.
+_CLIENT_SECTION_MAP = {
+    "الخلاصة التنفيذية": "القرار وأساسه",
+    "التوصيات الاستراتيجية": "القرار وأساسه",
+    "نظرة عامة على السوق وحجمه": "السوق بالأرقام",
+    "ديناميكيات السوق": "السوق بالأرقام",
+    "تحليل المستهلك والطلب": "السوق بالأرقام",
+    "المشهد التنافسي": "المنافسة والتسعير والهامش",
+    "التنظيم والوصول للسوق": "مسار الدخول والمتطلبات",
+    "اللوجستيات وسلسلة الإمداد": "مسار الدخول والمتطلبات",
+    "تقييم المخاطر": "المخاطر",
+}
+# ترتيب أقسام العميل النهائي (بلاغ المالك، البنية المطلوبة).
+_CLIENT_SECTION_ORDER = (
+    "القرار وأساسه", "السوق بالأرقام", "المنافسة والتسعير والهامش",
+    "مسار الدخول والمتطلبات", "المخاطر")
+
+_WRITER_HEADING_RE = re.compile(r"^##\s+\d+\.\s*(.+?)\s*$")
+_ROADMAP_SUBHEAD_RE = re.compile(r"^###\s+خارطة طريق الدخول")
+
+
+def _split_at_roadmap(body: list[str]) -> "tuple[list[str], list[str]]":
+    """قسّم متن التوصيات عند العنوان الفرعي "### خارطة طريق الدخول" — الجزء
+    قبله (تعليل الحكم) والجزء منه فصاعداً (الخارطة). نقطة قسم حتمية (عنوان
+    فرعي ثابت يفرضه كاتب التقرير) لا تحليل نصّي هشّ."""
+    for idx, line in enumerate(body):
+        if _ROADMAP_SUBHEAD_RE.match(line.strip()):
+            return body[:idx], body[idx:]
+    return body, []
+
+
+def _parse_writer_sections(report_text: str) -> "list[tuple[str, list[str]]]":
+    """قسّم سرد الكاتب إلى (عنوان القسم، أسطر متنه) — يعيد استعمال بنية
+    '## N. العنوان' نفسها التي يفرضها كاتب التقرير (silk_ai_judge._REPORT_
+    SECTIONS). العناوين الفرعية '### ' والجداول تبقى ضمن متن قسمها."""
+    sections: list[tuple[str, list[str]]] = []
+    cur_title, cur_body = None, []
+    for line in str(report_text or "").splitlines():
+        m = _WRITER_HEADING_RE.match(line.strip())
+        if m:
+            if cur_title is not None:
+                sections.append((cur_title, cur_body))
+            cur_title, cur_body = m.group(1).strip(), []
+        elif cur_title is not None:
+            cur_body.append(line)
+    if cur_title is not None:
+        sections.append((cur_title, cur_body))
+    return sections
+
+
+def _client_render_body_block(doc, lines: list[str]) -> None:
+    """اعرض أسطر متن قسم (فقرات + جداول Markdown + سطر الخلاصة الغامق) بعد
+    التطهير — نفس ميكانيكا _docx_deep_research لكن عبر _client_sanitize،
+    ويُسقِط أيّ جدول بقي فيه مصطلح ممنوع بعد التطهير (جداول الدرجات الرقمية
+    verdict/confidence — لغة خوارزمية لا تُعرَض للعميل)."""
+    i, n = 0, len(lines)
+    while i < n:
+        raw = lines[i].strip()
+        if not raw:
+            i += 1
+            continue
+        if raw.startswith("### "):
+            doc.add_heading(_client_sanitize(raw[4:]), level=3)
+            i += 1
+            continue
+        if raw.startswith("## "):  # عنوان قسم فرعي غير متوقّع — كفقرة مطهَّرة
+            doc.add_paragraph(_client_sanitize(raw[3:]))
+            i += 1
+            continue
+        if _is_markdown_table_row(raw):
+            block = []
+            while i < n and _is_markdown_table_row(lines[i].strip()):
+                block.append(lines[i].strip())
+                i += 1
+            joined = _client_sanitize("\n".join(block))
+            if _client_forbidden_hits(joined):
+                continue  # جدول درجات/تِلِمِتري — يُسقَط من متن العميل
+            _render_markdown_table(doc, joined.splitlines())
+            continue
+        stripped = _strip_inline_markdown(_client_sanitize(raw))
+        if stripped.startswith("ماذا يعني هذا لقرارك:"):
+            p = doc.add_paragraph()
+            p.add_run(stripped).bold = True
+        else:
+            doc.add_paragraph(stripped)
+        i += 1
+
+
+def _client_methodology_paragraph(dr: dict) -> str:
+    """فقرة المنهجية المضبوطة (٣ أسطر) — تحلّ محل جدول البعثات التشغيلي في
+    تصدير العميل (بلاغ المالك، النقطة ٤): عدد مسارات البحث، المصادر، تاريخ
+    الجلب — بمفردات تجارية بحتة، من حقول محسوبة فعلاً لا اختلاق."""
+    missions = dr.get("missions") or {}
+    n_tracks = len(missions)
+    n_producing = sum(
+        1 for m in missions.values()
+        if not (m.get("failed") if isinstance(m, dict) else False))
+    # المصادر البشرية الفريدة الظاهرة فعلاً في النتائج (لا أسماء أدوات).
+    sources = set()
+    for m in missions.values():
+        for f in (m.get("findings") or []) if isinstance(m, dict) else []:
+            src = str(f.get("source") or "").strip()
+            if src and not _client_forbidden_hits(src):
+                # اسم مصدر بشري فقط (قبل أيّ شرطة توضيحية).
+                sources.add(re.split(r"\s+[—\-(]", src)[0].strip())
+    src_list = "، ".join(sorted(s for s in sources if s)[:6]) or "مصادر رسمية عامة"
+    dates = sorted({str(f.get("retrieved_at"))
+                    for m in missions.values()
+                    if isinstance(m, dict)
+                    for f in (m.get("findings") or [])
+                    if f.get("retrieved_at")})
+    date_txt = (f"أحدث تاريخ جمع بيانات: {dates[-1]}" if dates
+                else "تواريخ الجمع مسجّلة في سجل الأدلة أدناه")
+    return (
+        f"اعتمد هذا التقرير على {n_tracks} مسار بحث مستقل، أنتج منها "
+        f"{n_producing} نتائج موثّقة بمصادرها، مع تحليل تقاطعي ومراجعة "
+        f"للاتساق. المصادر الأساسية: {src_list}. {date_txt}. تفاصيل كل "
+        "رقم بمصدره وتاريخه في «سجل الأدلة للمدققين» ختام التقرير.")
+
+
+# صياغة تجارية لكل فجوة في قسم "ما لم يكتمل للقرار" (بلاغ المالك، النقطة ٣):
+# لا عناوين فارغة متتالية، بل جملة تجارية موحّدة القالب لكل تقاطع بلا أدلة.
+_CLIENT_GAP_TEMPLATE = ("لم نتمكّن من توثيق {what} من مصدر موثّق ضمن هذا "
+                        "التقرير — إغلاق هذه الفجوة يتطلّب {how}.")
+_CLIENT_GAP_WHAT = {
+    "demand": ("الحجم الدقيق للطلب الفعلي القابل للتوجيه",
+               "بحثاً ميدانياً أوّلياً (مقابلات موزّعين أو استبيان طلب)"),
+    "entry_cost": ("تكلفة الدخول الكاملة بما فيها الشحن الفعلي",
+                   "عرض أسعار شحن ملزماً من وكيل لوجستي"),
+    "price_competitiveness": ("موقعك السعري الدقيق مقابل المنافسين",
+                              "بطاقة منتجك (تكلفتك للكيلوغرام) وخدمة رصد "
+                              "أسعار مدفوعة"),
+    "entry_door": ("قائمة موزّعين/مستوردين مؤكَّدين بالاسم",
+                   "خدمة تحقّق جهات اتصال مدفوعة (قواعد بيانات تجارية)"),
+    "swot": ("الموقف التنافسي المؤكَّد من منظور مصدّر سعودي",
+             "دمج نتائج التحقّق الميداني أعلاه في تقييم موحّد"),
+}
+
+
+def _client_gaps_section(doc, dr: dict) -> None:
+    """قسم "ما لم يكتمل للقرار والخطوة التالية" — يحوّل كل تقاطع بلا أدلة
+    كافية لصياغة تجارية موحّدة (بلاغ المالك النقطة ٣)، ثم الخطوة التالية.
+    لا عناوين فارغة متتالية: إن اكتمل كل شيء، سطر إيجابي واحد."""
+    doc.add_heading("ما لم يكتمل للقرار، والخطوة التالية", level=1)
+    analyst = dr.get("analyst") or {}
+    missing = analyst.get("missing_categories") or []
+    by_cat = analyst.get("by_category") or {}
+
+    gap_lines: list[str] = []
+    for cat in missing:
+        what, how = _CLIENT_GAP_WHAT.get(
+            cat, ("بند تحليلي إضافي", "بحثاً تكميلياً موجّهاً"))
+        gap_lines.append(_CLIENT_GAP_TEMPLATE.format(what=what, how=how))
+    # بلاغ مراجعة المالك (منطق قسم الفجوات): بند حاسم للقرار موسوم ○ غير
+    # متحقق (قناة الدخول الأولى) يجب أن يظهر هنا حتى لو اكتملت التقاطعات —
+    # لا يُقال «لا فجوة جوهرية» بينما الموزّع الأول غير مؤكَّد. باب الدخول
+    # المرصود بثقة دون عتبة «الثانوي» (0.5) = مرشّح غير محقَّق، لا حقيقة.
+    if "entry_door" not in missing:
+        from silk_narrative import EVIDENCE_SECONDARY_MIN
+        unverified_doors = [
+            f for f in (by_cat.get("entry_door") or [])
+            if _dp_conf(f) is not None and _dp_conf(f) < EVIDENCE_SECONDARY_MIN]
+        if unverified_doors:
+            names = "، ".join(
+                _client_sanitize(_clean_report_text(f.get("value"), 80))
+                for f in unverified_doors[:2])
+            gap_lines.append(
+                f"لم نتمكّن من تأكيد قناة الدخول الأولى ({names}) من مصدر "
+                "موثّق — إغلاق هذه الفجوة يتطلّب خدمة تحقّق جهات اتصال مدفوعة "
+                "(قواعد بيانات تجارية) قبل الالتزام بالموزّع.")
+
+    if gap_lines:
+        doc.add_paragraph(
+            "النقاط التالية لم تكتمل توثيقاً ضمن هذا التقرير؛ هي ما يفصل "
+            "التوصية الحالية عن قرار نهائي كامل، وكلٌّ منها قابل للإغلاق "
+            "بخطوة محدّدة:")
+        for line in gap_lines:
+            doc.add_paragraph(line, style="List Bullet")
+    else:
+        doc.add_paragraph(
+            "اكتملت التقاطعات التحليلية الأساسية بأدلة موثّقة بمصادرها، ولا "
+            "بند حاسم للقرار موسوم بأنه غير محقَّق؛ لا فجوة جوهرية تمنع "
+            "اتخاذ القرار ضمن نطاق هذا التقرير.")
+    nxt = dr.get("next_step")
+    if nxt:
+        doc.add_heading("الخطوة التالية المقترحة", level=2)
+        doc.add_paragraph(_client_sanitize(nxt))
+
+
+_CAT_TAG_RE = re.compile(
+    r"^\[(?:demand|price_competitiveness|entry_cost|entry_door|swot|[a-z_]+)\]\s*")
+
+
+def _dp_conf(f: object) -> "float | None":
+    """درجة الثقة لبند أدلة (dict أو DataPoint) — None إن تعذّر."""
+    if isinstance(f, dict):
+        c = f.get("confidence")
+    else:
+        c = getattr(f, "confidence", None)
+    try:
+        return float(c)
+    except (TypeError, ValueError):
+        return None
+
+
+def _readable_number(v: object) -> str:
+    """رقم بصيغة عربية مقروءة — 38000000.0 → «38 مليون» (بلاغ مراجعة المالك:
+    عشريات خام في سجل الأدلة). الوحدة (دولار/نسمة/…) تأتي من الملاحظة لا
+    تُختلَق هنا."""
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    a = abs(n)
+    if a >= 1e9:
+        return f"{n / 1e9:.1f} مليار".replace(".0 ", " ")
+    if a >= 1e6:
+        return f"{n / 1e6:.1f} مليون".replace(".0 ", " ")
+    if a >= 1e3:
+        return f"{n:,.0f}"
+    return f"{n:g}"
+
+
+def _client_readable_fact(value: object, note: object) -> "str | None":
+    """حوّل قيمة أدلة إلى حقيقة مقروءة لعمود «الحقيقة» — بلاغ مراجعة المالك
+    (النقطة ٤): (أ) البنود التي لا تُعرَض مباشرة (قيمة dict غير معروفة/رد
+    خام) تُسقَط (None) بدل سطر «بند تقني غير قابل للعرض» عديم المعنى؛ (ب)
+    العشريات الخام تُنسَّق مقروءةً مع سياق ملاحظتها. لا اختلاق وحدة."""
+    clean_note = _client_sanitize(_CAT_TAG_RE.sub("", str(note or "")).strip())
+    if isinstance(value, dict):
+        if value.get("partner") is not None and value.get("share") is not None:
+            return f"{value['partner']}: حصة {value['share']}%"
+        if value.get("hhi") is not None:
+            return f"مؤشر تركّز المورّدين HHI={value['hhi']}"
+        return None  # بنية غير معروفة — لا سطر عديم المعنى
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        num = _readable_number(value)
+        return f"{num} — {clean_note}" if clean_note else num
+    txt = _client_sanitize(_clean_report_text(value, max_len=140))
+    if not txt or txt.startswith("بند تقني غير قابل للعرض"):
+        return None  # بند لا يُعرَض — يُسقَط بدل ضجيج للمدقّق
+    return txt
+
+
+def _client_evidence_appendix(doc, dr: dict) -> None:
+    """سجل الأدلة للمدققين (بلاغ المالك النقطة ٤) — جدول الأدلة الكامل ينتقل
+    لملحق ختامي بهذا العنوان، بمفردات محايدة (المصدر البشري، لا اسم الأداة).
+    يبدأ بفقرة المنهجية المضبوطة (٣ أسطر). البنود عديمة المعنى تُسقَط،
+    والعشريات الخام تُنسَّق مقروءةً."""
+    doc.add_heading("المنهجية وسجل الأدلة للمدققين", level=1)
+    doc.add_paragraph(_client_methodology_paragraph(dr))
+    doc.add_heading("سجل الأدلة للمدققين", level=2)
+    rows = []
+    for m in (dr.get("missions") or {}).values():
+        if not isinstance(m, dict):
+            continue
+        for f in (m.get("findings") or []):
+            fact = _client_readable_fact(f.get("value"), f.get("note"))
+            if fact is None:  # بند عديم المعنى/غير قابل للعرض — يُسقَط
+                continue
+            src = str(f.get("source") or "—")
+            if _client_forbidden_hits(src):  # لا اسم أداة في عمود المصدر
+                src = "سجلّات رسمية"
+            rows.append([fact, src, f.get("retrieved_at") or "—",
+                        _evidence_badge(f.get("confidence"))])
+    if not rows:
+        doc.add_paragraph("لا بنود أدلة مفصّلة في هذا التقرير.")
+        return
+    doc.add_paragraph(
+        "كل بند أدناه هو حقيقة موثّقة بمصدرها وتاريخها، أساس السرد أعلاه — "
+        "للتحقّق المباشر. رمز الأدلة: ✓ موثّق مباشرةً · ◐ تقديري مسنَد · "
+        "○ يحتاج تحققاً.", style="Intense Quote")
+    _add_table(doc, ["الحقيقة", "المصدر", "تاريخ الجمع", "قوة الدليل"],
+               rows[:80])
+
+
+def render_client_docx(view: dict, path: str) -> str:
+    """تقرير العميل (Word) — القالب الثاني، جمهور العميل (بلاغ المالك: فصل
+    الجمهور). يستهلك view["deep_research"] نفسه (لا مسار عرض جديد) وينتج
+    بنية العميل السبع: القرار وأساسه → السوق بالأرقام → المنافسة والتسعير →
+    مسار الدخول والمتطلبات → المخاطر → ما لم يكتمل للقرار → المنهجية وسجل
+    الأدلة. حارس نصّي يرفض التصدير إن تسرّب أيّ مصطلح تشغيلي/خوارزمي.
+
+    نتيجة /analyze الكلاسيكية (بلا deep_research) ليست ضمن نطاق هذا القالب
+    — تُوجَّه لـrender_docx العادي من المستدعي. يعيد المسار عند النجاح.
+    """
+    try:
+        from docx import Document
+    except ImportError as exc:
+        raise RuntimeError(_DOCX_HINT) from exc
+
+    _assert_production_clean(view)
+    dr = view.get("deep_research") or {}
+    if not dr:
+        raise RuntimeError("render_client_docx يتطلّب نتيجة بحث عميق "
+                           "(view['deep_research']) — استخدم render_docx "
+                           "لتقارير /analyze الكلاسيكية")
+
+    doc = Document()
+    h = view.get("header") or {}
+    market = dr.get("market") or {}
+    verdict = dr.get("verdict") or {}
+    ai = verdict.get("ai") or {}
+    vtxt = ai.get("verdict") or verdict.get("verdict") or ""
+    branding = _load_branding()
+
+    # ٠) الغلاف — هوية سِلك، بلا أيّ تِلِمِتري
+    _add_page_header_footer(doc, f"سِلك — دراسة سوق تصديرية: {view.get('product')}")
+    _add_cover_wordmark(doc, branding)
+    doc.add_heading(f"دراسة سوق تصديرية: {view.get('product')}", 0)
+    doc.add_paragraph("أُعدّت بواسطة منصة سِلك لذكاء الأسواق",
+                      style="Intense Quote")
+    if view.get("test_run"):
+        doc.add_paragraph("⚠ نموذج توضيحي ببيانات موسومة — ليس تقريراً "
+                          "إنتاجياً")
+    _stamp_degraded_banner(doc, view)
+    _add_verdict_badge(doc, vtxt)
+    _add_table(doc, ["البند", "القيمة"], [
+        ["المنتج", h.get("product") or view.get("product")],
+        ["رمز HS", h.get("hs_code") or view.get("hs_code")],
+        ["بلد المنشأ", "المملكة العربية السعودية"],
+        ["السوق المستهدف", h.get("target_market")
+         or market.get("name_ar") or market.get("name_en")],
+        ["تاريخ الإعداد", h.get("date")]])
+
+    # بنية الأقسام: اجمع أقسام الكاتب المطهَّرة تحت عناوين العميل السبعة.
+    sections = _parse_writer_sections((dr.get("report") or {}).get("text") or "")
+    buckets: dict[str, list[list[str]]] = {c: [] for c in _CLIENT_SECTION_ORDER}
+    for title, body in sections:
+        # قسم التوصيات يُقسَم عند "### خارطة طريق الدخول": تعليل الحكم يبقى
+        # في "القرار وأساسه"، وخارطة الدخول (الأبواب والخطوات) تنتقل لـ
+        # "مسار الدخول والمتطلبات" — مطابقة أدقّ للبنية المطلوبة (بلاغ المالك).
+        if title == "التوصيات الاستراتيجية":
+            decision_part, roadmap_part = _split_at_roadmap(body)
+            buckets["القرار وأساسه"].append(decision_part)
+            if roadmap_part:
+                buckets["مسار الدخول والمتطلبات"].append(roadmap_part)
+            continue
+        client_head = _CLIENT_SECTION_MAP.get(title)
+        if client_head:
+            buckets[client_head].append(body)
+
+    # ١) القرار وأساسه — يبدأ دوماً بالحكم وتعليله (المصدر الوحيد للحكم)،
+    # ثم سرد الكاتب (الخلاصة + التوصيات) إن توفّر.
+    doc.add_heading("القرار وأساسه", level=1)
+    doc.add_paragraph(f"التوصية: {_VERDICT_LABELS_AR[_verdict_tone(vtxt)]}")
+    reasoning = ai.get("reasoning") or verdict.get("note") or ""
+    if reasoning:
+        doc.add_paragraph(_client_sanitize(_clean_report_text(reasoning, 700)))
+    _client_body_or_fallback(doc, buckets["القرار وأساسه"], dr,
+                             "القرار وأساسه")
+
+    # ٢-٥) بقية أقسام العميل بالترتيب
+    for client_head in _CLIENT_SECTION_ORDER[1:]:
+        doc.add_heading(client_head, level=1)
+        _client_body_or_fallback(doc, buckets[client_head], dr, client_head)
+
+    # ٦) ما لم يكتمل للقرار والخطوة التالية (صياغة تجارية للفجوات)
+    _client_gaps_section(doc, dr)
+
+    # ٧) المنهجية وسجل الأدلة للمدققين (يحلّ محل جدول البعثات)
+    _client_evidence_appendix(doc, dr)
+
+    _client_assert_clean(doc)  # الحارس النهائي — رفض إن تسرّب مصطلح ممنوع
+    doc.save(path)
+    return path
+
+
+def _client_body_or_fallback(doc, bodies: list[list[str]], dr: dict,
+                             client_head: str) -> None:
+    """اعرض متون الكاتب لهذا القسم إن توفّرت؛ وإلا صياغة تجارية موجزة من
+    التقاطعات المهيكلة (سرد الكاتب غائب = فشل النداء) — بلا تِلِمِتري، بلا
+    عنوان فارغ. لا اختلاق: يذكر فقط ما رُصد فعلاً أو يصرّح تجارياً بغيابه."""
+    if bodies:
+        for body in bodies:
+            _client_render_body_block(doc, body)
+        return
+    # مسار احتياطي: لا سرد كاتب — اعرض من التقاطعات المهيكلة إن وُجدت.
+    cat_for_head = {
+        "القرار وأساسه": ("swot",),
+        "السوق بالأرقام": ("demand",),
+        "المنافسة والتسعير والهامش": ("price_competitiveness",),
+        "مسار الدخول والمتطلبات": ("entry_cost", "entry_door"),
+        "المخاطر": (),
+    }.get(client_head, ())
+    by_cat = (dr.get("analyst") or {}).get("by_category") or {}
+    shown = False
+    for cat in cat_for_head:
+        for f in (by_cat.get(cat) or []):
+            doc.add_paragraph(
+                _client_sanitize(_clean_report_text(f.get("value"), 220)),
+                style="List Bullet")
+            shown = True
+    if not shown:
+        doc.add_paragraph(
+            "التحليل السردي التفصيلي لهذا القسم غير متاح ضمن هذا التقرير؛ "
+            "الأدلة المرصودة ذات الصلة مُدرجة في «سجل الأدلة للمدققين» ختام "
+            "التقرير.")
 
 
 def render_docx(view: dict, path: str) -> str:
