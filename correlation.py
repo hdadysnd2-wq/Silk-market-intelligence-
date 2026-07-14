@@ -154,8 +154,12 @@ def correlate(row: dict, product_card: dict, product_name: str = "") -> dict:
 
     cost = float(product_card.get("cost_per_unit") or 0.0)
     shipping = float(product_card.get("shipping_per_unit") or 0.0)
+    # سدّ تسريب: كانت الملاحظة تُرشد القارئ لتمرير اسم معامل بايثون خام
+    # (shipping_per_unit) — عميل تجاري لا يستدعي دالة؛ التحديث الفعلي يمرّ
+    # عبر بطاقة المنتج (product_card) في الطلب، فالصياغة تعكس ذلك.
     shipping_note = ("افتراض شحن معلَن قابل للتعديل: "
-                     f"{shipping} لكل وحدة (مرّر shipping_per_unit لتغييره)")
+                     f"{shipping} لكل وحدة — حدِّثه في بطاقة المنتج "
+                     "لحساب أدق للهامش")
 
     # خيط ١ — ملفات المنافسين المترابطة.
     competitor_threads: list[dict] = []
@@ -169,7 +173,7 @@ def correlate(row: dict, product_card: dict, product_name: str = "") -> dict:
             "name": name,
             "source_link": v.get("link"),
             "observed_price": None,
-            "price_flag": "سعر غير مرصود — price not observed",
+            "price_flag": "سعر غير مرصود",
             "channels": [c.get("title") for c in channels][:5],
             "suppliers": suppliers[:5],
             "contacts_available": bool(contacts),
@@ -182,7 +186,7 @@ def correlate(row: dict, product_card: dict, product_name: str = "") -> dict:
                 "matched_listing": listing.get("title"),
                 "match_ratio": ratio,
             }
-            thread["price_flag"] = "سعر مرصود من قائمة فعلية — observed"
+            thread["price_flag"] = "سعر مرصود من قائمة فعلية"
         slots = [thread["observed_price"] is not None, bool(channels),
                  bool(suppliers), bool(contacts)]
         thread["thread_completeness"] = f"{sum(slots)}/4"
@@ -201,8 +205,8 @@ def correlate(row: dict, product_card: dict, product_name: str = "") -> dict:
         gaps = [shipping_note]
         if tariff_pct is None:
             landed = cost + shipping
-            gaps.append("الرسوم الجمركية غير مرصودة — الهامش محسوب بلا جمارك "
-                        "(tariff not observed; margin excludes duties)")
+            gaps.append("الرسوم الجمركية غير مرصودة — الهامش أدناه محسوب "
+                        "بلا احتساب جمارك")
         else:
             landed = (cost + shipping) * (1 + tariff_pct / 100.0)
         if obs.get("currency"):
@@ -233,7 +237,8 @@ def correlate(row: dict, product_card: dict, product_name: str = "") -> dict:
         "doors": doors,
         "importers": suppliers if suppliers
         else ["فعّل التعميق (Volza) للحصول على الأسماء الموثّقة"],
-        "note": ("لا قنوات مرصودة — فعّل with_channels" if not doors else
+        "note": ("لا قنوات توزيع مرصودة — فعّل طبقة قنوات التوزيع لرصدها"
+                 if not doors else
                  "ترتيب أوّلي من مرشحات مرصودة — تحقق قبل التعاقد"),
     }
 
@@ -258,8 +263,8 @@ def correlate(row: dict, product_card: dict, product_name: str = "") -> dict:
         "coverage": (f"{observed} من {len(competitor_threads)} منافساً لهم "
                      "أسعار مرصودة — لرفع التغطية فعّل طبقة التعميق"
                      if competitor_threads else
-                     "لا مرشحي منافسين مرصودين — فعّل with_competitors "
-                     "(وwith_localprice للأسعار)"),
+                     "لا مرشحي منافسين مرصودين — فعّل طبقتي المنافسين "
+                     "والأسعار لرصدهم"),
         "note": ("خيوط مربوطة من نتائج الوكلاء في الذاكرة حصراً — صفر "
                  "استدعاءات خارجية؛ كل نقص معلن لا مُخمّن."),
     }
