@@ -64,7 +64,9 @@ def test_pricing_scout_has_comtrade_imports_tool():
 def test_pricing_scout_instructions_frame_unit_value_as_reference_not_retail():
     from silk_missions import MISSIONS
     txt = MISSIONS["pricing_scout"]["instructions"]
-    assert "سعر جملة مرجعي" in txt
+    # تمرير النثر (R1): الوسم أُعيدت صياغته إلى «متوسط سعر الاستيراد الرسمي
+    # (UN Comtrade)» — يبقى مؤطَّراً كمرجع لا سعر تجزئة.
+    assert "متوسط سعر الاستيراد الرسمي" in txt
     assert "لا سعر تجزئة فعلياً" in txt
 
 

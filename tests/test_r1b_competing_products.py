@@ -42,7 +42,10 @@ def test_pricing_scout_keeps_baseline_ladder_and_comtrade():
     ins = M.MISSIONS["pricing_scout"]["instructions"]
     assert "٣ متاجر" in ins or "3 متاجر" in ins
     assert "comtrade_imports" in ins
-    assert "سعر جملة مرجعي" in ins
+    # تمرير النثر (R1): الوسم صار «متوسط سعر الاستيراد الرسمي (UN Comtrade)»
+    # بدل «سعر جملة مرجعي (كومتريد)» — لا تعريب لاسم مصدر، ولغة أعمال لا هندسية.
+    assert "متوسط سعر الاستيراد الرسمي" in ins
+    assert "UN Comtrade" in ins
 
 
 # ── (ب) عقد برومبت الكاتب ─────────────────────────────────────────────────
