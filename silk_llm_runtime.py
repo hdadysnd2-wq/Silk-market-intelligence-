@@ -315,6 +315,25 @@ def _tool_channels_importers(args: dict, ctx: dict) -> list[DataPoint]:
                              _today())]
 
 
+def _tool_eurostat_eu_signals(args: dict, ctx: dict) -> list[DataPoint]:
+    """إشارات يوروستات الإضافية (المرحلة ٢ج، خيار B) — حصة إنفاق الغذاء من
+    مسح ميزانية الأسرة، وعدد السكان المولودين خارج السوق. **أسواق الاتحاد
+    الأوروبي/EFTA فقط** — امتناع معلن تلقائي خارجها (راجع
+    silk_eurostat_agent للتفاصيل والقيود)."""
+    from silk_eurostat_agent import (
+        foreign_born_population_count, household_food_expenditure_share)
+    market = ctx["market"]
+    which = str(args.get("which") or "both").strip().lower()
+    year = args.get("year")
+    y = int(year) if year else None
+    out: list[DataPoint] = []
+    if which in ("household_expenditure", "both"):
+        out.append(household_food_expenditure_share(market.iso3, market.iso2, y))
+    if which in ("foreign_born", "both"):
+        out.append(foreign_born_population_count(market.iso3, market.iso2, y))
+    return out
+
+
 def _tool_lookup_reference(args: dict, ctx: dict) -> list[DataPoint]:
     table = str(args.get("table") or "").strip().lower()
     market = ctx["market"]
@@ -471,6 +490,22 @@ TOOLS: dict[str, dict] = {
                 "which": {"type": "string",
                          "enum": ["channels", "importers", "both"]},
                 "num": {"type": "integer", "description": "per lens, default 3"}}},
+        },
+    },
+    "eurostat_eu_signals": {
+        "fn": _tool_eurostat_eu_signals,
+        "spec": {
+            "name": "eurostat_eu_signals",
+            "description": ("إشارات استهلاك/هجرة إضافية من يوروستات — حصة "
+                            "إنفاق الغذاء من مسح ميزانية الأسرة، وعدد "
+                            "السكان المولودين خارج السوق. **أسواق الاتحاد "
+                            "الأوروبي/EFTA فقط** — امتناع معلن تلقائي "
+                            "لغيرها، لا تستدعِها لسوق خارج أوروبا."),
+            "input_schema": {"type": "object", "properties": {
+                "which": {"type": "string",
+                         "enum": ["household_expenditure", "foreign_born",
+                                 "both"]},
+                "year": {"type": "integer"}}},
         },
     },
     "lookup_reference": {
