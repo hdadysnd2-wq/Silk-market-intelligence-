@@ -281,13 +281,15 @@ def test_regenerate_report_calls_writer_once_with_reconstructed_reports():
     captured = {}
 
     def fake_write_reviewed_report(mission_reports, analyst_summary, verdict,
-                                   product, market_name, trace_id=None):
+                                   product, market_name, trace_id=None,
+                                   hs_code=None):
         captured["mission_reports"] = mission_reports
         captured["analyst_summary"] = analyst_summary
         captured["verdict"] = verdict
         captured["product"] = product
         captured["market_name"] = market_name
         captured["trace_id"] = trace_id
+        captured["hs_code"] = hs_code  # المقترح ٤: يُمرَّر لاشتقاق فئة المنتج
         return {"report": "## 1. الخلاصة التنفيذية\nنص.", "review_cycles": 1,
                "unresolved_notes": []}
 
