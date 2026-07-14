@@ -1498,6 +1498,51 @@ _CLIENT_GAP_WHAT = {
 }
 
 
+def _client_confidence_section(doc, dr: dict) -> None:
+    """مؤشّر ثقة الدراسة (S3) — عدّ شارات الأدلة (✓ موثّق/◐ ثانوي/○ غير متحقق)
+    عبر بعثات الدراسة وتقاطعات المحلل، فيرى العميل شفافياً كم من الدراسة
+    مرصود بمصدر رسمي مقابل مُقدَّر أو فجوة. تجميع بحت من درجات ثقة قائمة —
+    لا رقم جديد ولا حكم، ويمرّ بحارس المصطلحات كأيّ قسم عميل."""
+    from silk_narrative import evidence_badge
+    counts = {"verified": 0, "secondary": 0, "unverified": 0}
+
+    def _tally(conf) -> None:
+        badge = evidence_badge(conf)
+        if badge.startswith("✓"):
+            counts["verified"] += 1
+        elif badge.startswith("◐"):
+            counts["secondary"] += 1
+        else:
+            counts["unverified"] += 1
+
+    for m in (dr.get("missions") or {}).values():
+        if not isinstance(m, dict) or m.get("failed"):
+            continue
+        for f in (m.get("findings") or []):
+            if _dp_conf(f) is not None:
+                _tally(_dp_conf(f))
+    for dps in ((dr.get("analyst") or {}).get("by_category") or {}).values():
+        for f in (dps or []):
+            if _dp_conf(f) is not None:
+                _tally(_dp_conf(f))
+
+    total = sum(counts.values())
+    if not total:
+        return   # لا مؤشرات معدودة — لا قسم فارغ
+    verified_pct = round(100 * counts["verified"] / total)
+    doc.add_heading("مؤشّر ثقة الدراسة", level=1)
+    doc.add_paragraph(
+        f"من إجمالي {total} مؤشراً مرصوداً في هذه الدراسة، "
+        f"{counts['verified']} موثّق بمصدر رسمي (نحو {verified_pct}%)، "
+        f"{counts['secondary']} من مصدر ثانوي، و{counts['unverified']} غير "
+        "متحقق. كلّ رقم في التقرير يحمل شارة توثيقه ومصدره في سجل الأدلة، "
+        "فالقرار يُتَّخذ بمعرفة درجة اليقين خلف كل رقم لا على ثقة عمياء.")
+    _add_table(doc, ["درجة التوثيق", "عدد المؤشرات"], [
+        ["✓ موثّق (مصدر رسمي)", str(counts["verified"])],
+        ["◐ ثانوي (مصدر واحد غير رسمي)", str(counts["secondary"])],
+        ["○ غير متحقق", str(counts["unverified"])]])
+
+
 def _client_gaps_section(doc, dr: dict) -> None:
     """قسم "ما لم يكتمل للقرار والخطوة التالية" — يحوّل كل تقاطع بلا أدلة
     كافية لصياغة تجارية موحّدة (بلاغ المالك النقطة ٣)، ثم الخطوة التالية.
@@ -1718,7 +1763,10 @@ def render_client_docx(view: dict, path: str) -> str:
         doc.add_heading(client_head, level=1)
         _client_body_or_fallback(doc, buckets[client_head], dr, client_head)
 
-    # ٦) ما لم يكتمل للقرار والخطوة التالية (صياغة تجارية للفجوات)
+    # ٦) مؤشّر ثقة الدراسة (S3) — شفافية درجة التوثيق قبل إعلان ما لم يكتمل
+    _client_confidence_section(doc, dr)
+
+    # ٧) ما لم يكتمل للقرار والخطوة التالية (صياغة تجارية للفجوات)
     _client_gaps_section(doc, dr)
 
     # ٧) المنهجية وسجل الأدلة للمدققين (يحلّ محل جدول البعثات)
