@@ -213,7 +213,7 @@ def test_quality_gate_flags_english_fields_and_mission_keys():
 def test_quality_gate_silent_on_clean_arabic_report():
     from silk_quality_gate import run_quality_gate
     out = run_quality_gate(_gate_view(
-        "الحكم WATCH — درجة الثقة متوسطة (64%). وكيل استكشاف الأسعار رصد "
+        "الحكم WATCH — درجة الثقة متوسطة (64%). تحليل الأسعار رصد "
         "سلّماً سعرياً ثلاثي الطبقات."))
     checks = {f["check"] for f in out["findings"]}
     assert "english_field_leak" not in checks
@@ -436,3 +436,155 @@ def test_swot_headers_use_the_same_pure_arabic_convention_in_both_derivatives():
     assert "### القوة" in md
     for en in ("Strengths", "Weaknesses", "Opportunities", "Threats"):
         assert en not in md
+
+
+# ── 9) الطبقة ٩ — إعادة تنظيم بنيوية + إعادة تسمية أقسام ────────────────────
+
+def test_all_twelve_missions_have_pure_business_topic_names():
+    """قرار المالك: أسماء البعثات الاثنتي عشرة تصبح عناوين موضوع تجاري
+    صرفة ("تحليل الأسعار") لا "وكيل X" — القسم يقرأ كتقرير استشاري، لا
+    توثيقاً لخط أنابيب."""
+    from silk_missions import MISSIONS
+    for key, row in MISSIONS.items():
+        assert "وكيل" not in row["name"], f"{key}: {row['name']!r}"
+        assert key not in row["name"]
+
+
+def test_deep_research_view_translates_raw_intersection_category_keys():
+    """سدّ تسريب: مفتاح تقاطع خام إنجليزي ("entry_cost") كان يصل حدّاً
+    معروضاً للعميل حرفياً من قائمة missing_categories."""
+    from silk_render import build_view
+    result = {
+        "product": "تمور", "hs_code": "080410", "markets": [],
+        "deep_research": {
+            "market": {"iso3": "ESP", "name_ar": "إسبانيا"},
+            "missions": {},
+            "analyst": {"report": {"summary": ""}, "by_category": {},
+                       "missing_categories": ["entry_cost", "swot"]},
+            "verdict": {"verdict": "PRELIMINARY GO"},
+            "report": {"report": "", "review_cycles": 0,
+                      "unresolved_notes": []},
+            "trace_id": "t-1",
+        },
+    }
+    view = build_view(result)
+    limits_text = " ".join(view["deep_research"]["limits"])
+    assert "entry_cost" not in limits_text
+    assert "تكلفة وصعوبة الدخول" in limits_text
+
+
+def test_deep_research_view_strips_raw_category_tag_from_finding_notes():
+    """سدّ تسريب: ملاحظة اكتشاف تقاطع المحلل تحمل أحياناً وسماً داخلياً
+    بادئاً ("[entry_cost] تعريفة مطبّقة") — يُزال، لا قيمة له للقارئ
+    (التقاطع معروف أصلاً من عنوان القسم الذي يُدرَج تحته)."""
+    from silk_render import build_view
+    result = {
+        "product": "تمور", "hs_code": "080410", "markets": [],
+        "deep_research": {
+            "market": {"iso3": "ESP", "name_ar": "إسبانيا"},
+            "missions": {},
+            "analyst": {"report": {"summary": ""},
+                       "by_category": {"entry_cost": [
+                           {"value": "تعريفة صفرية", "source": "WITS",
+                            "confidence": 0.8,
+                            "note": "[entry_cost] تعريفة مطبّقة"}]},
+                       "missing_categories": []},
+            "verdict": {"verdict": "PRELIMINARY GO"},
+            "report": {"report": "", "review_cycles": 0,
+                      "unresolved_notes": []},
+            "trace_id": "t-1",
+        },
+    }
+    view = build_view(result)
+    note = view["deep_research"]["analyst"]["by_category"]["entry_cost"][0]["note"]
+    assert "[entry_cost]" not in note
+    assert note == "تعريفة مطبّقة"
+
+
+def test_mission_summary_heading_is_topic_based_not_mission_count():
+    """سدّ تسريب: "البعثات الاثنتا عشرة — ملخّص" يذكر تفصيلاً من خط
+    الأنابيب الداخلي (عدد البعثات) — عنوان بموضوع العمل بدله."""
+    pytest.importorskip("docx")
+    import tempfile
+
+    from silk_render import build_view
+    from silk_reports import render_docx
+    view = build_view(_mock_research_result())
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "r.docx")
+        render_docx(view, path)
+        from conftest import docx_all_text
+        joined = docx_all_text(path)
+    assert "البعثات الاثنتا عشرة" not in joined
+    assert "ملخّص مصادر البحث" in joined
+
+
+def test_supplier_directory_is_a_top_level_section_not_under_recommendations():
+    """سدّ تسريب: دليل المورّدين والمستوردين كان عنواناً فرعياً (level=2)
+    مدفوناً داخل "التوصيات الاستراتيجية" — قسم رئيسي مستقل الآن."""
+    pytest.importorskip("docx")
+    import tempfile
+
+    from silk_render import build_view
+    from silk_reports import render_docx
+    view = build_view({"markets": [{"country": "الصين", "iso3": "CHN",
+                                    "total_score": 0.5, "confidence": 0.5,
+                                    "components": {}, "suppliers": [
+                                        {"name": "شركة أ", "source": "Volza"}]}],
+                       "classified": True, "product": "تمور"})
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "r.docx")
+        render_docx(view, path)
+        import docx
+        headings = [p.text for p in docx.Document(path).paragraphs
+                   if p.style.name.startswith("Heading 1")]
+    assert "دليل المورّدين والمستوردين" in headings
+
+
+def test_entry_decision_verdict_appears_before_recommendations_section():
+    """سدّ تسريب: قرار الدخول (المحرك الموزون §8) كان مدفوناً في القسم
+    الأخير (التوصيات) — القارئ يصل التوصية الفعلية بعد كل التفاصيل؛
+    يظهر الآن قرب الخلاصة التنفيذية، قبل التوصيات ببعيد."""
+    pytest.importorskip("docx")
+    import tempfile
+
+    from silk_render import build_view
+    from silk_reports import render_docx
+    view = build_view({"markets": [{"country": "الصين", "iso3": "CHN",
+                                    "total_score": 0.5, "confidence": 0.5,
+                                    "components": {},
+                                    "decision": {"schema": "silk.decision/v1",
+                                                "verdict": "GO",
+                                                "confidence": 0.8, "score": 0.7,
+                                                "why": "..."}}],
+                       "classified": True, "product": "تمور"})
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "r.docx")
+        render_docx(view, path)
+        from conftest import docx_all_text
+        joined = docx_all_text(path)
+    idx_decision = joined.find("قرار الدخول")
+    idx_recommendations = joined.find("١٤. التوصيات الاستراتيجية")
+    assert idx_decision >= 0 and idx_recommendations >= 0
+    assert idx_decision < idx_recommendations
+
+
+def test_regional_analysis_heading_no_longer_misleading():
+    """سدّ تسريب: "التحليل الإقليمي" اسم مضلِّل — القسم يقارن أسواقاً
+    مرشّحة عالمياً، لا مناطق فرعية داخل سوق واحد."""
+    pytest.importorskip("docx")
+    import tempfile
+
+    from silk_render import build_view
+    from silk_reports import render_docx
+    view = build_view({"markets": [{"country": "الصين", "iso3": "CHN",
+                                    "total_score": 0.5, "confidence": 0.5,
+                                    "components": {}}],
+                       "classified": True, "product": "تمور"})
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "r.docx")
+        render_docx(view, path)
+        from conftest import docx_all_text
+        joined = docx_all_text(path)
+    assert "التحليل الإقليمي" not in joined
+    assert "الأسواق المرشّحة الأخرى" in joined

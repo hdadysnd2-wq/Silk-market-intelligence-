@@ -340,14 +340,16 @@ def _first_steps(verdict: str, pillars: dict, conditions: list[str],
     if pillars["regulatory"].get("eligibility_gate"):
         steps.append("ابدأ بمسار اعتماد المنشأة (القائمة الأوروبية EU 2017/625) "
                      "— كل ما بعده محجوب عليه")
+    # سدّ تسريب (الطبقة ٩): كانت الخطوات تشير لاسم وكيل داخلي خام إنجليزي
+    # بين قوسين ("وكيل regulatory"/"وكيل supplier") — لا قيمة للقارئ في
+    # معرفة أي وكيل داخلي غذّى الخطوة؛ عربية صرفة بلا إسناد داخلي الآن.
     if pillars["regulatory"]["value"] is not None and \
             pillars["regulatory"]["value"] < 0.5:
-        steps.append("أغلق بنود قائمة الاشتراطات (وكيل regulatory) بنداً بنداً "
-                     "بمرجعها الرسمي")
+        steps.append("أغلق بنود قائمة الاشتراطات بنداً بنداً بمرجعها الرسمي")
     comp = pillars["competition"]["value"]
     if comp is not None and comp > 0.5:
-        steps.append("سوق مركّز: ادخل عبر موزّع قائم من مرشّحي وكيل supplier "
-                     "بدل البناء المباشر")
+        steps.append("سوق مركّز: ادخل عبر موزّع قائم من مرشّحي التوريد "
+                     "المرصودين بدل البناء المباشر")
     prof = pillars["profit"]["value"]
     if prof is None:
         steps.append("أكمل بطاقة المنتج (تكلفة/كجم وطاقة شهرية) ليُحسب الهامش "
@@ -356,8 +358,8 @@ def _first_steps(verdict: str, pillars: dict, conditions: list[str],
         if r["risk"] == "تقلب العملة":
             steps.append("سعّر بعقود قصيرة أو تحوّط عملة — " + r["evidence"])
     if not steps:
-        steps.append("تحقّق من مرشّحي التوزيع بالاسم (وكيلا competitor/supplier) "
-                     "— المرشّحون غير موثَّقين حتى تأكيدهم")
+        steps.append("تحقّق من مرشّحي التوزيع والتوريد بالاسم — المرشّحون "
+                     "غير موثَّقين حتى تأكيدهم")
     return steps[:5]
 
 

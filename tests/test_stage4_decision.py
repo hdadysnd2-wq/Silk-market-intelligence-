@@ -168,3 +168,17 @@ def test_engine_attaches_decision_with_research():
     assert dec["verdict"] in ("GO", "CONDITIONAL-GO", "NO-GO")
     assert dec["weights_option"] == "A"
     assert dec["confidence_basis"]
+
+
+def test_first_steps_carry_no_raw_internal_agent_key():
+    """سدّ تسريب (الطبقة ٩): خطوات أولى كانت تشير لاسم وكيل داخلي خام
+    إنجليزي بين قوسين ("وكيل regulatory"/"وكيل supplier") — لا قيمة
+    للقارئ في معرفة أي وكيل داخلي غذّى الخطوة."""
+    weak_reg = _b(regulatory_fit={"tariff_applied_pct": 25.0,
+                                  "entry_requirements_count": 0,
+                                  "eligibility_gate": False})
+    d = D.decide(weak_reg)
+    all_steps = " ".join(d["first_steps"])
+    assert "وكيل regulatory" not in all_steps
+    assert "وكيل supplier" not in all_steps
+    assert "وكيلا competitor/supplier" not in all_steps

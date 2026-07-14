@@ -602,6 +602,20 @@ def _mission_label(key: str) -> str:
     return key.replace("_", " ")
 
 
+def _category_label(key: str) -> str:
+    """اسم تقاطع المحلل الشامل التجاري بالعربية — نفس معجم
+    silk_market_analyst._CATEGORY_LABELS المستعمَل في بوابة الجودة
+    (silk_quality_gate._check_intersection_insufficiency)، بدل مفتاح
+    إنجليزي خام ("entry_cost") في حدّ معروض للعميل."""
+    try:
+        from silk_market_analyst import _CATEGORY_LABELS
+        if key in _CATEGORY_LABELS:
+            return _CATEGORY_LABELS[key]
+    except Exception:  # noqa: BLE001 — تسمية تجميلية لا شرط عرض
+        pass
+    return key.replace("_", " ")
+
+
 def _humanize_gap_note(text: object) -> str:
     """عرّب ملاحظات الحُرّاس/الفجوات الداخلية في سطر حدّ معروض للعميل —
     تفويض للمترجم القانوني الواحد (silk_narrative.translate_gaps /
@@ -792,8 +806,17 @@ def _deep_research_view(result: dict) -> dict | None:
     # P2: شارة أدلة ثلاثية (✓/◐/○) محسوبة هنا مرة واحدة في النموذج القانوني —
     # لا رقم ثقة خام يصل الواجهة، ولا منطق تصنيف مكرَّر في JS العميل.
     from silk_narrative import evidence_badge
+    # سدّ تسريب (الطبقة ٩): ملاحظة اكتشاف المحلل الشامل تحمل أحياناً وسم
+    # تقاطع خام بادئاً ("[entry_cost] تعريفة مطبّقة") — وسم تصنيف داخلي
+    # للمحلل نفسه، لا معلومة تفيد القارئ (التقاطع معروف أصلاً من عنوان
+    # القسم الذي يُدرَج تحته). يُزال، لا يُترجَم — تكرار لا قيمة إضافية له.
+    _cat_tag_re = re.compile(
+        r"^\[(?:demand|price_competitiveness|entry_cost|entry_door|swot)\]\s*")
     def _with_badge(x):
         d = _dp(x)
+        note = d.get("note")
+        if isinstance(note, str) and _cat_tag_re.match(note):
+            d = {**d, "note": _cat_tag_re.sub("", note)}
         return {**d, "confidence_badge": evidence_badge(d.get("confidence"))}
     by_category = {cat: [_with_badge(x) for x in (dps or [])]
                   for cat, dps in (analyst.get("by_category") or {}).items()}
@@ -828,7 +851,11 @@ def _deep_research_view(result: dict) -> dict | None:
              # معلنة) — كانت هذه تُسقَط صامتة من حدود التقرير قبل هذا الإصلاح.
              + [g for k, v in missions.items()
                for g in _mission_gap_lines(_mission_label(k), v["summary"])]
-             + [f"تقاطع المحلل بلا أدلة كافية: {c}"
+             # سدّ تسريب (الطبقة ٩): مفتاح تقاطع خام إنجليزي ("entry_cost")
+             # كان يصل حدّاً معروضاً للعميل حرفياً — الاسم التجاري العربي
+             # (نفس معجم silk_market_analyst._CATEGORY_LABELS المستعمَل في
+             # بوابة الجودة) يحل محله.
+             + [f"تقاطع المحلل بلا أدلة كافية: {_category_label(c)}"
                for c in (analyst.get("missing_categories") or [])]
              + [f"ملاحظة مراجع لم تُعالَج: {n}" for n in clean_unresolved])
     if not report_out.get("report") and clean_failure_reason:

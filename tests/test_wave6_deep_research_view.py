@@ -113,8 +113,11 @@ def test_header_brief_and_limits_reflect_deep_research():
     # بلاغ منتج من المالك: المفتاح snake_case الخام (pricing_scout) لا
     # يجوز أن يظهر في حدود معروضة للعميل — اسم البعثة العربي يحل محله.
     assert not any("pricing_scout" in x for x in view["limits"])
-    assert any("وكيل استكشاف الأسعار" in x for x in view["limits"])
-    assert any("entry_cost" in x for x in view["limits"])
+    assert any("تحليل الأسعار" in x for x in view["limits"])
+    # سدّ تسريب (الطبقة ٩): مفتاح تقاطع خام إنجليزي ("entry_cost") كان
+    # يصل هذا الحدّ حرفياً — الاسم التجاري العربي يحل محله الآن.
+    assert not any("entry_cost" in x for x in view["limits"])
+    assert any("تكلفة وصعوبة الدخول" in x for x in view["limits"])
     assert any("ملاحظة" in x for x in view["limits"])
 
 
