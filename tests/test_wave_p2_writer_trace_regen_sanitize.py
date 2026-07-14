@@ -353,7 +353,7 @@ def test_strip_internal_plumbing_replaces_llmagent_with_arabic_mission_name():
         "LLMAgent:tariffs_agreements: لا توجد بيانات WITS")
     assert "LLMAgent" not in out
     assert "tariffs_agreements" not in out
-    assert "وكيل التعريفات والاتفاقيات" in out
+    assert "التعريفات الجمركية والاتفاقيات التجارية" in out
 
 
 def test_strip_internal_plumbing_removes_dp_tags():
@@ -398,7 +398,7 @@ def test_deep_research_view_limits_use_mission_label_not_raw_name():
     limits_text = " ".join(view["deep_research"]["limits"])
     assert "LLMAgent" not in limits_text
     assert "tariffs_agreements" not in limits_text
-    assert "وكيل التعريفات والاتفاقيات" in limits_text
+    assert "التعريفات الجمركية والاتفاقيات التجارية" in limits_text
 
 
 def test_deep_research_view_report_text_sanitized():
@@ -423,7 +423,7 @@ def test_deep_research_view_report_text_sanitized():
     text = view["deep_research"]["report"]["text"]
     assert "LLMAgent" not in text
     assert "dp7" not in text
-    assert "وكيل التعريفات والاتفاقيات" in text
+    assert "التعريفات الجمركية والاتفاقيات التجارية" in text
 
 
 def test_quality_gate_flags_residual_internal_plumbing_leak_as_repairable():

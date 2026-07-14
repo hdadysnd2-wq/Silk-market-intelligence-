@@ -1369,12 +1369,17 @@ def create_app():
         if not ai_ok:
             return _json({"answer": None, "note": ai_note})
         from silk_ai_judge import answer_about_analysis, failure_reason
-        from silk_render import analysis_context
+        from silk_render import _strip_internal_plumbing, analysis_context
         out = answer_about_analysis(req.question, analysis_context(found))
         if out is None:
             # بلاغ حي (بحث "تمور/هولندا"): None لا يعني بالضرورة غياب
             # المفتاح — قد يكون فشل نداء فعلي (مهلة/شبكة) رغم مفتاح فعّال.
             return _json({"answer": None, "note": failure_reason()})
+        # سدّ تسريب: جواب كلود يمرّ بلا أي مُطهِّر مباشرة للعميل — كلود قد
+        # يقتبس مفتاحاً داخلياً حرفياً من السياق رغم تعريب السياق نفسه، أو
+        # يستخدم رمز حكم خام بنفسه؛ نفس مُطهِّر طبقة العرض (مرة واحدة).
+        if out.get("answer"):
+            out["answer"] = _strip_internal_plumbing(out["answer"])
         return _json(out)
 
     class OutcomeRequest(BaseModel):

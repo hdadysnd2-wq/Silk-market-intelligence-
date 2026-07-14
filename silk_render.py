@@ -54,7 +54,11 @@ def _decision(top: dict | None) -> dict:
               f"{jury.get('agents_total', 0)} وفجوات: {gaps_ar}")
     return {"verdict": verdict, "confidence": confidence,
             "why": (why or "")[:280], "market": top.get("country"),
-            "stage": jury.get("synthesis_stage")}
+            "stage": jury.get("synthesis_stage"),
+            # سدّ تسريب (الطبقة ٦): تصنيف الشارة محسوب هنا — لوحة الويب
+            # تستهلكه بدل حساب تصنيفها الخاص من الرمز الخام (نفس الإصلاح
+            # المطبَّق على شارة البحث العميق).
+            "tone": _verdict_tone(verdict)}
 
 
 def _competitive_position(top: dict | None) -> dict:
@@ -550,7 +554,10 @@ _WHOLE_JSON_RE = re.compile(r"^\s*[{\[].*[}\]]\s*$", re.S)
 # "confidence 0.64" وصلا جدولاً في متن تقرير العميل) — الكاتب يردّد أحياناً
 # أسماء حقول رآها في مدخلاته. القيمة العشرية بعد confidence تُصاغ بشرياً
 # (confidence_phrase) والوسمان يُعرَّبان؛ لا تعديل على أي رقم آخر.
-_EN_CONF_VALUE_RE = re.compile(r"\bconfidence\b(\s*[|:：]\s*)(\d?\.\d{1,4})")
+# سدّ تسريب (الطبقة ٥): الفاصل الأصلي [|:：] يطابق خلية جدول ("| confidence
+# | 0.64 |") لكن ليس نثراً حرّاً بفاصلة فراغ ("confidence 0.64") — الشكل
+# الذي ظهر فعلياً في جواب الدردشة السياقية الحرّ (سطح جديد لهذا المُطهِّر).
+_EN_CONF_VALUE_RE = re.compile(r"\bconfidence\b(\s*[|:：]?\s*)(\d?\.\d{1,4})")
 _EN_FIELD_RE = re.compile(r"\b(verdict|confidence)\b")
 _EN_FIELD_AR = {"verdict": "الحكم", "confidence": "درجة الثقة"}
 # رمز حكم آلة خام (GO/WATCH/NO-GO/CONDITIONAL-GO) داخل نثر حرّ كتبه الكاتب
@@ -590,6 +597,20 @@ def _mission_label(key: str) -> str:
         row = MISSIONS.get(key)
         if row and row.get("name"):
             return row["name"]
+    except Exception:  # noqa: BLE001 — تسمية تجميلية لا شرط عرض
+        pass
+    return key.replace("_", " ")
+
+
+def _category_label(key: str) -> str:
+    """اسم تقاطع المحلل الشامل التجاري بالعربية — نفس معجم
+    silk_market_analyst._CATEGORY_LABELS المستعمَل في بوابة الجودة
+    (silk_quality_gate._check_intersection_insufficiency)، بدل مفتاح
+    إنجليزي خام ("entry_cost") في حدّ معروض للعميل."""
+    try:
+        from silk_market_analyst import _CATEGORY_LABELS
+        if key in _CATEGORY_LABELS:
+            return _CATEGORY_LABELS[key]
     except Exception:  # noqa: BLE001 — تسمية تجميلية لا شرط عرض
         pass
     return key.replace("_", " ")
@@ -724,6 +745,28 @@ def _mission_gap_lines(name: str, summary: str) -> list[str]:
     return [f"{name}: {g.strip()}" for g in m.group(1).split("؛") if g.strip()]
 
 
+# تصنيف لون/تسمية شارة الحكم — مصدر واحد يستهلكه ثلاثة عارضين (لوحة
+# الويب، غلاف docx، خلاصة docx التنفيذية) بدل تكرار نفس المنطق بايثون +
+# JS بمعيارين قد يختلفان لنفس الرمز (سدّ تسريب الطبقة ٦: كانت لوحة الويب
+# تحسب تصنيفها الخاص من رمز الحكم الإنجليزي الخام وتعرض الرمز نفسه كنص
+# ظاهر — silk_reports._verdict_tone/_VERDICT_LABELS_AR كانتا نسخة موازية).
+def _verdict_tone(vtxt: object) -> str:
+    """تصنيف لون شارة الحكم — go (أخضر)/watch (كهرماني)/nogo (أحمر)/
+    unknown (رمادي)."""
+    t = str(vtxt or "").upper()
+    if "NO-GO" in t or "NO GO" in t:
+        return "nogo"
+    if "WATCH" in t or "CONDITIONAL" in t:
+        return "watch"
+    if "GO" in t:
+        return "go"
+    return "unknown"
+
+
+_VERDICT_LABELS_AR = {"go": "التوصية بالدخول", "watch": "مراقبة السوق",
+                      "nogo": "عدم الدخول حالياً", "unknown": "تعذّر إصدار توصية"}
+
+
 def _deep_research_view(result: dict) -> dict | None:
     """قسم البحث العميق (الموجة ٤، V5) — إضافي بحت، لا يمسّ أي مفتاح قائم.
 
@@ -763,13 +806,33 @@ def _deep_research_view(result: dict) -> dict | None:
     # P2: شارة أدلة ثلاثية (✓/◐/○) محسوبة هنا مرة واحدة في النموذج القانوني —
     # لا رقم ثقة خام يصل الواجهة، ولا منطق تصنيف مكرَّر في JS العميل.
     from silk_narrative import evidence_badge
+    # سدّ تسريب (الطبقة ٩): ملاحظة اكتشاف المحلل الشامل تحمل أحياناً وسم
+    # تقاطع خام بادئاً ("[entry_cost] تعريفة مطبّقة") — وسم تصنيف داخلي
+    # للمحلل نفسه، لا معلومة تفيد القارئ (التقاطع معروف أصلاً من عنوان
+    # القسم الذي يُدرَج تحته). يُزال، لا يُترجَم — تكرار لا قيمة إضافية له.
+    _cat_tag_re = re.compile(
+        r"^\[(?:demand|price_competitiveness|entry_cost|entry_door|swot)\]\s*")
     def _with_badge(x):
         d = _dp(x)
+        note = d.get("note")
+        if isinstance(note, str) and _cat_tag_re.match(note):
+            d = {**d, "note": _cat_tag_re.sub("", note)}
         return {**d, "confidence_badge": evidence_badge(d.get("confidence"))}
     by_category = {cat: [_with_badge(x) for x in (dps or [])]
                   for cat, dps in (analyst.get("by_category") or {}).items()}
     report_out = dr.get("report") or {}
     verdict = dr.get("verdict") or {}
+    # سدّ تسريب (الطبقة ٦): تعليل حكم كلود (ai.reasoning) نص حرّ — قد يردّد
+    # رمز حكم خام أو مصطلحاً داخلياً رآه في مدخلاته (نفس خطر ai.reasoning
+    # المذكور في _stage2)، وكان يصل خاماً لكل من لوحة الويب وخلاصة docx
+    # التنفيذية بلا أي مُطهِّر. تعقيم هنا مرة واحدة في النموذج القانوني —
+    # بقية حقول verdict (الرمز الخام، الثقة) تبقى كما هي لأن تصنيف الشارة
+    # (_verdict_tone) يحتاج الرمز الإنجليزي الخام تحديداً.
+    if isinstance(verdict.get("ai"), dict) and verdict["ai"].get("reasoning"):
+        verdict = {**verdict,
+                  "ai": {**verdict["ai"],
+                        "reasoning": _strip_internal_plumbing(
+                            verdict["ai"]["reasoning"])}}
     # سدّ تسريب: ملاحظات المراجعة غير المحلولة نص كلود حرّ (المراجِع) —
     # كانت تصل limits وview["deep_research"]["report"] خامة تماماً؛ وسبب
     # فشل التقرير (failure_reason) يحمل تفصيل استثناء/HTTP خام متعمَّد
@@ -788,7 +851,11 @@ def _deep_research_view(result: dict) -> dict | None:
              # معلنة) — كانت هذه تُسقَط صامتة من حدود التقرير قبل هذا الإصلاح.
              + [g for k, v in missions.items()
                for g in _mission_gap_lines(_mission_label(k), v["summary"])]
-             + [f"تقاطع المحلل بلا أدلة كافية: {c}"
+             # سدّ تسريب (الطبقة ٩): مفتاح تقاطع خام إنجليزي ("entry_cost")
+             # كان يصل حدّاً معروضاً للعميل حرفياً — الاسم التجاري العربي
+             # (نفس معجم silk_market_analyst._CATEGORY_LABELS المستعمَل في
+             # بوابة الجودة) يحل محله.
+             + [f"تقاطع المحلل بلا أدلة كافية: {_category_label(c)}"
                for c in (analyst.get("missing_categories") or [])]
              + [f"ملاحظة مراجع لم تُعالَج: {n}" for n in clean_unresolved])
     if not report_out.get("report") and clean_failure_reason:
@@ -800,6 +867,8 @@ def _deep_research_view(result: dict) -> dict | None:
     if verdict.get("ai_note"):
         limits.append(f"حكم كلود (مرحلة ٢): "
                       f"{_strip_internal_plumbing(verdict['ai_note'])}")
+    v_raw = (verdict.get("ai") or {}).get("verdict") or verdict.get("verdict") or ""
+    verdict_tone = _verdict_tone(v_raw)
     return {
         "market": result.get("market"),
         "trace_id": dr.get("trace_id"),
@@ -811,6 +880,12 @@ def _deep_research_view(result: dict) -> dict | None:
         "analyst": {"summary": analyst_report["summary"],
                    "missing_categories": analyst.get("missing_categories") or [],
                    "by_category": by_category},
+        # سدّ تسريب (الطبقة ٦): تصنيف/تسمية الحكم مُحسَّبان هنا مرة واحدة —
+        # لوحة الويب تستهلكهما بدل حساب تصنيفها الخاص من الرمز الخام
+        # وعرض الرمز نفسه كنص ظاهر (كان "CONDITIONAL-GO"/"WATCH" يظهر
+        # حرفياً على شارة الغلاف).
+        "verdict_tone": verdict_tone,
+        "verdict_label": _VERDICT_LABELS_AR[verdict_tone],
         "verdict": verdict,
         "report": {"text": _strip_internal_plumbing(report_out.get("report")),
                   "review_cycles": report_out.get("review_cycles", 0),
@@ -852,6 +927,9 @@ def build_view(result: dict) -> dict:
             "sufficiency": (f"بوابة كفاية البيانات: {jury.get('agents_with_data', 0)}/"
                             f"{jury.get('agents_total', 0)} وكلاء أساسيون لديهم "
                             f"بيانات؛ فجوات: {gaps_ar}"),
+            # سدّ تسريب (الطبقة ٦): نفس تصنيف الشارة المحسوب لمسار الجورية
+            # الاحتياطي أعلاه — هذا الفرع (محرك §8) هو الشائع فعلياً.
+            "tone": _verdict_tone(ed_top.get("verdict")),
         }
     cp = _competitive_position(top)
     view_markets = []
@@ -1044,6 +1122,11 @@ def analysis_context(result: dict, max_chars: int = 6000) -> str:
     كل رقم يُذكر بمصدره؛ الفجوات تُذكر كما هي كي يجيب كلود «غير متوفر في
     هذا التحليل» بدل الاختلاق.
     """
+    # سدّ تسريب: هذا السياق يُغذّى مباشرة لبرومبت الدردشة السياقية
+    # (silk_ai_judge.answer_about_analysis) — كلود مُطالَب بالاستشهاد حرفياً
+    # من هذا النص، فأي مفتاح داخلي خام هنا (اسم مكوّن snake_case، مفتاح وكيل)
+    # قابل للظهور حرفياً في جواب يصل العميل مباشرة.
+    from silk_narrative import internal_ar
     view = result.get("view") if isinstance(result.get("view"), dict) else None
     view = view or build_view(result)
     L: list[str] = []
@@ -1055,28 +1138,30 @@ def analysis_context(result: dict, max_chars: int = 6000) -> str:
         L.append(f"الخلاصة: {b}")
     top = (view.get("markets") or [{}])[0]
     for c in top.get("components_detail") or []:
+        name_ar = internal_ar(c.get("name"))
         if c.get("value") is not None:
-            L.append(f"{c['name']} = {c['value']} [المصدر: {c.get('source')}]")
+            L.append(f"{name_ar} = {c['value']} [المصدر: {c.get('source')}]")
         else:
             why = ("تعذّر الجلب — أعد المحاولة"
                    if c.get("status") == "fetch_failed" else "غير متوفر")
-            L.append(f"{c['name']}: {why}")
+            L.append(f"{name_ar}: {why}")
     for sc in (top.get("supplier_countries") or [])[:6]:
         L.append(f"مورّد: {sc.get('partner')} — حصة {sc.get('share')}% "
                  f"({sc.get('value_usd')}$) [UN Comtrade]")
     ag = ((top.get("research") or {}).get("agents")) or {}
     for k, a in ag.items():
+        k_ar = internal_ar(k)
         for f in (a.get("findings") or [])[:4]:
             if f.get("value") is None or isinstance(f.get("value"),
                                                     (list, dict)):
                 continue
             srcs = "، ".join(str(x.get("source")) for x in
                              (f.get("sources") or []) if isinstance(x, dict))
-            L.append(f"{k}.{f.get('metric')} = {f['value']}"
+            L.append(f"{k_ar} — {internal_ar(f.get('metric'))} = {f['value']}"
                      f"{(' ' + f['unit']) if f.get('unit') else ''}"
                      f" [المصدر: {srcs or '؟'}]")
         for g in (a.get("gaps") or [])[:2]:
-            L.append(f"فجوة {k}: {g}")
+            L.append(f"فجوة {k_ar}: {_humanize_gap_note(g)}")
     ed = top.get("entry_decision") or {}
     for cnd in (ed.get("conditions") or [])[:4]:
         L.append(f"شرط مفتوح: {cnd}")

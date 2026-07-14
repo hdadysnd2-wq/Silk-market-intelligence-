@@ -49,7 +49,7 @@ _MIN_FOUR_SEARCH_ANGLES = (
 
 MISSIONS: dict[str, dict] = {
     "pricing_scout": {
-        "key": "pricing_scout", "name": "وكيل استكشاف الأسعار",
+        "key": "pricing_scout", "name": "تحليل الأسعار",
         "mission": "أسعار المنتجات المنافسة الفعلية في السوق المستهدف",
         "allowed_tools": ["web_search", "trends_interest"],
         "instructions": (
@@ -61,7 +61,7 @@ MISSIONS: dict[str, dict] = {
             + _MIN_FOUR_SEARCH_ANGLES),
     },
     "consumer_culture": {
-        "key": "consumer_culture", "name": "وكيل ثقافة المستهلك",
+        "key": "consumer_culture", "name": "ثقافة المستهلك",
         "mission": "ثقافة الاستهلاك للفئة في السوق المستهدف",
         "allowed_tools": ["web_search", "trends_interest", "lookup_reference",
                          "openalex_search"],
@@ -73,7 +73,7 @@ MISSIONS: dict[str, dict] = {
             "الانطباع صراحةً." + _MIN_FOUR_SEARCH_ANGLES),
     },
     "trade_flow": {
-        "key": "trade_flow", "name": "وكيل تدفق التجارة",
+        "key": "trade_flow", "name": "تدفقات التجارة",
         "mission": "حجم استيراد السوق ومساراته لرمز HS هذه المهمة",
         "allowed_tools": ["comtrade_imports"],
         "instructions": (
@@ -82,7 +82,7 @@ MISSIONS: dict[str, dict] = {
             "الأداة — لا تقدير لسنة غير مجلوبة."),
     },
     "demographics_economy": {
-        "key": "demographics_economy", "name": "وكيل الديموغرافيا والاقتصاد",
+        "key": "demographics_economy", "name": "الديموغرافيا والاقتصاد الكلي",
         "mission": "سكان واقتصاد السوق المستهدف وربطهما بحجم الشريحة المستهدَفة",
         "allowed_tools": ["worldbank_indicator", "lookup_reference"],
         "instructions": (
@@ -91,7 +91,7 @@ MISSIONS: dict[str, dict] = {
             "بحجم الشريحة المستهدَفة للمنتج — احسب لا تُقدّر."),
     },
     "competitors": {
-        "key": "competitors", "name": "وكيل المنافسين",
+        "key": "competitors", "name": "تحليل المنافسين",
         "mission": "الدول والشركات المنافسة في السوق المستهدف",
         "allowed_tools": ["comtrade_competitors", "comtrade_imports", "web_search"],
         "instructions": (
@@ -110,7 +110,7 @@ MISSIONS: dict[str, dict] = {
             + _MIN_FOUR_SEARCH_ANGLES),
     },
     "customs_requirements": {
-        "key": "customs_requirements", "name": "وكيل الاشتراطات الجمركية",
+        "key": "customs_requirements", "name": "الاشتراطات الجمركية",
         "mission": "قائمة تحقق دخول السوق ومتطلبات المنشأ السعودي",
         "allowed_tools": ["lookup_reference", "web_search"],
         "instructions": (
@@ -120,7 +120,7 @@ MISSIONS: dict[str, dict] = {
             "اذكر شهادات الحلال/SONCAP/CIQ/SFDA متى انطبقت."),
     },
     "tariffs_agreements": {
-        "key": "tariffs_agreements", "name": "وكيل التعريفات والاتفاقيات",
+        "key": "tariffs_agreements", "name": "التعريفات الجمركية والاتفاقيات التجارية",
         "mission": "التعريفة الجمركية المطبَّقة وأثر اتفاقيات التجارة",
         "allowed_tools": ["wits_tariff", "lookup_reference"],
         "instructions": (
@@ -130,7 +130,7 @@ MISSIONS: dict[str, dict] = {
             "'تفضيل محتمل — تحقق' لا حقيقة مؤكدة."),
     },
     "logistics": {
-        "key": "logistics", "name": "وكيل اللوجستيات",
+        "key": "logistics", "name": "اللوجستيات",
         "mission": "جاهزية اللوجستيات وأفضل ميناء ملائم",
         "allowed_tools": ["worldbank_indicator", "lookup_reference", "web_search"],
         "instructions": (
@@ -141,7 +141,7 @@ MISSIONS: dict[str, dict] = {
             "معلنة، لا تقدير."),
     },
     "channels_importers": {
-        "key": "channels_importers", "name": "وكيل قنوات التوزيع والمستوردين",
+        "key": "channels_importers", "name": "قنوات التوزيع والاستيراد",
         "mission": "أبواب الدخول الفعلية للسوق المستهدف",
         "allowed_tools": ["channels_importers", "web_search"],
         "instructions": (
@@ -150,7 +150,7 @@ MISSIONS: dict[str, dict] = {
             "'غير موثَّقين — التحقق عبر التعميق'." + _MIN_FOUR_SEARCH_ANGLES),
     },
     "demand_trends": {
-        "key": "demand_trends", "name": "وكيل اتجاهات الطلب",
+        "key": "demand_trends", "name": "اتجاهات الطلب والموسمية",
         "mission": "اتجاه الطلب والموسمية للمنتج في السوق المستهدف",
         "allowed_tools": ["trends_interest", "faostat_supply",
                          "openalex_search"],
@@ -167,7 +167,7 @@ MISSIONS: dict[str, dict] = {
             "اختياري لأدبيات استهلاك/سوق ذات صلة إن وُجدت."),
     },
     "risk_news": {
-        "key": "risk_news", "name": "وكيل المخاطر والأخبار",
+        "key": "risk_news", "name": "تقييم المخاطر والمستجدات",
         "mission": "الاستقرار السياسي ومخاطر العملة وآخر الأخبار القطاعية",
         "allowed_tools": ["worldbank_indicator", "gdelt_news", "web_search",
                           "openalex_search"],
@@ -191,7 +191,7 @@ MISSIONS: dict[str, dict] = {
             "القطاع إن وُجدت." + _MIN_FOUR_SEARCH_ANGLES),
     },
     "opportunity_gaps": {
-        "key": "opportunity_gaps", "name": "وكيل الفرص والفجوات",
+        "key": "opportunity_gaps", "name": "الفرص الاستراتيجية والفجوات",
         "mission": "تركيب الفرص والفجوات من تقارير الوكلاء ١-١١ (يعمل أخيراً)",
         "allowed_tools": ["openalex_search"],
         "instructions": (

@@ -133,9 +133,18 @@ def _check_bare_partner_codes(dr: dict) -> list[dict]:
     """رمز شريك خام بدل اسم — حارس انحدار دائم لإصلاح ١٠.٢أ
     (`silk_data_layer.partner_name`) لا فحصاً أولياً؛ يُتوقَّع نظافته دوماً
     الآن لكنه يبقى يرصد أي تسرّب مستقبلي (مصدر بيانات جديد لا يمرّ عبر
-    partner_name)."""
+    partner_name).
+
+    سدّ تسريب (الطبقة ٧ — مفارقة البوابة): كانت ملاحظة هذا الفحص نفسها
+    تحمل مفتاح البعثة الخام (snake_case) وتنسيق repr بايثون الخام
+    (`{p!r}` → `'042'` بعلامات اقتباس بايثونية) — وهذه الملاحظة
+    (`repairable: False`) تُحقَن مباشرة في قسم "منهجية البحث ونطاقه"
+    المعروض للعميل عبر `methodology_notes`؛ أي بوابة الجودة كانت تكتشف
+    تسريباً ثم تُصدر تسريباً موازياً بنفسها. الاسم التجاري + بلا تنسيق
+    بايثون الآن، بنفس `_mission_label` المستعمَل في بقية هذا الملف."""
     findings = []
     for key, m in (dr.get("missions") or {}).items():
+        label = _mission_label(key)
         for f in (m.get("findings") or []):
             v = f.get("value")
             if isinstance(v, dict) and "partner" in v:
@@ -143,7 +152,7 @@ def _check_bare_partner_codes(dr: dict) -> list[dict]:
                 if p.isdigit():
                     findings.append({
                         "check": "bare_partner_code", "repairable": False,
-                        "note": f"[{key}] رمز شريك خام بلا اسم: {p!r}"})
+                        "note": f"[{label}] رمز شريك خام بلا اسم: «{p}»"})
     return findings
 
 
@@ -292,14 +301,28 @@ def run_quality_gate(view: dict) -> dict:
     findings += _check_analyst_layer_failure(dr)
 
     non_repairable = [f for f in findings if not f["repairable"]]
+    # سدّ تسريب (الطبقة ٧ — مفارقة البوابة): هذه الفحوصات مُعلَّمة
+    # repairable=True لأن *صنف* النتيجة يُصلَح عادة في طبقة العرض قبل أن
+    # يصل النص هنا (راجع تعليق الوحدة) — لكن حين تُطلِق أحدها فعلياً، فهذا
+    # يعني أن الإصلاح **فشل تحديداً في هذه التشغيلة**، والنص الخام وصل
+    # بالفعل إلى DOCX المُسلَّم قبل أن تُشغَّل هذه البوابة (راجع
+    # api.py._attach_quality_gate — تُشغَّل بعد بناء العرض لا قبله).
+    # تخفيضها بصمت إلى WARN كان يعني أن البوابة تكتشف تسريباً فعلياً
+    # ثم تكتمه هي نفسها بدل أن تُصعِّده — لا يجوز أن يمرّ هذا بحكم أهدأ من
+    # فشل بنيوي حقيقي (section_structure/agent_failed).
+    _REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
+                               "mission_key_leak", "raw_confidence"}
+    guard_fired = [f for f in findings if f["check"] in _REGRESSION_GUARD_FIRED]
+    severe = non_repairable + guard_fired
     if not findings:
         verdict = PASS
     elif any(f["check"] in ("section_structure", "agent_failed",
-                            "analyst_layer_failed") for f in non_repairable):
+                            "analyst_layer_failed") for f in non_repairable) \
+            or guard_fired:
         verdict = FAIL
     else:
         verdict = WARN
 
-    methodology_notes = [f["note"] for f in non_repairable]
+    methodology_notes = [f["note"] for f in severe]
     return {"verdict": verdict, "findings": findings,
            "methodology_notes": methodology_notes}
