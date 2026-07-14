@@ -13,19 +13,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
-@contextlib.contextmanager
-def _block_network():
-    real = socket.socket
-
-    def _no_net(*a, **k):  # noqa: ANN002, ANN003
-        raise OSError("network disabled for hermetic test")
-
-    socket.socket = _no_net
-    try:
-        yield
-    finally:
-        socket.socket = real
+# مرجع قانوني موحَّد (conftest.py) — راجع تعليق test_smoke.py لسبب توحيد
+# النسخ المحلية المكرَّرة (تسريب اتصال مجمَّع عبر جلسة requests المشتركة).
+from conftest import block_network as _block_network
 
 
 # سجلات Comtrade خام (بنية حقيقية) — fixture records in Comtrade's shape.

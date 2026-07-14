@@ -71,6 +71,12 @@ def test_comtrade_competitors_tool_returns_real_names_and_hhi(monkeypatch):
 
 
 def test_comtrade_competitors_no_data_declares_gap_not_empty_silence():
+    # ترقية المرحلة ٢ج (خيار A — إحصاءات المرآة): الاستعلام المباشر فارغ
+    # لا يكفي وحده لإعلان الفجوة بعد الآن — _tool_comtrade_competitors
+    # يحاول احتياط المرآة أولاً (market_competitors_mirror)، فيجب تعطيله
+    # هو أيضاً هنا كي يبقى هذا اختبار "لا بيانات في أي مصدر" لا اختبار
+    # الاحتياط الجديد (له اختبارات مخصَّصة في
+    # test_phase2c_a_mirror_statistics.py).
     import silk_llm_runtime as rt
     from silk_market_resolver import resolve_market
 
@@ -81,12 +87,15 @@ def test_comtrade_competitors_no_data_declares_gap_not_empty_silence():
 
     import silk_data_layer_v2
     orig = silk_data_layer_v2.market_competitors
+    orig_mirror = silk_data_layer_v2.market_competitors_mirror
     silk_data_layer_v2.market_competitors = fake_no_data
+    silk_data_layer_v2.market_competitors_mirror = fake_no_data
     try:
         out = rt._tool_comtrade_competitors(
             {"year": 2023}, {"hs_code": "080410", "market": ref})
     finally:
         silk_data_layer_v2.market_competitors = orig
+        silk_data_layer_v2.market_competitors_mirror = orig_mirror
     assert len(out) == 1
     assert out[0].value is None
     assert out[0].confidence == 0.0

@@ -14,7 +14,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 @contextlib.contextmanager
 def block_network():
-    """اقطع الشبكة مؤقتاً — make outbound sockets fail so 'no data' paths hold."""
+    """اقطع الشبكة مؤقتاً — make outbound sockets fail so 'no data' paths hold.
+
+    بلاغ حي (تسريب تسلسل اختبارات CI): جلسة requests المشتركة الدائمة
+    (silk_data_layer._session — تجميع اتصالات keep-alive للأداء الإنتاجي)
+    قد تحمل اتصالاً TCP حياً فعلياً تركه نداء سابق غير محظور في نفس عملية
+    pytest (تشغيل تسلسلي واحد لكل ملفات tests/). إعادة استعمال اتصال
+    مجمَّع قائم لا يستدعي socket.socket() من جديد، فيتجاوز الحجب أدناه
+    صامتاً ويُرجع بيانات حقيقية رغم دخول هذا السياق — ظهر هذا حين أضاف
+    ملف اختبار جديد بضعة نداءات فأزاح ترتيب التنفيذ فكشف اتصالاً مجمَّعاً
+    كان يبقى خاملاً غير مستغَل سابقاً. إغلاق تجمّعات الاتصال المعروفة عند
+    كل دخول يمنع نجاة اتصال حيّ لاختبار يُفترض به حجب كامل — Session.close()
+    يُغلق التجمّع الحالي فقط لا الكائن نفسه، فيُعاد فتح اتصال جديد طبيعياً
+    خارج هذا السياق حين تُستأنف الشبكة.
+    """
     real = socket.socket
 
     def _no_net(*a, **k):  # noqa: ANN002, ANN003
@@ -22,6 +35,12 @@ def block_network():
         # الكلمة (إصلاح مراجعة Stage 5) — قطع الشبكة حالة تشغيل صادقة لا بديل
         # بيانات، فلا يجوز أن تسمّم ملاحظاتُه تقريراً مشتقاً في اختبار.
         raise OSError("network disabled for offline test")
+
+    try:
+        import silk_data_layer
+        silk_data_layer._session.close()
+    except Exception:  # noqa: BLE001 — أفضل جهد؛ الحجب الأساسي (socket) نافذ بدونه
+        pass
 
     socket.socket = _no_net
     try:
