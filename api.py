@@ -822,7 +822,8 @@ def create_app():
                 analyst_assessment=analyst_input)
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
-                product, market_ref.name_en, trace_id=trace_id) if ai_ok else
+                product, market_ref.name_en, trace_id=trace_id,
+                hs_code=hs_code) if ai_ok else
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
             economics = dict(silk_context.data_counter() or {})
 
@@ -1355,7 +1356,8 @@ def create_app():
         trace_id = dr.get("trace_id")
         report_out = write_reviewed_report(
             mission_reports, analyst_summary, verdict,
-            found.get("product", ""), market_name, trace_id=trace_id)
+            found.get("product", ""), market_name, trace_id=trace_id,
+            hs_code=found.get("hs_code"))
         found["deep_research"]["report"] = report_out
         found["analysis_id"] = analysis_id
         found["view"] = _view(found)
