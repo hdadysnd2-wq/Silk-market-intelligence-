@@ -272,8 +272,11 @@ result = {
             "missing_categories": [],
         },
         "verdict": {
-            "verdict": "PRELIMINARY GO",
-            "ai": {"verdict": "دخول مشروط", "confidence": 0.66,
+            # رمز التوليف الحقيقي (CONDITIONAL-GO) — لا سلسلة عربية حرّة:
+            # شارة العميل تشتقّ تسميتها من _verdict_tone الذي يتعرّف على رموز
+            # التوليف (GO/WATCH/CONDITIONAL/NO-GO)، لا نصّ حرّ.
+            "verdict": "CONDITIONAL-GO",
+            "ai": {"verdict": "CONDITIONAL-GO", "confidence": 0.66,
                   "reasoning": ("الأدلة تدعم دخولاً مشروطاً بتأمين الأهلية "
                                "التنظيمية أولاً — تركّز سوق المورّدين "
                                "المعتدل والفجوة السعرية كافيان، والمخاطرة "
