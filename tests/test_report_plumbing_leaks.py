@@ -343,3 +343,96 @@ def test_quality_gate_stays_warn_for_ordinary_repairable_findings():
     checks = {f["check"] for f in out["findings"]}
     assert checks == {"markdown_artifacts"}
     assert out["verdict"] == "PASS-WITH-WARNINGS"
+
+
+# ── 8) الطبقة ٨ — نصوص ثابتة وانحراف docx/markdown ─────────────────────────
+
+def test_unverified_entities_note_has_no_hardcoded_raw_decimal():
+    """سدّ تسريب: "(ثقة 0.4)" كسر عشري خام ثابت على وجه التقرير — خارج
+    الملحق التقني — في كلا مصدري docx وmarkdown؛ الآن عبارة بشرية عبر
+    confidence_phrase(0.4) مثل كل رقم ثقة آخر في التقرير."""
+    import inspect
+
+    import silk_reports as R
+    docx_src = inspect.getsource(R._docx_competition_research)
+    md_src = inspect.getsource(R.render_markdown)
+    for src in (docx_src, md_src):
+        assert "ثقة 0.4)" not in src
+    assert "confidence_phrase(0.4)" in docx_src
+
+
+def _dr_result_with_two_categories_and_unresolved_notes():
+    return {
+        "product": "تمور", "hs_code": "080410", "markets": [],
+        "deep_research": {
+            "market": {"iso3": "ESP", "name_ar": "إسبانيا"},
+            "missions": {},
+            "analyst": {
+                "report": {"summary": ""},
+                "by_category": {
+                    "demand": [{"value": "طلب مرتفع", "source": "Eurostat",
+                               "confidence": 0.7, "note": ""}],
+                    "entry_door": [{"value": "استيراد مباشر",
+                                   "source": "مقابلة", "confidence": 0.6,
+                                   "note": ""}],
+                },
+                "missing_categories": [],
+            },
+            "verdict": {"verdict": "PRELIMINARY GO"},
+            "report": {"report": "## ملخص\nنص التقرير.", "review_cycles": 2,
+                       "unresolved_notes": ["تناقض في رقم واحد لم يُحسم"]},
+            "trace_id": "t-1",
+        },
+    }
+
+
+def test_docx_unresolved_notes_heading_appears_exactly_once_not_per_category():
+    """سدّ خلل (الطبقة ٨): كان الشرط متداخلاً داخل حلقة التقاطعات الخمسة
+    فيتكرّر عنوان "ملاحظات مراجعة لم تُحلّ" مرة لكل تقاطع له أدلة — مرة
+    واحدة فقط الآن بلا اعتماد على عدد التقاطعات."""
+    pytest.importorskip("docx")
+    import tempfile
+
+    from silk_render import build_view
+    from silk_reports import render_docx
+    view = build_view(_dr_result_with_two_categories_and_unresolved_notes())
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "r.docx")
+        render_docx(view, path)
+        from conftest import docx_all_text
+        joined = docx_all_text(path)
+    assert joined.count("ملاحظات مراجعة لم تُحلّ") == 1
+
+
+def test_markdown_limits_section_translates_gaps_like_docx_does():
+    """سدّ انحراف: قائمة "حدود هذا التقرير" في markdown كانت تُطبع خامة
+    بلا _gap_list_ar بخلاف docx التي كانت تُترجمها فعلاً — نفس المعالجة
+    الآن في المشتقّين."""
+    from silk_render import build_view
+    from silk_reports import render_markdown
+    view = build_view({"markets": [{"country": "الصين", "iso3": "CHN",
+                                    "total_score": 0.5, "confidence": 0.5,
+                                    "components": {},
+                                    "quality_flags": [
+                                        "market_size: يتطلب TAM مرصوداً"]}],
+                       "classified": True, "product": "تمور"})
+    md = render_markdown(view)
+    assert "market_size:" not in md
+    assert "حجم واردات السوق" in md
+
+
+def test_swot_headers_use_the_same_pure_arabic_convention_in_both_derivatives():
+    """سدّ انحراف: عناوين أرباع SWOT في markdown كانت ثنائية اللغة
+    ("القوة Strengths") بينما docx عربية صرفة — نفس الاصطلاح الآن."""
+    from silk_render import build_view
+    from silk_reports import render_markdown
+    view = build_view({"markets": [{"country": "الصين", "iso3": "CHN",
+                                    "total_score": 0.5, "confidence": 0.5,
+                                    "components": {},
+                                    "swot": {"S": [{"text": "سعر تنافسي",
+                                                    "evidence": "UN Comtrade"}]}}],
+                       "classified": True, "product": "تمور"})
+    md = render_markdown(view)
+    assert "### القوة" in md
+    for en in ("Strengths", "Weaknesses", "Opportunities", "Threats"):
+        assert en not in md

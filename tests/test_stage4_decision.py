@@ -7,6 +7,7 @@
 import copy
 import importlib.util
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -53,6 +54,24 @@ def test_go_when_score_and_confidence_clear_thresholds():
         assert p["basis"]                   # كل عمود يطبع معادلته
 
 
+def test_confidence_basis_uses_a_percentage_not_a_raw_fraction():
+    """سدّ تسريب (الطبقة ٨): "التغطية 0.85 × ..." كسر عشري خام كان يظهر
+    على وجه التقرير — نسبة مئوية بشرية بدله (شقيقة إصلاح سطر «لماذا»)."""
+    d = D.decide(BUNDLE)
+    assert "85%" in d["confidence_basis"]
+    assert "0.85" not in d["confidence_basis"]
+
+
+def test_weak_pillar_condition_uses_a_percentage_not_a_raw_fraction():
+    weak = _b(competition_intensity={"hhi": 0.85, "top_supplier_share_pct": 90.0,
+                                     "named_company_count": 1})
+    d = D.decide(weak)
+    weak_lines = [c for c in d["conditions"] if "شدة المنافسة ضعيف" in c]
+    assert weak_lines
+    assert "%" in weak_lines[0]
+    assert not re.search(r"ضعيف \(0\.\d+\)", weak_lines[0])
+
+
 def test_nogo_below_threshold_and_critical_risk_gate():
     weak = _b(market_attractiveness={"tam_usd": 1e5, "import_cagr_pct": -8.0,
                                      "gdp_per_capita_usd": 2_000,
@@ -96,7 +115,11 @@ def test_eligibility_gate_caps_regulatory_and_leads_steps():
 def test_both_weight_options_always_reported_and_selectable():
     d = D.decide(BUNDLE)
     assert set(d["scores_by_option"]) == {"A", "B"}
-    assert "GATE 3" in d["weights_note"]
+    # سدّ تسريب (الطبقة ٨): "بوابة GATE 3" مصطلح مسار عمل داخلي — الملاحظة
+    # المعروضة للعميل تحمل اسم منهجية الترجيح الوصفي بدله.
+    assert "GATE 3" not in d["weights_note"]
+    assert d["weights_label"] == "الأوزان القياسية"
+    assert "الأوزان القياسية" in d["weights_note"]
     # حالة تنظيمية قوية وسوق ضعيف: B (تنظيمي مثقّل) أعلى من A — اتجاه منطقي.
     reg_strong = _b(market_attractiveness={"tam_usd": 5e5,
                                            "import_cagr_pct": -5.0,

@@ -39,6 +39,12 @@ WEIGHT_OPTIONS: dict[str, dict[str, float]] = {
 }
 _N_PILLARS = len(next(iter(WEIGHT_OPTIONS.values())))   # عدد الأعمدة (٥ الآن)
 
+# اسم عرض عربي قصير لكل خيار أوزان (قرار المالك، الطبقة ٨) — يحل محل رمز
+# المفتاح الخام A/B على وجه التقرير؛ المفتاح A/B نفسه يبقى دون تغيير في
+# WEIGHT_OPTIONS/SILK_DECISION_WEIGHTS (سطح API مستقر، لا تغيير بنيوي).
+_WEIGHT_LABEL_AR: dict[str, str] = {"A": "الأوزان القياسية",
+                                    "B": "الأوزان التنظيمية المُثقّلة"}
+
 _GO, _NOGO = 0.65, 0.45          # عتبات §8
 _MIN_CONF_GO = 0.60
 
@@ -256,7 +262,11 @@ def decide(bundle: dict, weights_option: str | None = None) -> dict:
             continue
         eff = 1.0 - v if name == "competition" else v
         if eff < 0.5:
-            conditions.append(f"عمود {_AR[name]} ضعيف ({eff}) — {p['basis']}")
+            # سدّ تسريب (الطبقة ٨): كسر عشري خام على وجه التقرير ("ضعيف
+            # (0.37)") — نسبة مئوية بشرية بدله، شقيقة إصلاح سطر «لماذا»
+            # أعلاه لنفس السبب (لا رقم آلي خام يصل العميل).
+            conditions.append(f"عمود {_AR[name]} ضعيف ({round(eff * 100)}%) "
+                              f"— {p['basis']}")
     if pillars["regulatory"].get("eligibility_gate"):
         conditions.insert(0, "بوابة أهلية أمامية مفتوحة (منشأة معتمدة EU 2017/625) "
                              "— لا تقدّم قبل عبورها")
@@ -299,12 +309,19 @@ def decide(bundle: dict, weights_option: str | None = None) -> dict:
     return {
         "schema": SCHEMA, "verdict": verdict, "score": score,
         "confidence": confidence,
-        "confidence_basis": f"التغطية {coverage} × الأعمدة المحسوبة "
-                            f"{_N_PILLARS - len(missing_pillars)}/{_N_PILLARS}",
+        # سدّ تسريب (الطبقة ٨): كسر تغطية عشري خام ("التغطية 0.65 × ...")
+        # — نسبة مئوية بشرية بدله (شقيقة إصلاح سطر «لماذا» في المرحلة ٥).
+        "confidence_basis": f"التغطية {round(coverage * 100)}% × الأعمدة "
+                            f"المحسوبة {_N_PILLARS - len(missing_pillars)}"
+                            f"/{_N_PILLARS}",
         "weights_option": opt, "weights": WEIGHT_OPTIONS[opt],
         "scores_by_option": scores,
-        "weights_note": "خيار الأوزان قيد بوابة GATE 3 — كلا المجموعين محسوبان؛ "
-                        "الافتراضي A حتى قرار المالك",
+        # سدّ تسريب (الطبقة ٨، قرار المالك): "بوابة GATE 3" مصطلح مسار عمل
+        # داخلي — والحرف الخام A/B رمز مفتاح داخلي (يبقى weights_option/
+        # SILK_DECISION_WEIGHTS كما هما لسطح الـAPI؛ العرض فقط يتغيّر).
+        "weights_label": _WEIGHT_LABEL_AR.get(opt, opt),
+        "weights_note": (f"تُحسب الدرجة بمجموعتي أوزان معاً للمقارنة؛ "
+                         f"المعتمد لهذا القرار: {_WEIGHT_LABEL_AR.get(opt, opt)}"),
         "pillars": pillars, "missing_pillars": missing_pillars,
         "critical_risk": critical, "risks": risks, "conditions": conditions,
         "first_steps": first_steps, "why": why,

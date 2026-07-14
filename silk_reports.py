@@ -718,21 +718,32 @@ def _docx_entry_strategy(doc, m: dict) -> None:
 
 
 def _docx_entry_decision(doc, m: dict) -> None:
-    """قرار الدخول (المحرك الموزون §8) — verdict/score/pillars/conditions/risks."""
-    doc.add_heading("قرار الدخول (المحرك الموزون §8)", level=2)
+    """قرار الدخول — verdict/score/pillars/conditions/risks.
+
+    سدّ تسريب (الطبقة ٨، قرار المالك): العنوان والنص كانا يحملان رطانة
+    مسار العمل الداخلي ("المحرك الموزون §8"، "بوابة GATE 3") ورمز مفتاح
+    خام (A/B) — عنوان تجاري صرف الآن، وخيار الأوزان يُعرض باسمه الوصفي
+    (`weights_label`) لا رمزه (`weights_option` يبقى كما هو في المصدر
+    لأغراض داخلية/تتبّع فقط)."""
+    doc.add_heading("قرار الدخول", level=2)
     ed, absent = _entry_decision_of(m)
     if ed is None:
         doc.add_paragraph(absent)
         return
+    from silk_decision import _WEIGHT_LABEL_AR
     from silk_narrative import confidence_phrase, verdict_ar
     doc.add_paragraph(f"الحكم: {verdict_ar(ed.get('verdict'))} | "
                       f"النقاط: {_fmt(ed.get('score'))}"
                       f" | الثقة: {confidence_phrase(ed.get('confidence'))}")
     doc.add_paragraph(f"أساس الثقة: {ed.get('confidence_basis')}")
     sbo = ed.get("scores_by_option") or {}
-    doc.add_paragraph(f"خيار الأوزان المعتمد: {ed.get('weights_option')} — "
-                      f"النقاط بالخيارين: A = {_fmt(sbo.get('A'))} | "
-                      f"B = {_fmt(sbo.get('B'))}")
+    weights_label = ed.get("weights_label") or ed.get("weights_option") or ""
+    other_label = _WEIGHT_LABEL_AR.get(
+        "B" if ed.get("weights_option") == "A" else "A", "")
+    other_score = sbo.get("B" if ed.get("weights_option") == "A" else "A")
+    doc.add_paragraph(f"منهجية الترجيح المعتمدة: {weights_label} — النقاط "
+                      f"{_fmt(ed.get('score'))} (بديل مقارنة، {other_label}: "
+                      f"{_fmt(other_score)})")
     if ed.get("weights_note"):
         doc.add_paragraph(f"ملاحظة الأوزان: {ed['weights_note']}")
     # الأعمدة الأربعة كجدول (توازي render_markdown) — لا نقاط سردية مبعثرة.
@@ -808,7 +819,9 @@ def _docx_competition_research(doc, m: dict) -> None:
               ("مُستخلَص، غير موثَّق" if "مُستخلَص" in str(e.get("note") or "")
                else "غير موثَّق")]
              for e in ents[:10]])
-        doc.add_paragraph("كيانات غير موثَّقة (ثقة 0.4) — أكّدها قبل أي تعاقد.")
+        from silk_narrative import confidence_phrase
+        doc.add_paragraph(f"كيانات غير موثَّقة — الثقة {confidence_phrase(0.4)} "
+                          "— أكّدها قبل أي تعاقد.")
     else:
         doc.add_paragraph("لا شركات مرصودة بالاسم في هذا التشغيل "
                           "(أسماء الأعمال تأتي من Google Places حصراً)")
@@ -1117,10 +1130,16 @@ def _docx_deep_research(doc, view: dict) -> None:
             doc.add_paragraph(str(f.get("value")), style="List Bullet")
             doc.add_paragraph(f"[{f.get('source')} — {_evidence_badge(f.get('confidence'))}] "
                               f"{f.get('note') or ''}", style="Intense Quote")
-        if dr["report"].get("unresolved_notes"):
-            doc.add_heading("ملاحظات مراجعة لم تُحلّ", level=3)
-            for n in dr["report"]["unresolved_notes"]:
-                doc.add_paragraph(str(n), style="List Bullet")
+
+    # سدّ خلل (الطبقة ٨): كان هذا الشرط متداخلاً داخل حلقة التقاطعات
+    # أعلاه فيتكرّر عنوان "ملاحظات مراجعة لم تُحلّ" وقائمتها مرة لكل تقاطع
+    # له أدلة — خارج الحلقة الآن فيظهر مرة واحدة فقط. النص مُعرَّب أصلاً
+    # (clean_unresolved في _deep_research_view، الطبقة ٢) — لا حاجة لمُطهِّر
+    # إضافي هنا، القيمة نظيفة عند وصولها.
+    if dr["report"].get("unresolved_notes"):
+        doc.add_heading("ملاحظات مراجعة لم تُحلّ", level=3)
+        for n in dr["report"]["unresolved_notes"]:
+            doc.add_paragraph(str(n), style="List Bullet")
 
     if dr.get("next_step"):
         doc.add_paragraph(dr["next_step"], style="Intense Quote")
@@ -1607,20 +1626,25 @@ def render_markdown(view: dict) -> str:
     # ── ٣. تعريف السوق ونطاقه — جملة نطاق صريحة (§3) ─────────────────────────
     L += ["## تعريف السوق ونطاقه", "", _market_scope_paragraph(view), ""]
 
-    # ── قرار الدخول §8 — weighted entry decision ────────────────────────────
-    L += ["## قرار الدخول (المحرك الموزون §8)", ""]
+    # ── قرار الدخول — weighted entry decision ───────────────────────────────
+    L += ["## قرار الدخول", ""]
     ed, ed_absent = _entry_decision_of(top_m)
     if ed is None:
         L += [ed_absent, ""]
     else:
+        from silk_decision import _WEIGHT_LABEL_AR
         from silk_narrative import confidence_phrase, verdict_ar
         sbo = ed.get("scores_by_option") or {}
+        weights_label = ed.get("weights_label") or ed.get("weights_option") or ""
+        other_key = "B" if ed.get("weights_option") == "A" else "A"
+        other_label = _WEIGHT_LABEL_AR.get(other_key, "")
         L += [f"- الحكم: **{verdict_ar(ed.get('verdict'))}** | "
               f"النقاط: {_fmt(ed.get('score'))}"
               f" | الثقة: {confidence_phrase(ed.get('confidence'))}",
               f"- أساس الثقة: {ed.get('confidence_basis')}",
-              f"- خيار الأوزان المعتمد: {ed.get('weights_option')} — النقاط "
-              f"بالخيارين: A = {_fmt(sbo.get('A'))} | B = {_fmt(sbo.get('B'))}"]
+              f"- منهجية الترجيح المعتمدة: {weights_label} — النقاط "
+              f"{_fmt(ed.get('score'))} (بديل مقارنة، {other_label}: "
+              f"{_fmt(sbo.get(other_key))})"]
         if ed.get("weights_note"):
             L.append(f"- ملاحظة الأوزان: {ed['weights_note']}")
         L += ["", "| العمود | القيمة | الأساس | مكوّنات غائبة |",
@@ -1728,8 +1752,9 @@ def render_markdown(view: dict) -> str:
         if ents_rc:
             for n in ents_rc[:10]:
                 L.append(f"- {_entry_text(n)}")
-            L.append("- ملاحظة: كيانات غير موثَّقة (ثقة 0.4) — أكّدها قبل "
-                     "أي تعاقد.")
+            from silk_narrative import confidence_phrase
+            L.append(f"- ملاحظة: كيانات غير موثَّقة — الثقة "
+                     f"{confidence_phrase(0.4)} — أكّدها قبل أي تعاقد.")
         else:
             L.append("- لا كيانات مرصودة بالاسم — فجوة معلنة (أسماء الأعمال "
                      "تأتي من Google Places حصراً)")
@@ -1813,9 +1838,12 @@ def render_markdown(view: dict) -> str:
 
     # ── SWOT — أربع قوائم بدليل كل بند؛ الربع الفارغ معلن ────────────────────
     sw = top_m.get("swot") or {}
+    # سدّ انحراف (الطبقة ٨): عناوين الأرباع كانت ثنائية اللغة هنا
+    # ("القوة Strengths") بينما docx عربية صرفة لنفس القسم — نفس الاصطلاح
+    # الآن في كلا المشتقّين، لا لغة إنجليزية إضافية على وجه التقرير.
     L += ["## تحليل SWOT (قاعدي من حقائق مرصودة)", ""]
-    for key, title in (("S", "القوة Strengths"), ("W", "الضعف Weaknesses"),
-                       ("O", "الفرص Opportunities"), ("T", "التهديدات Threats")):
+    for key, title in (("S", "القوة"), ("W", "الضعف"),
+                       ("O", "الفرص"), ("T", "التهديدات")):
         L.append(f"### {title}")
         items = sw.get(key) or []
         if not items:
@@ -1928,8 +1956,11 @@ def render_markdown(view: dict) -> str:
     L.append("")
 
     # ── حدود هذا التقرير — declared limits before the recommendation ────────
+    # سدّ انحراف (الطبقة ٨): كانت هذه القائمة تُطبع خامة بلا _gap_list_ar
+    # — الآن نفس المعالجة المطبَّقة في docx (اتساق المشتقّين، لا مسارين).
     L += ["## حدود هذا التقرير", ""]
-    for x in (view.get("limits") or ["لا فجوات مرصودة في الأسواق العليا"])[:12]:
+    limits = view.get("limits") or ["لا فجوات مرصودة في الأسواق العليا"]
+    for x in _gap_list_ar(limits[:12]):
         L.append(f"- {x}")
     L.append("")
 
