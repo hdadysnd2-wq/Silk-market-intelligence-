@@ -648,6 +648,30 @@ def _traced_call(trace_id: str | None, stage: str, timeout: float,
     return result
 
 
+def _summarize_verdict(verdict: dict) -> str:
+    """ملخّص حكم نظيف للحقن في برومبت الكاتب — سدّ تسريب: كان الكود يُلقي
+    قاموس الحكم الخام عبر json.dumps(default=str) في البرومبت، فيظهر تمثيل
+    بايثون الخام لكائنات DataPoint الحيّة (contributing_findings) وأسماء
+    فئات الوكلاء (data_gaps) بالإنجليزية. هنا نلخّص بعربية بشرية فقط —
+    الحكم المُعرَّب، الثقة كعبارة، عدد المؤشرات المساهمة (رقم لا كائنات)،
+    والفجوات مُعرَّبة."""
+    from silk_narrative import confidence_phrase, internal_ar, verdict_ar
+    v = verdict or {}
+    ai = v.get("ai") or {}
+    verdict_token = ai.get("verdict") or v.get("verdict")
+    confidence = ai.get("confidence", v.get("confidence"))
+    gaps = ", ".join(internal_ar(g) for g in v.get("data_gaps", [])) or "لا شيء"
+    parts = [
+        f"الحكم: {verdict_ar(verdict_token)}",
+        f"الثقة: {confidence_phrase(confidence)}",
+        f"عدد المؤشرات المرصودة المساهمة: {len(v.get('contributing_findings') or [])}",
+        f"الفجوات المعلنة: {gaps}",
+    ]
+    if ai.get("reasoning"):
+        parts.append(f"تعليل التوليف: {ai['reasoning']}")
+    return " | ".join(parts)
+
+
 def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
                 product: str, market_name: str,
                 review_notes: list | None = None,
@@ -668,7 +692,7 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
     parts = [
         f"المنتج: {_isolate(product)}. السوق: {_isolate(market_name)}.",
         f"الحكم الجاهز (من طبقة التوليف — لا تُصدر حكماً مختلفاً، اشرحه): "
-        f"{_isolate(json.dumps(verdict, ensure_ascii=False, default=str))}",
+        f"{_isolate(_summarize_verdict(verdict))}",
         f"مسوّدة المحلل الشامل (خمس تقاطعات + SWOT):\n{_isolate(analyst_summary)}",
         f"حقائق البعثات الاثنتي عشرة (لا تتجاوزها، كل رقم من هنا فقط):\n{facts}",
     ]

@@ -44,10 +44,14 @@ def _decision(top: dict | None) -> dict:
     verdict = ai.get("verdict") or jury.get("verdict")
     confidence = (ai.get("confidence") if ai.get("confidence") is not None
                   else jury.get("confidence"))
+    # أسماء أصناف الوكلاء الداخلية (TradeFlowAgent...) لا تصل وجه المستخدم —
+    # تُعرَّب في المصدر هنا كي يرث كل مستهلك (نص/docx/markdown) الترجمة
+    # نفسها، بدل ترقيعها في مستهلك واحد فقط (كانت docx وحدها تُعرِّبها).
+    from silk_narrative import internal_ar
+    gaps_ar = ", ".join(internal_ar(g) for g in jury.get("data_gaps", [])) or "لا شيء"
     why = (ai.get("reasoning")
            or f"تغطية الوكلاء {jury.get('agents_with_data', 0)}/"
-              f"{jury.get('agents_total', 0)} وفجوات: "
-              f"{', '.join(jury.get('data_gaps', [])) or 'لا شيء'}")
+              f"{jury.get('agents_total', 0)} وفجوات: {gaps_ar}")
     return {"verdict": verdict, "confidence": confidence,
             "why": (why or "")[:280], "market": top.get("country"),
             "stage": jury.get("synthesis_stage")}
@@ -110,12 +114,14 @@ def _deep_research_brief(dr_view: dict) -> list[str]:
 
     نفس فلسفة `_brief` (§10.4: سطر جوال) لكن على شكل view["deep_research"]
     (١٢ بعثة + محلل، لا قائمة أسواق مرتّبة)."""
+    from silk_narrative import verdict_ar
     verdict = dr_view.get("verdict") or {}
     ai = verdict.get("ai") or {}
-    v = ai.get("verdict") or verdict.get("verdict") or "غير محسوم"
+    v_raw = ai.get("verdict") or verdict.get("verdict")
+    v = verdict_ar(v_raw) if v_raw else "تعذّر إصدار توصية"
     market = ((dr_view.get("market") or {}).get("name_ar")
              or (dr_view.get("market") or {}).get("name_en") or "؟")
-    lines = [f"التوصية: {v} — سوق {market} (بحث عميق، ١٢ بعثة)"]
+    lines = [f"التوصية: {v} — سوق {market} (بحث عميق شامل)"]
     demand = (dr_view.get("analyst") or {}).get("by_category", {}).get("demand") or []
     if demand:
         lines.append(f"الطلب الفعلي المقدَّر: {demand[0].get('value')}")
@@ -233,7 +239,8 @@ def _consumer_culture(result: dict) -> dict:
     cc = result.get("consumer_culture")
     raw = _culture(result)
     if isinstance(cc, dict) and cc.get("insights"):
-        return {"insights": cc.get("insights"), "note": cc.get("note", ""),
+        return {"insights": _sanitize_points(cc.get("insights")),
+                "note": _strip_internal_plumbing(cc.get("note", "")),
                 "grounded": True, "raw": raw}
     return {"insights": [], "note": "", "grounded": False, "raw": raw}
 
@@ -340,7 +347,12 @@ def _provenance(result: dict) -> list[dict]:
         if d.get("value") is not None:
             b["contributed"] += 1
         elif len(b["failures"]) < 3 and d.get("note"):
-            b["failures"].append(str(d.get("note"))[:140])
+            # سدّ تسريب: ملاحظة DataPoint فاشلة خام (مثل "PV.EST fetch
+            # failed for CHN: HTTPSConnectionPool(...)") كانت تصل ملحق
+            # الأثر — أضمن ملحق ظهوراً بنيوياً (كل DataPoint فاشل في شجرة
+            # النتيجة كلها يمرّ هنا) فتُعرَّب عند الجمع لا عند كل مستهلك.
+            failure = _strip_internal_plumbing(str(d.get("note")))
+            b["failures"].append(failure[:140])
     return sorted(by.values(), key=lambda b: -b["contributed"])
 
 
@@ -419,6 +431,7 @@ def _swot(research: dict | None) -> dict:
 
     اشتقاق عرض صرف: قواعد معلنة فوق حقائق حزمة البحث — لا نثر حر ولا تخمين.
     """
+    from silk_narrative import internal_ar
     S, W, O, T = [], [], [], []
     if not research or not research.get("agents"):
         return {"S": S, "W": W, "O": O, "T": T,
@@ -426,7 +439,7 @@ def _swot(research: dict | None) -> dict:
     sau = _rmetric(research, "competitor", "saudi_share_pct")
     if sau:
         S.append({"text": f"حضور سعودي قائم بحصة {sau}% من واردات السوق",
-                  "evidence": "UN Comtrade — saudi_share_pct"})
+                  "evidence": f"UN Comtrade — {internal_ar('saudi_share_pct')}"})
     uv = _rmetric(research, "pricing", "border_unit_value_usd_kg")
     suv = _rmetric(research, "pricing", "saudi_border_unit_value_usd_kg")
     if uv and suv and suv <= uv:
@@ -435,20 +448,20 @@ def _swot(research: dict | None) -> dict:
     for g in (research.get("agents", {}).get("pricing", {}).get("gaps") or []):
         if "بطاقة" in g or "margin" in g:
             W.append({"text": "الهامش غير محسوب — بطاقة المنتج غير مكتملة",
-                      "evidence": g[:120]})
+                      "evidence": _humanize_gap_note(g[:120])})
             break
     gate = _rmetric(research, "regulatory", "eligibility_gate")
     if gate:
         W.append({"text": "بوابة أهلية أوروبية مفتوحة (منشأة معتمدة EU 2017/625)",
-                  "evidence": "مرجع L1 — eligibility_gate"})
+                  "evidence": f"مرجع L1 — {internal_ar('eligibility_gate')}"})
     cagr = _rmetric(research, "market_size", "import_cagr_pct")
     if cagr is not None and cagr > 5:
         O.append({"text": f"واردات السوق تنمو {cagr}% سنوياً مركّباً",
-                  "evidence": "UN Comtrade — import_cagr_pct"})
+                  "evidence": f"UN Comtrade — {internal_ar('import_cagr_pct')}"})
     hhi = _rmetric(research, "competitor", "hhi")
     if hhi is not None and hhi < 0.15:
         O.append({"text": f"سوق مفتّت (HHI {hhi}) — لا مورّد مهيمناً",
-                  "evidence": "UN Comtrade — hhi"})
+                  "evidence": f"UN Comtrade — {internal_ar('hhi')}"})
     rr = _rmetric(research, "consumer_demand", "ramadan_seasonality")
     if rr and "مرجّحة" in str(rr):
         O.append({"text": "موسمية رمضان/العيدين فرصة ذروة طلب",
@@ -456,18 +469,18 @@ def _swot(research: dict | None) -> dict:
     top = _rmetric(research, "competitor", "top_supplier_share_pct")
     if top is not None and top > 50:
         T.append({"text": f"مورّد مهيمن بحصة {top}% — حرب أسعار محتملة",
-                  "evidence": "UN Comtrade — top_supplier_share_pct"})
+                  "evidence": f"UN Comtrade — {internal_ar('top_supplier_share_pct')}"})
     tariff = _rmetric(research, "regulatory", "tariff_applied_pct")
     if tariff is not None and tariff > 10:
         T.append({"text": f"تعريفة مطبّقة مرتفعة {tariff}%",
-                  "evidence": "WITS — tariff_applied_pct"})
+                  "evidence": f"WITS — {internal_ar('tariff_applied_pct')}"})
     fx = _rmetric(research, "risk", "fx_volatility_pct")
     if fx is not None and fx > 5:
         T.append({"text": f"تقلب عملة {fx}% (معامل اختلاف)",
-                  "evidence": "World Bank — PA.NUS.FCRF"})
+                  "evidence": f"World Bank — {internal_ar('PA.NUS.FCRF')}"})
     if _rmetric(research, "risk", "critical_risk"):
         T.append({"text": "خطر سياسي حرج (WGI دون −1.5)",
-                  "evidence": "World Bank — PV.EST"})
+                  "evidence": f"World Bank — {internal_ar('PV.EST')}"})
     return {"S": S, "W": W, "O": O, "T": T,
             "note": "خلايا مشتقة من الحقائق المتاحة — الخلية الفارغة تعني "
                     "غياب البيانات، لا سلامة الجانب"}
@@ -540,6 +553,12 @@ _WHOLE_JSON_RE = re.compile(r"^\s*[{\[].*[}\]]\s*$", re.S)
 _EN_CONF_VALUE_RE = re.compile(r"\bconfidence\b(\s*[|:：]\s*)(\d?\.\d{1,4})")
 _EN_FIELD_RE = re.compile(r"\b(verdict|confidence)\b")
 _EN_FIELD_AR = {"verdict": "الحكم", "confidence": "درجة الثقة"}
+# رمز حكم آلة خام (GO/WATCH/NO-GO/CONDITIONAL-GO) داخل نثر حرّ كتبه الكاتب
+# نفسه (بلاغ اختبار: "الحكم WATCH — مراقبة قبل الدخول مبني على...") — لا
+# حقل مُهيكَل يلتقطه verdict_ar عند مصدره هنا، فالتقاط نصّي مباشر داخل
+# السرد. الأطول أولاً (CONDITIONAL-GO/NO-GO قبل GO المجرّدة) كي لا يتبقّى
+# "-GO" يتيماً بعد الاستبدال.
+_RAW_VERDICT_RE = re.compile(r"\b(CONDITIONAL-GO|NO-GO|GO|WATCH)\b")
 
 
 def _strip_raw_json_leak(text: str | None) -> str | None:
@@ -585,16 +604,40 @@ def _humanize_gap_note(text: object) -> str:
     return translate_gaps([text])[0]
 
 
+_MISSION_KEY_PREFIX_RE = re.compile(r"^([a-z][a-z_]*)(:\s*)")
+
+
+def _strip_mission_key_prefix(text: str) -> str:
+    """بادئة مفتاح بعثة خام أول السطر ("pricing_scout: ...") → الاسم
+    التجاري العربي — بلاغ تدقيق: انهيار خيط بعثة يبني الملخّص بـ
+    `f"{key}: خطأ غير متوقع: ..."` (silk_missions.py) وهذه البادئة لا
+    يلتقطها `_INTERNAL_AGENT_RE` (يطابق "LLMAgent:key" فقط، لا "key:" مجرّدة)."""
+    m = _MISSION_KEY_PREFIX_RE.match(text)
+    if not m:
+        return text
+    try:
+        from silk_missions import MISSIONS
+        if m.group(1) in MISSIONS:
+            return _mission_label(m.group(1)) + m.group(2) + text[m.end():]
+    except Exception:  # noqa: BLE001 — تسمية تجميلية لا شرط عرض
+        pass
+    return text
+
+
 def _strip_internal_plumbing(text: str | None) -> str | None:
     """أزل تسريبات السباكة الداخلية من نص معروض للعميل (تقرير مكتوب/حدود
     بحث/ملخّص بعثة) — تفريغ JSON خام كامل يُستبدَل بنص مقروء أو فجوة
     معلنة (`_strip_raw_json_leak`)، "LLMAgent:<key>"/"LLMMissionAgent:
-    <key>" تُستبدَل باسم البعثة العربي، ووسوم استشهاد خام "dp7"/"[dp7]"
-    تُحذَف، وأسماء الحقول الداخلية الإنجليزية (verdict/confidence مع
-    قيمتها العشرية الخامة) تُعرَّب وتُصاغ بشرياً. None/فارغ يمر كما هو."""
+    <key>" وبادئة "<key>: " المجرّدة تُستبدَلان باسم البعثة العربي، ووسوم
+    استشهاد خام "dp7"/"[dp7]" تُحذَف، وأسماء الحقول الداخلية الإنجليزية
+    (verdict/confidence مع قيمتها العشرية الخامة) تُعرَّب وتُصاغ بشرياً،
+    ثم يمرّ النص على `silk_narrative.humanize_technical_note` (نقطة
+    التعريب المركزية) لالتقاط أي استثناء بايثون/خطأ HTTP/قالب مصدر متبقٍّ
+    لم تلتقطه الأنماط أعلاه. None/فارغ يمر كما هو."""
     if not text:
         return text
     text = _strip_raw_json_leak(text)
+    text = _strip_mission_key_prefix(text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
     text = _DP_TAG_RE.sub("", text)
 
@@ -603,7 +646,52 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
         return f"درجة الثقة{m.group(1)}{confidence_phrase(float(m.group(2)))}"
     text = _EN_CONF_VALUE_RE.sub(_conf_value, text)
     text = _EN_FIELD_RE.sub(lambda m: _EN_FIELD_AR[m.group(1)], text)
+    from silk_narrative import humanize_technical_note, verdict_ar
+    text = _RAW_VERDICT_RE.sub(lambda m: verdict_ar(m.group(1)), text)
+    text = humanize_technical_note(text)
     return re.sub(r"[ \t]{2,}", " ", text)
+
+
+def _sanitize_points(items: list, extra_key: str | None = None) -> list:
+    """طهّر قائمة {point, evidence, [extra_key]} — استخلاصات كلود الحرّة
+    (ثقافة المستهلك P1، ديناميكيات السوق P2-8) لم تكن تمرّ عبر
+    `_strip_internal_plumbing` إطلاقاً رغم أنها نفس نوع النص الحرّ الذي
+    قد يردّد وسماً داخلياً رآه كلود في مدخلاته (تسريب تدقيق). `evidence`
+    عناوين ويب خارجية مقتبَسة حرفياً — لا تُعدَّل، ليست سباكة داخلية."""
+    out = []
+    for it in items or []:
+        if not isinstance(it, dict):
+            continue
+        row = dict(it)
+        if "point" in row:
+            row["point"] = _strip_internal_plumbing(row.get("point"))
+        if extra_key and extra_key in row:
+            row[extra_key] = _strip_internal_plumbing(row.get(extra_key))
+        out.append(row)
+    return out
+
+
+def _sanitized_dynamics(dynamics: object) -> dict | None:
+    """ديناميكيات السوق (P2-8، `silk_ai_judge.classify_dynamics`) مطهَّرة —
+    نفس القصور الذي كان في _consumer_culture: قوائم point/evidence حرّة لم
+    تمرّ عبر `_strip_internal_plumbing` قط في هذا المسار."""
+    if dynamics is None:
+        return None
+    d = _dp(dynamics)
+    v = d.get("value")
+    if isinstance(v, dict):
+        v = dict(v)
+        for key in ("drivers", "restraints", "opportunities", "threats"):
+            if key in v:
+                v[key] = _sanitize_points(v.get(key))
+        if "porter" in v:
+            v["porter"] = _sanitize_points(v.get("porter"), extra_key="force")
+        if "pestel" in v:
+            v["pestel"] = _sanitize_points(v.get("pestel"), extra_key="dimension")
+        if v.get("note"):
+            v["note"] = _strip_internal_plumbing(v["note"])
+        d = {**d, "value": v}
+    return d
 
 
 def _mission_trace_summary(failed: bool, summary: str) -> dict:
@@ -667,6 +755,11 @@ def _deep_research_view(result: dict) -> dict | None:
         }
     analyst = dr.get("analyst") or {}
     analyst_report = _report_fields(analyst.get("report"))
+    # سدّ تسريب: ملخّص المحلل الشامل نص كلود حرّ فوق نفس الحقائق المعزولة
+    # التي يقرأها ملخّص كل بعثة — كان الأخير وحده يمرّ عبر التطهير، تاركاً
+    # ثغرة مطابقة (نفس نوع النص، لا سبب لتمييزه).
+    analyst_report = {**analyst_report,
+                      "summary": _strip_internal_plumbing(analyst_report["summary"])}
     # P2: شارة أدلة ثلاثية (✓/◐/○) محسوبة هنا مرة واحدة في النموذج القانوني —
     # لا رقم ثقة خام يصل الواجهة، ولا منطق تصنيف مكرَّر في JS العميل.
     from silk_narrative import evidence_badge
@@ -677,6 +770,16 @@ def _deep_research_view(result: dict) -> dict | None:
                   for cat, dps in (analyst.get("by_category") or {}).items()}
     report_out = dr.get("report") or {}
     verdict = dr.get("verdict") or {}
+    # سدّ تسريب: ملاحظات المراجعة غير المحلولة نص كلود حرّ (المراجِع) —
+    # كانت تصل limits وview["deep_research"]["report"] خامة تماماً؛ وسبب
+    # فشل التقرير (failure_reason) يحمل تفصيل استثناء/HTTP خام متعمَّد
+    # لأغراض تشخيص المطوّرين (silk_ai_judge.failure_reason) لكن كان يصل
+    # العميل حرفياً بما فيه توجيه تشغيلي ("راجع سجلّات الخادم") — العقد
+    # الخام يبقى في `report_out` كما هو؛ التطهير هنا للعرض فقط.
+    clean_unresolved = [_strip_internal_plumbing(n)
+                        for n in (report_out.get("unresolved_notes") or [])]
+    clean_failure_reason = (_strip_internal_plumbing(report_out.get("failure_reason"))
+                            if report_out.get("failure_reason") else "")
     # v["summary"] مُطبَّع أصلاً أعلاه (clean_summary) — لا حاجة لإعادة التنظيف.
     limits = ([f"فرصة {_mission_label(k)} بلا نتائج مبنية على استشهاد: "
               f"{v['summary']}"
@@ -687,16 +790,16 @@ def _deep_research_view(result: dict) -> dict | None:
                for g in _mission_gap_lines(_mission_label(k), v["summary"])]
              + [f"تقاطع المحلل بلا أدلة كافية: {c}"
                for c in (analyst.get("missing_categories") or [])]
-             + [f"ملاحظة مراجع لم تُعالَج: {n}"
-               for n in (report_out.get("unresolved_notes") or [])])
-    if not report_out.get("report") and report_out.get("failure_reason"):
-        limits.append(f"التقرير الكامل غائب: {report_out['failure_reason']}")
+             + [f"ملاحظة مراجع لم تُعالَج: {n}" for n in clean_unresolved])
+    if not report_out.get("report") and clean_failure_reason:
+        limits.append(f"التقرير الكامل غائب: {clean_failure_reason}")
     if result.get("hs_resolution_note"):
-        limits.append(f"تصنيف HS: {result['hs_resolution_note']}")
+        limits.append(f"تصنيف HS: {_humanize_gap_note(result['hs_resolution_note'])}")
     if result.get("ai_extras_note"):
-        limits.append(f"طبقة كلود: {result['ai_extras_note']}")
+        limits.append(f"طبقة كلود: {_humanize_gap_note(result['ai_extras_note'])}")
     if verdict.get("ai_note"):
-        limits.append(f"حكم كلود (مرحلة ٢): {verdict['ai_note']}")
+        limits.append(f"حكم كلود (مرحلة ٢): "
+                      f"{_strip_internal_plumbing(verdict['ai_note'])}")
     return {
         "market": result.get("market"),
         "trace_id": dr.get("trace_id"),
@@ -711,8 +814,8 @@ def _deep_research_view(result: dict) -> dict | None:
         "verdict": verdict,
         "report": {"text": _strip_internal_plumbing(report_out.get("report")),
                   "review_cycles": report_out.get("review_cycles", 0),
-                  "unresolved_notes": report_out.get("unresolved_notes") or [],
-                  "failure_reason": report_out.get("failure_reason") or ""},
+                  "unresolved_notes": clean_unresolved,
+                  "failure_reason": clean_failure_reason},
         "limits": limits,
         "next_step": ("فعّل خدمة التعميق المدفوعة للتحقق من المستوردين "
                      "وجهات الاتصال (Volza/Explee)"
@@ -736,6 +839,9 @@ def build_view(result: dict) -> dict:
     ed_top = (top or {}).get("decision") or {}
     if ed_top.get("schema") and not ed_top.get("error"):
         jury = (top or {}).get("jury") or {}
+        from silk_narrative import internal_ar
+        gaps_ar = ("، ".join(internal_ar(g) for g in jury.get("data_gaps", []))
+                  or "لا شيء")
         decision = {
             "verdict": ed_top.get("verdict"),
             "confidence": ed_top.get("confidence"),
@@ -745,8 +851,7 @@ def build_view(result: dict) -> dict:
             "stage": "silk.decision/v1 — المحرك الموزون §8 (الحكم الوحيد)",
             "sufficiency": (f"بوابة كفاية البيانات: {jury.get('agents_with_data', 0)}/"
                             f"{jury.get('agents_total', 0)} وكلاء أساسيون لديهم "
-                            f"بيانات؛ فجوات: "
-                            f"{'، '.join(jury.get('data_gaps', [])) or 'لا شيء'}"),
+                            f"بيانات؛ فجوات: {gaps_ar}"),
         }
     cp = _competitive_position(top)
     view_markets = []
@@ -764,7 +869,12 @@ def build_view(result: dict) -> dict:
                  "source": _dp(c).get("source"),
                  "confidence": _dp(c).get("confidence"),
                  "retrieved_at": _dp(c).get("retrieved_at", ""),
-                 "note": _dp(c).get("note", ""),
+                 # سدّ تسريب: ملاحظة DataPoint خام (نجاح إنجليزي مثل "HS…
+                 # total World… USD" أو فشل يضمّ استثناء) لم تكن تمرّ عبر
+                 # أي مُطهِّر رغم وصولها مباشرة لهذا الحقل في نموذج العرض
+                 # القانوني — أي مستهلك مستقبلي (JSON خام، ودجت جديد) يرث
+                 # النص المُعرَّب الآن، لا الخام.
+                 "note": _strip_internal_plumbing(_dp(c).get("note", "")),
                  "status": _dp(c).get("status", "")}
                 for name, c in comps.items()],
             "recommendation": row.get("recommendation"),
@@ -794,7 +904,8 @@ def build_view(result: dict) -> dict:
     limits = [f"{m['country']}: {_humanize_gap_note(f)}" for m in markets[:5]
               for f in (m.get("quality_flags") or [])]
     if not result.get("classified"):
-        limits.insert(0, result.get("hs_note") or "تعذّر التصنيف")
+        limits.insert(0, _humanize_gap_note(result.get("hs_note"))
+                     if result.get("hs_note") else "تعذّر التصنيف")
     # قسم البحث العميق (الموجة ٤، V5) — إضافي بحت؛ None لتحليل /analyze عادي.
     dr_view = _deep_research_view(result)
     if dr_view:
@@ -829,7 +940,7 @@ def build_view(result: dict) -> dict:
         "year_fell_back": bool(result.get("year_fell_back")),
         "classified": result.get("classified", False),
         "decision": decision,
-        "dynamics": _dp(result.get("dynamics")) if result.get("dynamics") is not None else None,
+        "dynamics": _sanitized_dynamics(result.get("dynamics")),
         "competitive_position": cp,
         "completeness": _completeness(markets),
         "markets": view_markets,
@@ -882,16 +993,17 @@ def render_text(view: dict) -> str:
         L.append("أثر المصادر: " + " ، ".join(
             f"{b['source']}={b['contributed']}/{b['attempted']}"
             for b in prov[:6]))
+    from silk_narrative import confidence_phrase, verdict_ar
     L += [f"رمز HS: {view['hs_code']} (ثقة {view['hs_confidence']}) | "
           f"سنة {view['year']} | مبدئي",
-          f"القرار: {d.get('verdict') or 'تعذّر الحكم'} "
-          f"(ثقة {d.get('confidence')}) — {d.get('market')}",
+          f"القرار: {verdict_ar(d.get('verdict'))} "
+          f"(ثقة {confidence_phrase(d.get('confidence'))}) — {d.get('market')}",
           f"لماذا: {d.get('why')}", "─" * 60]
     ed = (view.get("markets") or [{}])[0].get("entry_decision") or {}
     if ed.get("schema"):
-        L.append(f"قرار الدخول (§8): {ed.get('verdict')} score={ed.get('score')} "
-                 f"ثقة={ed.get('confidence')} [أوزان {ed.get('weights_option')}]"
-                 f" — {ed.get('why')}")
+        L.append(f"قرار الدخول (المحرك الموزون): {verdict_ar(ed.get('verdict'))} "
+                 f"— النقاط {ed.get('score')} — الثقة "
+                 f"{confidence_phrase(ed.get('confidence'))} — {ed.get('why')}")
         for c in (ed.get("conditions") or [])[:3]:
             L.append(f"  شرط: {c}")
     cp = view["competitive_position"]

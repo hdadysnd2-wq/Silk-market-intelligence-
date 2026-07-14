@@ -465,11 +465,13 @@ def test_cover_page_has_verdict_badge_and_branding(monkeypatch):
     path = render_docx(view, os.path.join(tempfile.mkdtemp(), "cover.docx"))
     text = docx_all_text(path)
     assert "أُعد بواسطة منصة سِلك لذكاء الأسواق" in text
-    assert "WATCH — مراقبة" in text
+    # الشارة مُعرَّبة بالكامل — لا رمز آلة WATCH خام (سدّ تسريب).
+    assert "مراقبة السوق" in text
+    assert "WATCH" not in text
     idx = text.find("سِلك — تقرير بحث عميق")
     assert idx != -1
     # الشارة قريبة من الغلاف (أول ٥٠٠ حرف) لا مدفونة في آخر المستند.
-    assert "WATCH" in text[idx:idx + 500]
+    assert "مراقبة السوق" in text[idx:idx + 500]
 
 
 def test_verdict_tone_matches_dashboard_logic():
@@ -660,7 +662,11 @@ def test_research_sample_docx_meets_wave9_delivery_gate():
     path = os.path.join(root, "samples", "research_report_latest.docx")
     assert os.path.exists(path), "شغّل tools/gen_research_sample.py"
     text = docx_all_text(path)
-    assert "GO" in text  # شارة حكم على الغلاف
+    from silk_narrative import VERDICT_AR
+    # شارة الحكم على الغلاف مُعرَّبة بالكامل — لا رمز آلة خام (سدّ تسريب).
+    assert any(v in text for v in VERDICT_AR.values())
+    for raw in ("CONDITIONAL-GO", "NO-GO", "WATCH"):
+        assert raw not in text
     assert "خارطة طريق الدخول" in text  # قسم ٩٠ يوماً
     assert "ماذا يعني هذا لقرارك" in text  # سطور الخلاصة
     assert "##" not in text and "**" not in text and "```" not in text

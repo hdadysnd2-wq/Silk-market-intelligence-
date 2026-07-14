@@ -269,8 +269,8 @@ def _add_page_header_footer(doc, title: str) -> None:
 _VERDICT_TEXT_COLORS = {"go": (0x1E, 0x7D, 0x32), "watch": (0xB8, 0x86, 0x0B),
                         "nogo": (0xC0, 0x00, 0x00), "unknown": (0x60, 0x60, 0x60)}
 _VERDICT_HIGHLIGHTS = {"go": "BRIGHT_GREEN", "watch": "YELLOW", "nogo": "RED"}
-_VERDICT_LABELS_AR = {"go": "GO — إيجابي", "watch": "WATCH — مراقبة",
-                      "nogo": "NO-GO — سلبي", "unknown": "غير محسوم"}
+_VERDICT_LABELS_AR = {"go": "التوصية بالدخول", "watch": "مراقبة السوق",
+                      "nogo": "عدم الدخول حالياً", "unknown": "تعذّر إصدار توصية"}
 
 
 def _add_verdict_badge(doc, vtxt: str) -> None:
@@ -445,9 +445,13 @@ def _rfind(agent: dict, metric: str) -> dict | None:
 
 
 def _f_text(f: dict) -> str:
-    """سطر الاكتشاف — metric: value unit [+ وسم «مُقدَّر» ونص المعادلة إن نموذجاً]."""
+    """سطر الاكتشاف — metric: value unit [+ وسم «مُقدَّر» ونص المعادلة إن نموذجاً].
+
+    اسم المقياس الداخلي (snake_case) يُعرَّب دوماً — لا يصل وجه العميل
+    خاماً (بلاغ تدقيق: "tam_usd"/"hhi" ظهرت حرفياً في جداول docx/markdown)."""
+    from silk_narrative import internal_ar
     unit = f" {f.get('unit')}" if f.get("unit") else ""
-    txt = f"{f.get('metric')}: {_fmt(f.get('value'))}{unit}"
+    txt = f"{internal_ar(f.get('metric'))}: {_fmt(f.get('value'))}{unit}"
     if f.get("modeled"):
         txt += f" [{_MODELED_TAG}]"
         if f.get("formula"):
@@ -577,7 +581,7 @@ def render_brief(view: dict, dashboard_url: str = "/") -> str:
     النزاهة الوحيدة، والقيم نفسها بلا أي تغيير.
     """
     from silk_narrative import (GAP_WORD, competition_phrase, country_ar,
-                                fmt_money, fmt_pct, internal_ar)
+                                fmt_money, fmt_pct, internal_ar, verdict_ar)
     _assert_production_clean(view)
     d = view.get("decision") or {}
     cp = view.get("competitive_position") or {}
@@ -617,7 +621,7 @@ def render_brief(view: dict, dashboard_url: str = "/") -> str:
           f"قراءة أولية {view.get('year')}",
          "",
          view.get("brief", [""])[0] if view.get("brief") else
-         f"التوصية: {d.get('verdict') or 'تعذّر إصدار توصية'}",
+         f"التوصية: {verdict_ar(d.get('verdict'))}",
          "", "أبرز الأرقام:", *numbers, ""]
     if len(view.get("brief") or []) > 1:
         L += view["brief"][1:3]
@@ -729,8 +733,9 @@ def _docx_entry_decision(doc, m: dict) -> None:
     if ed is None:
         doc.add_paragraph(absent)
         return
-    from silk_narrative import confidence_phrase
-    doc.add_paragraph(f"الحكم: {ed.get('verdict')} | النقاط: {_fmt(ed.get('score'))}"
+    from silk_narrative import confidence_phrase, verdict_ar
+    doc.add_paragraph(f"الحكم: {verdict_ar(ed.get('verdict'))} | "
+                      f"النقاط: {_fmt(ed.get('score'))}"
                       f" | الثقة: {confidence_phrase(ed.get('confidence'))}")
     doc.add_paragraph(f"أساس الثقة: {ed.get('confidence_basis')}")
     sbo = ed.get("scores_by_option") or {}
@@ -777,17 +782,19 @@ def _docx_market_size(doc, m: dict) -> None:
     ag = _ragent(m, "market_size")
     valued = [f for f in (ag.get("findings") or []) if f.get("value") is not None]
     if valued:
+        from silk_narrative import internal_ar
         _add_table(
             doc, ["المؤشر", "القيمة", "النوع", "المصدر"],
-            [[f.get("metric"),
+            [[internal_ar(f.get("metric")),
               f"{_fmt(f.get('value'))}{(' ' + f['unit']) if f.get('unit') else ''}",
               (_MODELED_TAG if f.get("modeled") else "رصد مباشر"),
               _f_src_bare(f)]
              for f in valued])
         for f in valued:
             if f.get("modeled") and f.get("formula"):
-                doc.add_paragraph(f"معادلة «{f.get('metric')}»: {f['formula']}",
-                                  style="Intense Quote")
+                doc.add_paragraph(
+                    f"معادلة «{internal_ar(f.get('metric'))}»: {f['formula']}",
+                    style="Intense Quote")
     else:
         doc.add_paragraph("لا اكتشافات مرصودة لحجم السوق")
     for g in ag.get("gaps") or []:
@@ -820,19 +827,21 @@ def _docx_competition_research(doc, m: dict) -> None:
         for n in refs[:8]:
             doc.add_paragraph(_entry_text(n), style="List Bullet")
     doc.add_paragraph("الطبقة الدولية (تركّز الموردين — UN Comtrade):")
+    from silk_narrative import internal_ar
     metrics_rows = []
     for metric in ("hhi", "top_supplier_share_pct", "saudi_share_pct"):
         f = _rfind(ag, metric)
+        metric_ar = internal_ar(metric)
         if f and f.get("value") is not None:
             # وحدة الحقيقة (%) كانت تُسقَط هنا — نفس البند في نسخة الماركداون
             # (_f_text) يعرضها صحيحة؛ إصلاح تناسق: كلاهما يقرأ f['unit'] الآن.
             unit = f" {f['unit']}" if f.get("unit") else ""
-            metrics_rows.append([metric, f"{_fmt(f.get('value'))}{unit}",
+            metrics_rows.append([metric_ar, f"{_fmt(f.get('value'))}{unit}",
                                  _f_src_bare(f)])
             if f.get("note"):
-                metrics_rows[-1].append(str(f["note"]))
+                metrics_rows[-1].append(_gap_ar(f["note"]))
         else:
-            metrics_rows.append([metric, "—", "—"])
+            metrics_rows.append([metric_ar, "—", "—"])
     max_cols = max(len(r) for r in metrics_rows)
     for r in metrics_rows:
         while len(r) < max_cols:
@@ -850,20 +859,22 @@ def _docx_pricing_layers(doc, m: dict) -> None:
         return
     ag = _ragent(m, "pricing")
     doc.add_paragraph("الطبقة الحدودية (قيم وحدة كومتريد):")
+    from silk_narrative import internal_ar
     border_rows, border_formulas = [], []
     for metric in ("border_unit_value_usd_kg", "saudi_border_unit_value_usd_kg",
                    "margin_at_border_pct"):
         f = _rfind(ag, metric)
+        metric_ar = internal_ar(metric)
         if f and f.get("value") is not None:
             unit = f" {f['unit']}" if f.get("unit") else ""
             border_rows.append([
-                metric, f"{_fmt(f.get('value'))}{unit}",
+                metric_ar, f"{_fmt(f.get('value'))}{unit}",
                 (_MODELED_TAG if f.get("modeled") else "رصد مباشر"),
                 _f_src_bare(f)])
             if f.get("modeled") and f.get("formula"):
-                border_formulas.append(f"معادلة «{metric}»: {f['formula']}")
+                border_formulas.append(f"معادلة «{metric_ar}»: {f['formula']}")
         else:
-            border_rows.append([metric, "—", "—", "—"])
+            border_rows.append([metric_ar, "—", "—", "—"])
     _add_table(doc, ["المؤشر", "القيمة", "النوع", "المصدر"], border_rows)
     for line in border_formulas:
         doc.add_paragraph(line, style="Intense Quote")
@@ -1014,13 +1025,17 @@ def _docx_deep_research(doc, view: dict) -> None:
                     level=1)
     _stamp_degraded_banner(doc, view)
 
+    # نفس تصنيف/تعريب الحكم المستعمَل في الغلاف (_VERDICT_LABELS_AR عبر
+    # _verdict_tone) — لا مصدر عرض ثانٍ قد يختلف نصّه عن الأول لنفس الرمز
+    # (اختبار اتساق: الحكم يظهر متطابقاً حرفياً في الخلاصة وهنا معاً).
     market = dr.get("market") or {}
     verdict = dr.get("verdict") or {}
     ai = verdict.get("ai") or {}
+    v_raw = ai.get("verdict") or verdict.get("verdict") or ""
     doc.add_paragraph(
         f"السوق: {market.get('name_ar') or market.get('name_en')} "
         f"({market.get('iso3')}) — الحكم: "
-        f"{ai.get('verdict') or verdict.get('verdict') or 'غير محسوم'}")
+        f"{_VERDICT_LABELS_AR[_verdict_tone(v_raw)]}")
     if ai.get("reasoning"):
         doc.add_paragraph(str(ai["reasoning"]), style="Intense Quote")
 
@@ -1167,7 +1182,13 @@ def _render_research_docx(doc, view: dict) -> None:
     market = dr.get("market") or {}
     verdict = dr.get("verdict") or {}
     ai = verdict.get("ai") or {}
-    vtxt = ai.get("verdict") or verdict.get("verdict") or "غير محسوم"
+    # vtxt يبقى الرمز الخام (GO/WATCH/...) لتصنيف اللون (_verdict_tone) —
+    # لا يُطبَع حرفياً على وجه العميل أبداً؛ كل موضع عرض يمرّ عبر
+    # _VERDICT_LABELS_AR[_verdict_tone(vtxt)] العربي الكامل (بلاغ تدقيق:
+    # كانت الشارة تُترجَم بينما سطر «الحكم:» أسفل الخلاصة التنفيذية يطبع
+    # الرمز الخام مباشرة — نفس التصنيف، مصدر عرض واحد لا اثنان).
+    vtxt = ai.get("verdict") or verdict.get("verdict") or ""
+    verdict_label = _VERDICT_LABELS_AR[_verdict_tone(vtxt)]
 
     # ٠) الغلاف وبطاقة التعريف — هوية سِلك (الموجة ١١، §11.1)
     branding = _load_branding()
@@ -1201,7 +1222,7 @@ def _render_research_docx(doc, view: dict) -> None:
     # ١) الخلاصة التنفيذية — من حكم التوليف حصراً (المصدر الوحيد للحكم في
     # هذا التقرير) — لا محرك §8 الموزون غير المُغذّى، ولا نص JSON خام.
     doc.add_heading("١. الخلاصة التنفيذية", level=1)
-    doc.add_paragraph(f"الحكم: {vtxt}")
+    doc.add_paragraph(f"الحكم: {verdict_label}")
     reasoning = ai.get("reasoning") or verdict.get("note") or ""
     if reasoning:
         doc.add_paragraph(_clean_report_text(reasoning, max_len=600))
@@ -1601,9 +1622,10 @@ def render_markdown(view: dict) -> str:
     if ed is None:
         L += [ed_absent, ""]
     else:
-        from silk_narrative import confidence_phrase
+        from silk_narrative import confidence_phrase, verdict_ar
         sbo = ed.get("scores_by_option") or {}
-        L += [f"- الحكم: **{ed.get('verdict')}** | النقاط: {_fmt(ed.get('score'))}"
+        L += [f"- الحكم: **{verdict_ar(ed.get('verdict'))}** | "
+              f"النقاط: {_fmt(ed.get('score'))}"
               f" | الثقة: {confidence_phrase(ed.get('confidence'))}",
               f"- أساس الثقة: {ed.get('confidence_basis')}",
               f"- خيار الأوزان المعتمد: {ed.get('weights_option')} — النقاط "
@@ -1693,15 +1715,16 @@ def render_markdown(view: dict) -> str:
     L += ["## المنافسة بطبقتيها", ""]
     comp = _ragent(top_m, "competitor")
     if comp:
+        from silk_narrative import internal_ar
         L.append("**الطبقة الدولية (تركّز الموردين — UN Comtrade):**")
         for metric in ("hhi", "top_supplier_share_pct", "saudi_share_pct"):
             f = _rfind(comp, metric)
             if f and f.get("value") is not None:
                 L.append(f"- {_f_text(f)} ({_f_srcline(f)})")
                 if f.get("note"):
-                    L.append(f"  - {f['note']}")
+                    L.append(f"  - {_gap_ar(f['note'])}")
             else:
-                L.append(f"- {metric}: غير مرصود")
+                L.append(f"- {internal_ar(metric)}: غير مرصود")
         sc_f = _rfind(comp, "supplier_countries")
         for c in ((sc_f or {}).get("value") or [])[:6]:
             if isinstance(c, dict):
@@ -1745,6 +1768,7 @@ def render_markdown(view: dict) -> str:
         L += [r_absent, ""]
     else:
         pr = _ragent(top_m, "pricing")
+        from silk_narrative import internal_ar
         L.append("**الطبقة الحدودية (قيم وحدة كومتريد):**")
         for metric in ("border_unit_value_usd_kg",
                        "saudi_border_unit_value_usd_kg", "margin_at_border_pct"):
@@ -1752,9 +1776,9 @@ def render_markdown(view: dict) -> str:
             if f and f.get("value") is not None:
                 L.append(f"- {_f_text(f)} ({_f_srcline(f)})")
                 if f.get("note"):
-                    L.append(f"  - {f['note']}")
+                    L.append(f"  - {_gap_ar(f['note'])}")
             else:
-                L.append(f"- {metric}: غير مرصود")
+                L.append(f"- {internal_ar(metric)}: غير مرصود")
         L += ["", "**طبقة التجزئة:**"]
         rp = _rfind(pr, "retail_prices")
         vals = (rp or {}).get("value") or []

@@ -235,7 +235,10 @@ def test_research_docx_leads_with_exec_summary_and_synthesis_verdict(
     text = docx_all_text(path)
     exec_idx = text.find("١. الخلاصة التنفيذية")
     exec_section = text[exec_idx:exec_idx + 400]
-    assert "WATCH" in exec_section
+    # الحكم يصل مُعرَّباً بالكامل — لا رمز آلة WATCH خام على وجه العميل
+    # (سدّ تسريب: نفس تصنيف الشارة عبر _VERDICT_LABELS_AR/_verdict_tone).
+    assert "مراقبة السوق" in exec_section
+    assert "WATCH" not in exec_section
 
 
 def test_research_docx_has_zero_placeholder_strings_and_zero_code_fences(
@@ -265,9 +268,11 @@ def test_research_docx_verdict_is_the_same_everywhere_no_contradiction(
     view = build_view(_netherlands_research_result())
     path = render_docx(view, os.path.join(tempfile.mkdtemp(), "nld3.docx"))
     text = docx_all_text(path)
-    # الحكم يظهر في الخلاصة وفي قسم البحث العميق — نفس النص، لا بديل
-    # "تعذّر الحكم"/"غير محسوم" ناتج عن محرك §8 غير مُغذّى.
-    assert text.count("WATCH") >= 2
+    # الحكم يظهر في الخلاصة وفي قسم البحث العميق — نفس النص المُعرَّب، لا
+    # بديل "تعذّر الحكم"/"غير محسوم" ناتج عن محرك §8 غير مُغذّى، ولا رمز
+    # آلة WATCH خام (سدّ تسريب).
+    assert text.count("مراقبة السوق") >= 2
+    assert "WATCH" not in text
     assert "تعذّر الحكم" not in text
     assert "غير محسوم" not in text
 
