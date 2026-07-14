@@ -41,16 +41,29 @@ def estimate_cost_usd(llm_usage: dict | None) -> dict:
     {model: {"input_tokens": N, "output_tokens": N, "cache_read_tokens": N,
     "cache_creation_tokens": N}} — حقلا الكاش اختياريان (نداءات بلا كاش تبقى
     صحيحة بلا تعديل).
-    المخرَج: {"total_usd", "by_model", "unpriced_models"} — نموذج بلا سعر
-    معروف يُستبعد من المجموع ويُسمّى صراحة في unpriced_models، لا يُصفَّر بصمت.
+    المخرَج: {"total_usd", "by_model", "unpriced_models", "unpriced_tokens",
+    "complete"} — نموذج بلا سعر معروف يُستبعد من المجموع ويُسمّى صراحة في
+    unpriced_models، لا يُصفَّر بصمت.
+
+    **إغلاق نقطة عمياء في القياس**: إسقاط نموذج مجهول من المجموع كان يجعل
+    `total_usd` يُبلِّغ أقل من الواقع بصمت (نداءات حقيقية استُهلكت، لكن قارئ
+    total_usd وحده لا يراها). لا نخمّن سعراً لنموذج مجهول (لا اختلاق)، لكن
+    الرموز مرصودة لا مُخمَّنة — فنُظهِر إجمالي رموز كل نموذج غير مُسعَّر في
+    `unpriced_tokens`، ونضع `complete=False` كي يعرف المستهلك أن المجموع
+    ناقص. القيمة الدولارية تبقى صادقة (النماذج المُسعَّرة فقط).
     """
     total = 0.0
     by_model: dict[str, float] = {}
     unpriced: list[str] = []
+    unpriced_tokens: dict[str, dict[str, int]] = {}
     for model, tok in (llm_usage or {}).items():
         pricing = _pricing_for(model)
         if pricing is None:
             unpriced.append(model)
+            # رموز مرصودة لا مُسعَّرة — تُعرَض كما هي، لا تُصفَّر ولا تُخمَّن.
+            unpriced_tokens[model] = {
+                "input_tokens": int(tok.get("input_tokens", 0) or 0),
+                "output_tokens": int(tok.get("output_tokens", 0) or 0)}
             continue
         cost = ((tok.get("input_tokens", 0) or 0) / 1_000_000 * pricing["input"]
                 + (tok.get("output_tokens", 0) or 0) / 1_000_000 * pricing["output"]
@@ -61,7 +74,9 @@ def estimate_cost_usd(llm_usage: dict | None) -> dict:
         by_model[model] = round(cost, 6)
         total += cost
     return {"total_usd": round(total, 6), "by_model": by_model,
-           "unpriced_models": sorted(unpriced)}
+           "unpriced_models": sorted(unpriced),
+           "unpriced_tokens": unpriced_tokens,
+           "complete": not unpriced}
 
 
 if __name__ == "__main__":

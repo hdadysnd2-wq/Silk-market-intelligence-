@@ -290,7 +290,11 @@ def _economics(counter: dict) -> dict:
     cost = estimate_cost_usd(counter.get("llm_usage"))
     return {**counter, "note": note, "cost_usd_estimate": cost["total_usd"],
            "cost_usd_by_model": cost["by_model"],
-           "cost_unpriced_models": cost["unpriced_models"]}
+           "cost_unpriced_models": cost["unpriced_models"],
+           # نقطة عمياء مُغلَقة: رموز النماذج غير المُسعَّرة (مرصودة) + علم
+           # اكتمال التقدير — total_usd الصادق يشمل المُسعَّر فقط.
+           "cost_unpriced_tokens": cost["unpriced_tokens"],
+           "cost_estimate_complete": cost["complete"]}
 
 
 def _ai_report(result: dict):
