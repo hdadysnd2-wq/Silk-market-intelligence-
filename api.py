@@ -1250,7 +1250,14 @@ def create_app():
 
     @app.get("/analyses/{analysis_id}/report.docx")
     def report_docx(analysis_id: int, request: Request):
-        """التقرير الكامل Word (§10.3) — derived from the ONE template.
+        """تقرير Word — derived from the ONE view-model (build_view).
+
+        فصل الجمهور (بلاغ المالك): نتيجة بحث عميق (/research) تُصدَّر بقالب
+        **العميل** (`render_client_docx`) بمفردات تجارية بحتة بلا تِلِمِتري —
+        هو ما يستلمه العميل الدافع. تِلِمِتري المشغّل (بعثات/حالات/اقتصاد
+        بيانات) يبقى على اللوحة (web/index.html)، ويبقى التصدير التشغيلي
+        الكامل للمدقّق متاحاً عبر `?internal=1`. نتيجة /analyze الكلاسيكية
+        (بلا deep_research) تبقى على `render_docx` العادي.
 
         C-1: محروسة. 404 للتحليل المفقود؛ 501 بلا python-docx.
         """
@@ -1262,15 +1269,26 @@ def create_app():
                                 detail=f"analysis {analysis_id} not found")
         import tempfile
         from silk_render import build_view
-        from silk_reports import render_docx
+        from silk_reports import render_client_docx, render_docx
         from fastapi.responses import FileResponse
+        view = build_view(found)
+        # التصدير الكامل التشغيلي للمدقّق فقط عند طلب صريح.
+        internal = str(request.query_params.get("internal") or "").lower() in (
+            "1", "true", "yes")
+        is_research = bool(view.get("deep_research"))
         try:
-            path = render_docx(build_view(found),
-                               os.path.join(tempfile.mkdtemp(), "report.docx"))
+            if is_research and not internal:
+                path = render_client_docx(
+                    view, os.path.join(tempfile.mkdtemp(), "report.docx"))
+                fname = f"silk_client_report_{analysis_id}.docx"
+            else:
+                path = render_docx(
+                    view, os.path.join(tempfile.mkdtemp(), "report.docx"))
+                fname = f"silk_report_{analysis_id}.docx"
         except RuntimeError as e:
             raise HTTPException(status_code=501, detail=str(e))
         return FileResponse(
-            path, filename=f"silk_report_{analysis_id}.docx",
+            path, filename=fname,
             media_type="application/vnd.openxmlformats-officedocument"
                        ".wordprocessingml.document")
 
