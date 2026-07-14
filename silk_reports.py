@@ -143,18 +143,11 @@ from silk_narrative import (  # noqa: E402
 )
 
 
-def _verdict_tone(vtxt: str) -> str:
-    """تصنيف لون شارة الحكم — go (أخضر)/watch (كهرماني)/nogo (أحمر)/
-    unknown (رمادي) — نفس منطق تصنيف الشارة في لوحة الواجهة (web/
-    index.html، renderDeepResearch) بالضبط، لا معيار مختلف بمصدرين."""
-    t = (vtxt or "").upper()
-    if "NO-GO" in t or "NO GO" in t:
-        return "nogo"
-    if "WATCH" in t or "CONDITIONAL" in t:
-        return "watch"
-    if "GO" in t:
-        return "go"
-    return "unknown"
+# سدّ تسريب (الطبقة ٦): _verdict_tone/_VERDICT_LABELS_AR انتقلتا إلى
+# silk_render.py — مصدر واحد يستهلكه غلاف/خلاصة docx هنا ولوحة الويب معاً
+# (view["deep_research"]["verdict_tone"/"verdict_label"])، بدل نسخة بايثون
+# ونسخة JS منفصلتين قد تختلفان لنفس الرمز.
+from silk_render import _VERDICT_LABELS_AR, _verdict_tone  # noqa: E402
 
 
 # ── هوية سِلك البصرية (الموجة ١١، §11.1) — config/branding.yaml ─────────
@@ -269,8 +262,6 @@ def _add_page_header_footer(doc, title: str) -> None:
 _VERDICT_TEXT_COLORS = {"go": (0x1E, 0x7D, 0x32), "watch": (0xB8, 0x86, 0x0B),
                         "nogo": (0xC0, 0x00, 0x00), "unknown": (0x60, 0x60, 0x60)}
 _VERDICT_HIGHLIGHTS = {"go": "BRIGHT_GREEN", "watch": "YELLOW", "nogo": "RED"}
-_VERDICT_LABELS_AR = {"go": "التوصية بالدخول", "watch": "مراقبة السوق",
-                      "nogo": "عدم الدخول حالياً", "unknown": "تعذّر إصدار توصية"}
 
 
 def _add_verdict_badge(doc, vtxt: str) -> None:

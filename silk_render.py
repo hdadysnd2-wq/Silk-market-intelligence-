@@ -54,7 +54,11 @@ def _decision(top: dict | None) -> dict:
               f"{jury.get('agents_total', 0)} وفجوات: {gaps_ar}")
     return {"verdict": verdict, "confidence": confidence,
             "why": (why or "")[:280], "market": top.get("country"),
-            "stage": jury.get("synthesis_stage")}
+            "stage": jury.get("synthesis_stage"),
+            # سدّ تسريب (الطبقة ٦): تصنيف الشارة محسوب هنا — لوحة الويب
+            # تستهلكه بدل حساب تصنيفها الخاص من الرمز الخام (نفس الإصلاح
+            # المطبَّق على شارة البحث العميق).
+            "tone": _verdict_tone(verdict)}
 
 
 def _competitive_position(top: dict | None) -> dict:
@@ -727,6 +731,28 @@ def _mission_gap_lines(name: str, summary: str) -> list[str]:
     return [f"{name}: {g.strip()}" for g in m.group(1).split("؛") if g.strip()]
 
 
+# تصنيف لون/تسمية شارة الحكم — مصدر واحد يستهلكه ثلاثة عارضين (لوحة
+# الويب، غلاف docx، خلاصة docx التنفيذية) بدل تكرار نفس المنطق بايثون +
+# JS بمعيارين قد يختلفان لنفس الرمز (سدّ تسريب الطبقة ٦: كانت لوحة الويب
+# تحسب تصنيفها الخاص من رمز الحكم الإنجليزي الخام وتعرض الرمز نفسه كنص
+# ظاهر — silk_reports._verdict_tone/_VERDICT_LABELS_AR كانتا نسخة موازية).
+def _verdict_tone(vtxt: object) -> str:
+    """تصنيف لون شارة الحكم — go (أخضر)/watch (كهرماني)/nogo (أحمر)/
+    unknown (رمادي)."""
+    t = str(vtxt or "").upper()
+    if "NO-GO" in t or "NO GO" in t:
+        return "nogo"
+    if "WATCH" in t or "CONDITIONAL" in t:
+        return "watch"
+    if "GO" in t:
+        return "go"
+    return "unknown"
+
+
+_VERDICT_LABELS_AR = {"go": "التوصية بالدخول", "watch": "مراقبة السوق",
+                      "nogo": "عدم الدخول حالياً", "unknown": "تعذّر إصدار توصية"}
+
+
 def _deep_research_view(result: dict) -> dict | None:
     """قسم البحث العميق (الموجة ٤، V5) — إضافي بحت، لا يمسّ أي مفتاح قائم.
 
@@ -773,6 +799,17 @@ def _deep_research_view(result: dict) -> dict | None:
                   for cat, dps in (analyst.get("by_category") or {}).items()}
     report_out = dr.get("report") or {}
     verdict = dr.get("verdict") or {}
+    # سدّ تسريب (الطبقة ٦): تعليل حكم كلود (ai.reasoning) نص حرّ — قد يردّد
+    # رمز حكم خام أو مصطلحاً داخلياً رآه في مدخلاته (نفس خطر ai.reasoning
+    # المذكور في _stage2)، وكان يصل خاماً لكل من لوحة الويب وخلاصة docx
+    # التنفيذية بلا أي مُطهِّر. تعقيم هنا مرة واحدة في النموذج القانوني —
+    # بقية حقول verdict (الرمز الخام، الثقة) تبقى كما هي لأن تصنيف الشارة
+    # (_verdict_tone) يحتاج الرمز الإنجليزي الخام تحديداً.
+    if isinstance(verdict.get("ai"), dict) and verdict["ai"].get("reasoning"):
+        verdict = {**verdict,
+                  "ai": {**verdict["ai"],
+                        "reasoning": _strip_internal_plumbing(
+                            verdict["ai"]["reasoning"])}}
     # سدّ تسريب: ملاحظات المراجعة غير المحلولة نص كلود حرّ (المراجِع) —
     # كانت تصل limits وview["deep_research"]["report"] خامة تماماً؛ وسبب
     # فشل التقرير (failure_reason) يحمل تفصيل استثناء/HTTP خام متعمَّد
@@ -803,6 +840,8 @@ def _deep_research_view(result: dict) -> dict | None:
     if verdict.get("ai_note"):
         limits.append(f"حكم كلود (مرحلة ٢): "
                       f"{_strip_internal_plumbing(verdict['ai_note'])}")
+    v_raw = (verdict.get("ai") or {}).get("verdict") or verdict.get("verdict") or ""
+    verdict_tone = _verdict_tone(v_raw)
     return {
         "market": result.get("market"),
         "trace_id": dr.get("trace_id"),
@@ -814,6 +853,12 @@ def _deep_research_view(result: dict) -> dict | None:
         "analyst": {"summary": analyst_report["summary"],
                    "missing_categories": analyst.get("missing_categories") or [],
                    "by_category": by_category},
+        # سدّ تسريب (الطبقة ٦): تصنيف/تسمية الحكم مُحسَّبان هنا مرة واحدة —
+        # لوحة الويب تستهلكهما بدل حساب تصنيفها الخاص من الرمز الخام
+        # وعرض الرمز نفسه كنص ظاهر (كان "CONDITIONAL-GO"/"WATCH" يظهر
+        # حرفياً على شارة الغلاف).
+        "verdict_tone": verdict_tone,
+        "verdict_label": _VERDICT_LABELS_AR[verdict_tone],
         "verdict": verdict,
         "report": {"text": _strip_internal_plumbing(report_out.get("report")),
                   "review_cycles": report_out.get("review_cycles", 0),
@@ -855,6 +900,9 @@ def build_view(result: dict) -> dict:
             "sufficiency": (f"بوابة كفاية البيانات: {jury.get('agents_with_data', 0)}/"
                             f"{jury.get('agents_total', 0)} وكلاء أساسيون لديهم "
                             f"بيانات؛ فجوات: {gaps_ar}"),
+            # سدّ تسريب (الطبقة ٦): نفس تصنيف الشارة المحسوب لمسار الجورية
+            # الاحتياطي أعلاه — هذا الفرع (محرك §8) هو الشائع فعلياً.
+            "tone": _verdict_tone(ed_top.get("verdict")),
         }
     cp = _competitive_position(top)
     view_markets = []

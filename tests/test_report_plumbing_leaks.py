@@ -218,3 +218,71 @@ def test_quality_gate_silent_on_clean_arabic_report():
     checks = {f["check"] for f in out["findings"]}
     assert "english_field_leak" not in checks
     assert "mission_key_leak" not in checks
+
+
+# ── 6) الطبقة ٦ — الحكم مُحسَّب في الخادم لا في JS العميل ──────────────────
+
+def test_humanize_technical_note_does_not_corrupt_common_english_words():
+    """بلاغ تصحيح: إضافة مفتاح "supplier" (اسم وكيل) لمعجم الاستبدال
+    الشامل كانت تُفسد ظهوره الطبيعي داخل جملة إنجليزية أخرى غير مقصودة
+    ("supplier HHI over 3 suppliers" أصبحت "المورّدون HHI over 3
+    suppliers") — مفاتيح أسماء الوكلاء منقولة لمعجم منفصل لا يدخل حلقة
+    الاستبدال الحرّة."""
+    from silk_narrative import humanize_technical_note
+    raw = "supplier HHI over 3 suppliers"
+    assert humanize_technical_note(raw) == raw
+
+
+def test_internal_ar_still_translates_agent_keys_by_exact_match():
+    from silk_narrative import internal_ar
+    assert internal_ar("supplier") == "المورّدون"
+    assert internal_ar("competitor") == "المنافسة"
+    assert internal_ar("pricing") == "التسعير"
+
+
+def test_build_view_exposes_server_computed_verdict_tone_classic_path():
+    """سدّ تسريب (الطبقة ٦): لوحة الويب كانت تحسب تصنيف لون الشارة من
+    الرمز الخام بنفسها (JS regex) — الآن الخادم يحسبه مرة واحدة في
+    النموذج القانوني، لكل من مسار محرك §8 الشائع ومسار الجورية الاحتياطي."""
+    from silk_render import build_view
+    view = build_view({
+        "markets": [{"country": "China", "iso3": "CHN", "total_score": 0.6,
+                    "confidence": 0.5, "components": {},
+                    "jury": {"verdict": "PRELIMINARY GO", "confidence": 0.5,
+                            "agents_with_data": 2, "agents_total": 3,
+                            "data_gaps": []},
+                    "decision": {"schema": "silk.decision/v1",
+                                "verdict": "CONDITIONAL-GO",
+                                "confidence": 0.31, "score": 0.636,
+                                "why": "..."}}],
+        "classified": True, "product": "تمور"})
+    assert view["decision"]["tone"] == "watch"
+
+
+def test_deep_research_view_exposes_verdict_tone_and_label_not_raw_token():
+    """بلاغ تصحيح: شارة غلاف البحث العميق في لوحة الويب كانت تعرض الرمز
+    الخام (CONDITIONAL-GO/WATCH) كنص ظاهر مباشرة — الآن view["deep_research"]
+    يحمل verdict_tone/verdict_label جاهزَين للعرض، وai.reasoning مُطهَّر."""
+    from silk_render import build_view
+    result = {
+        "product": "تمور", "hs_code": "080410", "markets": [],
+        "deep_research": {
+            "market": {"iso3": "ESP", "name_ar": "إسبانيا"},
+            "missions": {},
+            "analyst": {"report": {"summary": ""}, "by_category": {},
+                       "missing_categories": []},
+            "verdict": {"verdict": "PRELIMINARY GO",
+                       "ai": {"verdict": "CONDITIONAL-GO", "confidence": 0.55,
+                             "reasoning": "الحكم الحالي CONDITIONAL-GO لأن "
+                                         "النمو معتدل."}},
+            "report": {"report": "## ملخص\nنص.", "review_cycles": 1,
+                      "unresolved_notes": []},
+            "trace_id": "t-1",
+        },
+    }
+    view = build_view(result)
+    dr = view["deep_research"]
+    assert dr["verdict_tone"] == "watch"
+    assert dr["verdict_label"] == "مراقبة السوق"
+    assert "CONDITIONAL-GO" not in dr["verdict"]["ai"]["reasoning"]
+    assert "دخول مشروط" in dr["verdict"]["ai"]["reasoning"]

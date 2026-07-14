@@ -331,7 +331,7 @@ function applyLang(){
 /* أسماء الأسواق بالعربية (مرآة silk_narrative.COUNTRY_AR) + الوكلاء الثمانية */
 var CAR={SAU:"السعودية",ARE:"الإمارات",QAT:"قطر",KWT:"الكويت",OMN:"عُمان",BHR:"البحرين",JOR:"الأردن",LBN:"لبنان",EGY:"مصر",MAR:"المغرب",TUN:"تونس",DZA:"الجزائر",IRQ:"العراق",TUR:"تركيا",YEM:"اليمن",ZAF:"جنوب أفريقيا",NGA:"نيجيريا",KEN:"كينيا",ETH:"إثيوبيا",GHA:"غانا",IND:"الهند",PAK:"باكستان",BGD:"بنغلاديش",IDN:"إندونيسيا",MYS:"ماليزيا",SGP:"سنغافورة",THA:"تايلند",VNM:"فيتنام",CHN:"الصين",JPN:"اليابان",KOR:"كوريا الجنوبية",GBR:"بريطانيا",DEU:"ألمانيا",FRA:"فرنسا",ITA:"إيطاليا",ESP:"إسبانيا",NLD:"هولندا",USA:"الولايات المتحدة",CAN:"كندا"};
 var AGENT_AR={market_size:{ar:"حجم السوق",en:"Market size"},competitor:{ar:"المنافسة",en:"Competition"},regulatory:{ar:"الاشتراطات",en:"Regulatory"},pricing:{ar:"التسعير",en:"Pricing"},risk:{ar:"المخاطر",en:"Risk"},consumer_demand:{ar:"ثقافة المستهلك",en:"Consumer demand"},supplier:{ar:"المورّدون",en:"Suppliers"},logistics:{ar:"اللوجستيات",en:"Logistics"}};
-function agentName(k){var e=AGENT_AR[k];return e?(e[LANG]||e.ar):k}
+function agentName(k){var e=AGENT_AR[k];return e?(e[LANG]||e.ar):"بيانات إضافية"}
 var S={product:"",hs:"",market:null,span:5,raw:null,view:null,busy:false,
   adminKey:localStorage.getItem("silk_admin_key")||"",
   prefs:JSON.parse(localStorage.getItem("silk_agent_prefs")||"null"),
@@ -498,15 +498,20 @@ function comp(m,k){var c=(m.components_detail||[]).filter(function(x){return x.n
 /* لوحة البحث العميق (الموجة ٤، V5) — تُبنى من v.deep_research حصراً؛
    مختلفة عن renderBoard الكلاسيكية (لا ترتيب أسواق، سوق واحد مُحلَّل بعمق
    بـ١٢ بعثة). القالب الموحّد نفسه (result.view) — لا مسار عرض موازٍ. */
+/* سدّ تسريب (الطبقة ٦): تصنيف الشارة يصل مُحسَّباً من الخادم
+   (view.deep_research.verdict_tone/verdict_label) — لا حساب موازٍ هنا
+   من الرمز الإنجليزي الخام، ولا عرض للرمز نفسه كنص ظاهر (كان
+   "CONDITIONAL-GO"/"WATCH" يظهر حرفياً على شارة الغلاف). */
+var TONE_CSS={go:"go",nogo:"no",watch:"",unknown:""};
 function renderDeepResearch(v){
   var dr=v.deep_research,h=v.header||{},verdict=(dr.verdict||{}),ai=verdict.ai||{};
-  var vtxt=ai.verdict||verdict.verdict||"غير محسوم";
-  var tone=/NO-GO/.test(vtxt)?"no":(/WATCH|CONDITIONAL/.test(vtxt)?"":"go");
+  var tone=TONE_CSS[dr.verdict_tone]||"";
+  var vlabel=dr.verdict_label||"تعذّر إصدار توصية";
   var html='';
   if(dr.degraded||v.degraded){html+='<div style="background:#c00;color:#fff;font-weight:bold;padding:10px 14px;border-radius:6px;margin-bottom:14px">'
     +'⚠ DEGRADED — نظام الذكاء الاصطناعي غير متاح: '+esc(dr.degraded_reason||v.degraded_reason||"طبقة كلود غير متاحة")
     +'<div style="font-weight:normal;font-size:12.5px;margin-top:4px">هذا التقرير مبنيّ على مسار بلا حكم كلود — بعثات/محلل/تقرير قد تكون فارغة. غير مُنصَح بالاعتماد عليه للتسليم النهائي.</div></div>'}
-  html+='<div class="verdict"><div><span class="vtag '+tone+'"><span class="d"></span>'+esc(vtxt)+'</span>'
+  html+='<div class="verdict"><div><span class="vtag '+tone+'"><span class="d"></span>'+esc(vlabel)+'</span>'
     +'<h2>'+esc((v.brief||[])[0]||"")+'</h2><p>'+esc(ai.reasoning||(v.brief||[])[1]||"")+'</p></div>'
     +'<div class="conf"><div class="lvl">بحث عميق — ١٢ بعثة</div><div class="cap">سوق '+esc((dr.market||{}).name_ar||(dr.market||{}).name_en||"")+'</div></div></div>';
   // التقرير الكامل المكتوب والمراجَع — يُعرض أولاً مباشرة تحت بطاقة الحكم
@@ -548,7 +553,7 @@ function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class
   var d=v.decision||{},m=(v.markets||[{}])[0],h=v.header||{};
   $("#bTitle").textContent=(v.product||"")+" · "+(h.target_market||"");
   if(v.deep_research){renderDeepResearch(v);return}
-  var tone=/NO-GO/.test(d.verdict||"")?"no":(/CONDITIONAL|WATCH/.test(d.verdict||"")?"":"go");
+  var tone=TONE_CSS[d.tone]||"";
   var brief=(v.brief||[])[0]||"";
   var ms=comp(m,"market_size"),sp=comp(m,"saudi_position"),tr=m.trend||{};
   var kpi=function(lab,val,st,stTxt,src){return '<div class="kpi"><div class="lab">'+lab+'</div><div class="val num">'+val+'</div><span class="state '+st+'">'+stTxt+'</span><div class="src">'+esc(src||"—")+'</div></div>'};

@@ -71,16 +71,6 @@ INTERNAL_AR: dict[str, str] = {
     "saudi_position": "الحصة السعودية",
     "demand_capacity": "دخل الفرد",
     "competition": "تركّز الموردين",
-    # مفاتيح حزمة وكلاء البحث الثمانية الحتمية (silk_research.py، row["research"])
-    # — نفس التسمية المستخدَمة في لوحة العميل (web/index.html AGENT_AR) كي لا
-    # يختلف اسم نفس الوكيل بين الدردشة السياقية (analysis_context) واللوحة.
-    "competitor": "المنافسة",
-    "regulatory": "الاشتراطات",
-    "pricing": "التسعير",
-    "risk": "المخاطر",
-    "consumer_demand": "ثقافة المستهلك",
-    "supplier": "المورّدون",
-    "logistics": "اللوجستيات",
     "tam_usd": "إجمالي واردات السوق (TAM)",
     "sam_usd": "السوق القابل للخدمة (SAM)",
     "som_usd": "الحصة القابلة للتحصيل (SOM)",
@@ -130,6 +120,26 @@ INTERNAL_AR: dict[str, str] = {
     "no shopping results": "لا نتائج تسوّق مرصودة",
     "(ThreadPoolExecutor)": "",
     "ThreadPoolExecutor": "المعالجة المتوازية",
+}
+
+# مفاتيح حزمة وكلاء البحث الثمانية الحتمية (silk_research.py، row["research"])
+# — نفس التسمية المستخدَمة في لوحة العميل (web/index.html AGENT_AR) كي لا
+# يختلف اسم نفس الوكيل بين الدردشة السياقية (analysis_context) واللوحة.
+# قاموس منفصل عمداً عن INTERNAL_AR: هذه كلمات إنجليزية شائعة جداً بذاتها
+# ("supplier"، "risk"، "pricing") — لو دخلت حلقة الاستبدال الشامل في
+# humanize_technical_note() (تُطبَّق على أي نص حرّ) لأفسدت ظهورها العادي
+# داخل جمل أخرى غير مقصودة (بلاغ تصحيح: "supplier HHI over 3 suppliers"
+# في ملاحظة DataPoint خام تحوّلت لخليط "المورّدون HHI over 3 suppliers").
+# تُستهلك حصراً عبر مطابقة تامة (internal_ar) على مفتاح معروف، لا استبدال
+# نصّي داخل جملة عشوائية.
+_AGENT_KEY_AR: dict[str, str] = {
+    "competitor": "المنافسة",
+    "regulatory": "الاشتراطات",
+    "pricing": "التسعير",
+    "risk": "المخاطر",
+    "consumer_demand": "ثقافة المستهلك",
+    "supplier": "المورّدون",
+    "logistics": "اللوجستيات",
 }
 
 # رموز مؤشرات البنك الدولي → عربية — لا رمز API خام يصل وجه المستخدم.
@@ -295,11 +305,14 @@ def verdict_ar(verdict: object) -> str:
 
 def internal_ar(token: object) -> str:
     """مصطلح داخلي (وكيل/مقياس/رمز مؤشر بنك دولي) → عربي؛ غير المعروف يمرّ
-    كما هو. المعجمان منفصلان (لا دمج) كي تبقى أنماط `_TECH_PATTERNS`
+    كما هو. المعاجم منفصلة (لا دمج) كي تبقى أنماط `_TECH_PATTERNS`
     الأدق (مثل "PV.EST year=2022" → "الاستقرار السياسي (سنة 2022)") تعمل
-    قبل أي استبدال حرفي مبكر."""
+    قبل أي استبدال حرفي مبكر؛ و`_AGENT_KEY_AR` (كلمات إنجليزية شائعة
+    كمفاتيح وكلاء) لا تدخل حلقة الاستبدال الشامل في
+    `humanize_technical_note` — مطابقة تامة هنا فقط."""
     s = str(token or "")
-    return INTERNAL_AR.get(s) or _WB_INDICATOR_AR.get(s) or s
+    return (INTERNAL_AR.get(s) or _WB_INDICATOR_AR.get(s)
+            or _AGENT_KEY_AR.get(s) or s)
 
 
 def fmt_money(v: object) -> str:
