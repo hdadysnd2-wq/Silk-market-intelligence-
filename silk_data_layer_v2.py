@@ -196,6 +196,45 @@ def market_competitors(hs_code: str, market_m49: object, year: int) -> list[Data
     return market_imports(hs_code, market_m49, year)["competitors"]
 
 
+def market_competitors_mirror(hs_code: str, market_m49: object,
+                              year: int) -> list[DataPoint]:
+    """تقدير مرآة لمورّدي سوق لا يُبلِغ كومتريد عن نفسه — mirror fallback
+    (ترقية المرحلة ٢ج، خيار A): بدل سؤال السوق «من استوردتِ منه؟» (استعلام
+    market_imports() المباشر، reporter=السوق)، اسأل كل الدول الأخرى «كم
+    صدّرتِ لهذه السوق؟» (comtrade_trade بـreporter='all',
+    partner=السوق, flow='X') — نفس تقنية mirror_saudi_export أعلاه لكن
+    معمَّمة لكل مورّد لا لسعودية فقط، فتعيد صورة تنافسية كاملة (حصص +
+    HHI قابل للحساب) حتى حين لا تُبلِغ السوق الهدف عن نفسها إطلاقاً.
+
+    ثقة أدنى دوماً من market_competitors المباشر (0.6 لا 0.9-0.7) — تباين
+    تصريحات استيراد/تصدير معروف إحصائياً (قيمة CIF مقابل FOB، توقيت
+    الشحنة، إعادة التصدير عبر ميناء ثالث)، وكل بند موسوم صراحة في المصدر
+    والملاحظة («مرآة»). يُستدعى فقط حين يعيد market_competitors [] — لا
+    استبدال للاستعلام المباشر، احتياط عند غيابه فقط. Never fabricates:
+    [] أيضاً حين يعيد استعلام المرآة نفسه فراغاً.
+    """
+    recs = comtrade_trade(hs_code, "all", year, flow="X", partner=market_m49)
+    if not recs:
+        return []
+    totals: dict[str, float] = {}
+    for rec in recs:
+        code = str(rec.get("reporterCode") or "")
+        val = primary_value(rec)
+        if val is None or not code:
+            continue
+        totals[code] = totals.get(code, 0.0) + val
+    grand = sum(totals.values())
+    if grand <= 0:
+        return []
+    return [
+        _competitor_dp(
+            code, val, grand, hs_code=hs_code, market_label=market_m49,
+            year=year, source="UN Comtrade (مرآة)", confidence=0.6,
+            note_suffix=" — تقدير مرآة من تصريحات تصدير الشركاء (السوق لا "
+                       "تُبلِغ كومتريد مباشرة لهذه السنة/الرمز)")
+        for code, val in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)]
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print("Silk data layer v2 — demo (degrades gracefully offline)")

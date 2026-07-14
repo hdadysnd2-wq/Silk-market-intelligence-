@@ -326,6 +326,31 @@ def comtrade_trade(
     return data
 
 
+def comtrade_trade_mirror_total(hs_code: str, market_m49: object, year: int,
+                                flow: str = "M") -> float | None:
+    """إجمالي تقدير مرآة لسوق لا يُبلِغ كومتريد عن نفسه — mirror fallback
+    (ترقية المرحلة ٢ج، خيار A من مقترح تكامل مصادر جديدة).
+
+    تقنية «إحصاءات المرآة» (نفس مبدأ mirror_saudi_export في
+    silk_data_layer_v2.py، لكن معمَّمة لكل مورّد لا لسعودية فقط): بدل سؤال
+    السوق «كم استوردتِ؟» (قد لا تُبلِغ لكومتريد إطلاقاً — شائع لأسواق نامية
+    كثيرة)، اسأل كل الدول الأخرى «كم صدّرتِ لهذه السوق؟» عبر الاتجاه
+    المعاكس (comtrade_trade بـreporter='all', partner=السوق, flow معكوس).
+    مجموع تصريحات التصدير هذه تقدير بديل، لا تقرير مباشر — يُستدعى فقط
+    كـ**احتياط** حين يعيد الاستعلام المباشر [] (سجل حقيقي غائب)، لا عند
+    فشل الجلب (شبكة/429 — إعادة المحاولة بمعامل مختلف لن تحلّ عطلاً حياً
+    وتستهلك ميزانية كومتريد اليومية بلا داعٍ). None على الفشل/الغياب أيضاً
+    — لا صفر مختلَق، ولا اختلاق قيمة حين يعيد نداء المرآة نفسه فراغاً.
+    """
+    inverse_flow = "X" if flow == "M" else "M"
+    recs = comtrade_trade(hs_code, "all", year, flow=inverse_flow,
+                          partner=market_m49)
+    if not recs:
+        return None
+    vals = [v for v in (primary_value(r) for r in recs) if v is not None]
+    return sum(vals) if vals else None
+
+
 def world_bank(iso3: str, indicator: str, year: int | None = None) -> DataPoint:
     """مؤشر البنك الدولي — القيمة لسنة محددة، أو أحدث سنة منشورة.
 

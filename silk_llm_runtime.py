@@ -35,7 +35,8 @@ from silk_agents import AgentReport, BaseAgent
 from silk_ai_judge import _MODEL, _PRINCIPLE, _call_tools, _isolate
 from silk_ai_judge import failure_reason as _ai_failure_reason
 from silk_data_layer import (
-    DataPoint, comtrade_trade, primary_qty, primary_value, world_bank)
+    DataPoint, comtrade_trade, comtrade_trade_mirror_total, primary_qty,
+    primary_value, world_bank)
 from silk_market_resolver import MarketRef
 
 log = logging.getLogger(__name__)
@@ -127,9 +128,27 @@ def _tool_comtrade_imports(args: dict, ctx: dict) -> list[DataPoint]:
             continue
         vals = [v for v in (primary_value(r) for r in recs) if v is not None]
         if not vals:
+            # ترقية المرحلة ٢ج (خيار A — إحصاءات المرآة): الاستعلام
+            # المباشر نجح لكن أعاد سجلاً فارغاً — قد تكون السوق فعلاً
+            # بلا استيراد لهذا الرمز، أو قد تكون لا تُبلِغ كومتريد عن
+            # نفسها إطلاقاً (شائع لأسواق نامية كثيرة). بدل إعلان فجوة
+            # صامتة مباشرة، اسأل شركاءها التجاريين "كم صدّرتم لها؟" —
+            # لا محاولة عند فشل الجلب الفعلي (fetch_failed أعلاه)، فقط
+            # عند غياب سجل حقيقي في ردّ ناجح.
+            mirror_total = comtrade_trade_mirror_total(hs, market.m49, year,
+                                                        flow="M")
+            if mirror_total is not None:
+                out.append(DataPoint(
+                    round(mirror_total, 2), "UN Comtrade (مرآة)", 0.6,
+                    f"HS{hs} تقدير استيراد {market.name_en} {year} من "
+                    "مرآة تصريحات تصدير الشركاء (السوق لا تُبلِغ كومتريد "
+                    "مباشرة لهذه السنة/الرمز) — أقل يقيناً من تصريح "
+                    "مباشر، تقدير احتياطي لا بديل كامل",
+                    _today(), status="mirrored"))
+                continue
             out.append(DataPoint(
                 None, "UN Comtrade", 0.0,
-                f"HS{hs} استيراد {market.name_en} {year}: لا سجل",
+                f"HS{hs} استيراد {market.name_en} {year}: لا سجل (ولا مرآة)",
                 _today(), status="no_record"))
             continue
         out.append(DataPoint(
@@ -161,7 +180,7 @@ def _tool_comtrade_competitors(args: dict, ctx: dict) -> list[DataPoint]:
     (partner=0) — هذه الأداة تستدعي partner='all' فتعيد حصص كل دولة مورّدة
     بالاسم الحقيقي (silk_data_layer.partner_name، الموجة ١٠) — لا تعتمد على
     بحث الويب لصورة تنافسية أساسية."""
-    from silk_data_layer_v2 import market_competitors
+    from silk_data_layer_v2 import market_competitors, market_competitors_mirror
     hs, market = ctx.get("hs_code"), ctx["market"]
     if not hs:
         return [DataPoint(None, "UN Comtrade", 0.0,
@@ -170,20 +189,34 @@ def _tool_comtrade_competitors(args: dict, ctx: dict) -> list[DataPoint]:
     top_n = min(max(int(args.get("top_n") or 10), 1), 20)
     y = int(year) if year else _recent_years(1)[0]
     comps = market_competitors(hs, market.m49, y)
+    mirrored = False
+    if not comps:
+        # ترقية المرحلة ٢ج (خيار A — إحصاءات المرآة): الاستعلام المباشر
+        # يتطلب أن تُبلِغ السوق الهدف عن نفسها لكومتريد (reporter=السوق)
+        # — أسواق كثيرة لا تُبلِغ إطلاقاً رغم أن شركاءها التجاريين
+        # يُبلِغون عن تصديرهم إليها. احتياط فقط، لا استبدال للاستعلام
+        # المباشر.
+        comps = market_competitors_mirror(hs, market.m49, y)
+        mirrored = bool(comps)
     if not comps:
         return [DataPoint(
             None, "UN Comtrade", 0.0,
-            f"HS{hs} مورّدو {market.name_en} {y}: لا سجل ثنائي/تعذّر الجلب",
+            f"HS{hs} مورّدو {market.name_en} {y}: لا سجل ثنائي/تعذّر الجلب "
+            "(ولا مرآة)",
             _today())]
     top = comps[:top_n]
     hhi = round(sum((c.value.get("share") or 0.0) ** 2 for c in comps), 1)
+    mirror_note = (" — تقدير مرآة من تصريحات تصدير الشركاء (السوق لا تُبلِغ "
+                   "كومتريد مباشرة)" if mirrored else "")
     summary = DataPoint(
         {"year": y, "hhi": hhi, "supplier_count": len(comps),
          "top_suppliers": [{"partner": c.value["partner"],
                             "share": c.value["share"]} for c in top]},
-        "UN Comtrade", 0.9,
+        "UN Comtrade (مرآة)" if mirrored else "UN Comtrade",
+        0.6 if mirrored else 0.9,
         f"HS{hs} مورّدو {market.name_en} {y}: {len(comps)} دولة مرصودة، "
-        f"مؤشر تركّز HHI={hhi} (>2500 مركّز جداً، 1500-2500 معتدل، <1500 مجزَّأ)",
+        f"مؤشر تركّز HHI={hhi} (>2500 مركّز جداً، 1500-2500 معتدل، <1500 "
+        f"مجزَّأ){mirror_note}",
         _today())
     return [summary, *top]
 
