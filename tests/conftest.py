@@ -94,3 +94,28 @@ def _isolated_fact_store(monkeypatch):
     # صراحة قبل أي استخدام.
     import silk_context
     silk_context._data_counter.set(None)
+
+
+# ── طبقة الدخان الحية (opt-in) — gated live-integration lane ─────────────────
+# اختبارات موسومة `live` تضرب الشبكة الحقيقية (مصادر مجانية بلا مفتاح فقط —
+# لا حرق أرصدة). تُتخطّى دائماً في CI الافتراضي (`pytest tests/ -q`) وتعمل
+# فقط حين SILK_RUN_LIVE=1 (مسار workflow_dispatch يدوي، راجع
+# .github/workflows/live-smoke.yml). هذا يبدأ إغلاق أكبر فجوة اختبار: غياب
+# أي اختبار تكامل حي (كل شيء آخر يقطع الشبكة).
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "live: real-network integration smoke test — skipped unless "
+        "SILK_RUN_LIVE=1 (opt-in lane, never runs on default CI).")
+
+
+def pytest_collection_modifyitems(config, items):
+    if os.environ.get("SILK_RUN_LIVE") == "1":
+        return
+    skip_live = pytest.mark.skip(
+        reason="live-network test; set SILK_RUN_LIVE=1 to run "
+               "(opt-in lane — see .github/workflows/live-smoke.yml)")
+    for item in items:
+        if "live" in item.keywords:
+            item.add_marker(skip_live)
