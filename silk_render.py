@@ -44,10 +44,14 @@ def _decision(top: dict | None) -> dict:
     verdict = ai.get("verdict") or jury.get("verdict")
     confidence = (ai.get("confidence") if ai.get("confidence") is not None
                   else jury.get("confidence"))
+    # أسماء أصناف الوكلاء الداخلية (TradeFlowAgent...) لا تصل وجه المستخدم —
+    # تُعرَّب في المصدر هنا كي يرث كل مستهلك (نص/docx/markdown) الترجمة
+    # نفسها، بدل ترقيعها في مستهلك واحد فقط (كانت docx وحدها تُعرِّبها).
+    from silk_narrative import internal_ar
+    gaps_ar = ", ".join(internal_ar(g) for g in jury.get("data_gaps", [])) or "لا شيء"
     why = (ai.get("reasoning")
            or f"تغطية الوكلاء {jury.get('agents_with_data', 0)}/"
-              f"{jury.get('agents_total', 0)} وفجوات: "
-              f"{', '.join(jury.get('data_gaps', [])) or 'لا شيء'}")
+              f"{jury.get('agents_total', 0)} وفجوات: {gaps_ar}")
     return {"verdict": verdict, "confidence": confidence,
             "why": (why or "")[:280], "market": top.get("country"),
             "stage": jury.get("synthesis_stage")}
@@ -110,12 +114,14 @@ def _deep_research_brief(dr_view: dict) -> list[str]:
 
     نفس فلسفة `_brief` (§10.4: سطر جوال) لكن على شكل view["deep_research"]
     (١٢ بعثة + محلل، لا قائمة أسواق مرتّبة)."""
+    from silk_narrative import verdict_ar
     verdict = dr_view.get("verdict") or {}
     ai = verdict.get("ai") or {}
-    v = ai.get("verdict") or verdict.get("verdict") or "غير محسوم"
+    v_raw = ai.get("verdict") or verdict.get("verdict")
+    v = verdict_ar(v_raw) if v_raw else "تعذّر إصدار توصية"
     market = ((dr_view.get("market") or {}).get("name_ar")
              or (dr_view.get("market") or {}).get("name_en") or "؟")
-    lines = [f"التوصية: {v} — سوق {market} (بحث عميق، ١٢ بعثة)"]
+    lines = [f"التوصية: {v} — سوق {market} (بحث عميق شامل)"]
     demand = (dr_view.get("analyst") or {}).get("by_category", {}).get("demand") or []
     if demand:
         lines.append(f"الطلب الفعلي المقدَّر: {demand[0].get('value')}")
@@ -419,6 +425,7 @@ def _swot(research: dict | None) -> dict:
 
     اشتقاق عرض صرف: قواعد معلنة فوق حقائق حزمة البحث — لا نثر حر ولا تخمين.
     """
+    from silk_narrative import internal_ar
     S, W, O, T = [], [], [], []
     if not research or not research.get("agents"):
         return {"S": S, "W": W, "O": O, "T": T,
@@ -426,7 +433,7 @@ def _swot(research: dict | None) -> dict:
     sau = _rmetric(research, "competitor", "saudi_share_pct")
     if sau:
         S.append({"text": f"حضور سعودي قائم بحصة {sau}% من واردات السوق",
-                  "evidence": "UN Comtrade — saudi_share_pct"})
+                  "evidence": f"UN Comtrade — {internal_ar('saudi_share_pct')}"})
     uv = _rmetric(research, "pricing", "border_unit_value_usd_kg")
     suv = _rmetric(research, "pricing", "saudi_border_unit_value_usd_kg")
     if uv and suv and suv <= uv:
@@ -435,20 +442,20 @@ def _swot(research: dict | None) -> dict:
     for g in (research.get("agents", {}).get("pricing", {}).get("gaps") or []):
         if "بطاقة" in g or "margin" in g:
             W.append({"text": "الهامش غير محسوب — بطاقة المنتج غير مكتملة",
-                      "evidence": g[:120]})
+                      "evidence": _humanize_gap_note(g[:120])})
             break
     gate = _rmetric(research, "regulatory", "eligibility_gate")
     if gate:
         W.append({"text": "بوابة أهلية أوروبية مفتوحة (منشأة معتمدة EU 2017/625)",
-                  "evidence": "مرجع L1 — eligibility_gate"})
+                  "evidence": f"مرجع L1 — {internal_ar('eligibility_gate')}"})
     cagr = _rmetric(research, "market_size", "import_cagr_pct")
     if cagr is not None and cagr > 5:
         O.append({"text": f"واردات السوق تنمو {cagr}% سنوياً مركّباً",
-                  "evidence": "UN Comtrade — import_cagr_pct"})
+                  "evidence": f"UN Comtrade — {internal_ar('import_cagr_pct')}"})
     hhi = _rmetric(research, "competitor", "hhi")
     if hhi is not None and hhi < 0.15:
         O.append({"text": f"سوق مفتّت (HHI {hhi}) — لا مورّد مهيمناً",
-                  "evidence": "UN Comtrade — hhi"})
+                  "evidence": f"UN Comtrade — {internal_ar('hhi')}"})
     rr = _rmetric(research, "consumer_demand", "ramadan_seasonality")
     if rr and "مرجّحة" in str(rr):
         O.append({"text": "موسمية رمضان/العيدين فرصة ذروة طلب",
@@ -456,18 +463,18 @@ def _swot(research: dict | None) -> dict:
     top = _rmetric(research, "competitor", "top_supplier_share_pct")
     if top is not None and top > 50:
         T.append({"text": f"مورّد مهيمن بحصة {top}% — حرب أسعار محتملة",
-                  "evidence": "UN Comtrade — top_supplier_share_pct"})
+                  "evidence": f"UN Comtrade — {internal_ar('top_supplier_share_pct')}"})
     tariff = _rmetric(research, "regulatory", "tariff_applied_pct")
     if tariff is not None and tariff > 10:
         T.append({"text": f"تعريفة مطبّقة مرتفعة {tariff}%",
-                  "evidence": "WITS — tariff_applied_pct"})
+                  "evidence": f"WITS — {internal_ar('tariff_applied_pct')}"})
     fx = _rmetric(research, "risk", "fx_volatility_pct")
     if fx is not None and fx > 5:
         T.append({"text": f"تقلب عملة {fx}% (معامل اختلاف)",
-                  "evidence": "World Bank — PA.NUS.FCRF"})
+                  "evidence": f"World Bank — {internal_ar('PA.NUS.FCRF')}"})
     if _rmetric(research, "risk", "critical_risk"):
         T.append({"text": "خطر سياسي حرج (WGI دون −1.5)",
-                  "evidence": "World Bank — PV.EST"})
+                  "evidence": f"World Bank — {internal_ar('PV.EST')}"})
     return {"S": S, "W": W, "O": O, "T": T,
             "note": "خلايا مشتقة من الحقائق المتاحة — الخلية الفارغة تعني "
                     "غياب البيانات، لا سلامة الجانب"}
@@ -540,6 +547,12 @@ _WHOLE_JSON_RE = re.compile(r"^\s*[{\[].*[}\]]\s*$", re.S)
 _EN_CONF_VALUE_RE = re.compile(r"\bconfidence\b(\s*[|:：]\s*)(\d?\.\d{1,4})")
 _EN_FIELD_RE = re.compile(r"\b(verdict|confidence)\b")
 _EN_FIELD_AR = {"verdict": "الحكم", "confidence": "درجة الثقة"}
+# رمز حكم آلة خام (GO/WATCH/NO-GO/CONDITIONAL-GO) داخل نثر حرّ كتبه الكاتب
+# نفسه (بلاغ اختبار: "الحكم WATCH — مراقبة قبل الدخول مبني على...") — لا
+# حقل مُهيكَل يلتقطه verdict_ar عند مصدره هنا، فالتقاط نصّي مباشر داخل
+# السرد. الأطول أولاً (CONDITIONAL-GO/NO-GO قبل GO المجرّدة) كي لا يتبقّى
+# "-GO" يتيماً بعد الاستبدال.
+_RAW_VERDICT_RE = re.compile(r"\b(CONDITIONAL-GO|NO-GO|GO|WATCH)\b")
 
 
 def _strip_raw_json_leak(text: str | None) -> str | None:
@@ -603,6 +616,8 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
         return f"درجة الثقة{m.group(1)}{confidence_phrase(float(m.group(2)))}"
     text = _EN_CONF_VALUE_RE.sub(_conf_value, text)
     text = _EN_FIELD_RE.sub(lambda m: _EN_FIELD_AR[m.group(1)], text)
+    from silk_narrative import verdict_ar
+    text = _RAW_VERDICT_RE.sub(lambda m: verdict_ar(m.group(1)), text)
     return re.sub(r"[ \t]{2,}", " ", text)
 
 
@@ -736,6 +751,9 @@ def build_view(result: dict) -> dict:
     ed_top = (top or {}).get("decision") or {}
     if ed_top.get("schema") and not ed_top.get("error"):
         jury = (top or {}).get("jury") or {}
+        from silk_narrative import internal_ar
+        gaps_ar = ("، ".join(internal_ar(g) for g in jury.get("data_gaps", []))
+                  or "لا شيء")
         decision = {
             "verdict": ed_top.get("verdict"),
             "confidence": ed_top.get("confidence"),
@@ -745,8 +763,7 @@ def build_view(result: dict) -> dict:
             "stage": "silk.decision/v1 — المحرك الموزون §8 (الحكم الوحيد)",
             "sufficiency": (f"بوابة كفاية البيانات: {jury.get('agents_with_data', 0)}/"
                             f"{jury.get('agents_total', 0)} وكلاء أساسيون لديهم "
-                            f"بيانات؛ فجوات: "
-                            f"{'، '.join(jury.get('data_gaps', [])) or 'لا شيء'}"),
+                            f"بيانات؛ فجوات: {gaps_ar}"),
         }
     cp = _competitive_position(top)
     view_markets = []
@@ -882,16 +899,17 @@ def render_text(view: dict) -> str:
         L.append("أثر المصادر: " + " ، ".join(
             f"{b['source']}={b['contributed']}/{b['attempted']}"
             for b in prov[:6]))
+    from silk_narrative import confidence_phrase, verdict_ar
     L += [f"رمز HS: {view['hs_code']} (ثقة {view['hs_confidence']}) | "
           f"سنة {view['year']} | مبدئي",
-          f"القرار: {d.get('verdict') or 'تعذّر الحكم'} "
-          f"(ثقة {d.get('confidence')}) — {d.get('market')}",
+          f"القرار: {verdict_ar(d.get('verdict'))} "
+          f"(ثقة {confidence_phrase(d.get('confidence'))}) — {d.get('market')}",
           f"لماذا: {d.get('why')}", "─" * 60]
     ed = (view.get("markets") or [{}])[0].get("entry_decision") or {}
     if ed.get("schema"):
-        L.append(f"قرار الدخول (§8): {ed.get('verdict')} score={ed.get('score')} "
-                 f"ثقة={ed.get('confidence')} [أوزان {ed.get('weights_option')}]"
-                 f" — {ed.get('why')}")
+        L.append(f"قرار الدخول (المحرك الموزون): {verdict_ar(ed.get('verdict'))} "
+                 f"— النقاط {ed.get('score')} — الثقة "
+                 f"{confidence_phrase(ed.get('confidence'))} — {ed.get('why')}")
         for c in (ed.get("conditions") or [])[:3]:
             L.append(f"  شرط: {c}")
     cp = view["competitive_position"]

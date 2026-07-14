@@ -95,10 +95,15 @@ def test_render_markdown_full_report_every_number_sourced():
     _seed_store()
     from silk_render import build_view
     from silk_reports import render_markdown
+    from silk_narrative import VERDICT_AR
     md = render_markdown(build_view(_analyzed()))
     assert "تمور" in md and "080410" in md
     assert "قرار الدخول" in md                      # قسم §8
-    assert any(v in md for v in ("GO", "CONDITIONAL-GO", "NO-GO"))
+    # الحكم يصل مُعرَّباً — لا رمز آلة خام (GO/CONDITIONAL-GO/NO-GO) على
+    # وجه التقرير (سدّ تسريب).
+    assert any(v in md for v in VERDICT_AR.values())
+    for raw in ("GO", "CONDITIONAL-GO", "NO-GO"):
+        assert raw not in md
     assert "TAM" in md and "60,000,000" in md.replace("٬", ",")
     assert "UN Comtrade" in md                      # المصدر بجانب الرقم
     assert "مُقدَّر" in md                           # وسم النماذج المعلنة

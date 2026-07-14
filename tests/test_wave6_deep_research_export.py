@@ -98,7 +98,12 @@ def test_deep_research_brief_uses_analyst_intersections_not_empty_components():
     brief = render_brief(view)
     assert "طلب استدلالي معقول" in brief
     assert "نيجيريا" in brief
-    assert "WATCH" in brief
+    # الحكم يصل مُعرَّباً لا رمز الآلة الخام (سدّ تسريب: مسار /research كان
+    # يُظهر "WATCH"/"GO" حرفياً في المختصر الجوال بينما المسار الكلاسيكي
+    # يُترجمه أصلاً عبر silk_narrative.verdict_ar) — راجع "مراقبة السوق"
+    # في VERDICT_AR.
+    assert "مراقبة السوق" in brief
+    assert "WATCH" not in brief
 
 
 def test_classic_brief_unaffected_by_deep_research_branch():

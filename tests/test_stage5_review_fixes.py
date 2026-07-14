@@ -57,13 +57,14 @@ def test_single_authoritative_verdict_everywhere():
     md = render_markdown(view)
     txt = render_text(view)
     brief = render_brief(view)
-    # المشتقات التحليلية (md/txt) تحمل رمز الحكم؛ المختصر — وجه المستخدم —
-    # يحمل ترجمته العربية لنفس الحكم الواحد (طبقة السرد P1)، لا حكماً ثانياً.
-    for out in (md, txt):
-        assert "CONDITIONAL-GO" in out
+    # سدّ تسريب: كل المشتقات (md/txt/brief) تحمل الآن الترجمة العربية
+    # الواحدة لنفس الحكم — لا رمز آلة CONDITIONAL-GO خام في أي منها (كان
+    # md/txt وحدهما يطبعان الرمز الخام قبل هذا الإصلاح؛ حكم واحد بمصدر
+    # عرض واحد silk_narrative.verdict_ar، لا حكمان بصياغتين).
+    for out in (md, txt, brief):
+        assert "دخول مشروط" in out         # ترجمة CONDITIONAL-GO الواحدة
+        assert "CONDITIONAL-GO" not in out
         assert "NO-GO" not in out          # لا حكم ثانٍ في أي قسم
-    assert "دخول مشروط" in brief           # ترجمة CONDITIONAL-GO الواحدة
-    assert "NO-GO" not in brief and "عدم الدخول" not in brief
     # وأول سطر قرار في الخاتمة = نفس الحكم (سطور المختصر تشتق من decision).
     assert "دخول مشروط" in view["brief"][0]
 

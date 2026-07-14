@@ -17,6 +17,8 @@ Pure display over computed fields; adds no numbers, calls no network.
 """
 from __future__ import annotations
 
+import re
+
 # ── المعجم — the mandatory glossary ─────────────────────────────────────────
 
 VERDICT_AR: dict[str, str] = {
@@ -103,7 +105,126 @@ INTERNAL_AR: dict[str, str] = {
     "LocalPriceAgent": "وكيل أسعار التجزئة المدفوع",
     "retail_prices": "أسعار التجزئة",
     "no shopping results": "لا نتائج تسوّق مرصودة",
+    "(ThreadPoolExecutor)": "",
+    "ThreadPoolExecutor": "المعالجة المتوازية",
 }
+
+# رموز مؤشرات البنك الدولي → عربية — لا رمز API خام يصل وجه المستخدم.
+_WB_INDICATOR_AR: dict[str, str] = {
+    "NY.GDP.PCAP.CD": "دخل الفرد",
+    "NY.GDP.PCAP.PP.CD": "دخل الفرد (تعادل القوة الشرائية)",
+    "SP.POP.TOTL": "عدد السكان",
+    "PV.EST": "الاستقرار السياسي",
+    "RQ.EST": "الجودة التنظيمية",
+    "RL.EST": "سيادة القانون",
+    "GE.EST": "فعالية الحكومة",
+    "CC.EST": "مكافحة الفساد",
+    "VA.EST": "الصوت والمساءلة",
+    "LP.LPI.OVRL.XQ": "الأداء اللوجستي",
+    "LP.LPI.TIME.XQ": "الالتزام بالمواعيد اللوجستية",
+    "LP.LPI.ITRN.XQ": "جودة الشحن الدولي",
+    "PA.NUS.FCRF": "سعر الصرف",
+}
+
+
+def _wb_ar(code: str) -> str:
+    return _WB_INDICATOR_AR.get(code, code)
+
+
+# أنماط ملاحظات تقنية خام شائعة (استثناءات بايثون/أخطاء HTTP/قوالب مصادر
+# محدَّدة) → عربية مقروءة. مُرتَّبة الأخصّ أولاً؛ عقود الملاحظات في طبقة
+# البيانات (silk_data_layer.py، silk_hs_resolver.py، ...) تبقى كما هي —
+# هذا تحويل عرض فقط (silk_render._strip_internal_plumbing يستدعيه أيضاً
+# عبر humanize_technical_note، فالإصلاح مركزي مرة واحدة).
+_TECH_PATTERNS: list[tuple[re.Pattern, object]] = [
+    # البنك الدولي
+    (re.compile(r"\b([A-Z]{2}(?:\.[A-Z0-9]+){1,3})\s+fetch failed for\s+(\w+):.*"),
+     lambda m: f"{_wb_ar(m.group(1))} ({m.group(2)}): تعذّر الجلب — أعد المحاولة"),
+    (re.compile(r"\b([A-Z]{2}(?:\.[A-Z0-9]+){1,3}):\s*no value returned for\s+(\w+)"),
+     lambda m: f"{_wb_ar(m.group(1))} ({m.group(2)}): لا قيمة منشورة"),
+    (re.compile(r"\bno value returned for\s+(\w+)"),
+     lambda m: f"لا قيمة منشورة لـ{m.group(1)}"),
+    (re.compile(r"\b([A-Z]{2}(?:\.[A-Z0-9]+){1,3})\s+year=(\d{4})"),
+     lambda m: f"{_wb_ar(m.group(1))} (سنة {m.group(2)})"),
+    (re.compile(r"شكل ردّ غير متوقع من البنك الدولي:\s*\S+"),
+     "تعذّر تفسير رد البنك الدولي"),
+    (re.compile(r"البنك الدولي أعاد خطأ API:.*"),
+     "البنك الدولي أعاد خطأ فني — أعد المحاولة"),
+    (re.compile(r"سجلات البنك الدولي ليست قائمة:\s*\S+"),
+     "تعذّر تفسير رد البنك الدولي"),
+    (re.compile(r"\b([A-Z]{2}(?:\.[A-Z0-9]+){1,3})\b"),
+     lambda m: _wb_ar(m.group(1))),
+    # مصنّف HS
+    (re.compile(r"no HS match for\s+['\"]([^'\"]*)['\"]"),
+     lambda m: f"لا تطابق لتصنيف HS للمنتج «{m.group(1)}»"),
+    (re.compile(r"weak match for\s+['\"]([^'\"]*)['\"]\s*"
+               r"\(best=['\"]([^'\"]*)['\"],\s*score=([\d.]+)\)"),
+     lambda m: (f"تطابق ضعيف لتصنيف HS للمنتج «{m.group(1)}» — أقرب نتيجة: "
+                f"{m.group(2)} (نسبة {round(float(m.group(3)) * 100)}%)")),
+    (re.compile(r"HS seed empty/unavailable"), "قاعدة تصنيف HS غير متاحة حالياً"),
+    (re.compile(r"invalid HS code\s+['\"]([^'\"]*)['\"]"),
+     lambda m: f"رمز HS غير صالح: {m.group(1)}"),
+    # فاو ستات
+    (re.compile(r"FAOSTAT unavailable:\s*non-JSON response for ([\w/]+):"
+               r".*\(may require auth\)"),
+     lambda m: f"فاو ستات: رد غير مقروء لـ{m.group(1)} — قد يتطلب تفعيل مفتاح"),
+    (re.compile(r"FAOSTAT unavailable:\s*fetch failed for ([\w/]+):"
+               r".*\(may require auth\)"),
+     lambda m: f"فاو ستات: تعذّر الجلب لـ{m.group(1)} — قد يتطلب تفعيل مفتاح"),
+    (re.compile(r"FAOSTAT unavailable:\s*unknown area for ISO3 '(\w+)' "
+               r"\(no mapping\)"),
+     lambda m: f"فاو ستات: لا يغطي هذا المصدر {m.group(1)}"),
+    (re.compile(r"FAOSTAT unavailable:.*"), "فاو ستات: غير متاح حالياً"),
+    # مصادر أخرى بأنماط "fetch failed" إنجليزية عامة
+    (re.compile(r"\bGDELT\b.*fetch failed for.*"),
+     "تعذّر جلب أخبار المخاطر — أعد المحاولة"),
+    (re.compile(r"\bOpenAlex\b.*fetch failed for.*"),
+     "تعذّر جلب المراجع البحثية — أعد المحاولة"),
+    (re.compile(r"pytrends unavailable / no network:.*"),
+     "بيانات الاتجاهات غير متاحة (بلا شبكة)"),
+    (re.compile(r"Volza:\s*no named importers parsed for HS(\d+) into (\w+)"),
+     lambda m: f"فولزا: لا مستوردون بالاسم مرصودون لرمز {m.group(1)} في {m.group(2)}"),
+    (re.compile(r"Explee unavailable:.*"), "إكسبلي غير متاح حالياً"),
+    (re.compile(r"Google Maps API status=(\w+):.*"),
+     lambda m: f"خرائط جوجل: تعذّر الجلب ({m.group(1)})"),
+]
+
+_EXC_CLASS_RE = re.compile(
+    r"\b[A-Z][A-Za-z0-9]*(?:Error|Exception|Timeout)\b\s*:?\s*.*")
+_CONN_POOL_RE = re.compile(r"\b\w*ConnectionPool\([^)]*\)[^.؛]*")
+_HTTP_STATUS_RE = re.compile(r"\bHTTP\s*\d{3}\b:?\s*")
+
+
+def humanize_technical_note(text: object) -> str:
+    """حوّل ملاحظة تقنية خام (استثناء بايثون/خطأ HTTP/قالب مصدر داخلي)
+    لعربية مقروءة — نقطة التعريب المركزية الوحيدة، يستدعيها كل من
+    `translate_gaps` (قوائم الفجوات/الحدود) و
+    `silk_render._strip_internal_plumbing` (نصوص حرة: ملخّصات
+    البعثات/المحلل/الملاحظات غير المحلولة) فلا يتكرر الإصلاح مرتين.
+
+    عقود ملاحظات DataPoint في طبقة البيانات تبقى كما هي حرفياً — هذا
+    تحويل عرض فقط، لا تعديل على قيمة أو مصدر أو حقل مخزَّن.
+    """
+    s = str(text or "")
+    if not s:
+        return s
+    for token, ar in INTERNAL_AR.items():
+        s = s.replace(token, ar)
+    for en, ar in _EN_COUNTRY_AR.items():
+        s = s.replace(en, ar)
+    for rx, repl in _TECH_PATTERNS:
+        s = rx.sub(repl, s)
+    s = re.sub(r"missing \(no [^)]*\)", "غير متوفر", s)
+    s = re.sub(r"\bmissing\b", "غير متوفر", s)
+    s = re.sub(r"\(no [^)]*signal\)", "", s)
+    s = re.sub(r"\bunobserved\b", "غير مرصود", s)
+    # الشبكة الأمان الأخيرة: أي اسم صنف استثناء بايثون أو جزء اتصال HTTP
+    # خام لم يلتقطه نمط معروف أعلاه — لا نص تقني خام يمر أبداً للعميل.
+    s = _EXC_CLASS_RE.sub("تعذّر الاتصال بالمصدر — خطأ تقني مؤقت", s)
+    s = _CONN_POOL_RE.sub("تعذّر الاتصال بالمصدر", s)
+    s = _HTTP_STATUS_RE.sub("خطأ استجابة الخادم: ", s)
+    return re.sub(r"[ \t]{2,}", " ", s).strip(" —:")
+
 
 GAP = "—"          # القيمة الغائبة: شرطة هادئة، لا شعار ولا شرح مكرّر.
 GAP_WORD = "غير متوفر"
@@ -132,8 +253,12 @@ def verdict_ar(verdict: object) -> str:
 
 
 def internal_ar(token: object) -> str:
-    """مصطلح داخلي (وكيل/مقياس) → عربي؛ غير المعروف يمرّ كما هو."""
-    return INTERNAL_AR.get(str(token or ""), str(token or ""))
+    """مصطلح داخلي (وكيل/مقياس/رمز مؤشر بنك دولي) → عربي؛ غير المعروف يمرّ
+    كما هو. المعجمان منفصلان (لا دمج) كي تبقى أنماط `_TECH_PATTERNS`
+    الأدق (مثل "PV.EST year=2022" → "الاستقرار السياسي (سنة 2022)") تعمل
+    قبل أي استبدال حرفي مبكر."""
+    s = str(token or "")
+    return INTERNAL_AR.get(s) or _WB_INDICATOR_AR.get(s) or s
 
 
 def fmt_money(v: object) -> str:
@@ -246,22 +371,10 @@ def translate_gaps(gaps: list) -> list[str]:
     """فجوات داخلية (بأسماء وكلاء/مقاييس وهياكل إنجليزية) → عربية كاملة.
 
     لا اسم صنف كود ولا هيكل جملة إنجليزي يمرّ — ملاحظات الفجوة الداخلية
-    تبقى كما هي في نموذج البيانات؛ الترجمة للعرض فقط.
+    تبقى كما هي في نموذج البيانات؛ الترجمة للعرض فقط. مُفوَّض بالكامل
+    لـ `humanize_technical_note` — نقطة تعريب واحدة (راجع تعليقها).
     """
-    import re
-    out = []
-    for g in gaps or []:
-        s = str(g)
-        for token, ar in INTERNAL_AR.items():
-            s = s.replace(token, ar)
-        for en, ar in _EN_COUNTRY_AR.items():
-            s = s.replace(en, ar)
-        # هياكل ملاحظات الفجوة الإنجليزية الشائعة → عربية هادئة.
-        s = re.sub(r"missing \(no [^)]*\)", "غير متوفر", s)
-        s = re.sub(r"\bmissing\b", "غير متوفر", s)
-        s = re.sub(r"\(no [^)]*signal\)", "", s).strip()
-        out.append(s)
-    return out
+    return [humanize_technical_note(g) for g in (gaps or [])]
 
 
 # ── الخلاصة التنفيذية السردية — the 3-paragraph executive summary ───────────

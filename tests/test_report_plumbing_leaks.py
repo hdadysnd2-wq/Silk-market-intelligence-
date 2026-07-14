@@ -39,8 +39,19 @@ def test_strip_internal_plumbing_humanizes_english_fields():
 
 def test_strip_internal_plumbing_leaves_arabic_prose_untouched():
     from silk_render import _strip_internal_plumbing
-    prose = "الحكم النهائي WATCH — الطلب موسمي حول رمضان بثقة عالية."
+    prose = "الطلب موسمي حول رمضان وينمو بثبات — تحليل مبني على أدلة مرصودة."
     assert _strip_internal_plumbing(prose) == prose
+
+
+def test_strip_internal_plumbing_translates_bare_verdict_token_in_prose():
+    # سدّ تسريب لاحق: الكاتب أحياناً يكتب رمز الحكم الخام داخل نثر حرّ
+    # ("الحكم النهائي WATCH — ...") بدل حقل مُهيكَل — لا مصدر عرض آخر
+    # يلتقط هذا الشكل، فالالتقاط النصّي المباشر هنا هو خط الدفاع الوحيد.
+    from silk_render import _strip_internal_plumbing
+    prose = "الحكم النهائي WATCH — الطلب موسمي حول رمضان بثقة عالية."
+    out = _strip_internal_plumbing(prose)
+    assert "مراقبة السوق" in out
+    assert "WATCH" not in out
 
 
 # ── 2) الاسم العربي للبعثة في النموذج القانوني وكل المشتقات ──────────────
