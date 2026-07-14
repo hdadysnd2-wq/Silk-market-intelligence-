@@ -19,19 +19,9 @@ from silk_data_layer import DataPoint
 CARD = {"cost_per_unit": 12.5, "unit": "kg", "tier": "premium",
         "monthly_capacity": 5000, "shipping_per_unit": 2.0}
 
-
-@contextlib.contextmanager
-def _block_network():
-    real = socket.socket
-
-    def _no_net(*a, **k):  # noqa: ANN002, ANN003
-        raise OSError("network disabled for hermetic test")
-
-    socket.socket = _no_net
-    try:
-        yield
-    finally:
-        socket.socket = real
+# مرجع قانوني موحَّد (conftest.py) — راجع تعليق test_smoke.py لسبب توحيد
+# النسخ المحلية المكرَّرة (تسريب اتصال مجمَّع عبر جلسة requests المشتركة).
+from conftest import block_network as _block_network
 
 
 def _fixture_row() -> dict:

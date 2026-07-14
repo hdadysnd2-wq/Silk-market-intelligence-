@@ -12,21 +12,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import silk_hs_resolver as resolver
 import silk_engine as engine
 
-
-@contextlib.contextmanager
-def _block_network():
-    """اقطع الشبكة مؤقتًا — force outbound sockets to fail so 'no data => 0.0'
-    holds even where the CI has internet. Restores socket.socket on exit."""
-    real = socket.socket
-
-    def _no_net(*a, **k):  # noqa: ANN002, ANN003
-        raise OSError("network disabled for hermetic test")
-
-    socket.socket = _no_net
-    try:
-        yield
-    finally:
-        socket.socket = real
+# نسخة محلية موحَّدة إلى المرجع القانوني الواحد في conftest.py — بلاغ حي
+# (تسريب اتصال مجمَّع عبر جلسة requests المشتركة في CI): النسخ المحلية
+# المكرَّرة (سبع ملفات) كانت تفتقر لإغلاق تجمّع الاتصالات، فتنجو اتصالات
+# حيّة من نداءات سابقة غير محظورة إلى اختبار يُفترض به حجب كامل.
+from conftest import block_network as _block_network
 
 
 def test_all_modules_import():
