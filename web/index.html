@@ -502,7 +502,7 @@ function comp(m,k){var c=(m.components_detail||[]).filter(function(x){return x.n
    (view.deep_research.verdict_tone/verdict_label) — لا حساب موازٍ هنا
    من الرمز الإنجليزي الخام، ولا عرض للرمز نفسه كنص ظاهر (كان
    "CONDITIONAL-GO"/"WATCH" يظهر حرفياً على شارة الغلاف). */
-var TONE_CSS={go:"go",nogo:"no",watch:"",unknown:""};
+var TONE_CSS={go:"go",conditional:"go",nogo:"no",watch:"",unknown:""};
 function renderDeepResearch(v){
   var dr=v.deep_research,h=v.header||{},verdict=(dr.verdict||{}),ai=verdict.ai||{};
   var tone=TONE_CSS[dr.verdict_tone]||"";
