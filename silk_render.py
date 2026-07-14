@@ -1149,6 +1149,37 @@ def analysis_context(result: dict, max_chars: int = 6000) -> str:
              f"{view.get('data_year', view.get('year'))}")
     for b in view.get("brief") or []:
         L.append(f"الخلاصة: {b}")
+    # R2 (تفعيل الدردشة فوق الدراسة العميقة): analysis_context كان يقرأ شكل
+    # /analyze حصراً (top فارغ للدراسة العميقة إذ markets=[])، فتُجيب دردشة
+    # «اسأل عن الدراسة» من سياق شبه فارغ للدراسات الرئيسية. هنا نضيف تأريض
+    # البحث العميق — حقائق البعثات بمصادرها، تقاطعات المحلل، الحكم، والتقرير
+    # المكتوب — كي تُؤسَّس الإجابة على كامل الدراسة لا العنوان وحده. لا اختلاق:
+    # كل رقم بمصدره، وما ليس هنا يقال «غير متوفر» في برومبت الإجابة نفسه.
+    dr = view.get("deep_research")
+    if isinstance(dr, dict):
+        if dr.get("verdict_label"):
+            L.append(f"حكم الدراسة: {dr['verdict_label']}")
+        for key, m in (dr.get("missions") or {}).items():
+            if not isinstance(m, dict) or m.get("failed"):
+                continue
+            label = m.get("label") or key
+            for f in (m.get("findings") or [])[:3]:
+                val = f.get("value")
+                if val is None or isinstance(val, (list, dict)):
+                    continue
+                src = f.get("source") or ""
+                L.append(f"{label}: {val}"
+                         + (f" [المصدر: {src}]" if src else ""))
+        an = dr.get("analyst") or {}
+        for cat, dps in (an.get("by_category") or {}).items():
+            for d in (dps or [])[:2]:
+                val = d.get("value")
+                if val is None or isinstance(val, (list, dict)):
+                    continue
+                L.append(f"تقاطع {_category_label(cat)}: {val}")
+        report_text = (dr.get("report") or {}).get("text")
+        if report_text:
+            L.append("التقرير المكتوب للدراسة:\n" + report_text)
     top = (view.get("markets") or [{}])[0]
     for c in top.get("components_detail") or []:
         name_ar = internal_ar(c.get("name"))

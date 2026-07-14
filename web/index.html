@@ -545,9 +545,20 @@ function renderDeepResearch(v){
   if((dr.limits||[]).length)html+='<div class="bcard" style="margin:18px 0"><h3>حدود هذا البحث</h3>'
     +dr.limits.slice(0,8).map(function(x){return '<p style="font-size:12.5px;color:var(--muted)">• '+esc(x)+'</p>'}).join("")+'</div>';
   var de=v.data_economics;
-  if(de&&de.note)html+='<div class="bcard" style="margin:18px 0 50px"><h3>اقتصاد البيانات</h3><p style="font-size:14px">'+esc(de.note)+'</p></div>';
+  if(de&&de.note)html+='<div class="bcard" style="margin:18px 0"><h3>اقتصاد البيانات</h3><p style="font-size:14px">'+esc(de.note)+'</p></div>';
+  // R2 (تفعيل الدردشة فوق الدراسة العميقة): نفس بطاقة «اسأل» ونفس askAnalysis
+  // المستعملتين في لوحة /analyze — كانتا تُبنيان بعد renderDeepResearch...return
+  // فلا تظهران للدراسات الرئيسية إطلاقاً. الآن مؤسَّسة على كامل الدراسة
+  // (analysis_context وسّع ليقرأ شكل deep_research).
+  html+='<div class="bcard" style="margin:18px 0 50px"><h3>اسأل عن الدراسة</h3>'
+    +'<div class="note">إجابات من نتائج هذه الدراسة حصراً — بمصادرها؛ ما لم يُرصد يُقال صراحةً · كل سؤال يُحتسب من السقف اليومي</div>'
+    +'<div id="askThread"></div>'
+    +'<div class="cbox" style="margin-top:10px"><textarea id="askBox" rows="1" placeholder="مثال: ليش حصة السعودية منخفضة؟ وش أكبر عائق للدخول؟"></textarea>'
+    +'<button class="sendb" id="askBtn">↑</button></div></div>';
   $("#boardBody").innerHTML=html;
   var dq=$("#deepBtn");if(dq)dq.addEventListener("click",function(){toast("التعميق يتطلب مفاتيح المصادر المدفوعة — فعّلها من الإعدادات")});
+  var ab=$("#askBtn");if(ab)ab.addEventListener("click",askAnalysis);
+  var ax=$("#askBox");if(ax)ax.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();askAnalysis()}});
 }
 function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class="empty">شغّل تحليلاً أولاً.</div>';return}
   var d=v.decision||{},m=(v.markets||[{}])[0],h=v.header||{};
