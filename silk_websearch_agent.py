@@ -36,13 +36,19 @@ def search_key() -> str:
             or os.environ.get("SERPER_API_KEY", "").strip())
 
 
-def web_search(query: str, num: int = 5) -> list[DataPoint]:
+def web_search(query: str, num: int = 5,
+               gl: str | None = None, hl: str | None = None) -> list[DataPoint]:
     """بحث ويب — organic web results as DataPoints (consumer/market signals).
 
     Standalone helper. Provider chosen by SEARCH_PROVIDER (default 'serper').
     Returns a list of DataPoint(value={"title","snippet","link"}) on success, or
     a single DataPoint(value=None, confidence=0.0) when the key is missing /
     provider unsupported / network fails / no results. Never raises, never invents.
+
+    gl/hl (R1): نطاق الدولة (ISO 3166-1 alpha-2) ولغة الواجهة (رمز lang) —
+    يمرّران لـSerper كي يبحث النظام كمستهلك محلي في السوق المستهدف (سوق غير
+    لاتيني/غير إنجليزي يعيد نتائج ضعيفة بلا هذا). فارغ => بحث عام كالسابق
+    (لا كسر توافق). نفس الدعم القائم في web_search_shopping(gl=...).
     """
     q = (query or "").strip()
     if not q:
@@ -62,24 +68,31 @@ def web_search(query: str, num: int = 5) -> list[DataPoint]:
         return [DataPoint(None, "Web Search (Serper)", 0.0,
                           "requires SEARCH_API_KEY (or SERPER_API_KEY)", _today())]
 
+    body: dict = {"q": q, "num": int(num)}
+    if gl:
+        body["gl"] = str(gl).strip().lower()
+    if hl:
+        body["hl"] = str(hl).strip().lower()
+    geo_note = (f" gl={body['gl']}" if body.get("gl") else "") + \
+               (f" hl={body['hl']}" if body.get("hl") else "")
     try:
         import requests  # lazy: import works offline/keyless
         resp = requests.post(
             _SERPER_URL,
             headers={"X-API-KEY": key, "Content-Type": "application/json"},
-            json={"q": q, "num": int(num)},
+            json=body,
             timeout=_TIMEOUT,
         )
         resp.raise_for_status()
         organic = (resp.json() or {}).get("organic") or []
     except Exception as e:  # noqa: BLE001 — never raise to caller
-        log.warning("Web search fetch failed ('%s'): %s", q, e)
+        log.warning("Web search fetch failed ('%s'%s): %s", q, geo_note, e)
         return [DataPoint(None, "Web Search (Serper)", 0.0,
                           f"serper unavailable / no network: {e}", _today())]
 
     if not organic:
         return [DataPoint(None, "Web Search (Serper)", 0.0,
-                          f"no results for '{q}'", _today())]
+                          f"no results for '{q}'{geo_note}", _today())]
 
     findings: list[DataPoint] = []
     for item in organic[: int(num)]:
@@ -88,7 +101,7 @@ def web_search(query: str, num: int = 5) -> list[DataPoint]:
              "snippet": item.get("snippet", ""),
              "link": item.get("link", "")},
             "Web Search (Serper)", 0.5,
-            f"organic result for '{q}'", _today()))
+            f"organic result for '{q}'{geo_note}", _today()))
     return findings
 
 

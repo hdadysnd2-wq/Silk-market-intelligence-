@@ -74,6 +74,9 @@ _REF_TABLES = {
     "demographics": os.path.join(_HERE, "data", "demographics_l1.csv"),
     "ports": os.path.join(_HERE, "data", "ports_l1.csv"),
     "agreements": os.path.join(_HERE, "data", "agreements_l1.csv"),
+    # لغة/عملة/متاجر السوق (R1) — يُغذّي البحث بلغة السوق ونطاقه ومنصّاته
+    # كي يبحث النظام كمستهلك محلي بدل التخمين. جدول توجيه بحث لا مصدر أرقام.
+    "locale": os.path.join(_HERE, "data", "market_locale.csv"),
 }
 
 
@@ -107,6 +110,32 @@ def _load_csv(path: str) -> tuple[dict, ...]:
     except Exception as e:  # noqa: BLE001 — مرجع غائب يُعامَل كفجوة، لا عطل
         log.warning("reference CSV unavailable (%s): %s", path, e)
         return ()
+
+
+def _market_locale(ctx: dict) -> dict:
+    """صف لغة/عملة/متاجر السوق من market_locale.csv — {} إن غاب السوق.
+
+    R1: يمكّن البحث من التصرّف كمستهلك محلي (لغة/نطاق/منصّات مشتقّة من
+    السوق لا مُخمَّنة). سوق بلا صف => {} فيتراجع البحث للسلوك العام بلا كسر.
+    """
+    market = ctx.get("market")
+    iso3 = getattr(market, "iso3", "") if market is not None else ""
+    if not iso3:
+        return {}
+    for r in _load_csv(_REF_TABLES["locale"]):
+        if (r.get("iso3") or "").strip().upper() == iso3:
+            return dict(r)
+    return {}
+
+
+def _locale_gl(ctx: dict) -> str:
+    """نطاق الدولة (gl، ISO 3166-1 alpha-2) للسوق من مرجع locale — '' إن غاب."""
+    return (_market_locale(ctx).get("gl") or "").strip().lower()
+
+
+def _locale_hl(ctx: dict) -> str:
+    """لغة الواجهة (hl) للسوق من مرجع locale = لغته الأساسية — '' إن غاب."""
+    return (_market_locale(ctx).get("lang_primary") or "").strip().lower()
 
 
 # ── الأدوات · tool implementations (args from Claude, ctx from the run) ─────
@@ -271,7 +300,11 @@ def _tool_web_search(args: dict, ctx: dict) -> list[DataPoint]:
     if not query:
         return [DataPoint(None, "Web Search", 0.0, "استعلام فارغ", _today())]
     num = int(args.get("num") or 5)
-    return web_search(query, num=min(max(num, 1), 10))
+    # R1: نطاق الدولة/لغة الواجهة — من وسيط كلود إن مرّره، وإلا من مرجع locale
+    # للسوق (gl/hl مشتقّان من السوق لا مُخمَّنان). فارغ => بحث عام كالسابق.
+    gl = str(args.get("gl") or "").strip() or _locale_gl(ctx)
+    hl = str(args.get("hl") or "").strip() or _locale_hl(ctx)
+    return web_search(query, num=min(max(num, 1), 10), gl=gl or None, hl=hl or None)
 
 
 def _tool_gdelt_news(args: dict, ctx: dict) -> list[DataPoint]:
@@ -447,10 +480,16 @@ TOOLS: dict[str, dict] = {
         "spec": {
             "name": "web_search",
             "description": "بحث ويب عام (نتائج عضوية) — استخدمه بلغة السوق "
-                           "المستهدف حين يكون ذلك مناسباً.",
+                           "المستهدف. النطاق (gl) ولغة السوق (hl) يُطبَّقان "
+                           "تلقائياً من مرجع السوق؛ لا حاجة لتمريرهما إلا "
+                           "لتجاوزٍ مقصود.",
             "input_schema": {"type": "object", "properties": {
                 "query": {"type": "string"},
-                "num": {"type": "integer", "description": "1-10, default 5"}},
+                "num": {"type": "integer", "description": "1-10, default 5"},
+                "gl": {"type": "string", "description": "تجاوز اختياري لنطاق "
+                       "الدولة ISO 3166-1 alpha-2 (يُشتق تلقائياً من السوق)"},
+                "hl": {"type": "string", "description": "تجاوز اختياري للغة "
+                       "الواجهة (تُشتق تلقائياً من لغة السوق)"}},
                 "required": ["query"]},
         },
     },
