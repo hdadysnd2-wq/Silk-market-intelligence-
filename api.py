@@ -1374,6 +1374,16 @@ def create_app():
         if found is None:
             raise HTTPException(status_code=404,
                                 detail=f"analysis {analysis_id} not found")
+        # HIGH#5 (تدقيق الواجهة 2026-07-15): البلوب الكلاسيكي (/analyze) يُخزَّن
+        # داخل المحرّك (silk_engine.py:619) *قبل* إرفاق result["view"] (api.py:579،
+        # بعد الحفظ)، فيصل هذا المسار بلا view — ونقر «التحليلات الأخيرة» على
+        # تحليل كلاسيكي كان يفتح لوحةً فارغة («شغّل تحليلاً أولاً»). أعِد بناء
+        # العرض عند غيابه فقط (مسار /research يحفظ *مع* view فلا يُمَسّ)، تماماً
+        # كما تفعل مسارات القراءة الأخرى (brief/report.md/report.docx تبني
+        # build_view(found) طازجاً). المعرّف كذلك يُضمَن للبلوبات الأقدم.
+        found.setdefault("analysis_id", analysis_id)
+        if not found.get("view"):
+            found["view"] = _view(found)
         if str(request.query_params.get("economics") or "").strip().lower() \
                 in ("1", "true", "yes"):
             return _json(_economics_summary(analysis_id, found))
