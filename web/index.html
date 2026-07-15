@@ -490,10 +490,25 @@ var snb=$("#snapBtn");if(snb)snb.addEventListener("click",quickSnapshot);
    تُخزَّن معرّفها (S.lastFailedResearchId) — النقر مجدداً **يستأنفها**
    بدل تشغيلة كاملة جديدة (لا حرق اعتمادات مضاعف). */
 function stopResearchPoll(){if(S.researchPollTimer){clearTimeout(S.researchPollTimer);S.researchPollTimer=null}}
+/* تقدّم حيّ بالتكلفة (المرحلة/الزمن/النداءات/التكلفة حتى الآن) — من نفس
+   حقول /research/{id}/status المُغذّاة من عدّاد البيانات القائم (لا عدّاد
+   جديد). التكلفة دوماً بعلامة "~" (تقدير من دفتر أسعار مُسعَّر لا رقم
+   مؤكَّد)، ونموذج غير مُسعَّر يظهر كعلَم صدق صريح لا صفراً مخفياً. */
+function fmtElapsed(s){if(s==null)return null;return s<60?(s+" ث"):(Math.round(s/60)+" د")}
+function researchProgressText(st){
+  if(!st.stage_label)return "…جارٍ البحث ("+st.missions_completed+"/"+st.missions_total+")";
+  var t="…"+st.stage_label;
+  if(st.stage==="missions")t+=" ("+st.missions_completed+"/"+st.missions_total+")";
+  var el=fmtElapsed(st.elapsed_seconds);if(el)t+=" · "+el;
+  if(st.llm_calls!=null)t+=" · نداءات: "+st.llm_calls;
+  if(st.cost_usd_estimate!=null){
+    t+=" · التكلفة حتى الآن: ~$"+st.cost_usd_estimate.toFixed(2);
+    if(st.cost_unpriced_models&&st.cost_unpriced_models.length)t+=" ⚠"}
+  return t}
 function pollResearchStatus(analysisId,lbl){
   getJSON("/research/"+analysisId+"/status").then(function(st){
     if(st.status==="running"){
-      $("#researchBtn").textContent="…جارٍ البحث ("+st.missions_completed+"/"+st.missions_total+")";
+      $("#researchBtn").textContent=researchProgressText(st);
       S.researchPollTimer=setTimeout(function(){pollResearchStatus(analysisId,lbl)},1500);return}
     stopResearchPoll();
     if(st.status==="completed"){
@@ -585,7 +600,15 @@ function renderDeepResearch(v){
   if((dr.limits||[]).length)html+='<div class="bcard" style="margin:18px 0"><h3>حدود هذا البحث</h3>'
     +dr.limits.slice(0,8).map(function(x){return '<p style="font-size:12.5px;color:var(--muted)">• '+esc(x)+'</p>'}).join("")+'</div>';
   var de=v.data_economics;
-  if(de&&de.note)html+='<div class="bcard" style="margin:18px 0"><h3>اقتصاد البيانات</h3><p style="font-size:14px">'+esc(de.note)+'</p></div>';
+  if(de&&de.note){
+    // التكلفة الفعلية النهائية — محسوبة أصلاً (estimate_cost_usd) ولم تكن
+    // تُعرَض هنا إطلاقاً. علامة "~" دوماً (تقدير من دفتر أسعار)، ونموذج غير
+    // مُسعَّر يظهر صراحةً بدل رقم يبدو تاماً وهو ناقص.
+    var costLine="";
+    if(de.cost_usd_estimate!=null){
+      costLine='<p style="font-size:13px;color:var(--ink-soft);margin-top:4px">التكلفة الفعلية المُقدَّرة: ~$'+de.cost_usd_estimate.toFixed(2)
+        +(de.cost_unpriced_models&&de.cost_unpriced_models.length?' ⚠ (يستثني نماذج غير مُسعَّرة: '+esc(de.cost_unpriced_models.join("، "))+')':'')+'</p>'}
+    html+='<div class="bcard" style="margin:18px 0"><h3>اقتصاد البيانات</h3><p style="font-size:14px">'+esc(de.note)+'</p>'+costLine+'</div>'}
   // R2 (تفعيل الدردشة فوق الدراسة العميقة): نفس بطاقة «اسأل» ونفس askAnalysis
   // المستعملتين في لوحة /analyze — كانتا تُبنيان بعد renderDeepResearch...return
   // فلا تظهران للدراسات الرئيسية إطلاقاً. الآن مؤسَّسة على كامل الدراسة

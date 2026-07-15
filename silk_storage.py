@@ -89,7 +89,12 @@ def init_db(path: str | None = None) -> None:
         # ترحيل القواعد الأقدم — additive migration; existing rows untouched.
         existing = {r[1] for r in conn.execute("PRAGMA table_info(analyses)")}
         for col in ("outcome", "outcome_date", "status", "kind",
-                   "request_json", "updated_at"):
+                   "request_json", "updated_at",
+                   # التقدّم الحيّ (المرحلة/العدّادات/التكلفة المُقدَّرة حتى
+                   # الآن) — لقطة تُحدَّث أثناء تشغيلة /research الجارية،
+                   # يقرأها GET /research/{id}/status. مستقلّة عن json_blob
+                   # النهائي (لا يُكتَب إلا عند الاكتمال).
+                   "progress_json"):
             if col not in existing:
                 conn.execute(f"ALTER TABLE analyses ADD COLUMN {col} TEXT")
 
@@ -183,6 +188,59 @@ def update_research_status(analysis_id: int, status: str,
         conn.execute(
             "UPDATE analyses SET status = ?, updated_at = ? WHERE id = ?",
             (status, now, analysis_id))
+
+
+def update_research_progress(analysis_id: int, path: str | None = None,
+                             **fields) -> None:
+    """حدّث لقطة تقدّم حيّة لتشغيلة بحث عميق جارية — تُدمَج (قراءة-تعديل-
+    كتابة) مع أي لقطة سابقة بنفس الصفّ، لا تستبدلها بالكامل.
+
+    الحقول المتوقَّعة: `stage` ('missions'|'analyst'|'writer'|'reviewer'|
+    'done')، `started_at` (ISO، يُضبَط أول مرة فقط ولا يُستبدَل لاحقاً حتى
+    لو أُعيد تمريره — الاستدعاءات اللاحقة تُمرّره بأمان بلا تكرار منطق)،
+    `llm_calls`/`tool_calls`/`cost_usd_estimate`/`cost_unpriced_models` —
+    قناة جانبية صامتة (فشل الكتابة لا يُسقط التشغيلة، نفس مبدأ نقاط تفتيش
+    البعثات). قيمة None في `fields` تُهمَل (لا تمسح حقلاً محفوظاً بلا قصد).
+    """
+    path = path or _db_path()
+    init_db(path)
+    with _connect(path) as conn:
+        row = conn.execute(
+            "SELECT progress_json FROM analyses WHERE id = ?",
+            (analysis_id,)).fetchone()
+        current: dict = {}
+        if row and row["progress_json"]:
+            try:
+                current = json.loads(row["progress_json"])
+            except Exception:  # noqa: BLE001 — لقطة فاسدة تُستبدَل لا تكسر الكتابة
+                current = {}
+        for k, v in fields.items():
+            if v is None:
+                continue
+            if k == "started_at" and current.get("started_at"):
+                continue  # يُضبَط أول مرة فقط — لا يتحرّك مع كل لقطة لاحقة
+            current[k] = v
+        conn.execute(
+            "UPDATE analyses SET progress_json = ? WHERE id = ?",
+            (json.dumps(current, ensure_ascii=False, default=_json_default),
+             analysis_id))
+
+
+def get_research_progress(analysis_id: int, path: str | None = None) -> dict:
+    """اللقطة الحيّة الحالية — قاموس فارغ إن لم تُسجَّل بعد/لا قاعدة. لا اختلاق."""
+    path = path or _db_path()
+    if not os.path.exists(path):
+        return {}
+    with _connect(path) as conn:
+        row = conn.execute(
+            "SELECT progress_json FROM analyses WHERE id = ?",
+            (analysis_id,)).fetchone()
+    if not row or not row["progress_json"]:
+        return {}
+    try:
+        return json.loads(row["progress_json"])
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def mark_research_failed(analysis_id: int, error_message: str,

@@ -359,7 +359,13 @@ def _product_card_context(product_card: dict | None) -> str:
 def _checkpoint(analysis_id: int | None, key: str, report: AgentReport) -> None:
     """خزّن نقطة تفتيش بعثة فور اكتمالها — no-op بلا analysis_id (استدعاء
     مكتبي مباشر خارج /research، أو `persist=False`). فشل التخزين لا يُسقط
-    التشغيلة — نفس مبدأ عدّادات silk_context (قناة جانبية لا شرط)."""
+    التشغيلة — نفس مبدأ عدّادات silk_context (قناة جانبية لا شرط).
+
+    التقدّم الحيّ (تدقيق تجربة المستخدم): نفس لحظة اكتمال كل بعثة أيضاً
+    لقطةُ تقدّمٍ («المرحلة: بعثات»، عدّادات llm_calls/tool_calls الحالية) —
+    هذا الحلقة (المُنسِّقة في `run_all_missions`، لا خيوط العمل) تُنفَّذ في
+    نفس السياق (contextvar) الذي بدأ العدّاد، فتقرأ التراكم الحيّ من خيوط
+    البعثات (نفس كائن القاموس المُشترَك عبر `copy_context`، لا نسخة جامدة)."""
     if analysis_id is None:
         return
     try:
@@ -367,6 +373,8 @@ def _checkpoint(analysis_id: int | None, key: str, report: AgentReport) -> None:
         silk_storage.save_mission_checkpoint(analysis_id, key, report)
     except Exception as e:  # noqa: BLE001 — نقطة التفتيش تحسين لا شرط تشغيل
         log.warning("checkpoint write failed for %s/%s: %s", analysis_id, key, e)
+    import silk_context
+    silk_context.snapshot_research_progress(analysis_id, "missions")
 
 
 def run_all_missions(market: MarketRef, product: str = "",
