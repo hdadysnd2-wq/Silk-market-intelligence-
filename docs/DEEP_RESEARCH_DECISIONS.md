@@ -1214,14 +1214,35 @@ json` يبقى `[]` بصدق حتى ذاك التشغيل الحي.
   `test_tail_is_governed_when_run_cap_hit`.
 - **H6 — حدّ إنفاق دولاري حقيقي.** `SILK_PAID_DAILY_CAP` يحدّ *عدد* التفعيلات لا
   الدولارات (تشغيلة ~$7 = تفعيلة واحدة). أُضيف دفتر دولاري يومي في `usage.db`
-  (`silk_usage.record_usd`/`usd_spent_today`/`would_exceed_usd_cap`) وبوابة
-  429 مسبقة على `/research` (`SILK_PAID_DAILY_USD_CAP`، `SILK_RESEARCH_EXPECTED_USD`).
-  حدّ ميزانية خشِن مكمّل — عدّاد التفعيلات الذرّي يبقى الحارس المالي fail-closed.
-  حارسان: `test_research_daily_spend_is_bounded_by_cap`،
+  (`silk_usage`، جدول `paid_usd`) وبوابة 429 مسبقة على `/research`
+  (`SILK_PAID_DAILY_USD_CAP`، `SILK_RESEARCH_EXPECTED_USD`). عدّاد التفعيلات
+  الذرّي يبقى الحارس المالي fail-closed المستقل.
+  - **مراجعة المالك ١ (تزامن).** البوابة الأصلية كانت `would_exceed_usd_cap`
+    (قراءة بلا حجز) والتسجيل بعد التشغيلة — فتشغيلتان متزامنتان قرب السقف تقرآن
+    «تحت السقف» معاً وتتجاوزانه (TOCTOU). أُبدِلت البوابة بحجز ذرّي
+    `silk_usage.try_reserve_usd` (BEGIN IMMEDIATE يأخذ قفل الكتابة قبل القراءة —
+    نفس نمط `try_reserve_paid_calls` المُثبَت)، فلا يمكن لتشغيلتين المرور معاً.
+    حارس: `test_usd_reserve_is_atomic_under_concurrency` (٨ خيوط، سقف يسع ٣).
+  - **مراجعة المالك ٢ (دقّة).** التكلفة المُصالَحة (`reconcile_usd` يبدّل التقدير
+    المحجوز بالمُنفَق الفعلي بعد التشغيلة) تُحتسب من `economics["llm_usage"]` الذي
+    يُقرأ **بعد اكتمال الذيل كله**، وكل ردّ HTTP يسجّل رموزه في
+    `silk_llm_provider._record_usage` قبل فحص الاقتطاع — فتُحتسب **كل محاولات
+    تصعيد سقف الكاتب** و**كل دورات المراجع**، لا المحاولة الأولى فقط. حارس:
+    `test_usd_ledger_includes_all_escalation_attempts` (٣ محاولات تصعيد → التكلفة
+    = ٣× محاولة واحدة). `would_exceed_usd_cap`/`record_usd`/`usd_spent_today`
+    تبقى قائمة للرصد والاختبار الوحدوي.
+  حارسا البوابة: `test_research_daily_spend_is_bounded_by_cap`،
   `test_research_refuses_429_when_daily_usd_cap_exhausted`.
 - **H7 — تنزيل `.md` يفحص `r.ok`.** كان فرع الـmd يعرض جسم 4xx/5xx كأنه تقرير
   (فرع الـdocx يفحص). أُضيف الفحص (`web/index.html`). حارس:
   `test_md_download_guards_response_ok`.
+
+**دليل الإثبات الحيّ.** أُضيف `docs/LIVE_PROOF_RUNBOOK.md` — إجراء واحد قابل
+للنسخ يُنتِج أول إثبات حيّ لمسار `/research` (تمور × هولندا): curl إيجاد المعرّف،
+curl إعادة التوليد بالبيئة الموصى بها (محاولة مُقيَّدة مقابل تصعيد كامل)، شكلا
+النجاح والفشل المتوقَّعان (وما يُلتقَط ويُلصَق عند الفشل)، وقائمة الالتقاط بعد
+النجاح (أول عيّنة حقيقية + أول حالة ذهبية برقم Comtrade موثّق يدوياً + إحالة
+القيد #84 → هذا الـPR).
 
 **انعكاس #91 للتصعيد — قرار متعمَّد (توثيق تدقيق F2).** نقل حلقة تصعيد
 `max_tokens` من المزوّد إلى طبقة الكاتب (#91) أعاد ضمناً حَكَمَ التوليف والمراجع

@@ -168,14 +168,88 @@ def record_usd(amount: float, path: str | None = None) -> None:
 
 def would_exceed_usd_cap(estimated: float, path: str | None = None) -> bool:
     """هل يتجاوز الإنفاقُ المتوقَّع السقفَ الدولاري؟ — True حين السقف مضبوط
-    و(المُنفَق اليوم + المتوقَّع) > السقف. بوابة ما قبل التشغيل الخشِنة: تمنع
-    بدء تشغيلة جديدة حين تُوشِك ميزانية اليوم على النفاد. حدّ التفعيلات الذرّي
-    (try_reserve_paid_calls) يبقى الحارس المالي fail-closed؛ هذا حدّ ميزانية
-    تكميلي بالدولار."""
+    و(المُنفَق اليوم + المتوقَّع) > السقف. فحص إخباري فقط (قراءة بلا حجز)؛
+    للبوابة الفعلية استعمل try_reserve_usd الذرّية (تمنع سباق تشغيلتين
+    متزامنتين). Informational read only — the enforcing path uses the atomic
+    try_reserve_usd."""
     cap = daily_usd_cap()
     if cap is None or estimated <= 0:
         return False
     return usd_spent_today(path) + estimated > cap
+
+
+def try_reserve_usd(estimated: float, path: str | None = None) -> bool:
+    """احجز مبلغاً مُقدَّراً ذرّياً قبل بدء تشغيلة مدفوعة — atomic check-and-
+    reserve بالدولار (نظير try_reserve_paid_calls للعدّاد؛ يسدّ سباق TOCTOU).
+
+    القراءة والتسجيل داخل معاملة واحدة (BEGIN IMMEDIATE تأخذ قفل الكتابة قبل
+    القراءة)، فلا يمكن لتشغيلتَي /research متزامنتين قرب السقف أن تقرآ «تحت
+    السقف» معًا ثم تسجّلا معًا وتتجاوزا الحدّ الدولاري. Two concurrent /research
+    runs can no longer both pass the USD gate.
+
+    - يعيد True والحجز (المبلغ المُقدَّر) مسجَّل، أو False (تجاوز السقف) وبلا
+      أي تسجيل. Returns True with the estimate reserved, or False (nothing
+      recorded) when it would breach the cap.
+    - بلا سقف (SILK_PAID_DAILY_USD_CAP غير مضبوط) => يسجّل التقدير ويعيد True
+      دائمًا (للرصد)، ولا يُحجب المسار الافتراضي أبدًا. No cap => record and
+      always allow (observability), never blocks the default path.
+    - عند فشل القاعدة: يُحجب فقط إن كان السقف مضبوطًا (fail-closed، نفس فلسفة
+      try_reserve_paid_calls)؛ بلا سقف يُسمَح كي لا يُكسَر المسار الافتراضي على
+      عطل دفتر. On DB failure: deny iff a cap is set, else allow.
+
+    التكلفة الفعلية تُصالَح لاحقًا عبر reconcile_usd بعد اكتمال التشغيلة، فيحمل
+    الدفتر المُنفَق الحقيقي لا التقدير. The actual cost is reconciled post-run.
+    """
+    cap = daily_usd_cap()
+    est = float(estimated or 0.0)
+    if est <= 0:
+        return True
+    try:
+        with _connect(path or _db_path()) as conn:
+            conn.execute("BEGIN IMMEDIATE")  # قفل كتابة قبل القراءة
+            row = conn.execute(
+                "SELECT usd FROM paid_usd WHERE day = ?", (_today(),)).fetchone()
+            current = float(row[0]) if row else 0.0
+            if cap is not None and current + est > cap:
+                conn.rollback()  # لا حجز عند الرفض
+                return False
+            conn.execute(
+                "INSERT INTO paid_usd (day, usd) VALUES (?, ?) "
+                "ON CONFLICT(day) DO UPDATE SET usd = usd + excluded.usd",
+                (_today(), est))
+        return True  # الخروج من with يلتزم
+    except Exception as e:  # noqa: BLE001 — الدفتر لا يُسقِط الـAPI أبداً
+        log.warning("usd ledger reserve failed: %s", e)
+        return cap is None  # سقف مضبوط => امنع (fail-closed)؛ بلا سقف => اسمح
+
+
+def reconcile_usd(reserved: float, actual: float, path: str | None = None) -> None:
+    """صالِح حجزًا مسبقًا بالتكلفة الفعلية — بعد اكتمال التشغيلة يُطبَّق الفرق
+    (actual − reserved) ذرّيًا على دفتر اليوم، فيصير الدفتر يحمل المُنفَق
+    الفعلي المُقدَّر (من الرموز) بدل التقدير المحجوز مسبقًا. Swaps the reserved
+    estimate for the token-derived actual, atomically.
+
+    - الفرق صفر => لا شيء. حجز بلا تسوية (تعطّل قبل الاكتمال) يُبقي التقدير
+      محجوزًا — تحفّظ مقصود (fail-closed): لا نُنقِص محاسبةً لتشغيلة قد تكون
+      استهلكت. A run that crashes before reconcile keeps its full reservation.
+    - الدفتر لا ينزل تحت الصفر (حماية من فرق سالب كبير/تقريب). Floored at 0.
+    """
+    delta = float(actual or 0.0) - float(reserved or 0.0)
+    if delta == 0:
+        return
+    try:
+        with _connect(path or _db_path()) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT usd FROM paid_usd WHERE day = ?", (_today(),)).fetchone()
+            current = float(row[0]) if row else 0.0
+            new = max(0.0, current + delta)
+            conn.execute(
+                "INSERT INTO paid_usd (day, usd) VALUES (?, ?) "
+                "ON CONFLICT(day) DO UPDATE SET usd = excluded.usd",
+                (_today(), new))
+    except Exception as e:  # noqa: BLE001
+        log.warning("usd ledger reconcile failed: %s", e)
 
 
 def try_reserve_paid_calls(n: int, path: str | None = None) -> bool:

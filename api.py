@@ -853,10 +853,15 @@ def create_app():
         economics["cost_usd_estimate"] = cost["total_usd"]
         economics["cost_usd_by_model"] = cost["by_model"]
         economics["cost_unpriced_models"] = cost["unpriced_models"]
-        # H6: سجّل الإنفاق الفعلي المُقدَّر في الدفتر الدولاري اليومي — لكل
-        # تشغيلة (متزامنة أو خلفية، كلاهما يمرّ من هنا). البوابة المسبقة في
-        # المعالج تمنع بدء تشغيلة تتجاوز السقف؛ هذا يسجّل ما أُنفِق فعلاً.
-        silk_usage.record_usd(cost["total_usd"])
+        # H6: صالِح الحجز المسبق بالتكلفة الفعلية المُقدَّرة — المعالج حجز
+        # التقدير (_expected) ذرّيًا قبل البدء؛ هنا نبدّله بالمُنفَق الحقيقي
+        # المحسوب من رموز *كل* نداءات كلود في التشغيلة: بعثات + محلل + توليف +
+        # كاتب بما فيه **كل محاولات تصعيد السقف** + **دورات المراجع** — العدّاد
+        # يُقرأ بعد اكتمال الذيل كله (economics أعلاه)، وكل ردّ HTTP يسجّل رموزه
+        # حتى المقتطع (silk_llm_provider._record_usage قبل فحص الاقتطاع). لكل
+        # تشغيلة (متزامنة أو خلفية، كلاهما يمرّ من هنا).
+        _reserved_usd = float(os.environ.get("SILK_RESEARCH_EXPECTED_USD", "3.0"))
+        silk_usage.reconcile_usd(reserved=_reserved_usd, actual=cost["total_usd"])
         budget_status = _research_budget_status(economics)
 
         result: dict = {
@@ -1022,13 +1027,16 @@ def create_app():
                         "أعد المحاولة، أو مرّر allow_degraded=true لتسليم "
                         "تقرير موسوم صراحة كمتدهور (غير مُنصَح به تسليمياً)."})
 
-        # H6 (تدقيق): بوابة الميزانية الدولارية اليومية — ترفض بدء تشغيلة
-        # /research جديدة حين يُوشِك سقف الإنفاق (SILK_PAID_DAILY_USD_CAP) على
-        # النفاد (السقف غير مضبوط => لا أثر). الإنفاق الفعلي يُسجَّل بعد كل
-        # تشغيلة في _run_research_pipeline. تسبق حجز عدّاد التفعيلات كي لا
-        # تستهلك تفعيلة على طلب مرفوض. الاستئناف المكتمل رجع مبكراً قبل هنا.
+        # H6 (تدقيق): بوابة الميزانية الدولارية اليومية — تحجز تكلفة التشغيلة
+        # المتوقَّعة ذرّيًا قبل بدئها (try_reserve_usd، لا فحص قراءة فقط)، فلا
+        # يمكن لتشغيلتين متزامنتين قرب السقف أن تمرّا معًا وتتجاوزا الحدّ (سباق
+        # TOCTOU مسدود — نفس نمط عدّاد التفعيلات الذرّي). السقف غير مضبوط => لا
+        # حجب. الإنفاق الفعلي يُصالَح بعد التشغيلة في _run_research_pipeline
+        # (reconcile_usd) فيحمل الدفتر المُنفَق الحقيقي لا التقدير. تسبق حجز
+        # عدّاد التفعيلات كي لا تُستهلك تفعيلة على طلب مرفوض. الاستئناف المكتمل
+        # رجع مبكراً قبل هنا.
         _expected_usd = float(os.environ.get("SILK_RESEARCH_EXPECTED_USD", "3.0"))
-        if silk_usage.would_exceed_usd_cap(_expected_usd):
+        if not silk_usage.try_reserve_usd(_expected_usd):
             raise HTTPException(status_code=429, detail={
                 "error": "daily_usd_budget_exhausted",
                 "reason": f"الميزانية اليومية بالدولار أوشكت على النفاد — "
