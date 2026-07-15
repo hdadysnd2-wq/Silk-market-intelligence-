@@ -754,7 +754,10 @@ def create_app():
             hit.append(f"SILK_RESEARCH_MAX_TOOL_CALLS={tool_cap}")
         return {"exhausted": bool(hit), "caps_hit": hit,
                "llm_calls": llm_calls, "llm_cap": llm_cap,
-               "tool_calls": tool_calls, "tool_cap": tool_cap}
+               "tool_calls": tool_calls, "tool_cap": tool_cap,
+               # H5: هل تدهور الذيل (تخطّى حَكَم التوليف + مراجعة الكاتب) لأن
+               # البعثات استنفدت السقف؟ مُعلَن صراحةً، لا مدفون.
+               "tail_degraded": bool(economics.get("tail_degraded"))}
 
     def _attach_quality_gate(result: dict, trace_id: str | None) -> None:
         """شغّل بوابة الجودة على القالب الموحّد وألحِق نتيجتها — الموجة ١٠،
@@ -803,6 +806,18 @@ def create_app():
                                          resume_reports=resume_reports)
             mission_reports = research_run["reports"]
             trace_id = research_run.get("trace_id")
+            # H5 (تدقيق): حارس إنفاق على مستوى التشغيلة للذيل. السقف الكلي
+            # (SILK_RESEARCH_MAX_LLM_CALLS) كان يُستشار داخل حلقة البعثات
+            # فقط؛ الذيل (محلل+توليف+كاتب+مراجع) يجري بلا حكم حتى لو استُنفد.
+            # الآن: إن بلغت البعثاتُ السقف، يُنتِج الذيل التقرير الأساسي
+            # (المحلل + مسوّدة الكاتب — لا يُلغى الكاتب فلا فقدان) لكن يتخطّى
+            # المكلّف الاختياري: حَكَم التوليف مرحلة-٢ (تبقى جورية المرحلة ١)
+            # ودورة مراجعة الكاتب (مسوّدة بلا تنقيح). تدهور رشيق مُعلَن.
+            _llm_cap = int(os.environ.get("SILK_RESEARCH_MAX_LLM_CALLS", "40"))
+            _ctr = silk_context.data_counter() or {}
+            tail_over_budget = ai_ok and _ctr.get("llm_calls", 0) >= _llm_cap
+            tail_with_ai = ai_ok and not tail_over_budget
+            tail_max_cycles = 1 if tail_over_budget else 2
             # بلاغ حي (تمور/هولندا، تشغيلة ثانية): trace_context البعثات
             # الاثنتي عشرة يُغلَق فور عودة deep_research() أعلاه — نداءا
             # المحلل الشامل والكاتب/المراجع كانا يجريان **بلا أي تتبّع**،
@@ -818,14 +833,15 @@ def create_app():
             analyst_input = to_synthesis_input(analyst_out)
             verdict = synthesize(
                 list(mission_reports.values()), product=product,
-                market=market_ref.name_en, with_ai=ai_ok,
+                market=market_ref.name_en, with_ai=tail_with_ai,
                 analyst_assessment=analyst_input)
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
-                product, market_ref.name_en, trace_id=trace_id,
-                hs_code=hs_code) if ai_ok else
+                product, market_ref.name_en, max_cycles=tail_max_cycles,
+                trace_id=trace_id, hs_code=hs_code) if ai_ok else
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
             economics = dict(silk_context.data_counter() or {})
+            economics["tail_degraded"] = tail_over_budget
 
         served = economics.get("store_hits", 0) + economics.get("cache_hits", 0)
         economics["note"] = (
@@ -837,6 +853,10 @@ def create_app():
         economics["cost_usd_estimate"] = cost["total_usd"]
         economics["cost_usd_by_model"] = cost["by_model"]
         economics["cost_unpriced_models"] = cost["unpriced_models"]
+        # H6: سجّل الإنفاق الفعلي المُقدَّر في الدفتر الدولاري اليومي — لكل
+        # تشغيلة (متزامنة أو خلفية، كلاهما يمرّ من هنا). البوابة المسبقة في
+        # المعالج تمنع بدء تشغيلة تتجاوز السقف؛ هذا يسجّل ما أُنفِق فعلاً.
+        silk_usage.record_usd(cost["total_usd"])
         budget_status = _research_budget_status(economics)
 
         result: dict = {
@@ -1001,6 +1021,19 @@ def create_app():
                 "hint": "اضبط ANTHROPIC_API_KEY (وSILK_API_KEY إن لزم) ثم "
                         "أعد المحاولة، أو مرّر allow_degraded=true لتسليم "
                         "تقرير موسوم صراحة كمتدهور (غير مُنصَح به تسليمياً)."})
+
+        # H6 (تدقيق): بوابة الميزانية الدولارية اليومية — ترفض بدء تشغيلة
+        # /research جديدة حين يُوشِك سقف الإنفاق (SILK_PAID_DAILY_USD_CAP) على
+        # النفاد (السقف غير مضبوط => لا أثر). الإنفاق الفعلي يُسجَّل بعد كل
+        # تشغيلة في _run_research_pipeline. تسبق حجز عدّاد التفعيلات كي لا
+        # تستهلك تفعيلة على طلب مرفوض. الاستئناف المكتمل رجع مبكراً قبل هنا.
+        _expected_usd = float(os.environ.get("SILK_RESEARCH_EXPECTED_USD", "3.0"))
+        if silk_usage.would_exceed_usd_cap(_expected_usd):
+            raise HTTPException(status_code=429, detail={
+                "error": "daily_usd_budget_exhausted",
+                "reason": f"الميزانية اليومية بالدولار أوشكت على النفاد — "
+                          f"أُنفِق {round(silk_usage.usd_spent_today(), 2)}$ اليوم؛ "
+                          f"تشغيلة /research متوقَّعة بنحو {_expected_usd}$."})
 
         hs_code = req.hs_code or stored_request.get("hs_code")
         hs_note = None
@@ -1358,6 +1391,18 @@ def create_app():
             mission_reports, analyst_summary, verdict,
             found.get("product", ""), market_name, trace_id=trace_id,
             hs_code=found.get("hs_code"))
+        # H1 (تدقيق): إعادة التوليد كانت تطمس التقرير المخزَّن بـreport_out حتى
+        # لو فشل الكاتب هذه المرة (report=None) — فيُفقَد تقرير سابق ناجح كلّفت
+        # تشغيلته الكاملة، وهو بالضبط ما تُنقِذه هذه النقطة. الآن: لا نحفظ null
+        # فوق تقرير سابق ناجح؛ نُبقي المخزَّن ونُبلّغ الفشل (السجل لا يُلمَس).
+        from silk_render import _strip_internal_plumbing
+        prior_report = (dr.get("report") or {}).get("report")
+        if not report_out.get("report") and prior_report:
+            return _json({"report": None, "regenerated": False,
+                          "note": "تعذّرت إعادة توليد التقرير هذه المرة؛ "
+                                  "التقرير السابق محفوظ كما هو دون تغيير.",
+                          "failure_reason": _strip_internal_plumbing(
+                              report_out.get("failure_reason") or "")})
         found["deep_research"]["report"] = report_out
         found["analysis_id"] = analysis_id
         found["view"] = _view(found)
@@ -1394,7 +1439,11 @@ def create_app():
         if out is None:
             # بلاغ حي (بحث "تمور/هولندا"): None لا يعني بالضرورة غياب
             # المفتاح — قد يكون فشل نداء فعلي (مهلة/شبكة) رغم مفتاح فعّال.
-            return _json({"answer": None, "note": failure_reason()})
+            # H3 (تدقيق): كان يعيد failure_reason() خاماً — يحمل
+            # empty_response/stop_reason/«راجع سجلّات الخادم». يمرّ الآن عبر
+            # نفس مُطهِّر طبقة العرض (H4 يُعرّب تلك الرموز).
+            return _json({"answer": None,
+                          "note": _strip_internal_plumbing(failure_reason())})
         # سدّ تسريب: جواب كلود يمرّ بلا أي مُطهِّر مباشرة للعميل — كلود قد
         # يقتبس مفتاحاً داخلياً حرفياً من السياق رغم تعريب السياق نفسه، أو
         # يستخدم رمز حكم خام بنفسه؛ نفس مُطهِّر طبقة العرض (مرة واحدة).

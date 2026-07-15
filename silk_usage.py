@@ -66,6 +66,13 @@ def _connect(path: str) -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS paid_usage ("
         "day TEXT PRIMARY KEY, calls INTEGER NOT NULL DEFAULT 0)"
     )
+    # H6 (تدقيق): دفتر إنفاق دولاري يومي — حدّ ميزانية خشِن مكمّل لعدّاد
+    # التفعيلات. عدّاد التفعيلات يحدّ *عدد* العمليات؛ هذا يحدّ *الدولارات*
+    # الفعلية المُقدَّرة (تشغيلة /research قد تكلّف ~$7 لكنها تفعيلة واحدة).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS paid_usd ("
+        "day TEXT PRIMARY KEY, usd REAL NOT NULL DEFAULT 0)"
+    )
     return conn
 
 
@@ -113,6 +120,62 @@ def would_exceed_cap(requested: int, path: str | None = None) -> bool:
     if cap is None or requested <= 0:
         return False
     return paid_calls_today(path) + requested > cap
+
+
+# ── دفتر الإنفاق الدولاري اليومي (H6) — حدّ ميزانية خشِن بالدولار ──────────
+
+def daily_usd_cap() -> float | None:
+    """سقف الإنفاق اليومي بالدولار من البيئة — `SILK_PAID_DAILY_USD_CAP`، أو
+    None حين غير مضبوط (لا حدّ دولاري — الافتراضي، توافق خلفي كامل)."""
+    raw = os.environ.get("SILK_PAID_DAILY_USD_CAP", "").strip()
+    if not raw:
+        return None
+    try:
+        cap = float(raw)
+    except ValueError:
+        log.warning("SILK_PAID_DAILY_USD_CAP=%r is not a number — cap ignored", raw)
+        return None
+    return cap if cap >= 0 else None
+
+
+def usd_spent_today(path: str | None = None) -> float:
+    """إنفاق اليوم المُقدَّر بالدولار (0.0 عند أي خطأ)."""
+    try:
+        with _connect(path or _db_path()) as conn:
+            row = conn.execute(
+                "SELECT usd FROM paid_usd WHERE day = ?", (_today(),)).fetchone()
+        return float(row[0]) if row else 0.0
+    except Exception as e:  # noqa: BLE001 — الدفتر لا يُسقِط الـAPI أبداً
+        log.warning("usd ledger read failed: %s", e)
+        return 0.0
+
+
+def record_usd(amount: float, path: str | None = None) -> None:
+    """سجّل مبلغاً مُقدَّراً بالدولار في دفتر اليوم — يُستدعى بعد كل تشغيلة
+    بالتكلفة الفعلية المُقدَّرة (silk_pricing). صفر/سالب => لا شيء."""
+    if amount is None or amount <= 0:
+        return
+    try:
+        with _connect(path or _db_path()) as conn:
+            conn.execute(
+                "INSERT INTO paid_usd (day, usd) VALUES (?, ?) "
+                "ON CONFLICT(day) DO UPDATE SET usd = usd + excluded.usd",
+                (_today(), float(amount)),
+            )
+    except Exception as e:  # noqa: BLE001
+        log.warning("usd ledger write failed: %s", e)
+
+
+def would_exceed_usd_cap(estimated: float, path: str | None = None) -> bool:
+    """هل يتجاوز الإنفاقُ المتوقَّع السقفَ الدولاري؟ — True حين السقف مضبوط
+    و(المُنفَق اليوم + المتوقَّع) > السقف. بوابة ما قبل التشغيل الخشِنة: تمنع
+    بدء تشغيلة جديدة حين تُوشِك ميزانية اليوم على النفاد. حدّ التفعيلات الذرّي
+    (try_reserve_paid_calls) يبقى الحارس المالي fail-closed؛ هذا حدّ ميزانية
+    تكميلي بالدولار."""
+    cap = daily_usd_cap()
+    if cap is None or estimated <= 0:
+        return False
+    return usd_spent_today(path) + estimated > cap
 
 
 def try_reserve_paid_calls(n: int, path: str | None = None) -> bool:

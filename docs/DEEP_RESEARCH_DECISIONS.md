@@ -1183,3 +1183,55 @@ failure`، `test_operator_docx_with_report_none_surfaces_failure_reason`.
 (`evals/golden_cases.json` يتطلب رقم كومتريد محقَّقاً يدوياً بـsource_url +
 verified_at/by — لا يُختلَق، القرار المتكرر عبر الموجات ٥-١٢). `golden_cases.
 json` يبقى `[]` بصدق حتى ذاك التشغيل الحي.
+
+## التدقيق الكامل 2026-07-15 — إغلاق النتائج السبع العالية (بعد #91)
+
+`docs/FULL_AUDIT_2026-07-15.md` (تدقيق قراءة-فقط بستّة وكلاء) لم يجد أي BLOCKER
+ولا خللاً في مبدأ لا-الاختلاق (سليم عبر ~٢١ وكيل مصدر)، وأخرج ٧ نتائج عالية —
+كلها حَوْكمة تكلفة أو تسريب سباكة للعميل، لا سلامة بيانات. أُغلقت السبع في PR
+واحد، كلٌّ باختباره المسمّى (`tests/test_audit_high_fixes.py`):
+
+- **H1 — regen لا يطمس تقريراً سابقاً.** كان `POST /analyses/{id}/report` يكتب
+  `report_out` فوق المخزَّن حتى لو فشل الكاتب (report=None)، فيُفقَد تقرير سابق
+  ناجح. الآن: null فوق تقرير سابق ناجح = لا حفظ، يُبقى المخزَّن ويُبلَّغ الفشل
+  (`api.py`, regen). حارس: `test_regen_writer_failure_preserves_prior_report`.
+- **H2 — تطهير قيم تقاطعات المحلل.** `_deep_research_view._with_badge` كان يطهّر
+  الملخّص فقط؛ `by_category[*].value/note` تصل `/brief` و`/ask` خامّة (تسريب
+  مُثبَت: `LLMMissionAgent: pricing_scout … dp7`). تُطهَّر الآن في المصدر. أُصلح
+  أيضاً `_INTERNAL_AGENT_RE` ليقبل مسافة بعد النقطتين (النمط A من التدقيق) كي
+  يُلتقَط الشكل المُسرَّب فعلياً. حارس: `test_brief_analyst_values_are_sanitized`.
+- **H3 — تطهير ملاحظة `/ask`.** كانت تعيد `failure_reason()` خاماً؛ تمرّ الآن عبر
+  `_strip_internal_plumbing`. حارس: `test_ask_note_is_sanitized`.
+- **H4 — تعريب رموز `failure_reason`.** `empty_response`/`stop_reason='max_tokens'`/
+  `راجع سجلّات الخادم` كانت تنجو من التعقيم وتصل `/report.md` وحدود التقرير و`/ask`.
+  أُضيفت أنماط في `silk_narrative._TECH_PATTERNS`. حارس:
+  `test_failure_reason_tokens_are_humanized_before_any_client_surface`.
+- **H5 — حارس إنفاق على الذيل.** السقف الكلي كان داخل حلقة البعثات فقط؛ ذيل
+  المحلل/التوليف/الكاتب/المراجع يجري بلا حكم. الآن: إن بلغت البعثاتُ السقف
+  (`SILK_RESEARCH_MAX_LLM_CALLS`)، يتدهور الذيل رشيقاً — يُتخطّى حَكَم التوليف
+  مرحلة-٢ (تبقى الجورية) ودورة مراجعة الكاتب (مسوّدة بلا تنقيح)، والكاتب لا يُلغى
+  (لا فقدان تقرير)، ويُعلَن `budget_status.tail_degraded`. حارس:
+  `test_tail_is_governed_when_run_cap_hit`.
+- **H6 — حدّ إنفاق دولاري حقيقي.** `SILK_PAID_DAILY_CAP` يحدّ *عدد* التفعيلات لا
+  الدولارات (تشغيلة ~$7 = تفعيلة واحدة). أُضيف دفتر دولاري يومي في `usage.db`
+  (`silk_usage.record_usd`/`usd_spent_today`/`would_exceed_usd_cap`) وبوابة
+  429 مسبقة على `/research` (`SILK_PAID_DAILY_USD_CAP`، `SILK_RESEARCH_EXPECTED_USD`).
+  حدّ ميزانية خشِن مكمّل — عدّاد التفعيلات الذرّي يبقى الحارس المالي fail-closed.
+  حارسان: `test_research_daily_spend_is_bounded_by_cap`،
+  `test_research_refuses_429_when_daily_usd_cap_exhausted`.
+- **H7 — تنزيل `.md` يفحص `r.ok`.** كان فرع الـmd يعرض جسم 4xx/5xx كأنه تقرير
+  (فرع الـdocx يفحص). أُضيف الفحص (`web/index.html`). حارس:
+  `test_md_download_guards_response_ok`.
+
+**انعكاس #91 للتصعيد — قرار متعمَّد (توثيق تدقيق F2).** نقل حلقة تصعيد
+`max_tokens` من المزوّد إلى طبقة الكاتب (#91) أعاد ضمناً حَكَمَ التوليف والمراجع
+و`ai_report` والمستخلِصات الأربعة إلى نداء مفرد (فقدوا التصعيد العابر الذي منحهم
+إياه #90 حين كانت الحلقة داخل `complete()`). هذا **مقبول ومقصود**: المواقع
+غير-الكاتبة مخرَجاتها صغيرة (700–1800 رمزاً) نادراً ما تُقتطَع؛ وحين تُقتطَع مع
+نص، `complete` المفرد يعيد النص الجزئي (خير من None)؛ والكاتب — الموقع الوحيد
+الذي يسبّب `report=None` والذي يُنتِج تقريراً طويلاً بجداول وخارطة طريق — هو
+الوحيد الذي يحتاج التصعيد ويحتفظ به. لا تُوسَّع الحلقة للمواقع الأخرى بلا دليل
+اقتطاع فعلي منها (نفس انضباط «لا تخمين»). الفروق الأصغر من التدقيق (النمط
+العدائي B–J، `_redact` عريض، تدهور المحلل المفرد، يتيم `/research` عالق، تصدير
+مكرّر، إلخ) مُسجَّلة في `docs/FULL_AUDIT_2026-07-15.md` كـMEDIUM/LOW خارج نطاق
+هذا الـPR.

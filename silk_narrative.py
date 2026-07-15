@@ -220,6 +220,15 @@ _TECH_PATTERNS: list[tuple[re.Pattern, object]] = [
     (re.compile(r"Explee unavailable:.*"), "إكسبلي غير متاح حالياً"),
     (re.compile(r"Google Maps API status=(\w+):.*"),
      lambda m: f"خرائط جوجل: تعذّر الجلب ({m.group(1)})"),
+    # فشل نداء كلود — رموز داخلية (تدقيق H4، بلاغ هولندا): failure_reason
+    # يحمل "empty_response"/"stop_reason='max_tokens'"/"راجع سجلّات الخادم"
+    # التي كانت تنجو من التعقيم وتصل /ask و/report.md وحدود التقرير. تُعرَّب
+    # هنا قبل أي سطح عميل — نفس نقطة التعريب المركزية.
+    (re.compile(r"\bstop_reason\s*=\s*'?max_tokens'?"),
+     "بلغ التوليد الحدّ الأقصى للطول"),
+    (re.compile(r"\bstop_reason\s*=\s*'?[\w-]+'?"), ""),   # أي سبب آخر — يُزال الرمز الخام
+    (re.compile(r"\bempty_response\b:?\s*"), ""),          # نوع فشل داخلي
+    (re.compile(r"\s*[—–-]?\s*راجع سجلّات الخادم"), ""),   # توجيه تشغيلي — لا يخصّ العميل
 ]
 
 _EXC_CLASS_RE = re.compile(
