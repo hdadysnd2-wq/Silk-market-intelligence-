@@ -16,7 +16,7 @@ from silk_agents import AgentReport
 from silk_data_layer import DataPoint
 from silk_market_resolver import resolve_market
 from silk_render import build_view
-from silk_reports import render_docx
+from silk_reports import render_docx, render_markdown
 
 ref, _ = resolve_market("Spain")
 
@@ -296,3 +296,11 @@ _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 out_path = os.path.join(_repo_root, "samples", "research_report_latest.docx")
 render_docx(view, out_path)
 print("wrote", out_path, "— quality gate:", gate_out["verdict"])
+
+# تدقيق تصدير /research: report.md لنتيجة بحث عميق يُصيَّر من deep_research
+# (silk_reports._md_deep_research) لا من قالب /analyze الفارغ — نُثبت المخرَج
+# المُصلَح كعيّنة ملتزَمة (§10.6).
+md_path = os.path.join(_repo_root, "samples", "research_report_latest.md")
+with open(md_path, "w", encoding="utf-8") as _fh:
+    _fh.write(render_markdown(view))
+print("wrote", md_path)
