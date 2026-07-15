@@ -22,6 +22,8 @@ CI (`.github/workflows/ci.yml`) runs exactly `python -m pytest tests/ -q`. There
 
 ## Architecture — the pipeline
 
+> **Scope note.** This section documents **pipeline 1 (`/analyze`)** only. A second pipeline — **`/research`** (the 12-mission deep-research path, waves 6–13) — and the client-vs-operator report split, quick snapshot (`silk_snapshot.py`), and grounded chat (`/ask`) landed after this file was written. They share the one view (`build_view`) and one verdict (`synthesize`) documented here, but their own mechanics live in `docs/ARCHITECTURE.md` and the `docs/DEEP_RESEARCH_DECISIONS.md` ledger (see its «ما بعد الموجة ١٣» section for PRs #76–#83). `docs/PLATFORM_ANALYSIS.md` is the current full reference.
+
 `silk_engine.analyze()` is the spine. Order matters because later stages consume earlier stages' in-memory output:
 
 1. **Resolve** — product name → HS6 via `silk_hs_resolver` (CSV seed + difflib; weak match = `None`, never guessed). An explicit `hs_code` arg bypasses this (used by the discovery hand-off).
@@ -44,7 +46,7 @@ CI (`.github/workflows/ci.yml`) runs exactly `python -m pytest tests/ -q`. There
 
 ## BaseAgent and the paid/free boundary
 
-All 15 agents inherit `BaseAgent` (`silk_agents.py`), which enforces the protocol structurally:
+All agents inherit `BaseAgent` (`silk_agents.py`) — 18 `BaseAgent` subclasses as of PR #83 (`grep 'class.*(BaseAgent)' silk_*.py`), which enforces the protocol structurally:
 
 - `PAID = True` agents (LocalPrice, Volza, Explee — exactly these three) cannot execute outside the deepen context (`silk_context.deepen_context()`, a contextvar set only by `POST /deepen`). Outside it they return a tagged skipped report **without attempting any call**, even with keys set.
 - An unexpected exception in `_execute()` automatically becomes a failed report with a noted DataPoint — silent failure is impossible.
