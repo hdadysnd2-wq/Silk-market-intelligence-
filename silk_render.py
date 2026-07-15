@@ -547,7 +547,9 @@ _GAPS_RE = re.compile(r"فجوات:\s*([^|]*)")
 # (الكاتب أو بعثة) يستشهد أحياناً حرفياً بوسوم رآها في مدخلاته الخام بدل
 # تلخيصها بلغة تجارية. الإصلاح تطبيع حتمي في طبقة العرض، لا تعديل على
 # الأرقام: راجع _mission_label/_strip_internal_plumbing تحت.
-_INTERNAL_AGENT_RE = re.compile(r"LLM(?:Mission)?Agent:([A-Za-z_]+)")
+# `\s*` بعد النقطتين: كلود يكتب أحياناً "LLMMissionAgent: pricing_scout"
+# بمسافة (تسريب مُثبَت في المختصر) — بلا `\s*` كان يفلت (تدقيق، النمط A).
+_INTERNAL_AGENT_RE = re.compile(r"LLM(?:Mission)?Agent:\s*([A-Za-z_]+)")
 _DP_TAG_RE = re.compile(r"\[?dp\d+\]?")
 _WHOLE_JSON_RE = re.compile(r"^\s*[{\[].*[}\]]\s*$", re.S)
 # بلاغ حي إنتاجي (تمور/هولندا HS080410): وصلت الواجهةَ أشكالُ JSON خام لم
@@ -871,7 +873,15 @@ def _deep_research_view(result: dict) -> dict | None:
         d = _dp(x)
         note = d.get("note")
         if isinstance(note, str) and _cat_tag_re.match(note):
-            d = {**d, "note": _cat_tag_re.sub("", note)}
+            note = _cat_tag_re.sub("", note)
+        # H2 (تدقيق): قيمة/ملاحظة تقاطع المحلل كانتا تصلان /brief و/ask
+        # خامّتين — الملخّص وحده كان يُطهَّر. تُطهَّران هنا في المصدر فيرثهما
+        # كل مستهلك للـview (اللوحة، المختصر، سياق الدردشة). أرقام/غير-نصّ
+        # تُترك كما هي (لا سباكة فيها).
+        val = d.get("value")
+        d = {**d,
+             "value": _strip_internal_plumbing(val) if isinstance(val, str) else val,
+             "note": _strip_internal_plumbing(note) if isinstance(note, str) else note}
         return {**d, "confidence_badge": evidence_badge(d.get("confidence"))}
     by_category = {cat: [_with_badge(x) for x in (dps or [])]
                   for cat, dps in (analyst.get("by_category") or {}).items()}
