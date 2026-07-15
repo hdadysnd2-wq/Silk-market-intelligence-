@@ -865,6 +865,14 @@ def create_app():
         economics["cost_usd_estimate"] = cost["total_usd"]
         economics["cost_usd_by_model"] = cost["by_model"]
         economics["cost_unpriced_models"] = cost["unpriced_models"]
+        # إسناد التكلفة لكل بعثة (Part C، تحضير قياس حقيقي لتخفيض الكلفة):
+        # mission_usage يُملأ فقط داخل silk_context.mission_context (وسم كل
+        # نداء بمفتاح بعثته) — يُعاد استعمال estimate_cost_usd نفسه لكل بعثة
+        # لا حساب تسعير موازٍ. تشغيلات سابقة لهذه الإضافة تعرض {} — فجوة
+        # معلنة صريحة (تشغيلة قديمة بلا هذا الوسم)، لا اختلاق رقم.
+        economics["cost_usd_by_mission"] = {
+            mkey: estimate_cost_usd(mu)["total_usd"]
+            for mkey, mu in (economics.get("mission_usage") or {}).items()}
         silk_context.snapshot_research_progress(analysis_id, "done")
         # H6: صالِح الحجز المسبق بالتكلفة الفعلية المُقدَّرة — المعالج حجز
         # التقدير (_expected) ذرّيًا قبل البدء؛ هنا نبدّله بالمُنفَق الحقيقي
