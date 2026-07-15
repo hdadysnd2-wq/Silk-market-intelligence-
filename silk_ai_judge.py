@@ -25,9 +25,16 @@ _TIMEOUT = float(os.environ.get("SILK_AI_TIMEOUT_S", "60"))
 _LONG_TIMEOUT = float(os.environ.get("SILK_AI_LONG_TIMEOUT_S", "300"))
 # سقف رموز إخراج كاتب التقرير — بلاغ حي إنتاجي (تمور/هولندا HS080410):
 # التقرير المهني من أحد عشر قسماً بجداول وخارطة طريق يتجاوز 5000 رمزاً
-# فيقتطعه السقف (stop_reason="max_tokens"). رُفع إلى 8000، ومزوّد كلود
-# يصعّد السقف تلقائياً عند الاقتطاع (silk_llm_provider._MAX_TOKENS_CEILING).
+# فيقتطعه السقف (stop_reason="max_tokens"، فيعود report=None). رُفع إلى 8000،
+# ومع اقتطاع رغم ذلك يصعّد الكاتب السقف ويعيد المحاولة أدناه.
 _WRITER_MAX_TOKENS = int(os.environ.get("SILK_WRITER_MAX_TOKENS", "8000"))
+# تصعيد سقف الإخراج عند الاقتطاع (max_tokens) — بحلقة عند طبقة الكاتب
+# (لا داخل المزوّد) كي تكون **كل محاولة نداءً مُتتبَّعاً مستقلاً** (report_call
+# event + عدّ llm_calls + قياس رموز التكلفة)، لا حلقة صامتة خارج طبقة التتبّع
+# والعدّ (الذيل يعمل خارج سقف نداءات التشغيلة الكلي، فالرؤية شرط). مقيَّدة:
+# ٣ محاولات إضافية كحدّ أقصى (٤ نداءات)، وسقف صلب 16000 رمزاً.
+_MAX_TOKENS_RETRIES = int(os.environ.get("SILK_MAX_TOKENS_RETRIES", "3"))
+_MAX_TOKENS_CEILING = int(os.environ.get("SILK_MAX_TOKENS_CEILING", "16000"))
 
 # مبدأ الحَكَم — non-negotiable judging principle handed to the model every call.
 _PRINCIPLE = (
@@ -960,10 +967,36 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "التقرير كله** — واحدة تختم الخلاصة التنفيذية، وواحدة تختم خارطة "
         "طريق الدخول؛ ما عدا ذلك انسِج الأثر في السرد دون تذييل معنون "
         "ولا تكرار للسرد أعلاه.")
-    return _traced_call(
-        trace_id, "revision" if review_notes else "draft", _LONG_TIMEOUT,
-        lambda: _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=_WRITER_MAX_TOKENS,
-                     timeout=_LONG_TIMEOUT))
+    # تصعيد سقف الإخراج عند الاقتطاع — كل محاولة نداءٌ مُتتبَّع مستقل
+    # (report_call + عدّ + قياس رموز)، لا حلقة صامتة داخل المزوّد. يُعاد أوفى
+    # نص أُنتِج (نص مقتطع مفيد خير من None)؛ التصعيد يقتصر على الاقتطاع
+    # (max_tokens) فلا يُهدَر على فشل شبكة/مهلة. `report=None` لا يمكن أن
+    # يسبّبه max_tokens بعد اليوم — بلاغ هولندا، القضية محسومة.
+    from silk_llm_provider import last_stop_reason
+    user = "\n\n".join(parts)
+    stage = "revision" if review_notes else "draft"
+    effective_max = _WRITER_MAX_TOKENS
+    best = ""
+    for attempt in range(_MAX_TOKENS_RETRIES + 1):
+        # اسم المرحلة يتجنّب لصاقة "tok" — تُنقّحها heuristic أسرار silk_trace.
+        st = stage if attempt == 0 else f"{stage}_escalate{attempt}"
+        out = _traced_call(
+            trace_id, st, _LONG_TIMEOUT,
+            lambda cap=effective_max: _call(_PRINCIPLE, user, max_tokens=cap,
+                                            timeout=_LONG_TIMEOUT))
+        if out and len(out) > len(best):
+            best = out
+        # اكتمال طبيعي (نص غير مقتطع) أو فشل غير-اقتطاع (شبكة/مهلة/رفض): التصعيد
+        # لا يفيد أيّهما — توقّف. التصعيد حصراً على stop_reason=max_tokens.
+        if last_stop_reason() != "max_tokens":
+            break
+        if effective_max >= _MAX_TOKENS_CEILING:
+            log.warning("writer hit max_tokens at ceiling %d after %d attempt(s)"
+                        " — returning best partial (%d chars)",
+                        effective_max, attempt + 1, len(best))
+            break
+        effective_max = min(effective_max * 2, _MAX_TOKENS_CEILING)
+    return best or None
 
 
 def _section_order_issues(draft: str) -> list[str]:

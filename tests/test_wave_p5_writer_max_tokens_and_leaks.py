@@ -55,71 +55,22 @@ def _resp(payload: dict):
     return _R()
 
 
-# ═══ القضية ١ — استرداد الكاتب من نفاد رموز الإخراج ═══════════════════════
+# ═══ القضية ١ — استرداد الكاتب من نفاد رموز الإخراج (تصعيد مُتتبَّع) ═══════
 
-def test_max_tokens_with_no_text_blocks_recovers_via_ceiling_escalation():
-    """المسار الإنتاجي بالضبط: أول رد stop_reason='max_tokens' وبلا أي كتلة
-    نصية (كان يعيد None → report=None). يجب أن يرفع المزوّد السقف ويعيد
-    المحاولة، فيسترد نصاً حقيقياً — لا None."""
-    import silk_llm_provider as lp
-    maxes: list[int] = []
-
-    def fake_post(url, **kw):
-        maxes.append(kw["json"]["max_tokens"])
-        if len(maxes) == 1:  # أول محاولة: نفاد السقف بلا نص إطلاقاً
-            return _resp({"stop_reason": "max_tokens", "content": [],
-                          "usage": {"input_tokens": 10, "output_tokens": 10}})
-        return _resp({"stop_reason": "end_turn",  # بعد رفع السقف: نص كامل
-                      "content": [{"type": "text", "text": "التقرير الكامل."}],
-                      "usage": {"input_tokens": 10, "output_tokens": 40}})
-
-    with _env(ANTHROPIC_API_KEY="k"), \
-         mock.patch("requests.post", side_effect=fake_post):
-        out = lp.AnthropicProvider().complete("sys", "user", 8000,
-                                              "claude-opus-4-8", 5)
-    assert out == "التقرير الكامل."          # استُرِدّ، لا None
-    assert lp.last_error() is None            # نجاح نظيف
-    assert len(maxes) == 2 and maxes[1] > maxes[0]   # صُعِّد السقف فعلاً
+def _mission_reports():
+    from silk_agents import AgentReport
+    from silk_data_layer import DataPoint
+    return {"trade_flow": AgentReport(
+        "LLMAgent:trade_flow",
+        [DataPoint("واردات هولندا 33 مليون دولار", "UN Comtrade", 0.9, "note")],
+        False, "ok")}
 
 
-def test_max_tokens_with_partial_text_returns_best_partial_never_none():
-    """نفاد السقف مع نص جزئي حتى بعد التصعيد → يُعاد الجزئي (تقرير مقتطع
-    مفيد أفضل من report=None) — لا None، لا اختلاق."""
-    import silk_llm_provider as lp
+# ── المزوّد: نداء مفرد يعرض stop_reason (لا حلقة مخفية داخله) ──────────────
 
-    def fake_post(url, **kw):
-        return _resp({"stop_reason": "max_tokens",
-                      "content": [{"type": "text", "text": "جزء من التقرير"}],
-                      "usage": {"input_tokens": 10, "output_tokens": 30}})
-
-    with _env(ANTHROPIC_API_KEY="k"), \
-         mock.patch("requests.post", side_effect=fake_post):
-        out = lp.AnthropicProvider().complete("s", "u", 8000, "m", 5)
-    assert out == "جزء من التقرير"
-    assert lp.last_error() is None
-
-
-def test_max_tokens_zero_text_forever_declares_gap_not_fabrication():
-    """الحالة المرضية القصوى: نفاد السقف بلا أي نص أبداً حتى السقف الصلب →
-    يُعلَن فجوة صريحة (empty_response + None)، لا يُختلَق نص. المبدأ المؤسِّس."""
-    import silk_llm_provider as lp
-
-    def fake_post(url, **kw):
-        return _resp({"stop_reason": "max_tokens", "content": [],
-                      "usage": {"input_tokens": 10, "output_tokens": 5}})
-
-    with _env(ANTHROPIC_API_KEY="k"), \
-         mock.patch("requests.post", side_effect=fake_post):
-        out = lp.AnthropicProvider().complete("s", "u", 8000, "m", 5)
-    assert out is None                         # لا اختلاق
-    err = lp.last_error()
-    assert err and err["type"] == "empty_response"
-    assert "max_tokens" in err["message"]
-
-
-def test_normal_response_makes_exactly_one_call_no_escalation():
-    """رد طبيعي (stop_reason='end_turn') لا يُصعِّد ولا يعيد المحاولة —
-    مسارات النجاح العادية غير متأثّرة بالإصلاح (نداء واحد فقط)."""
+def test_complete_is_single_shot_and_records_stop_reason():
+    """المزوّد طبقة HTTP رقيقة: نداء واحد لكل استدعاء، ويعرض stop_reason
+    لطبقة الكاتب (لا تصعيد داخلي)."""
     import silk_llm_provider as lp
     n = {"c": 0}
 
@@ -132,20 +83,56 @@ def test_normal_response_makes_exactly_one_call_no_escalation():
     with _env(ANTHROPIC_API_KEY="k"), \
          mock.patch("requests.post", side_effect=fake_post):
         out = lp.AnthropicProvider().complete("s", "u", 900, "m", 5)
-    assert out == "رد." and n["c"] == 1
+    assert out == "رد." and n["c"] == 1              # نداء واحد فقط
+    assert lp.last_stop_reason() == "end_turn"
 
 
-def test_deep_report_recovers_end_to_end_from_writer_max_tokens():
-    """المسار الكامل: الكاتب (deep_report → _call → complete) يواجه
-    max_tokens-بلا-نص ثم يسترد، فيعيد نصّ تقرير لا None."""
+def test_complete_returns_truncated_text_on_max_tokens_with_text():
+    """اقتطاع مع نص → يُعاد النص الجزئي (لا None)، وstop_reason='max_tokens'
+    معروض كي تقرّر طبقة الكاتب التصعيد."""
+    import silk_llm_provider as lp
+
+    def fake_post(url, **kw):
+        return _resp({"stop_reason": "max_tokens",
+                      "content": [{"type": "text", "text": "جزء من التقرير"}],
+                      "usage": {"input_tokens": 10, "output_tokens": 30}})
+
+    with _env(ANTHROPIC_API_KEY="k"), \
+         mock.patch("requests.post", side_effect=fake_post):
+        out = lp.AnthropicProvider().complete("s", "u", 8000, "m", 5)
+    assert out == "جزء من التقرير" and lp.last_error() is None
+    assert lp.last_stop_reason() == "max_tokens"
+
+
+def test_complete_max_tokens_no_text_declares_gap_and_signals_stop_reason():
+    """اقتطاع بلا نص → None + empty_response معلَن، وstop_reason='max_tokens'
+    معروض (فيعرف الكاتب أنه اقتطاع لا فشل شبكة). لا اختلاق."""
+    import silk_llm_provider as lp
+
+    def fake_post(url, **kw):
+        return _resp({"stop_reason": "max_tokens", "content": [],
+                      "usage": {"input_tokens": 10, "output_tokens": 5}})
+
+    with _env(ANTHROPIC_API_KEY="k"), \
+         mock.patch("requests.post", side_effect=fake_post):
+        out = lp.AnthropicProvider().complete("s", "u", 8000, "m", 5)
+    assert out is None
+    err = lp.last_error()
+    assert err and err["type"] == "empty_response" and "max_tokens" in err["message"]
+    assert lp.last_stop_reason() == "max_tokens"
+
+
+# ── الكاتب: التصعيد عند طبقة الكاتب، كل محاولة نداءٌ مُتتبَّع مستقل ─────────
+
+def test_writer_recovers_end_to_end_from_max_tokens_no_text():
+    """المسار الإنتاجي بالضبط: أول محاولة للكاتب max_tokens-بلا-نص (كانت
+    تعطي report=None)، فيصعّد الكاتب السقف والمحاولة الثانية تنجح — يُعاد نص."""
     import silk_ai_judge as aj
-    from silk_agents import AgentReport
-    from silk_data_layer import DataPoint
     posts = {"n": 0}
 
     def fake_post(url, **kw):
         posts["n"] += 1
-        if posts["n"] == 1:  # المحاولة الأولى للكاتب: نفاد السقف بلا نص
+        if posts["n"] == 1:
             return _resp({"stop_reason": "max_tokens", "content": [],
                           "usage": {"input_tokens": 20, "output_tokens": 20}})
         return _resp({"stop_reason": "end_turn",
@@ -153,15 +140,90 @@ def test_deep_report_recovers_end_to_end_from_writer_max_tokens():
                                    "text": "## 1. الخلاصة\nتقرير مسترَدّ."}],
                       "usage": {"input_tokens": 20, "output_tokens": 60}})
 
-    reports = {"trade_flow": AgentReport(
-        "LLMAgent:trade_flow",
-        [DataPoint("واردات هولندا 33 مليون دولار", "UN Comtrade", 0.9, "note")],
-        False, "ok")}
     with _env(ANTHROPIC_API_KEY="k", SILK_API_KEY="x"), \
          mock.patch("requests.post", side_effect=fake_post):
-        out = aj.deep_report(reports, "مسوّدة المحلل", {"verdict": "WATCH"},
-                             "تمور", "هولندا")
+        out = aj.deep_report(_mission_reports(), "مسوّدة المحلل",
+                             {"verdict": "WATCH"}, "تمور", "هولندا")
     assert out and "تقرير مسترَدّ" in out       # لا None بسبب max_tokens
+    assert posts["n"] == 2                       # صُعِّد مرة واحدة (نجح بعدها)
+
+
+def test_writer_escalation_is_bounded_and_traces_each_attempt():
+    """اقتطاع دائم بلا نص → التصعيد مُقيَّد بـ_MAX_TOKENS_RETRIES+1 محاولة،
+    و**كل محاولة تُصدر report_call event مستقلاً** بمرحلة متصاعدة، والسقف
+    يتضاعف؛ النتيجة النهائية فجوة معلنة (None) لا اختلاق."""
+    import silk_ai_judge as aj
+    import silk_trace
+    caps: list[int] = []
+
+    def fake_post(url, **kw):
+        caps.append(kw["json"]["max_tokens"])
+        return _resp({"stop_reason": "max_tokens", "content": [],
+                      "usage": {"input_tokens": 10, "output_tokens": 5}})
+
+    with _env(ANTHROPIC_API_KEY="k", SILK_API_KEY="x"), \
+         mock.patch("requests.post", side_effect=fake_post):
+        out = aj.deep_report(_mission_reports(), "محلل",
+                             {"verdict": "WATCH"}, "تمور", "هولندا",
+                             trace_id="run-p5-bounded")
+    assert out is None                           # فجوة معلنة، لا اختلاق
+    # مقيَّد بـسقفين: _MAX_TOKENS_RETRIES (≤4 محاولات) والسقف الصلب. بالقيم
+    # الافتراضية (8000→16000) يبلغ التضعيفُ السقفَ الصلب بخطوة واحدة، فيتوقّف
+    # عند محاولتين (إعادة النداء بنفس السقف لا تفيد) — كلاهما حدّ صريح.
+    assert aj._MAX_TOKENS_RETRIES == 3            # الحدّ الأقصى المعلن للمحاولات
+    assert caps == [8000, 16000]                  # صعّد مرة للسقف الصلب ثم توقّف
+    events = [e for e in silk_trace.read_trace("run-p5-bounded")
+              if e.get("kind") == "report_call"]
+    assert len(events) == 2                       # حدث report_call مستقل لكل محاولة
+    assert [e["stage"] for e in events] == ["draft", "draft_escalate1"]
+
+
+def test_writer_escalation_meters_every_attempt_in_cost():
+    """كل محاولة تصعيد تُحسَب وتُقاس: llm_calls يزيد لكل محاولة، ورموزها
+    تتراكم في تقدير التكلفة (الذيل خارج سقف النداءات الكلي فالقياس شرط)."""
+    import silk_ai_judge as aj
+    import silk_context
+    from silk_pricing import estimate_cost_usd
+
+    def fake_post(url, **kw):  # اقتطاع دائم *مع* نص جزئي → out ليس None
+        return _resp({"stop_reason": "max_tokens",
+                      "content": [{"type": "text", "text": "جزء"}],
+                      "usage": {"input_tokens": 100, "output_tokens": 50}})
+
+    with _env(ANTHROPIC_API_KEY="k", SILK_API_KEY="x"), \
+         mock.patch("requests.post", side_effect=fake_post):
+        c = silk_context.begin_data_counter()
+        out = aj.deep_report(_mission_reports(), "محلل",
+                             {"verdict": "WATCH"}, "تمور", "هولندا")
+    assert out == "جزء"                           # أوفى جزئي، لا None
+    assert c["llm_calls"] == 2                     # عُدّت كلتا المحاولتين (8000→16000)
+    # رموز المحاولتين تراكمت (2×50 إخراج) وتظهر في تقدير التكلفة.
+    usage = c["llm_usage"]
+    assert any(v.get("output_tokens") == 100 for v in usage.values())
+    assert estimate_cost_usd(usage)["total_usd"] > 0
+
+
+def test_normal_writer_makes_exactly_one_attempt_no_escalation():
+    """رد طبيعي (end_turn) → محاولة واحدة، حدث report_call واحد، بلا تصعيد —
+    مسار النجاح العادي غير متأثّر."""
+    import silk_ai_judge as aj
+    import silk_trace
+    n = {"c": 0}
+
+    def fake_post(url, **kw):
+        n["c"] += 1
+        return _resp({"stop_reason": "end_turn",
+                      "content": [{"type": "text", "text": "## 1. تقرير كامل."}],
+                      "usage": {"input_tokens": 10, "output_tokens": 40}})
+
+    with _env(ANTHROPIC_API_KEY="k", SILK_API_KEY="x"), \
+         mock.patch("requests.post", side_effect=fake_post):
+        out = aj.deep_report(_mission_reports(), "محلل", {"verdict": "WATCH"},
+                             "تمور", "هولندا", trace_id="run-p5-normal")
+    assert out and n["c"] == 1                     # نداء واحد فقط
+    events = [e for e in silk_trace.read_trace("run-p5-normal")
+              if e.get("kind") == "report_call"]
+    assert len(events) == 1 and events[0]["stage"] == "draft"
 
 
 # ═══ القضية ٢ — تسريب JSON خام للواجهة (سلاسل إنتاجية حرفية) ══════════════

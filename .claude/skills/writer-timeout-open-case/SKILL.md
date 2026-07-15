@@ -16,11 +16,17 @@ the evidence-capture (`last_error` `empty_response`) was built to reveal — the
 `stop_reason` self-identified the phase, no guessing.
 
 **Fix (evidence-driven, the exact `max_tokens` branch):**
-- `silk_llm_provider.complete` now escalates the output ceiling on
-  `stop_reason == "max_tokens"` and retries, returning the fullest text obtained
-  — `max_tokens` can no longer cause `report=None`
-  (`_MAX_TOKENS_RETRIES`/`_MAX_TOKENS_CEILING`). If any text is ever produced it
-  is returned (truncated > nothing); only a pathological zero-text-at-ceiling
+- `silk_llm_provider.complete` stays a single-shot HTTP seam but now exposes
+  `last_stop_reason()`; the **escalation loop lives in the writer layer**
+  (`silk_ai_judge.deep_report`) so **each attempt is an independent traced call**
+  — its own `report_call` event, `llm_calls` increment, and metered tokens
+  (the writer tail runs outside the run-level call cap, so per-attempt visibility
+  is required). On `stop_reason == "max_tokens"` the writer doubles the ceiling
+  and retries, returning the fullest text obtained — `max_tokens` can no longer
+  cause `report=None`. Bounded by BOTH `SILK_MAX_TOKENS_RETRIES` (3 → ≤4
+  attempts) AND `SILK_MAX_TOKENS_CEILING` (16000); with defaults, doubling from
+  8000 reaches the ceiling in one step, so escalation runs ≤2 attempts (retrying
+  at the same ceiling is pointless). Only a pathological zero-text-at-ceiling
   still declares a gap (`None` + `empty_response`) — no fabrication.
 - Writer output ceiling raised 5000 → `SILK_WRITER_MAX_TOKENS` default 8000
   (`silk_ai_judge.py`).
