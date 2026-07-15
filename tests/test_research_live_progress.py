@@ -20,7 +20,14 @@ import tempfile
 import time
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# التسلسل المعياري لمراحل /research (يطابق api.py:_STAGE_LABEL_AR) — يُستعمَل
+# لفحص عدم-التنازل بدل اشتراط رؤية "missions" أوّلاً (راجع التعليق عند نقطة
+# الاستعمال لسبب السباق المشروع).
+_STAGE_ORDER = ["missions", "analyst", "writer", "reviewer", "done"]
 
 
 def _client():
@@ -238,11 +245,17 @@ def test_status_endpoint_reflects_stage_elapsed_calls_and_cost_end_to_end():
             time.sleep(0.01)
         assert status["status"] == "completed"
 
-        # مراحل مرصودة بترتيب زمني صحيح (البعثات أولاً، الاكتمال أخيراً) —
-        # لا نشترط رؤية كل مرحلة فرادى (استطلاع قد يفوّت مرحلة قصيرة)، لكن
-        # الأولى يجب أن تكون "missions" والأخيرة "done".
+        # مراحل مرصودة بترتيب زمني صحيح — لا نشترط رؤية كل مرحلة فرادى (استطلاع
+        # قد يفوّت مرحلة قصيرة)، ولا نشترط أن تكون الأولى "missions" تحديداً:
+        # تشغيلة اختبار مُصطنَعة (نداءات كلود مُموَّهة شبه فورية) قد تكتمل بين
+        # نداء POST /research وأول GET status، فيكون أول رصد "done" مباشرة —
+        # سباق حقيقي لا عطلاً؛ عتبة عدم-التنازل تُبقي حراسة الترتيب فعلية (لا
+        # إضعاف الحارس، راجع silk-operations §THE RULES.٥) بينما تقبل هذا السباق
+        # المشروع. الأخيرة تبقى "done" دوماً — تلك الضمانة لا تتزحزح.
         assert seen_stages, "لم تُرصد أي مرحلة إطلاقاً"
-        assert seen_stages[0] == "missions"
+        indices = [_STAGE_ORDER.index(s) for s in seen_stages]
+        assert indices == sorted(indices), (
+            f"stages observed out of canonical order: {seen_stages}")
         assert seen_stages[-1] == "done"
 
         # الحقول الحيّة كلها ظهرت خلال الاستطلاع لا None طوال الوقت.
@@ -251,6 +264,22 @@ def test_status_endpoint_reflects_stage_elapsed_calls_and_cost_end_to_end():
         assert status["cost_usd_estimate"] is not None
         assert status["cost_usd_estimate"] >= 0
         assert status["stage_label"] == "اكتمل"          # تسمية عربية للمرحلة النهائية
+
+
+def test_stage_order_check_still_catches_a_genuine_regression():
+    """تخفيف الاختبار السابق (قبول أول رصد ≠ "missions") لا يُضعِف حراسة
+    الترتيب — تسلسل حقيقي مقلوب أو متذبذب لا يزال يُسقِط الفحص (silk-operations
+    §THE RULES.٥: لا إضعاف حارس لإسكاته)."""
+    def check(seen_stages):
+        indices = [_STAGE_ORDER.index(s) for s in seen_stages]
+        assert indices == sorted(indices)
+
+    check(["missions", "done"])            # سباق مقبول: مرحلة مفقودة، ترتيب سليم
+    check(["done"])                        # سباق متطرّف مقبول: رُصد الاكتمال فقط
+    with pytest.raises(AssertionError):
+        check(["analyst", "missions", "done"])   # تراجُع حقيقي: عاد لمرحلة أسبق
+    with pytest.raises(AssertionError):
+        check(["writer", "reviewer", "writer", "done"])  # تذبذب حقيقي
 
 
 def test_status_endpoint_stage_is_none_before_any_snapshot():
