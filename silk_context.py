@@ -94,6 +94,36 @@ def agent_prefs_context(prefs: dict | None):
         _agent_prefs.reset(token)
 
 
+# إسناد التكلفة لكل بعثة (تدقيق تخفيض كلفة /research، Part C): كان
+# record_llm_usage يُجمِّع الرموز حسب النموذج فقط — والاثنتا عشرة بعثة
+# تتشارك نفس النموذج (Opus) اليوم، فلا سبيل لمعرفة أيّ بعثة استهلكت كم رمزاً
+# من `llm_usage` وحده، ولا حدث تتبّع (`silk_trace`) يحمل عدّ رموز إطلاقاً
+# (elapsed_ms/tool_calls فقط) — قرار توجيه نموذج لكل بعثة (Haiku مقابل Opus)
+# يحتاج بالضبط هذا الرقم ولم يكن موجوداً. contextvar بنفس نمط agent_prefs
+# أعلاه — ينسخه `contextvars.copy_context()` مستقلاً لكل خيط بعثة موازٍ
+# (`run_all_missions`)، فلا تختلط بعثتان متزامنتان.
+_current_mission: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "silk_current_mission", default=None)
+
+
+@contextlib.contextmanager
+def mission_context(mission_key: str | None):
+    """فعّل وسم البعثة الحالية لكتلة — نداءات كلود داخلها تُسجَّل أيضاً في
+    `data_counter()["mission_usage"][mission_key]` (راجع `record_llm_usage`)،
+    فوق `llm_usage` الإجمالي القائم — لا يغيّره ولا يستبدله."""
+    token = _current_mission.set(mission_key)
+    try:
+        yield
+    finally:
+        _current_mission.reset(token)
+
+
+def current_mission() -> str | None:
+    """مفتاح البعثة النشطة الآن — None خارج `mission_context` (نداءات
+    المحلل/الكاتب/المراجع، التي ليست بعثة واحدة من الاثنتي عشرة)."""
+    return _current_mission.get()
+
+
 # اقتصاد البيانات (persist-5): عدّاد لكل تحليل — كم قراءة خُدمت من المخزن/
 # ذاكرة الطلبات مقابل كم جلبة حية. contextvar فيعزل الطلبات المتزامنة؛
 # غياب العدّاد (نداء مكتبي خارج analyze) = لا عدّ، صفر أثر على أي مسار.
@@ -112,6 +142,10 @@ def begin_data_counter() -> dict:
     `llm_usage` (تدقيق المعمارية، دين ٤): رموز الإدخال/الإخراج الفعلية لكل
     نموذج — يغذّي تقدير التكلفة (`silk_pricing.estimate_cost_usd`)؛ نفس مبدأ
     القناة الجانبية الصامتة — راجع `record_llm_usage`.
+
+    `mission_usage` (Part C، إسناد التكلفة لكل بعثة): يُنشَأ كسولاً (lazy) في
+    `record_llm_usage` فقط داخل `mission_context()` — {mission_key: {model:
+    {tokens}}}؛ إضافي فوق `llm_usage` الإجمالي لا بديل عنه.
     """
     c = {"store_hits": 0, "cache_hits": 0, "live_fetches": 0,
          "llm_calls": 0, "tool_calls": 0, "llm_usage": {}}
@@ -139,19 +173,29 @@ def record_llm_usage(model: str, input_tokens: int, output_tokens: int,
     c = _data_counter.get()
     if c is None:
         return
+
+    def _add(row: dict) -> None:
+        row["input_tokens"] += int(input_tokens or 0)
+        row["output_tokens"] += int(output_tokens or 0)
+        # الحقلان الاختياريان يُضافان فقط عند وجود كاش فعلي — نداء بلا كاش يُبقي
+        # الصف بشكله الأصلي {input_tokens, output_tokens} كي لا يخالف اختبارات
+        # المساواة الحرفية القائمة (regression guard).
+        cr = int(cache_read_tokens or 0)
+        cc = int(cache_creation_tokens or 0)
+        if cr:
+            row["cache_read_tokens"] = row.get("cache_read_tokens", 0) + cr
+        if cc:
+            row["cache_creation_tokens"] = row.get("cache_creation_tokens", 0) + cc
+
     usage = c.setdefault("llm_usage", {})
-    row = usage.setdefault(model, {"input_tokens": 0, "output_tokens": 0})
-    row["input_tokens"] += int(input_tokens or 0)
-    row["output_tokens"] += int(output_tokens or 0)
-    # الحقلان الاختياريان يُضافان فقط عند وجود كاش فعلي — نداء بلا كاش يُبقي
-    # الصف بشكله الأصلي {input_tokens, output_tokens} كي لا يخالف اختبارات
-    # المساواة الحرفية القائمة (regression guard).
-    cr = int(cache_read_tokens or 0)
-    cc = int(cache_creation_tokens or 0)
-    if cr:
-        row["cache_read_tokens"] = row.get("cache_read_tokens", 0) + cr
-    if cc:
-        row["cache_creation_tokens"] = row.get("cache_creation_tokens", 0) + cc
+    _add(usage.setdefault(model, {"input_tokens": 0, "output_tokens": 0}))
+
+    # إسناد لكل بعثة (Part C) — إضافي بحت، فوق `llm_usage` الإجمالي أعلاه لا
+    # بدلاً منه. لا أثر خارج `mission_context` (نداءات المحلل/الكاتب/المراجع).
+    mkey = _current_mission.get()
+    if mkey is not None:
+        m_usage = c.setdefault("mission_usage", {}).setdefault(mkey, {})
+        _add(m_usage.setdefault(model, {"input_tokens": 0, "output_tokens": 0}))
 
 
 def data_counter() -> dict | None:

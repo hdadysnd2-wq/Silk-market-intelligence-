@@ -1008,7 +1008,14 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
             f"توجيه المستخدم (وجّه التركيز فقط — لا تخترع بيانات): "
             f"{_isolate(instruction)}")
 
-    result = _run_loop(eff_mission, ctx, eff_budget, timeout=timeout)
+    # إسناد التكلفة لكل بعثة (Part C): يسِم كل نداء كلود يجري داخل _run_loop
+    # باسم هذه البعثة — silk_context.record_llm_usage يقرأه فيُراكم في
+    # data_counter()["mission_usage"][key] فوق الإجمالي القائم. آمن تحت
+    # ThreadPoolExecutor (كل خيط بعثة موازٍ يملك نسخة سياق مستقلة عبر
+    # copy_context()، فلا تختلط وسوم بعثتين متزامنتين).
+    import silk_context
+    with silk_context.mission_context(eff_mission.get("key")):
+        result = _run_loop(eff_mission, ctx, eff_budget, timeout=timeout)
     today = _today()
     label = eff_mission.get("name") or eff_mission.get("key") or "LLM agent"
     registry = result.get("registry", {})
