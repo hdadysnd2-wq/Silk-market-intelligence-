@@ -394,7 +394,12 @@ function post(path,body){return fetch(base()+path,{method:"POST",headers:hdrs(tr
 function getJSON(path){return fetch(base()+path,{headers:hdrs(false)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));return d})})}
 
 /* ── بحث المنتج ── */
-var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim();clearTimeout(pT);if(!q){$("#pDrop").classList.remove("open");return}
+var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim();clearTimeout(pT);
+  // MED (تدقيق الواجهة، M12): أي تعديل يُبطل الحلّ السابق فوراً — وإلا يبقى
+  // S.product/S.hs قديمَين (من اختيار سابق) فيُحلَّل منتج غير الظاهر في
+  // الصندوق صامتاً حين يُنقَر «حلّل السوق» بلا اختيار صفٍّ جديد من القائمة.
+  if(S.product&&q!==S.product){S.product=null;S.hs=null;$("#pResolved").classList.remove("on");sync()}
+  if(!q){$("#pDrop").classList.remove("open");return}
   pT=setTimeout(function(){fetch(base()+"/index?q="+encodeURIComponent(q)+"&limit=10").then(function(r){return r.json()}).then(function(list){
     if(!Array.isArray(list)||!list.length){$("#pDrop").classList.remove("open");return}
     $("#pDrop").innerHTML=list.map(function(it){return '<div class="drow" data-n="'+esc(it.name)+'" data-hs="'+esc(it.hs)+'"><span>'+esc(it.name)+'</span><span class="hs">'+esc(it.hs)+'</span></div>'}).join("");
@@ -657,7 +662,11 @@ function dataYearNote(v){
   return '<div class="note" style="margin:2px 0 14px">سنة البيانات المعتمدة: '+v.data_year+'</div>';
 }
 function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class="empty">شغّل تحليلاً أولاً.</div>';return}
-  var d=v.decision||{},m=(v.markets||[{}])[0],h=v.header||{};
+  // MED (تدقيق الواجهة، M8): [] صادقة في JS، فتراجُع || القديم على مصفوفة
+  // markets فارغة (نتيجة بوّابة نطاق كالنفط/الفحم) لم يكن يُفعَّل أبداً —
+  // يبقى m=undefined فيرمي استثناءً عند أول m.trend/comp(m,...)، فتبقى اللوحة
+  // كما هي بلا رسالة مرئية (فشل صامت). التصحيح: تراجُع صريح لكائن فارغ.
+  var d=v.decision||{},m=(v.markets&&v.markets[0])||{},h=v.header||{};
   $("#bTitle").textContent=(v.product||"")+" · "+(h.target_market||"");
   if(v.deep_research){renderDeepResearch(v);return}
   var tone=TONE_CSS[d.tone]||"";
@@ -776,7 +785,8 @@ function send(){var msg=$("#chatBox").value.trim();if(!msg)return;
     if(!p.product){wait.remove();chatAdd("<p>لم أتعرّف على منتج في رسالتك. جرّب صيغة مثل: <b>حلّل التمور في الصين</b> أو <b>عسل في ألمانيا</b> — أي منتج غير نفطي يعمل.</p>");return}
     S.product=p.product.name;S.hs=p.product.hs;if(p.market)S.market={iso3:p.market.iso3,name:p.market.name};S.span=p.span;sync();
     runAnalysis(function(res){wait.remove();
-      var v=res.view||{},m=(v.markets||[{}])[0],brief=(v.brief||[])[0]||"—";
+      // M8 نفسها مكرَّرة هنا (مسار نتيجة الدردشة) — نفس التصحيح.
+      var v=res.view||{},m=(v.markets&&v.markets[0])||{},brief=(v.brief||[])[0]||"—";
       var ag=((m.research||{}).agents)||{},done=0,total=0,rows="";
       Object.keys(ag).forEach(function(k){total++;var a=ag[k]||{};var ok=a.status&&a.status!=="failed";if(ok)done++;
         var f=(a.findings||[]).filter(function(x){return x&&x.value!=null})[0];
