@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+from typing import Callable
 
 log = logging.getLogger(__name__)
 
@@ -1073,7 +1074,8 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
                           verdict: dict, product: str, market_name: str,
                           max_cycles: int = 2,
                           trace_id: str | None = None,
-                          hs_code: str | None = None) -> dict:
+                          hs_code: str | None = None,
+                          on_stage: Callable[[str], None] | None = None) -> dict:
     """حلقة الكتابة والمراجعة — Writer → Reviewer، أقصى دورتين (التكليف).
 
     يعيد {"report": نص أو None, "review_cycles": عدد الدورات الفعلية,
@@ -1083,7 +1085,20 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
     المفتاح عن فشل النداء الفعلي (مهلة/شبكة) بدل غموض السببين.
     `trace_id`: يمرَّر لكل نداء داخلي (كاتب/مراجع) — راجع `_traced_call`.
     `hs_code`: يُمرَّر للكاتب لاشتقاق فئة المنتج (المقترح ٤).
+    `on_stage`: قناة تقدّم حيّة اختيارية — تُستدعى بـ"writer" قبل كل نداء
+    كتابة (مسوّدة أو تنقيح) وبـ"reviewer" قبل كل نداء مراجعة، فيميّز
+    `GET /research/{id}/status` بين المرحلتين بدل تسمية الذيل كله "كاتب".
+    استثناء داخل `on_stage` لا يُسقط الكتابة (نفس مبدأ القناة الجانبية).
     """
+    def _stage(name: str) -> None:
+        if on_stage is None:
+            return
+        try:
+            on_stage(name)
+        except Exception as e:  # noqa: BLE001 — إشعار تقدّم تحسيني لا شرط
+            log.warning("on_stage(%r) callback failed: %s", name, e)
+
+    _stage("writer")
     draft = deep_report(mission_reports, analyst_summary, verdict, product,
                         market_name, trace_id=trace_id, hs_code=hs_code)
     if not draft:
@@ -1093,6 +1108,7 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
     notes: list = []
     cycles = 0
     for cycles in range(1, max(1, max_cycles) + 1):
+        _stage("reviewer")
         review = review_report(draft, mission_reports, trace_id=trace_id)
         if not review or review["approved"]:
             notes = []
@@ -1100,6 +1116,7 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
         notes = review["issues"]
         if cycles >= max_cycles:
             break
+        _stage("writer")
         fixed = deep_report(mission_reports, analyst_summary, verdict,
                             product, market_name, review_notes=notes,
                             trace_id=trace_id, hs_code=hs_code)

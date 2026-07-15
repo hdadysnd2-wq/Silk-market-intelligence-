@@ -796,6 +796,15 @@ def create_app():
             from silk_synthesis import synthesize
             from silk_ai_judge import write_reviewed_report
 
+            # تقدّم حيّ (GET /research/{id}/status): لقطة أولى تضبط started_at
+            # مرّة واحدة — كل لقطة لاحقة (لكل بعثة، ولكل مرحلة كاتب/مراجع)
+            # تعيد استعمال نفس القناة (silk_context.snapshot_research_progress)
+            # بلا عدّاد جديد، تُقرأ من نفس data_counter المستعمَل للتقرير النهائي.
+            import datetime as _dt
+            _started_at = _dt.datetime.now().isoformat(timespec="seconds")
+            silk_context.snapshot_research_progress(
+                analysis_id, "missions", started_at=_started_at)
+
             # deep_research() (لا run_all_missions مباشرة) — يفعّل التتبّع
             # الكامل دوماً (data/traces/{trace_id}.jsonl، الموجة ٦) فيبقى كل
             # تشغيل /research إنتاجي قابلاً للتدقيق، لا التشغيلات التجريبية فقط.
@@ -806,6 +815,7 @@ def create_app():
                                          resume_reports=resume_reports)
             mission_reports = research_run["reports"]
             trace_id = research_run.get("trace_id")
+            silk_context.snapshot_research_progress(analysis_id, "analyst")
             # H5 (تدقيق): حارس إنفاق على مستوى التشغيلة للذيل. السقف الكلي
             # (SILK_RESEARCH_MAX_LLM_CALLS) كان يُستشار داخل حلقة البعثات
             # فقط؛ الذيل (محلل+توليف+كاتب+مراجع) يجري بلا حكم حتى لو استُنفد.
@@ -838,7 +848,9 @@ def create_app():
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
                 product, market_ref.name_en, max_cycles=tail_max_cycles,
-                trace_id=trace_id, hs_code=hs_code) if ai_ok else
+                trace_id=trace_id, hs_code=hs_code,
+                on_stage=lambda s: silk_context.snapshot_research_progress(
+                    analysis_id, s)) if ai_ok else
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
             economics = dict(silk_context.data_counter() or {})
             economics["tail_degraded"] = tail_over_budget
@@ -853,6 +865,7 @@ def create_app():
         economics["cost_usd_estimate"] = cost["total_usd"]
         economics["cost_usd_by_model"] = cost["by_model"]
         economics["cost_unpriced_models"] = cost["unpriced_models"]
+        silk_context.snapshot_research_progress(analysis_id, "done")
         # H6: صالِح الحجز المسبق بالتكلفة الفعلية المُقدَّرة — المعالج حجز
         # التقدير (_expected) ذرّيًا قبل البدء؛ هنا نبدّله بالمُنفَق الحقيقي
         # المحسوب من رموز *كل* نداءات كلود في التشغيلة: بعثات + محلل + توليف +
@@ -1116,26 +1129,61 @@ def create_app():
         _finish_research_run(analysis_id, result)  # no-op إن persist=false
         return _json(result)
 
+    # تسمية عربية للمرحلة الحيّة (GET /status) — مرآة نصّية لقيم `stage` التي
+    # تُسجَّلها silk_context.snapshot_research_progress (missions/analyst/
+    # writer/reviewer/done). قيمة غير معروفة (تشغيلة قديمة قبل هذه الميزة،
+    # بلا لقطة بعد) تعرض None لا تسمية مُخترَعة.
+    _STAGE_LABEL_AR = {
+        "missions": "بحث البعثات", "analyst": "تحليل شامل",
+        "writer": "كتابة التقرير", "reviewer": "مراجعة التقرير",
+        "done": "اكتمل"}
+
     @app.get("/research/{analysis_id}/status")
     def research_status(analysis_id: int, request: Request):
         """حالة تشغيلة بحث عميق — تقدّم لكل بعثة من الاثنتي عشرة + الحالة
         العامة (P0، حادثة نفاد الاعتمادات) — اللوحة تستطلعها دورياً بدل
-        انتظار اتصال HTTP واحد طويل قد تقطعه بوّابة عكسية."""
+        انتظار اتصال HTTP واحد طويل قد تقطعه بوّابة عكسية.
+
+        تقدّم حيّ (المرحلة/الزمن المنقضي/التكلفة حتى الآن): من لقطة
+        `silk_storage.get_research_progress` — نفس عدّادات `data_economics`
+        النهائية نفسها تُقرأ أثناء التشغيل بدل عدّاد جديد. التكلفة **مُقدَّرة
+        من دفتر أسعار مُسعَّر فقط** (`silk_pricing`) — نموذج غير مُسعَّر يظهر
+        في `cost_unpriced_models` صراحةً بدل أن يُحتسَب صفراً بصمت (لا اختلاق).
+        """
         _require_key(request)
         _rate_limit(request)
         from silk_missions import MISSION_ORDER
-        from silk_storage import get_research_run, mission_status_map
+        from silk_storage import (get_research_run, mission_status_map,
+                                  get_research_progress)
         run_row = get_research_run(analysis_id)
         if run_row is None or run_row.get("kind") != "research":
             raise HTTPException(status_code=404,
                                 detail=f"research run {analysis_id} not found")
         done = mission_status_map(analysis_id)
         missions = {key: done.get(key, "pending") for key in MISSION_ORDER}
+        progress = get_research_progress(analysis_id)
+        stage = progress.get("stage")
+        elapsed_seconds = None
+        started_at = progress.get("started_at")
+        if started_at:
+            try:
+                import datetime as _dt
+                elapsed_seconds = round(
+                    (_dt.datetime.now() - _dt.datetime.fromisoformat(started_at))
+                    .total_seconds())
+            except Exception:  # noqa: BLE001 — طابع زمني فاسد = فجوة لا استثناء
+                elapsed_seconds = None
         return _json({
             "analysis_id": analysis_id, "status": run_row.get("status"),
             "product": run_row.get("product"), "hs_code": run_row.get("hs_code"),
             "created_at": run_row.get("created_at"),
             "updated_at": run_row.get("updated_at"),
+            "stage": stage, "stage_label": _STAGE_LABEL_AR.get(stage),
+            "elapsed_seconds": elapsed_seconds,
+            "llm_calls": progress.get("llm_calls"),
+            "tool_calls": progress.get("tool_calls"),
+            "cost_usd_estimate": progress.get("cost_usd_estimate"),
+            "cost_unpriced_models": progress.get("cost_unpriced_models") or [],
             "missions": missions,
             "missions_completed": sum(1 for v in missions.values()
                                       if v != "pending"),

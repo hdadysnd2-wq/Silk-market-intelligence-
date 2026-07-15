@@ -157,3 +157,35 @@ def record_llm_usage(model: str, input_tokens: int, output_tokens: int,
 def data_counter() -> dict | None:
     """العدّاد الحالي — the active counter dict, or None outside an analysis."""
     return _data_counter.get()
+
+
+def snapshot_research_progress(analysis_id: int | None, stage: str,
+                               started_at: str | None = None) -> None:
+    """سجّل لقطة تقدّم حيّة لتشغيلة `/research` جارية — المرحلة الحالية +
+    العدّادات الموجودة أصلاً (llm_calls/tool_calls) + تكلفة مُقدَّرة حتى
+    الآن، محسوبة من نفس `data_counter()`/`silk_pricing.estimate_cost_usd`
+    المستعمَلين للتقرير النهائي — **لا عدّاد جديد**، قراءة لِما هو مُتراكم
+    فعلاً وقت الاستدعاء.
+
+    قناة جانبية صامتة تماماً (نفس فلسفة `count_data`/`record_llm_usage`):
+    بلا `analysis_id` (تشغيلة غير محفوظة، `persist=False`) أو عدّاد نشط
+    = لا شيء؛ فشل الكتابة إلى القرص لا يُسقط التشغيلة أبداً (يُسجَّل تحذيراً
+    فقط) — التقدّم المرئي تحسين، لا شرط تشغيل.
+    """
+    if analysis_id is None:
+        return
+    try:
+        import silk_storage
+        from silk_pricing import estimate_cost_usd
+        c = _data_counter.get() or {}
+        cost = estimate_cost_usd(c.get("llm_usage"))
+        silk_storage.update_research_progress(
+            analysis_id, stage=stage, started_at=started_at,
+            llm_calls=c.get("llm_calls", 0), tool_calls=c.get("tool_calls", 0),
+            cost_usd_estimate=cost["total_usd"],
+            cost_unpriced_models=cost.get("unpriced_models") or [])
+    except Exception as e:  # noqa: BLE001 — لقطة تحسينية، لا تُسقِط التشغيلة أبداً
+        import logging
+        logging.getLogger(__name__).warning(
+            "progress snapshot failed for analysis %s stage %s: %s",
+            analysis_id, stage, e)
