@@ -138,8 +138,18 @@ def _call(system: str, user: str, max_tokens: int = 1600,
         log.info("AI call skipped: ai-extras blocked in this context")
         return None
     from silk_llm_provider import get_provider
-    return get_provider().complete(system, user, max_tokens,
-                                   model or _MODEL, timeout or _TIMEOUT)
+    out = get_provider().complete(system, user, max_tokens,
+                                  model or _MODEL, timeout or _TIMEOUT)
+    if out is not None:
+        # عُدّ نداءات كلود خارج حلقة البعثات (الكاتب/المراجع/التوليف/إضافات
+        # المسار المجاني) في نفس عدّاد data_economics. حلقة البعثات تعدّ
+        # نداءاتها في silk_llm_runtime؛ هذا الذيل كان غير محسوب فيُبلَّغ عدد
+        # نداءات أقل من الواقع (التكلفة الدولارية محسوبة أصلاً من الرموز، لكن
+        # العدّ الصحيح مطلوب للقياس الصادق). آمن للسقف: الذيل يعمل بعد انتهاء
+        # حلقة البعثات فلا يؤثر في أي قرار سقف؛ نُعدّ النجاح فقط. صامت بلا عدّاد.
+        from silk_context import count_data
+        count_data("llm_calls")
+    return out
 
 
 def _call_tools(system: str, messages: list, tools: list | None = None,

@@ -305,7 +305,8 @@ def test_pricing_empty_usage_is_zero():
     import silk_pricing as pricing
 
     assert pricing.estimate_cost_usd(None) == {
-        "total_usd": 0.0, "by_model": {}, "unpriced_models": []}
+        "total_usd": 0.0, "by_model": {}, "unpriced_models": [],
+        "unpriced_tokens": {}, "complete": True}
 
 
 def test_record_llm_usage_is_noop_outside_active_counter():
