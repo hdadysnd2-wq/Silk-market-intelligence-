@@ -27,7 +27,9 @@ log = logging.getLogger(__name__)
 PASS, WARN, FAIL = "PASS", "PASS-WITH-WARNINGS", "FAIL"
 
 _MARKDOWN_RE = re.compile(r"(^#{1,6}\s)|(```)|(\*\*)", re.M)
-_RAW_JSON_RE = re.compile(r'[{]\s*"[a-zA-Z_]+"\s*:', re.M)
+# مفتاح JSON بأي حروف (لا اللاتينية فقط) — بلاغ حي: حكم مسرَّب عُرِّبت
+# مفاتيحه ("{\"الحكم\":...}") فأفلت من [a-zA-Z_]+؛ [^"\s]+ يلتقط الصيغتين.
+_RAW_JSON_RE = re.compile(r'[{]\s*"[^"\s]+"\s*:', re.M)
 _RAW_CONFIDENCE_RE = re.compile(r"\(?ثقة\s*0")
 _TERMINAL_PUNCT = ".!?:؛،؟…\"'”)"
 # بلاغ منتج من المالك: التقرير المعروض للعميل كشف السباكة الداخلية

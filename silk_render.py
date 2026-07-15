@@ -550,6 +550,24 @@ _GAPS_RE = re.compile(r"فجوات:\s*([^|]*)")
 _INTERNAL_AGENT_RE = re.compile(r"LLM(?:Mission)?Agent:([A-Za-z_]+)")
 _DP_TAG_RE = re.compile(r"\[?dp\d+\]?")
 _WHOLE_JSON_RE = re.compile(r"^\s*[{\[].*[}\]]\s*$", re.S)
+# بلاغ حي إنتاجي (تمور/هولندا HS080410): وصلت الواجهةَ أشكالُ JSON خام لم
+# يلتقطها _WHOLE_JSON_RE المُرسَّى: (أ) سياج شيفرة "```json {...}" أو "json
+# {...}"؛ (ب) JSON مضمَّن خلف بادئة نصية ("التوصية: {\"verdict\":...}")؛
+# (ج) لاحقة عدّ أدوات داخلية ("... | tool calls: 2"). تُطهَّر كلها هنا.
+_JSON_FENCE_RE = re.compile(r"`{3,}|(?<![A-Za-z؀-ۿ])json(?=\s*[{\[])",
+                            re.I)
+# الشكل الإنجليزي فقط ("| tool calls: N") — هو ما تسرَّب للعميل. الشكل
+# العربي ("نداءات أدوات: N") تِلِمتري مشغّل مشروع يُحلّله _mission_trace_summary
+# لعدّ نداءات الأدوات، فلا يُجرَّد هنا (بلاغ حي: تجريده صفّر العدّ في اللوحة).
+_TOOL_CALLS_SUFFIX_RE = re.compile(
+    r"\s*\|\s*tool calls\s*:?\s*\d+\s*$", re.I)
+# علامات بنية JSON داخلية للنموذج — وجود أيّها يعني تسريب سباكة لا نثر عميل.
+# تشمل مفاتيح الحكم بصيغتها الإنجليزية الخام وصيغتها المُعرَّبة (كان
+# _EN_FIELD_RE يحوّل verdict/confidence داخل JSON مسرَّب قبل التقاطه، فيظهر
+# "{\"الحكم\":...}" على الواجهة — نلتقط الصيغتين).
+_INTERNAL_JSON_MARKERS = ('"datapoint_ids"', '"findings"', '"claim"',
+                          '"reasoning"', '"verdict"', '"confidence"',
+                          '"الحكم"', '"درجة الثقة"')
 # تسريب حقول داخلية إنجليزية في نص معروض (بلاغ مالك: "verdict" و
 # "confidence 0.64" وصلا جدولاً في متن تقرير العميل) — الكاتب يردّد أحياناً
 # أسماء حقول رآها في مدخلاته. القيمة العشرية بعد confidence تُصاغ بشرياً
@@ -568,24 +586,48 @@ _EN_FIELD_AR = {"verdict": "الحكم", "confidence": "درجة الثقة"}
 _RAW_VERDICT_RE = re.compile(r"\b(CONDITIONAL-GO|NO-GO|GO|WATCH)\b")
 
 
-def _strip_raw_json_leak(text: str | None) -> str | None:
-    """استبدل نصاً هو بالكامل تفريغ JSON خام بنص عربي مقروء — بلاغ حي
-    (بعثة risk_news أعادت `{"claim": "..."}` حرفياً كملخّص حين فشل
-    `silk_llm_runtime._parse_output` تفسير ردّها كاملاً). يستخرج قيمة
-    مفتاح شائع (claim/summary/value/note) إن أمكن، وإلا يُصرَّح بالفجوة
-    صراحة بدل عرض بنية JSON خام. نص عادي لا يشبه JSON يمر كما هو."""
-    if not text or not _WHOLE_JSON_RE.match(text):
-        return text
+_RAW_JSON_GAP = "تعذّر تفسير رد كلود لهذا البند — بيانات غير مقروءة"
+
+
+def _extract_or_gap(blob: str) -> str:
+    """استخرج قيمة مفتاح مقروء من تفريغ JSON، وإلا فجوة معلنة — لا JSON خام
+    يُعرَض إطلاقاً. `reasoning` أولاً (تعليل الحكم المسرَّب)، ثم مفاتيح البعثة
+    الشائعة (claim/summary/value/note)."""
     try:
-        obj = json.loads(text)
+        obj = json.loads(blob)
     except Exception:  # noqa: BLE001 — تفريغ مشوَّه أيضاً غير قابل للعرض خاماً
-        return "تعذّر تفسير رد كلود لهذا البند — بيانات غير مقروءة"
+        return _RAW_JSON_GAP
     if isinstance(obj, dict):
-        for key in ("claim", "summary", "value", "note"):
+        for key in ("reasoning", "claim", "summary", "value", "note"):
             val = obj.get(key)
             if isinstance(val, str) and val.strip():
                 return val.strip()
-    return "تعذّر تفسير رد كلود لهذا البند — بيانات غير مقروءة"
+    return _RAW_JSON_GAP
+
+
+def _strip_raw_json_leak(text: str | None) -> str | None:
+    """استبدل تفريغ JSON خام بنص عربي مقروء أو فجوة معلنة — بلاغ حي
+    (بعثة risk_news أعادت `{"claim": "..."}` حرفياً كملخّص، وحكم كلود
+    وصل الواجهةَ كـ`{"verdict":...}` مسيَّجاً بـ"json" أو مضمَّناً خلف بادئة).
+    يعالج ثلاثة أشكال فاتت الإصدار المُرسَّى القديم: سياج شيفرة، JSON
+    مضمَّن، ولاحقة عدّ أدوات داخلية. نص عادي لا يحمل بنية JSON يمر كما هو."""
+    if not text:
+        return text
+    # (١) أزل لاحقة عدّ الأدوات الداخلية ("... | tool calls: 2").
+    out = _TOOL_CALLS_SUFFIX_RE.sub("", text)
+    # (٢) أزل سياج الشيفرة (```json / json) قبل كائن JSON إن وُجد.
+    if _JSON_FENCE_RE.search(out):
+        out = _JSON_FENCE_RE.sub("", out).strip()
+    # (٣) النص كلّه JSON — استخرج قيمة مقروءة أو أعلن فجوة (السلوك القائم).
+    if _WHOLE_JSON_RE.match(out):
+        return _extract_or_gap(out)
+    # (٤) JSON مضمَّن خلف/أمام نص، يحمل علامة بنية داخلية — استبدل مجاله
+    #     { .. } بقيمة مقروءة/فجوة مع الحفاظ على أي نص عربي سليم حوله.
+    if any(m in out for m in _INTERNAL_JSON_MARKERS):
+        i, j = out.find("{"), out.rfind("}")
+        if i != -1 and j > i:
+            out = (out[:i] + _extract_or_gap(out[i:j + 1]) + out[j + 1:]).strip()
+    return out
 
 
 def _mission_label(key: str) -> str:

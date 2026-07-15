@@ -38,6 +38,20 @@ def last_error() -> dict | None:
     return _last_error.get()
 
 
+# استرداد نفاد رموز الإخراج (max_tokens) — بلاغ حي إنتاجي مثبَت بالأدلة
+# (كاتب التقرير، تشغيلة تمور/هولندا HS080410): رد HTTP 200 ناجح بـ
+# stop_reason="max_tokens" وبلا أي كتلة نصية كان يعيد None، فيصير
+# report=None ويظهر للعميل "Claude call failed (empty_response: ...
+# stop_reason='max_tokens')". هذه سلسلة الفشل وراء PRs #69/#70/#71.
+# الإصلاح المبني على الدليل بالضبط: عند اقتطاع الرد لنفاد السقف، نرفع سقف
+# الإخراج ونعيد المحاولة (حتى stop_reason طبيعي أو السقف الصلب)، ونعيد
+# دائماً أوفى نص أُنتِج — فـmax_tokens لا يمكن أن يسبّب report=None بعد
+# اليوم. لا يمسّ مسارات النجاح العادية (الحلقة تنكسر بعد المحاولة الأولى
+# ما لم يكن stop_reason=max_tokens تحديداً).
+_MAX_TOKENS_RETRIES = int(os.environ.get("SILK_MAX_TOKENS_RETRIES", "3"))
+_MAX_TOKENS_CEILING = int(os.environ.get("SILK_MAX_TOKENS_CEILING", "16000"))
+
+
 class LLMProvider(ABC):
     """الواجهة الدنيا — نداء إكمال نصّي، ونداء حلقة استخدام أدوات."""
 
@@ -105,36 +119,51 @@ class AnthropicProvider(LLMProvider):
             return None
         try:
             import requests  # lazy: keep core import offline-safe
-            resp = requests.post(
-                self._ENDPOINT, timeout=self._timeout_pair(timeout),
-                headers=self._headers(key),
-                json={"model": model, "max_tokens": max_tokens,
-                     "system": [{"type": "text", "text": system,
-                                "cache_control": {"type": "ephemeral"}}],
-                     "messages": [{"role": "user", "content": user}]})
-            resp.raise_for_status()
-            data = resp.json()
-            self._record_usage(model, data)
-            if data.get("stop_reason") == "refusal":  # safety decline -> no fabrication
-                log.warning("AI judge: request refused by the model")
-                _last_error.set({"type": "refusal",
-                                 "message": "model refused the request"})
-                return None
-            text = "".join(b.get("text", "") for b in data.get("content", [])
-                          if b.get("type") == "text").strip()
-            if not text:
-                # بلاغ حي (تشغيلة ثالثة): هذا كان مسار الفشل الصامت الوحيد —
-                # رد HTTP ناجح بلا كتل نصية (stop_reason=max_tokens مثلاً)
-                # يعيد None بلا أي سطر سجل ولا last_error، فتظهر الواجهة
-                # "مهلة أو خطأ شبكة" زوراً وسجل Railway خالٍ من أي أثر.
+            best_text = ""        # أوفى نص أُنتِج عبر المحاولات (لا نخسر جزئياً)
+            stop_reason = None
+            effective_max = max_tokens
+            for _attempt in range(_MAX_TOKENS_RETRIES + 1):
+                resp = requests.post(
+                    self._ENDPOINT, timeout=self._timeout_pair(timeout),
+                    headers=self._headers(key),
+                    json={"model": model, "max_tokens": effective_max,
+                         "system": [{"type": "text", "text": system,
+                                    "cache_control": {"type": "ephemeral"}}],
+                         "messages": [{"role": "user", "content": user}]})
+                resp.raise_for_status()
+                data = resp.json()
+                self._record_usage(model, data)
+                stop_reason = data.get("stop_reason")
+                if stop_reason == "refusal":  # safety decline -> no fabrication
+                    log.warning("AI judge: request refused by the model")
+                    _last_error.set({"type": "refusal",
+                                     "message": "model refused the request"})
+                    return None
+                text = "".join(b.get("text", "") for b in data.get("content", [])
+                              if b.get("type") == "text").strip()
+                if len(text) > len(best_text):
+                    best_text = text        # احتفظ بالأوفى (الأعلى سقفاً غالباً)
+                if stop_reason != "max_tokens":
+                    break   # اكتمل طبيعياً — لا داعي للتصعيد
+                # اقتُطع الرد بنفاد رموز الإخراج — ارفع السقف وأعد المحاولة
+                # (بلاغ هولندا: كان يعيد None هنا). توقّف عند السقف الصلب.
+                if effective_max >= _MAX_TOKENS_CEILING:
+                    log.warning("AI judge hit max_tokens at ceiling %d — "
+                                "returning best partial (%d chars)",
+                                effective_max, len(best_text))
+                    break
+                effective_max = min(effective_max * 2, _MAX_TOKENS_CEILING)
+            if not best_text:
+                # نفاد السقف قبل أي كتلة نصية على الإطلاق — يُعلَن فجوة صراحة
+                # (لا اختلاق نص). نادر جداً بعد التصعيد؛ العقد يبقى صادقاً.
                 detail = {"type": "empty_response",
-                          "message": f"HTTP 200 بلا كتل نصية — "
-                                     f"stop_reason={data.get('stop_reason')!r}"}
+                          "message": f"HTTP 200 بلا كتل نصية بعد تصعيد السقف — "
+                                     f"stop_reason={stop_reason!r}"}
                 log.warning("AI judge call returned no text: %s", detail["message"])
                 _last_error.set(detail)
                 return None
             _last_error.set(None)
-            return text
+            return best_text
         except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
             log.warning("AI judge call failed: %s: %s", type(e).__name__, e)
             _last_error.set(self._error_detail(e))

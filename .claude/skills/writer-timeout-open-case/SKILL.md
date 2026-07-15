@@ -3,13 +3,39 @@ name: writer-timeout-open-case
 description: Case file for the UNRESOLVED deep-research report-writer failure (three production failures, PRs 69/70/71). Load before touching silk_ai_judge timeouts, the writer/reviewer, or when a /research run again produces report=None — it contains the exact evidence-reading protocol and the fixes deliberately NOT applied yet.
 ---
 
-# OPEN CASE: the report writer keeps failing — do not guess, read the evidence
+# CASE CLOSED: the report writer keeps failing — root cause found from evidence
 
-Status: **UNRESOLVED**. The writer (`silk_ai_judge.deep_report`) has failed in
-three separate production runs. Three PRs each fixed what could be proven and
-deliberately refused to guess beyond the evidence. The evidence-capture tooling
-is now armed and waiting for the next live failure. Your job, if it fails again,
-is to run the protocol in section 3 — not to pick a fix by intuition.
+Status: **RESOLVED** (dates/Netherlands HS080410, the 4th live failure). The
+captured evidence the three prior PRs armed for finally arrived: the "Full
+Report" section displayed
+`empty_response: ... no text blocks — stop_reason='max_tokens'`. **Root cause:
+the writer exhausted its output-token budget (`max_tokens=5000`) before emitting
+any text block, so `silk_llm_provider.complete` returned `None`
+(`silk_llm_provider.py:123-135`) → `report=None`.** This is exactly the branch
+the evidence-capture (`last_error` `empty_response`) was built to reveal — the
+`stop_reason` self-identified the phase, no guessing.
+
+**Fix (evidence-driven, the exact `max_tokens` branch):**
+- `silk_llm_provider.complete` now escalates the output ceiling on
+  `stop_reason == "max_tokens"` and retries, returning the fullest text obtained
+  — `max_tokens` can no longer cause `report=None`
+  (`_MAX_TOKENS_RETRIES`/`_MAX_TOKENS_CEILING`). If any text is ever produced it
+  is returned (truncated > nothing); only a pathological zero-text-at-ceiling
+  still declares a gap (`None` + `empty_response`) — no fabrication.
+- Writer output ceiling raised 5000 → `SILK_WRITER_MAX_TOKENS` default 8000
+  (`silk_ai_judge.py`).
+- Guard: `tests/test_wave_p5_writer_max_tokens_and_leaks.py`
+  (`test_max_tokens_with_no_text_blocks_recovers_via_ceiling_escalation`,
+  `test_deep_report_recovers_end_to_end_from_writer_max_tokens`, +
+  best-partial and zero-text-declares-gap cases). Full ledger entry:
+  `docs/DEEP_RESEARCH_DECISIONS.md` («القضية ٣ من البلاغ الحي — نفاد رموز
+  الإخراج»).
+
+The history and protocol below are retained for reference: the discipline that
+produced this fix (three PRs of instrumentation, zero guessed fixes) is the
+model to follow for the next unproven failure. Do not re-open this case for a
+`max_tokens` recurrence — that is now handled; a NEW `error_type` in the
+decision table (§3) is a different case.
 
 ## 1. Case history (verified against git log and code)
 

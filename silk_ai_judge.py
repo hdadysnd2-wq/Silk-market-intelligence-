@@ -23,6 +23,11 @@ _TIMEOUT = float(os.environ.get("SILK_AI_TIMEOUT_S", "60"))
 # فيتجاوزان بانتظام مهلة ٦٠ث القياسية للبعثة الواحدة، فيعود _call بـNone
 # ويظهر التقاطع "دليل غير كافٍ" رغم توفر أدلة حقيقية في نفس التشغيلة.
 _LONG_TIMEOUT = float(os.environ.get("SILK_AI_LONG_TIMEOUT_S", "300"))
+# سقف رموز إخراج كاتب التقرير — بلاغ حي إنتاجي (تمور/هولندا HS080410):
+# التقرير المهني من أحد عشر قسماً بجداول وخارطة طريق يتجاوز 5000 رمزاً
+# فيقتطعه السقف (stop_reason="max_tokens"). رُفع إلى 8000، ومزوّد كلود
+# يصعّد السقف تلقائياً عند الاقتطاع (silk_llm_provider._MAX_TOKENS_CEILING).
+_WRITER_MAX_TOKENS = int(os.environ.get("SILK_WRITER_MAX_TOKENS", "8000"))
 
 # مبدأ الحَكَم — non-negotiable judging principle handed to the model every call.
 _PRINCIPLE = (
@@ -957,7 +962,7 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "ولا تكرار للسرد أعلاه.")
     return _traced_call(
         trace_id, "revision" if review_notes else "draft", _LONG_TIMEOUT,
-        lambda: _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=5000,
+        lambda: _call(_PRINCIPLE, "\n\n".join(parts), max_tokens=_WRITER_MAX_TOKENS,
                      timeout=_LONG_TIMEOUT))
 
 
