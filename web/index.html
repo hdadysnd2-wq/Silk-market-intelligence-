@@ -437,7 +437,7 @@ function buildBody(){var y=years();
   if(!isNaN(price))b.own_price=price;return b}
 function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#runBtn").textContent=t("running");
   post("/analyze",buildBody()).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#runBtn").textContent=t("run");sync();
-    pushHist();renderBoard();if(then)then(res);else nav("board")})
+    pushHist(res&&res.analysis_id||null);renderBoard();if(then)then(res);else nav("board")})
   .catch(function(e){S.busy=false;$("#runBtn").textContent=t("run");sync();toast("فشل الطلب: "+e.message)})}
 $("#runBtn").addEventListener("click",function(){runAnalysis()});
 /* R4 — لقطة سريعة لمنتج جديد: التكلفة قبل التشغيل، ثم من المخزن عند التكرار. */
@@ -514,7 +514,7 @@ function pollResearchStatus(analysisId,lbl){
     if(st.status==="completed"){
       getJSON("/analyses/"+analysisId).then(function(res){
         S.raw=res;S.view=res.view||null;S.busy=false;S.lastFailedResearchId=null;$("#researchBtn").textContent=lbl;sync();
-        pushHist();renderBoard();nav("board")})
+        pushHist(analysisId);renderBoard();nav("board")})
       .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("اكتمل البحث لكن تعذّرت قراءة النتيجة: "+e.message)});
       return}
     // 'failed' — البعثات المكتملة محفوظة؛ النقر القادم يستأنف بنفس المعرّف لا يبدأ من الصفر.
@@ -538,13 +538,28 @@ function runDeepResearch(){if(S.busy)return;
     if(res&&res.analysis_id&&res.status==="running"){pollResearchStatus(res.analysis_id,lbl);return}
     // توافق رجعي: رد متزامن كامل (لو عُطِّل async_run مستقبلاً من الخادم).
     S.raw=res;S.view=res.view||null;S.busy=false;S.lastFailedResearchId=null;$("#researchBtn").textContent=lbl;sync();
-    pushHist();renderBoard();nav("board")})
+    pushHist(res&&res.analysis_id||null);renderBoard();nav("board")})
   .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("فشل البحث العميق: "+e.message)})}
 $("#researchBtn").addEventListener("click",function(){runDeepResearch()});
-function pushHist(){var label=S.product+" · "+((S.view&&S.view.header&&S.view.header.target_market)||"—");
-  S.hist=[{label:label}].concat(S.hist.filter(function(h){return h.label!==label})).slice(0,5);
+function pushHist(id){var label=S.product+" · "+((S.view&&S.view.header&&S.view.header.target_market)||"—");
+  S.hist=[{label:label,id:id||null}].concat(S.hist.filter(function(h){return h.label!==label})).slice(0,5);
   localStorage.setItem("silk_hist",JSON.stringify(S.hist));drawHist()}
-function drawHist(){$("#histList").innerHTML=S.hist.map(function(h){return '<div class="hist">'+esc(h.label)+'</div>'}).join("")}
+function drawHist(){$("#histList").innerHTML=S.hist.map(function(h){return '<div class="hist" data-id="'+(h.id||"")+'">'+esc(h.label)+'</div>'}).join("")}
+/* بلاغ حي: عناصر «التحليلات الأخيرة» تبدو قابلة للنقر (cursor:pointer) منذ
+   البداية لكن لم تُربَط بأي معالج نقر قط — سقوط صامت بلا أي فِعل مرئي عند
+   النقر (نفس نمط بلاغ ٢: catch فارغ يُخفي 401). مُصلَح هنا: نقر يفتح
+   التحليل المخزَّن، أو يظهر رسالة عربية مرئية دوماً — أبداً لا فعل صامت. */
+function openStoredAnalysis(id){
+  getJSON("/analyses/"+id).then(function(res){
+    S.raw=res;S.view=res.view||null;sync();pushHist(id);renderBoard();nav("board")})
+  .catch(function(e){
+    if(/^HTTP 401\b/.test(e.message))toast("يتطلب مفتاح الخدمة — أدخله من القائمة");
+    else toast("تعذّر فتح التحليل رقم "+id+": "+e.message)})}
+$("#histList").addEventListener("click",function(e){
+  var el=e.target.closest(".hist");if(!el)return;
+  var id=el.getAttribute("data-id");
+  if(!id){toast("هذا العنصر قديم بلا معرّف مخزَّن — أعد البحث لفتحه");return}
+  openStoredAnalysis(id)});
 drawHist();
 
 /* ── اللوحة — تُبنى من view الحقيقي حصراً؛ الغائب «—» هادئة ── */
