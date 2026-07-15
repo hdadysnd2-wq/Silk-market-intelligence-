@@ -27,6 +27,7 @@ operator-intent fidelity** first, code hygiene second.
 | Writing or modifying tests | `testing-discipline` |
 | Deploying, env vars, production-only behavior | `railway-operations` |
 | Opening a PR or documenting an incident/decision | `pr-and-wave-discipline` |
+| The owner pastes real evidence and asks "why did this happen" / touching the money path, sanitizer chain, or `/ops` endpoints | `silk-operations` |
 
 ## The three laws that outrank everything in this library
 
@@ -40,8 +41,11 @@ operator-intent fidelity** first, code hygiene second.
 
 ## Known open items handed over
 
-- **Writer-timeout case is UNRESOLVED** — see `writer-timeout-open-case`.
-  Evidence capture is armed; the next live failure should self-diagnose.
+- **Writer-timeout case is RESOLVED** (root cause found from the Netherlands
+  evidence: `max_tokens` output-budget exhaustion) — see
+  `writer-timeout-open-case` for the fix and the protocol it leaves behind for
+  the next *different* writer failure (a new `error_type` is a new case, not a
+  reopening of this one).
 - `evals/golden_cases.json` is deliberately `[]` — the first golden case
   requires a manually verified live Comtrade number (runbook in
   `docs/DEEP_RESEARCH_DECISIONS.md`).

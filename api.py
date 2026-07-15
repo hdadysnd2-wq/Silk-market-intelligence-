@@ -442,6 +442,13 @@ def create_app():
         # Atomic check-and-reserve: no TOCTOU window between read and write.
         if paid_requested and not silk_usage.try_reserve_paid_calls(
                 paid_requested):
+            # ITEM 5ب: رفض حجز بحالة السقف — نص خادمي بحت، لا محتوى كلود.
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "reservation_refused",
+                "بلغ سقف التفعيلات المدفوعة اليومي (SILK_PAID_DAILY_CAP)",
+                context={"requested": paid_requested,
+                        "today_activations": silk_usage.paid_calls_today()})
             raise HTTPException(
                 status_code=429,
                 detail="daily paid-layer cap reached (SILK_PAID_DAILY_CAP) — "
@@ -854,6 +861,16 @@ def create_app():
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
             economics = dict(silk_context.data_counter() or {})
             economics["tail_degraded"] = tail_over_budget
+            if not report_out.get("report"):
+                # ITEM 5ب: فشل الكاتب في التشغيلة الرئيسية (لا مسار regen) —
+                # السبب مُطهَّر قبل التخزين (نفس مُطهِّر H1/H4 القائم).
+                from silk_render import _strip_internal_plumbing
+                import silk_ops_log
+                silk_ops_log.record_error(
+                    "writer_failure",
+                    _strip_internal_plumbing(report_out.get("failure_reason") or "")
+                    or "فشل الكاتب بلا سبب مسجَّل",
+                    context={"analysis_id": analysis_id, "trace_id": trace_id})
 
         served = economics.get("store_hits", 0) + economics.get("cache_hits", 0)
         economics["note"] = (
@@ -1058,6 +1075,14 @@ def create_app():
         # رجع مبكراً قبل هنا.
         _expected_usd = float(os.environ.get("SILK_RESEARCH_EXPECTED_USD", "3.0"))
         if not silk_usage.try_reserve_usd(_expected_usd):
+            # ITEM 5ب: رفض حجز بحالة السقف — نص خادمي بحت، لا محتوى كلود.
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "reservation_refused",
+                f"الميزانية اليومية بالدولار أوشكت على النفاد — "
+                f"أُنفِق {round(silk_usage.usd_spent_today(), 2)}$ اليوم",
+                context={"expected_usd": _expected_usd,
+                        "spent_today_usd": round(silk_usage.usd_spent_today(), 2)})
             raise HTTPException(status_code=429, detail={
                 "error": "daily_usd_budget_exhausted",
                 "reason": f"الميزانية اليومية بالدولار أوشكت على النفاد — "
@@ -1268,6 +1293,23 @@ def create_app():
             return {"overall": "unreachable", "agents_can_work": False,
                     "error": f"{type(e).__name__}: {e}", "sources": []}
 
+    @app.get("/ops/last-errors")
+    def ops_last_errors(request: Request, n: int = 20):
+        """ITEM 5ب (مذكّرة العمليات، تدقيق 2026-07-15): آخر n خطأ تشغيلي —
+        فشل تصدير (docx 501)، فشل كاتب (تقرير None)، رفض حجز (429 بحالة
+        السقف) — بلا حاجة لسجلات Railway (البروكسي يمنع الوصول لها من
+        صندوق تطوير معزول عن الشبكة الحيّة؛ هذه النقطة تقطع تلك الحلقة).
+
+        محروسة كبقية سطوح المشغّل (`/diagnostics`)؛ كل سبب مخزَّن **مُطهَّر
+        مسبقاً** (`silk_render._strip_internal_plumbing`، راجع مواقع
+        `silk_ops_log.record_error`) — لا `stop_reason`/تتبّع استثناء خام
+        يصل هذا الردّ إطلاقاً.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        import silk_ops_log
+        return _json({"errors": silk_ops_log.last_errors(n)})
+
     @app.get("/sources")
     def sources(request: Request):
         """خريطة حالة طبقات المصادر الاثنتي عشرة — 12-layer data-source status map.
@@ -1320,6 +1362,11 @@ def create_app():
 
         C-1: محروسة — البلوب المخزّن يحمل بطاقة المنتج الاقتصادية،
         والمعرّفات متسلسلة، فبلا مصادقة يقرؤها مجهول بالتعداد.
+
+        ITEM 5أ (خدمة ذاتية للمشغّل، تدقيق 2026-07-15): `?economics=1` يعيد
+        ملخّص اقتصاد التشغيلة فقط (لا البلوب الكامل — قد يبلغ عشرات
+        الكيلوبايتات) — يقطع حلقة «الصق لي بيانات Railway» التي كانت
+        مستحيلة الإغلاق من صندوق تطوير معزول عن الشبكة الحيّة.
         """
         _require_key(request)
         _rate_limit(request)
@@ -1327,7 +1374,37 @@ def create_app():
         if found is None:
             raise HTTPException(status_code=404,
                                 detail=f"analysis {analysis_id} not found")
+        if str(request.query_params.get("economics") or "").strip().lower() \
+                in ("1", "true", "yes"):
+            return _json(_economics_summary(analysis_id, found))
         return _json(found)
+
+    def _economics_summary(analysis_id: int, found: dict) -> dict:
+        """ITEM 5أ: ملخّص اقتصاد تشغيلة واحدة — llm_usage/mission_usage
+        (#96)/cost_usd_by_mission/العدّادات/التكلفة النهائية. تشغيلة سابقة
+        لتفعيل الإسناد لكل بعثة تعرض `mission_usage`/`cost_usd_by_mission`
+        فارغين صراحة (`mission_usage_available: false`) — فجوة معلنة، لا
+        استثناء، ولا اختلاق رقم لتشغيلة أقدم من الميزة. `note` (نص حرّ
+        بُنِي خادمياً) يمرّ عبر نفس مُطهِّر السباكة الداخلية دفاعاً بالعمق."""
+        de = found.get("data_economics") or {}
+        from silk_render import _strip_internal_plumbing
+        note = de.get("note")
+        return {
+            "analysis_id": analysis_id,
+            "llm_calls": de.get("llm_calls"),
+            "tool_calls": de.get("tool_calls"),
+            "store_hits": de.get("store_hits"),
+            "cache_hits": de.get("cache_hits"),
+            "live_fetches": de.get("live_fetches"),
+            "llm_usage": de.get("llm_usage") or {},
+            "mission_usage": de.get("mission_usage") or {},
+            "mission_usage_available": bool(de.get("mission_usage")),
+            "cost_usd_estimate": de.get("cost_usd_estimate"),
+            "cost_usd_by_model": de.get("cost_usd_by_model") or {},
+            "cost_usd_by_mission": de.get("cost_usd_by_mission") or {},
+            "cost_unpriced_models": de.get("cost_unpriced_models") or [],
+            "note": _strip_internal_plumbing(note) if note else None,
+        }
 
     @app.get("/analyses/{analysis_id}/brief")
     def brief(analysis_id: int, request: Request):
@@ -1384,6 +1461,20 @@ def create_app():
                     view, os.path.join(tempfile.mkdtemp(), "report.docx"))
                 fname = f"silk_report_{analysis_id}.docx"
         except RuntimeError as e:
+            # ITEM 5ب: سبب ثابت عام لا نص الاستثناء الخام — رسالة حارس
+            # التصدير (`_client_assert_clean`) قد تقتبس فئة/شظية داخلية
+            # (مثال: "algorithm_language: «درجة الثقة»") لا يلتقطها مُطهِّر
+            # السباكة العام (يعرّب EN→AR، لا يحذف أسماء فئات عربية موجودة
+            # أصلاً) — فبدل مطاردة كل شكل تسريب محتمل بتعبير نمطي جديد،
+            # لا يصل /ops/last-errors نص الاستثناء إطلاقاً؛ ردّ الـHTTP نفسه
+            # (الذي يخصّ الطالب لا سطحاً عاماً) يبقى يحمل str(e) كاملاً كما
+            # كان دوماً — لا تغيير هناك.
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "export_failure",
+                "فشل تصدير docx (منصّة ناقصة أو محتوى رفضه حارس التصدير) — "
+                "التفصيل الكامل في استجابة الطلب الأصلي، لا هنا",
+                context={"analysis_id": analysis_id})
             raise HTTPException(status_code=501, detail=str(e))
         return FileResponse(
             path, filename=fname,
@@ -1461,6 +1552,16 @@ def create_app():
         # فوق تقرير سابق ناجح؛ نُبقي المخزَّن ونُبلّغ الفشل (السجل لا يُلمَس).
         from silk_render import _strip_internal_plumbing
         prior_report = (dr.get("report") or {}).get("report")
+        if not report_out.get("report"):
+            # ITEM 5ب: فشل كاتب أثناء regen — يُسجَّل بصرف النظر عن وجود
+            # تقرير سابق محفوظ أم لا (كلاهما فشل كاتب حقيقي يستحق الرصد).
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "writer_failure",
+                _strip_internal_plumbing(report_out.get("failure_reason") or "")
+                or "فشل الكاتب بلا سبب مسجَّل",
+                context={"analysis_id": analysis_id, "regen": True,
+                         "prior_preserved": bool(prior_report)})
         if not report_out.get("report") and prior_report:
             return _json({"report": None, "regenerated": False,
                           "note": "تعذّرت إعادة توليد التقرير هذه المرة؛ "
