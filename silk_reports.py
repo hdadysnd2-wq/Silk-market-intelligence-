@@ -394,6 +394,8 @@ def _data_year_label(view: dict) -> str:
     الفعلية مع سبب التراجُع — لا يظهر رقمُ سنةٍ فارغةٍ كأنه سنة التحليل.
     """
     dy = view.get("data_year", view.get("year"))
+    if dy is None:
+        return "—"   # فجوة معلنة — لا يُطبع نص "None" الحرفي (تدقيق: /research بلا سنة)
     if view.get("year_fell_back") and dy != view.get("year"):
         return f"{dy} (أحدث سنة منشورة؛ {view.get('year')} لم تُنشر بعد)"
     return str(dy)
@@ -1326,6 +1328,17 @@ _CLIENT_SANITIZE = [
     (re.compile(r"مبنيّة على استشهاد|مبني على استشهاد"), "موثّقة بمصادرها"),
     (re.compile(r"المحلل الشامل"), "فريق التحليل"),
     (re.compile(r"كاتب التقرير"), "فريق الإعداد"),
+    # بلاغ حي إنتاجي (تدقيق تمور/هولندا، 501 تصدير العميل): سرد الكاتب يمرّ
+    # عبر `_strip_internal_plumbing` (silk_render) الذي يعرّب حقول الحكم
+    # الإنجليزية (confidence→«درجة الثقة»، verdict→«الحكم»، score→«الدرجة»)،
+    # فتصل الصيغة العربية «درجة الثقة»/«الدرجة الرقمية» متن العميل وتُسقِطه
+    # حارسُ لغة الخوارزمية (_client_assert_clean) بـ501. تُحوَّل هنا لمفردة
+    # توثيق تجارية — الأحكام الرقمية تبقى للملحق/التصدير التشغيلي فقط.
+    (re.compile(r"الدرجة الرقمية|النتيجة الرقمية"), "التقييم"),
+    (re.compile(r"درجة الثقة"), "مستوى التوثيق"),
+    (re.compile(r"\bconfidence\b", re.I), "مستوى التوثيق"),
+    (re.compile(r"\bverdict\b", re.I), "التوصية"),
+    (re.compile(r"\bscore\b", re.I), "التقييم"),
 ]
 
 
@@ -2189,12 +2202,116 @@ def _md_cell(x: object) -> str:
     return str(x if x is not None else "—").replace("|", "/").replace("\n", " ")
 
 
+def _md_deep_research(view: dict, prefix: list[str]) -> str:
+    """التقرير الكامل Markdown لنتيجة /research — يُصيَّر من `view["deep_research"]`
+    (نفس مصدر اللوحة وتصدير Word عبر `_docx_deep_research`)، لا من قالب /analyze.
+
+    بلاغ حي إنتاجي (تدقيق تمور/هولندا): `render_markdown` كان يُصيّر قالب
+    /analyze حصراً — و`markets:[]` لنتيجة بحث عميق تُفرِّغ كل أقسامه («تغطية
+    0.0%»، «0 أسواق»، SWOT فارغ، «with_research غير مفعّلة») بينما النصّ
+    السردي الغنيّ (HHI، أسعار الرفّ، لوائح EU) موجود في `dr["report"]["text"]`
+    ولا يُقرأ أبداً. هذا الفرع يُصيّره فعلاً: ترويسة صادقة + الحكم + السرد
+    الكامل + ملحق الأدلة + أثر المصادر + الحدود.
+    """
+    dr = view.get("deep_research") or {}
+    h = view.get("header") or {}
+    L = list(prefix)
+    verdict = dr.get("verdict") or {}
+    ai = verdict.get("ai") or {}
+
+    # ── الترويسة كجدول — نفس القالب لكن بلا حقول /analyze الفارغة ─────────────
+    market = dr.get("market") or {}
+    L += [f"# سِلك — تقرير بحث سوق معمّق: {view.get('product')}", "",
+          "| البند | القيمة |", "| --- | --- |",
+          f"| المنتج | {_md_cell(h.get('product') or view.get('product'))} |",
+          f"| رمز HS | {_md_cell(h.get('hs_code') or view.get('hs_code'))} "
+          f"(ثقة التصنيف {_md_cell(view.get('hs_confidence'))}) |",
+          "| المنشأ | السعودية (SAU) |",
+          f"| السوق المستهدف | {_md_cell(h.get('target_market') or market.get('name_ar') or market.get('name_en'))} |",
+          f"| التاريخ | {_md_cell(h.get('date'))} |",
+          f"| الحكم | {_md_cell(view.get('verdict_label') or dr.get('verdict_label'))} |"]
+    rc = (dr.get("report") or {}).get("review_cycles") or 0
+    if rc:
+        L.append(f"| مراجعة التقرير | روجِع عبر {rc} دورة تنقيح |")
+    L.append("")
+
+    _bnr = _degraded_banner_text(view)
+    if _bnr:
+        L += [f"> {_bnr}", ""]
+
+    # ── الحكم وأساسه — من synthesize (نقطة الحكم الوحيدة) ────────────────────
+    L += ["## الحكم وأساسه", ""]
+    L.append(f"- التوصية: **{view.get('verdict_label') or dr.get('verdict_label') or '—'}**")
+    reasoning = ai.get("reasoning") or verdict.get("note")
+    if reasoning:
+        L += ["", str(reasoning)]
+    L.append("")
+
+    # ── التقرير السردي الكامل (كاتب التقرير، مراجَع) — النصّ الغنيّ نفسه ──────
+    report_text = (dr.get("report") or {}).get("text")
+    if report_text:
+        L += [str(report_text).rstrip(), ""]
+    else:
+        fr = (dr.get("report") or {}).get("failure_reason")
+        L += ["## التقرير السردي الكامل", "",
+              ("تعذّر إنجاز التقرير السردي التفصيلي في هذه المحاولة"
+               + (f" — {fr}" if fr else "")
+               + "؛ الأدلة المرصودة والحكم أعلاه قائمة، ويمكن إعادة التوليد "
+                 "دون إعادة البحث الكامل."), ""]
+
+    # ── ملحق الأدلة الرقمية — التقاطعات (raw supporting evidence) ────────────
+    by_cat = (dr.get("analyst") or {}).get("by_category") or {}
+    if any(by_cat.values()):
+        L += ["## ملحق: الأدلة الرقمية الداعمة", ""]
+        for cat, items in by_cat.items():
+            if not items:
+                continue
+            L.append(f"### {_CATEGORY_AR.get(cat, cat)}")
+            for f in items:
+                badge = f.get("confidence_badge") or ""
+                L.append(f"- {_md_cell(f.get('value'))} "
+                         f"[{_md_cell(f.get('source'))} {badge}] "
+                         f"{_md_cell(f.get('note') or '')}".rstrip())
+            L.append("")
+
+    # ── ملحق أثر المصادر — provenance (البعثات الاثنتا عشرة وإسهامها) ────────
+    L += ["## ملحق: أثر المصادر (المحاولات والإسهام)", ""]
+    prov = view.get("provenance") or []
+    if prov:
+        for b in prov:
+            L.append(f"- {b['source']}: أسهم {b['contributed']} من "
+                     f"{b['attempted']} محاولة")
+            for fl in b.get("failures") or []:
+                L.append(f"  - فشل مُسجَّل: {fl}")
+    else:
+        L.append("- لا أثر مصادر مسجّلاً")
+    L.append("")
+
+    # ── حدود هذا التقرير — declared limits ──────────────────────────────────
+    L += ["## حدود هذا التقرير", ""]
+    limits = view.get("limits") or ["لا فجوات مرصودة"]
+    for x in _gap_list_ar(limits[:12]):
+        L.append(f"- {x}")
+    L.append("")
+
+    # ── التوصية / المختصر — نفس سطور المختصر (لا صياغة موازية) ───────────────
+    L += ["## التوصية / المختصر", ""]
+    for line in view.get("brief") or []:
+        L.append(f"- {line}")
+    if view.get("note"):
+        L += ["", str(view["note"])]
+    L.append("")
+    return "\n".join(L)
+
+
 def render_markdown(view: dict) -> str:
     """التقرير الكامل Markdown (§7) — نفس أقسام Word وترتيبها، من القالب حصراً.
 
     كل رقم يليه سطر مصدره بين قوسين؛ المنمذج موسوم «مُقدَّر — نموذج بافتراضات
     معلنة» بمعادلته؛ بوابة 2B نفسها: قسم دون العتبة يطبع سطر النقص الصريح فقط.
     Full Markdown report derived from the ONE canonical view — pure display.
+    نتيجة /research (`view["deep_research"]`) تُصيَّر عبر `_md_deep_research`
+    (من السرد المراجَع نفسه، لا قالب /analyze الفارغ) — نفس فرع `render_docx`.
     """
     from silk_render import insufficient_line
 
@@ -2209,12 +2326,17 @@ def render_markdown(view: dict) -> str:
         L += ["> ⚠ **TEST RUN** — تشغيل برهاني ببدائل موسومة، "
               "ليس تقريراً إنتاجياً", ""]
 
+    # بلاغ حي (تدقيق /research): نتيجة بحث عميق تُصيَّر من deep_research لا من
+    # قالب /analyze (markets:[] يُفرّغه) — نفس فرع render_docx.
+    if view.get("deep_research"):
+        return _md_deep_research(view, L)
+
     # ── الترويسة كجدول — header table ────────────────────────────────────────
     L += [f"# سِلك — تقرير سوق: {view.get('product')}", "",
           "| البند | القيمة |", "| --- | --- |",
           f"| المنتج | {_md_cell(h.get('product'))} |",
           f"| رمز HS | {_md_cell(h.get('hs_code'))} "
-          f"(ثقة التصنيف {view.get('hs_confidence')}) |",
+          f"(ثقة التصنيف {_md_cell(view.get('hs_confidence'))}) |",
           "| المنشأ | السعودية (SAU) |",
           f"| السوق المستهدف | {_md_cell(h.get('target_market'))} |",
           f"| التاريخ | {_md_cell(h.get('date'))} |",

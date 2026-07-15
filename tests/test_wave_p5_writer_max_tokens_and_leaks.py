@@ -195,7 +195,11 @@ def test_writer_escalation_meters_every_attempt_in_cost():
         c = silk_context.begin_data_counter()
         out = aj.deep_report(_mission_reports(), "محلل",
                              {"verdict": "WATCH"}, "تمور", "هولندا")
-    assert out == "جزء"                           # أوفى جزئي، لا None
+    # أوفى جزئي، لا None — ومنذ Q1 (تدقيق التسليم المقتطع) يُلحَق به إعلانُ
+    # اكتمالٍ صريح بدل قطع خام صامت (نفس النص الجزئي في صدره).
+    assert out.startswith("جزء")
+    import silk_ai_judge as _aj
+    assert _aj._TRUNCATION_MARKER in out          # فجوة اكتمال معلنة عند بلوغ السقف
     assert c["llm_calls"] == 2                     # عُدّت كلتا المحاولتين (8000→16000)
     # رموز المحاولتين تراكمت (2×50 إخراج) وتظهر في تقدير التكلفة.
     usage = c["llm_usage"]

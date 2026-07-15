@@ -269,6 +269,85 @@ def _check_audit_coverage(dr: dict) -> list[dict]:
     return []
 
 
+# Q2 (تدقيق CAGR غير متسق، تمور/هولندا): معدّل نمو سنوي مركّب واحد قد يظهر
+# برقمين مختلفين على نافذتَي سنوات مختلفتين (الملخّص «13.3% (2020-2024)»
+# مقابل الحكم «16.3% (2019-2023)») بلا مصالحة. نلتقط «معدّل نمو مؤطَّر بنافذة»
+# = نسبة مئوية تجاور لفظَ نموٍّ ونافذةَ سنوات ضمن الجملة نفسها.
+_GROWTH_KW_RE = re.compile(r"نمو|مركّب|مركب|سنوي|CAGR|معدّل النمو|compound", re.I)
+_PCT_RE = re.compile(r"(\d{1,2}(?:\.\d+)?)\s*%")
+_YEAR_WINDOW_RE = re.compile(r"(?:19|20)\d{2}\s*[-–—]\s*(?:19|20)\d{2}")
+
+
+def _check_cagr_consistency(dr: dict) -> list[dict]:
+    """اكشف أكثر من معدّل نمو سنوي مركّب بنوافذ سنوات مختلفة بلا مصالحة —
+    نفس المقياس، سنوات أساس مختلفة، رقمان متعارضان. يمسح سرد الكاتب + تعليل
+    الحكم + ملخّص المحلل (المصادر التي أظهرت التعارض فعلاً في البلاغ الحيّ)."""
+    report_text = (dr.get("report") or {}).get("text") or ""
+    verdict = dr.get("verdict") or {}
+    reasoning = " ".join(str(x) for x in [
+        (verdict.get("ai") or {}).get("reasoning"), verdict.get("note"),
+        ((dr.get("analyst") or {}).get("report") or {}).get("summary")] if x)
+    blob = report_text + "\n" + reasoning
+    all_windows = [(m.start(), re.sub(r"\s+", "", m.group(0)))
+                   for m in _YEAR_WINDOW_RE.finditer(blob)]
+    # قُرب (لا تقسيم جُمَل — «.» يكسر العشري «13.3%»): لكل نسبة يجاورها لفظُ
+    # نموٍّ ضمن ±45 محرفاً، نربطها بأقربِ نافذةِ سنوات إليها (أقلّ مسافة، ≤45)
+    # — فلا تختطف نسبةٌ نافذةَ جملةٍ أخرى في نصٍّ قصير.
+    windowed: list[tuple[str, str]] = []
+    for pm in _PCT_RE.finditer(blob):
+        ctx = blob[max(0, pm.start() - 45):pm.end() + 45]
+        if not _GROWTH_KW_RE.search(ctx):
+            continue
+        near = [(abs(wp - pm.start()), w) for wp, w in all_windows
+                if abs(wp - pm.start()) <= 45]
+        if not near:
+            continue
+        windowed.append((pm.group(1), min(near)[1]))
+    distinct_vals = {v for v, _ in windowed}
+    distinct_wins = {w for _, w in windowed}
+    if len(distinct_vals) >= 2 and len(distinct_wins) >= 2:
+        pairs = "، ".join(f"{v}% ({w})" for v, w in dict.fromkeys(windowed))
+        return [{
+            "check": "cagr_inconsistency", "repairable": False,
+            "note": ("معدّلات نمو سنوي مركّب متعارضة على نوافذ سنوات مختلفة "
+                     f"بلا مصالحة: {pairs} — يجب اعتماد معدّل واحد قانوني مع "
+                     "ذكر نافذته، وأيّ بديل يُذكر بنافذته صراحة")}]
+    return []
+
+
+# Q3 (تدقيق عملة العمود المضلِّل، تمور/هولندا): عمود «السعر/كجم بالدولار»
+# يحمل قيماً باليورو مع اعتذار داخل الخليّة — وعدٌ بتحويلٍ لم يُجرَ. نكشف عمود
+# عملةٍ يَعِد بعملةٍ بينما النصّ يحمل رموز عملةٍ أخرى.
+_CURRENCY_LABELS = {
+    "USD": re.compile(r"بالدولار|\bUSD\b|دولار"),
+    "EUR": re.compile(r"باليورو|\bEUR\b|€|يورو"),
+    "GBP": re.compile(r"بالجنيه|\bGBP\b|£|جنيه إسترليني"),
+}
+
+
+def _check_currency_label_mismatch(dr: dict) -> list[dict]:
+    """اكشف عمودَ سعرٍ يَعِد بعملةٍ بينما القيم بعملةٍ أخرى (تحويل غير مُنجَز).
+
+    البلاغ الحيّ: عنوان العمود «السعر/كجم بالدولار» بينما الخلايا يورو. نكتفي
+    بإشارةٍ نصّية حتمية: ذكرُ «بالدولار» (وعدُ عمودٍ بالدولار) مع وجود رموز
+    يورو/جنيه في التقرير نفسه (أو العكس) = وعدُ تحويلٍ لم يُجرَ."""
+    text = (dr.get("report") or {}).get("text") or ""
+    # عنوان عمود يَعِد بعملة صراحةً (صيغة «بالـ…» داخل ترويسة السعر).
+    promised = [cur for cur, pat in _CURRENCY_LABELS.items()
+                if re.search(r"السعر[^|]{0,20}" + {"USD": "بالدولار",
+                             "EUR": "باليورو", "GBP": "بالجنيه"}[cur], text)]
+    for cur in promised:
+        others = [c for c in _CURRENCY_LABELS
+                  if c != cur and _CURRENCY_LABELS[c].search(text)]
+        if others:
+            return [{
+                "check": "currency_label_mismatch", "repairable": False,
+                "note": (f"عمود السعر مُعنوَن بـ{cur} بينما التقرير يحمل قيماً "
+                         f"بعملة أخرى ({'، '.join(others)}) — عنوِن العمود "
+                         "بالعملة المرصودة فعلاً، ولا تَعِد بتحويلٍ لم يُجرَ")}]
+    return []
+
+
 def run_quality_gate(view: dict) -> dict:
     """شغّل بوابة الجودة على `view["deep_research"]` — يعيد
     {"verdict": PASS|WARN|FAIL, "findings": [...], "methodology_notes": [...]}.
@@ -298,6 +377,8 @@ def run_quality_gate(view: dict) -> dict:
     findings += _check_bare_partner_codes(dr)
     findings += _check_intersection_insufficiency(dr)
     findings += _check_section_structure(dr)
+    findings += _check_cagr_consistency(dr)
+    findings += _check_currency_label_mismatch(dr)
     findings += _check_agent_health(dr)
     findings += _check_audit_coverage(dr)
     findings += _check_analyst_layer_failure(dr)
