@@ -252,17 +252,25 @@ _RTL_BODY_FONT = "Arial"
 
 
 def _set_rtl_paragraph(ppr) -> None:
-    """§4: أضِف <w:bidi/> + محاذاة يمين على خصائص فقرة (pPr) عبر oxml —
-    اتجاه أساس RTL فتتدفّق الفقرة والقوائم من اليمين."""
+    """§4 (مُصحَّح، مُتحقَّق تجريبياً): أضِف <w:bidi/> + محاذاة **منطقية**
+    START على خصائص فقرة (pPr) عبر oxml.
+
+    **حرِج**: مع فقرة bidi يفسّر OOXML قيمة w:jc **منطقياً** — فـ`right`
+    تُصيَّر بصرياً **يساراً** في العربية (انقلاب). الصحيح `start` (يُصيَّر
+    محاذاةً لليمين في RTL؛ وهو الافتراضي أصلاً). لا تستعمل right/end/both
+    أبداً. العناوين/التذييلات الموسَّطة (`center`) تبقى موسَّطةً كما هي."""
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     if ppr.find(qn("w:bidi")) is None:
         ppr.append(OxmlElement("w:bidi"))
     jc = ppr.find(qn("w:jc"))
+    if jc is not None and jc.get(qn("w:val")) == "center":
+        return  # عنوان/تذييل موسَّط — يبقى موسَّطاً
     if jc is None:
         jc = OxmlElement("w:jc")
         ppr.append(jc)
-    jc.set(qn("w:val"), "right")
+    # START (لا right/end/both) — الانقلاب المنطقي يجعل right تُصيَّر يساراً.
+    jc.set(qn("w:val"), "start")
 
 
 def _set_rtl_run_fonts(rpr, font: str = _RTL_BODY_FONT) -> None:

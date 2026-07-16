@@ -194,11 +194,36 @@ def test_docx_is_rtl_document_wide(tmp_path):
     assert "<w:rtl" in styles_xml
 
 
-def test_docx_jc_is_right_aligned(tmp_path):
+def test_docx_jc_is_logical_start_never_right(tmp_path):
+    """§4 (مُصحَّح): مع فقرات bidi يفسّر OOXML قيمة jc **منطقياً** — `right`
+    تُصيَّر يساراً في العربية (انقلاب). المحاذاة يجب أن تكون `start` (أو
+    `center` للعناوين/التذييل) حصراً — **صفر** right/left/end/both."""
     doc_xml, _, _ = _docx_xml(str(tmp_path))
     import re
     vals = re.findall(r'<w:jc w:val="([^"]+)"', doc_xml)
-    assert vals and all(v == "right" for v in vals)
+    assert vals, "لا محاذاة مضبوطة إطلاقاً"
+    assert set(vals) <= {"start", "center"}, f"محاذاة محظورة: {set(vals)}"
+    for forbidden in ("right", "left", "end", "both"):
+        assert forbidden not in vals, f"محاذاة «{forbidden}» تنقلب بصرياً"
+
+
+def test_docx_every_text_paragraph_is_bidi_and_start(tmp_path):
+    """§4 (بوابة قبول CI على مستوى XML — الفحص الحاسم لانقلاب jc المنطقي):
+    كل فقرة نصّية تحمل <w:bidi/> ومحاذاتها start (أو center للعنوان/التذييل)؛
+    لا فقرة نصّية بمحاذاة right/left/end/both."""
+    import re
+    doc_xml, _, _ = _docx_xml(str(tmp_path))
+    # لكل فقرة، افحص pPr إن وُجد: أي jc يجب أن يكون start/center فقط.
+    paras = re.findall(r"<w:pPr>.*?</w:pPr>", doc_xml, re.S)
+    checked = 0
+    for ppr in paras:
+        m = re.search(r'<w:jc w:val="([^"]+)"', ppr)
+        if not m:
+            continue
+        checked += 1
+        assert m.group(1) in ("start", "center")
+        assert "<w:bidi" in ppr, "فقرة بمحاذاة بلا bidi (اتجاه غير مضبوط)"
+    assert checked > 5, "عدد الفقرات المفحوصة ضئيل — العيّنة غير ممثِّلة"
 
 
 def test_docx_opens_cleanly_after_rtl(tmp_path):
