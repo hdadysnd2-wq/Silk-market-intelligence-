@@ -91,6 +91,18 @@ _TEST_ANCHORS = [
     (11, "tests/test_client_sanitizer_covers_guard.py",
      ["def test_every_arabic_guard_trigger_is_neutralized_by_the_sanitizer",
       "def test_dlreport_surfaces_the_501_detail_not_bare_status"]),
+    (12, "tests/test_limits_reconciliation_b1.py",
+     ["def test_resolved_supplier_share_gap_is_retagged_not_contradiction",
+      "def test_genuinely_unresolved_gap_stays_verbatim"]),
+    (13, "tests/test_client_export_redact_not_refuse.py",
+     ["def test_render_client_docx_does_not_501_on_english_source_title"]),
+]
+
+# حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
+_SYMBOL_ANCHORS_EXTRA = [
+    (12, "silk_render.py", ["_reconcile_mission_limits", "_first_clause"]),
+    (13, "silk_reports.py", ["_client_redact_residual"]),
+    (13, "tools/post_deploy_smoke.py", ["report.docx"]),
 ]
 
 
@@ -106,7 +118,7 @@ def test_lessons_ledger_and_its_wiring_exist():
 def test_every_symbol_anchor_still_present():
     """كل رمز مصدر مسمّى في عمود الإنفاذ لا يزال موجوداً."""
     missing = []
-    for rule, path, needles in _SYMBOL_ANCHORS:
+    for rule, path, needles in _SYMBOL_ANCHORS + _SYMBOL_ANCHORS_EXTRA:
         if not _exists(path):
             missing.append(f"[rule {rule}] ملف مفقود: {path}")
             continue
@@ -155,7 +167,7 @@ def test_all_ledger_rules_are_covered_by_at_least_one_anchor():
             for m in _re.finditer(r"^\|\s*(\d+)\s*\|", ledger, _re.M)}
     assert rows and rows == set(range(1, max(rows) + 1)), (
         f"أرقام صفوف السجلّ غير متتابعة: {sorted(rows)}")
-    covered = {r for r, _, _ in _SYMBOL_ANCHORS}
+    covered = {r for r, _, _ in _SYMBOL_ANCHORS + _SYMBOL_ANCHORS_EXTRA}
     covered |= {r for r, _, _ in _DOC_ANCHORS}
     covered |= {r for r, _, _ in _TEST_ANCHORS}
     assert covered == rows, (
