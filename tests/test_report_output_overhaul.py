@@ -234,6 +234,28 @@ def test_docx_opens_cleanly_after_rtl(tmp_path):
     assert doc.paragraphs
 
 
+def test_docx_tables_are_bidi_visual(tmp_path):
+    """§4 (بلاغ المراجعة — نصف العيب الأصلي): كل جدول يحمل <w:bidiVisual/>
+    (وإلا تنقلب أعمدته بصرياً حتى لو كانت فقراته صحيحة)، وكل فقرة خليّة
+    تحمل <w:bidi/> ومحاذاتها start/center — عدد bidiVisual == عدد الجداول."""
+    import re
+    doc_xml, _, _ = _docx_xml(str(tmp_path))
+    n_tables = len(re.findall(r"<w:tbl>", doc_xml))
+    n_bidivisual = doc_xml.count("<w:bidiVisual")
+    assert n_tables > 0, "لا جداول في العيّنة — الفحص غير ممثِّل"
+    assert n_bidivisual == n_tables, (
+        f"جداول بلا bidiVisual: {n_tables} جدولاً مقابل "
+        f"{n_bidivisual} bidiVisual — أعمدة مقلوبة")
+    # كل فقرة خليّة (داخل <w:tc>) تحمل bidi ومحاذاة start/center.
+    for tc in re.findall(r"<w:tc>.*?</w:tc>", doc_xml, re.S):
+        for ppr in re.findall(r"<w:pPr>.*?</w:pPr>", tc, re.S):
+            m = re.search(r'<w:jc w:val="([^"]+)"', ppr)
+            if m:
+                assert m.group(1) in ("start", "center"), (
+                    f"خليّة بمحاذاة مقلوبة: {m.group(1)}")
+                assert "<w:bidi" in ppr, "فقرة خليّة بلا bidi"
+
+
 # ── §3 PDF — المُسلَّم النهائي PDF، تدهور رشيق ──────────────────────────────
 
 def test_pdf_conversion_fails_cleanly_when_engine_absent(tmp_path, monkeypatch):
@@ -284,6 +306,89 @@ def test_pdf_produced_when_engine_available(tmp_path):
     assert os.path.exists(pdf) and pdf.endswith(".pdf")
     with open(pdf, "rb") as fh:
         assert fh.read(5) == b"%PDF-"
+
+
+def _measure_pdf_lines(pdf_path):
+    """أرجِع (عرض_الصفحة، [(x0,x1) لكل سطر]) عبر pdfplumber أو
+    `pdftotext -bbox`، أو None إن لم تتوفّر أداة قياس. النقاط بوحدة النقطة."""
+    try:
+        import pdfplumber  # type: ignore
+        from collections import defaultdict
+        pw = None
+        lines = []
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                pw = page.width
+                rows = defaultdict(list)
+                for w in page.extract_words():
+                    rows[round(w["top"])].append(w)
+                for ws in rows.values():
+                    lines.append((min(w["x0"] for w in ws),
+                                  max(w["x1"] for w in ws)))
+        return pw, lines
+    except Exception:  # noqa: BLE001 — جرّب pdftotext -bbox
+        pass
+    import shutil
+    import subprocess
+    import re as _re
+    if not shutil.which("pdftotext"):
+        return None
+    try:
+        xhtml = subprocess.run(
+            ["pdftotext", "-bbox", pdf_path, "-"],
+            capture_output=True, text=True, timeout=60).stdout
+    except Exception:  # noqa: BLE001
+        return None
+    pw_m = _re.search(r'<page width="([\d.]+)"', xhtml)
+    pw = float(pw_m.group(1)) if pw_m else None
+    words = [(float(a), float(b)) for a, b in _re.findall(
+        r'<word xMin="([\d.]+)" yMin="[\d.]+" xMax="([\d.]+)"', xhtml)]
+    # التجميع على أساس y غير متاح هنا مباشرة؛ نكتفي بحدود الكلمات كأسطر مفردة
+    # (كافٍ لقياس حافة اليمين مقابل حدّ الكتلة). كل كلمة = مقطع (x0,x1).
+    return (pw, [(x0, x1) for x0, x1 in words]) if pw else None
+
+
+def test_pdf_rtl_geometry_and_arabic_font(tmp_path):
+    """§4 (الفحص الحاسم لانقلاب jc المنطقي على مستوى الـPDF المُصيَّر) + §3
+    (تشكيل عربي): الأسطر القصيرة المتعرّجة غير الموسَّطة يجب أن تنحاز يميناً
+    (حافتها اليمنى ضمن 10 نقاط من حدّ الكتلة اليمين ≥95٪)، وخطّ عربي متوفّر.
+
+    **مُلزَم في خطّ النشر/التجهيز** (SILK_PDF_ACCEPTANCE=1): يفشل بصوتٍ عالٍ
+    إن غاب الخطّ العربي أو محرّك التحويل أو أداة القياس — لا يبقى مُتخطّى
+    أبداً قبل الإصدار. خارج ذلك (المطوّر المحلّي/الـsandbox) يُتخطّى برفق."""
+    import os
+    import pytest
+    import silk_reports
+    require = os.environ.get("SILK_PDF_ACCEPTANCE") == "1"
+
+    def _gate(reason):
+        if require:
+            pytest.fail(f"بوابة قبول PDF مُلزَمة وفشل شرطها: {reason}")
+        pytest.skip(reason)
+
+    if not silk_reports.has_arabic_font():
+        _gate("خطّ عربي (Naskh/Amiri/Arabic) غائب — التشكيل سيُنتِج مربّعات")
+    view = __import__("silk_render").build_view(_mini_research_result())
+    docx = os.path.join(str(tmp_path), "g.docx")
+    silk_reports.render_docx(view, docx)
+    try:
+        pdf = silk_reports.docx_to_pdf(docx, os.path.join(str(tmp_path), "g.pdf"))
+    except RuntimeError as e:
+        _gate(f"تعذّر تحويل PDF: {e}")
+    measured = _measure_pdf_lines(pdf)
+    if measured is None:
+        _gate("لا أداة قياس PDF (pdfplumber/pdftotext) متاحة")
+    pw, segs = measured
+    ragged = [(x0, x1) for x0, x1 in segs
+              if (x1 - x0) < 0.40 * pw                      # قصير
+              and abs(((x0 + x1) / 2) - pw / 2) > 0.05 * pw]  # غير موسَّط
+    assert len(ragged) >= 3, "أسطر قصيرة متعرّجة قليلة — العيّنة غير ممثِّلة"
+    block_right = sorted(x1 for _, x1 in segs)[int(len(segs) * 0.90)]
+    flush_right = sum(1 for _, x1 in ragged if block_right - x1 <= 10)
+    frac = flush_right / len(ragged)
+    assert frac >= 0.95, (
+        f"انحياز يميني للأسطر القصيرة {frac:.0%} < 95٪ — محاذاة jc منقلبة "
+        "(تُصيَّر يساراً) أو RTL غير فاعل في الـPDF")
 
 
 # ── §8 بوابة الأسلوب الحتمية ────────────────────────────────────────────────

@@ -2147,6 +2147,25 @@ def _find_soffice() -> "str | None":
     return None
 
 
+# عائلات خطوط عربية الشكل يقبلها التشكيل — أيّها كافٍ لـPDF بلا مربّعات tofu.
+_ARABIC_FONT_HINTS = ("naskh", "amiri", "arabic", "cairo", "dubai", "tahoma",
+                      "scheherazade", "lateef", "kufi", "arial")
+
+
+def has_arabic_font() -> bool:
+    """§3/§4: هل يتوفّر على الخادم خطّ عربي الشكل (Naskh/Amiri/Arabic/…)؟
+    بلا خطّ عربي عامل، ينتج PDF بمربّعات tofu بدل الحروف الموصولة — يُفحَص
+    عبر fc-list. يُستعمَل في مسار قبول الـPDF (يفشل بصوتٍ عالٍ إن غاب)."""
+    import subprocess
+    try:
+        out = subprocess.run(["fc-list", ":", "family"], capture_output=True,
+                             text=True, timeout=20)
+    except Exception:  # noqa: BLE001 — fc-list غير متاح = لا يمكن التأكيد
+        return False
+    blob = (out.stdout or "").lower()
+    return any(hint in blob for hint in _ARABIC_FONT_HINTS)
+
+
 def docx_to_pdf(docx_path: str, pdf_path: "str | None" = None,
                 timeout: int = 180) -> str:
     """§3: حوّل مستند Word إلى PDF عبر LibreOffice headless — يعيد مسار الـPDF.

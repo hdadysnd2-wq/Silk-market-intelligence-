@@ -81,3 +81,20 @@ https://<domain>/          → الواجهة (اترك حقل «رابط الب
 - كل push إلى `main` ينشر تلقائيًا (افتراضي Railway؛ يمكن تقييده بـ **Check Suites** ليننتظر نجاح CI).
 - ترحيل من Render: هذا الدليل يحلّ محل `render.yaml` (حُذف). لا ترحيل بيانات تلقائي — إن كانت لديك `silk.db` قديمة على قرص Render انسخها إلى قرص Railway عبر `railway ssh` / `scp` قبل إيقاف الخدمة القديمة، فسجل التحليلات تراكمي ولا يُحذف (قاعدة المستودع).
 - *Migrating from Render: this guide replaces the deleted `render.yaml`. No automatic data migration — copy any existing `silk.db` from the old Render disk onto the Railway volume before decommissioning; the analyses track record is cumulative and must never be lost.*
+
+## ٦ · بوابة قبول PDF/RTL قبل الإصدار — PDF/RTL release-acceptance gate (§3/§4)
+
+المُسلَّم النهائي PDF غير قابل للتحرير (§3)، وكامله RTL (§4). محرّك التحويل
+(LibreOffice/`soffice`) وخطّ عربي الشكل يجب أن يكونا حاضرين على النشر — وهذا
+**لا يُلتقَط هرمتياً**. قبل أي إصدار:
+
+1. **على النشر الحيّ**: `python3 tools/post_deploy_smoke.py https://<host> --key <SILK_API_KEY>`
+   — الخطوة ٥ تضرب `GET /analyses/{id}/report.pdf` فعلياً (٥٠٣ = محرّك التحويل
+   غائب). يجب أن يعيد توقيع `%PDF`.
+2. **على التجهيز/الـstaging** (حيث `soffice` وخطّ عربي مثبّتان):
+   `SILK_PDF_ACCEPTANCE=1 python3 -m pytest tests/test_report_output_overhaul.py::test_pdf_rtl_geometry_and_arabic_font -q`
+   — يفشل **بصوتٍ عالٍ** إن غاب الخطّ العربي أو محرّك التحويل أو أداة قياس
+   الـPDF (pdfplumber/pdftotext)، ويقيس أن ≥٩٥٪ من الأسطر القصيرة المتعرّجة
+   تنحاز يميناً (الفحص الحاسم لانقلاب `jc` المنطقي في الـPDF المُصيَّر).
+   **لا يجوز أن يبقى هذا الاختبار مُتخطّى قبل الإصدار** — خطّ النشر يضبط
+   `SILK_PDF_ACCEPTANCE=1` فيتحوّل التخطّي إلى فشل صريح.

@@ -11,6 +11,9 @@
   3. GET /analyses/{id}/report.md   → 200 + جسم غير فارغ.
   4. GET /analyses/{id}/report.docx → 200 + توقيع ZIP (‏docx = zip) + يُفتَح
      عبر python-docx إن كانت مثبّتة.
+  5. GET /analyses/{id}/report.pdf  → 200 + توقيع %PDF (§3، أمر العمل الرئيس):
+     يُثبِت أن محرّك التحويل (LibreOffice) يعمل حياً — لا يُكتشَف هرمتياً.
+     503 هنا = محرّك التحويل غائب على النشر (فشل صريح لا صمت).
 
 الاستعمال:
     python3 tools/post_deploy_smoke.py https://<railway-host>  [--key SILK_API_KEY]
@@ -104,6 +107,16 @@ def main() -> int:
             fails.append(f"report.docx id={aid}: 200 لكن python-docx فشل فتحه: {e}")
             opened = "فشل الفتح"
         print(f"✓ report.docx 200 — {len(body)} بايت، {opened}")
+
+    # 5) report.pdf — §3: المُسلَّم النهائي؛ يُثبِت أن soffice يعمل حياً
+    st, body = _get(base, f"/analyses/{aid}/report.pdf", key)
+    if st != 200:
+        fails.append(f"report.pdf id={aid}: HTTP {st} — {(body or b'')[:200]!r} "
+                     "(503 = محرّك تحويل PDF غائب على النشر)")
+    elif not ((body or b"")[:5] == b"%PDF-"):
+        fails.append(f"report.pdf id={aid}: 200 لكن ليس ملف PDF صالحاً")
+    else:
+        print(f"✓ report.pdf 200 — {len(body)} بايت، توقيع %PDF")
 
     if fails:
         print("\n✗ فشل فحص الدخان:")
