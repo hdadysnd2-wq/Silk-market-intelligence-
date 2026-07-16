@@ -85,7 +85,10 @@ def test_ask_endpoint_guarded_grounded_and_no_agent_reruns():
         r = client.post("/analyses/1/ask", json={"question": "ما الحصة؟"})
     assert r.status_code == 200
     body = r.json()
-    assert body["answer"] is None and "كلود" in body["note"]
+    # §2 (أمر العمل الرئيس): الملاحظة المعروضة لا تذكر «كلود» — تُعرَّب في
+    # طبقة العرض إلى «التحليل الآلي». معلَنة لا 500.
+    assert body["answer"] is None
+    assert "كلود" not in body["note"] and "التحليل الآلي" in body["note"]
     eng.assert_not_called()                    # 10b: لا إعادة تشغيل أبداً
     os.environ.pop("SILK_RATE_LIMIT", None)
 

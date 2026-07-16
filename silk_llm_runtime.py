@@ -1077,11 +1077,20 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
 
     findings: list[DataPoint] = []
     for f in result["findings"]:
-        cited_notes = "؛ ".join(
-            str(registry[i].note) for i in f["datapoint_ids"] if i in registry)
+        cited = [registry[i] for i in f["datapoint_ids"] if i in registry]
+        cited_notes = "؛ ".join(str(c.note) for c in cited)
+        # §2/§6 (أمر العمل الرئيس — سجل الأدلة للمدققين): عمود «المصدر» يحمل
+        # المصدر العمومي الحقيقي للنقاط المستشهَد بها (UN Comtrade, World
+        # Bank, Google Trends, OpenAlex, …) لا اسم البعثة الداخلي ولا وسم
+        # «(Claude tool-use)». يُشتقّ من `.source` للنقاط المُسجَّلة فعلاً
+        # (registry) — بلا اختلاق: إن غاب مصدر عمومي يبقى اسم البعثة العربي.
+        pub_sources = list(dict.fromkeys(
+            str(getattr(c, "source", "") or "").strip() for c in cited
+            if str(getattr(c, "source", "") or "").strip()))
+        public_source = "، ".join(pub_sources) if pub_sources else label
         prefix = f"[{f['category']}] " if f.get("category") else ""
         findings.append(DataPoint(
-            f["claim"], f"{label} (Claude tool-use)", f["confidence"],
+            f["claim"], public_source, f["confidence"],
             _truncate_at_word(f"{prefix}مبني على: {cited_notes}", 500), today))
 
     failed = not findings

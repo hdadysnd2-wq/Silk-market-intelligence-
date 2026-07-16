@@ -37,7 +37,19 @@ def _env(**vals):
 
 # ═══ Q1 — تسليم مقتطع يُعلَن فجوةً لا يُشحن خاماً ═════════════════════════
 
-def test_truncated_writer_output_gets_declared_gap_not_raw_cutoff():
+_FULL_REPORT = "\n\n".join(
+    f"## {i}. {t}\nفقرة كاملة تنتهي بجملة سليمة."
+    for i, t in enumerate((
+        "الخلاصة التنفيذية", "منهجية البحث ونطاقه", "نظرة عامة على السوق وحجمه",
+        "ديناميكيات السوق", "تحليل المستهلك والطلب", "المشهد التنافسي",
+        "التنظيم والوصول للسوق", "اللوجستيات وسلسلة الإمداد", "تقييم المخاطر",
+        "التوصيات الاستراتيجية", "الملاحق"), start=1))
+
+
+def test_truncated_then_still_incomplete_fails_no_partial_no_ops_warning():
+    """§5 (أمر العمل الرئيس): كاتب يبقى مقتطعاً حتى بعد نداء الإكمال الواحد
+    => إخفاق داخلي صريح (report=None)، لا تقرير جزئي ولا لافتة تشغيلية
+    (اسم متغيّر بيئة/⚠) تُشحن. حارس H1 يصون تقريراً سابقاً في المسار الأعلى."""
     import importlib
     import silk_ai_judge
     import silk_llm_provider
@@ -62,15 +74,53 @@ def test_truncated_writer_output_gets_declared_gap_not_raw_cutoff():
                 {}, "ملخّص", {"verdict": "WATCH"}, "تمور", "Netherlands")
         finally:
             silk_llm_provider.reset_provider()
-    assert out                                        # لم يُفقَد النص (أوفى جزئي محفوظ)
-    assert silk_ai_judge._TRUNCATION_MARKER in out    # فجوة اكتمال معلنة
-    assert "القسم لم يكتمل" in out
-    # القطع وسط الجملة مُوضَّح، والأقسام الناقصة مُعلَنة (لا "...وي" خام صامت).
-    assert "[…]" in out
-    assert "الملاحق" in out                           # أحد الأقسام الناقصة مذكور
+    assert out is None   # لا يُشحَن جزئي — إخفاق داخلي صريح (§5)
 
 
-def test_complete_writer_output_gets_no_truncation_marker():
+def test_truncated_then_continuation_completes_ships_full_report():
+    """§5: أول نداء مقتطع، ونداء الإكمال يُكمِل الأقسام الباقية => يُشحن
+    التقرير كاملاً بلا علامة اكتطاع ولا اسم متغيّر بيئة ولا ⚠."""
+    import importlib
+    import silk_ai_judge
+    import silk_llm_provider
+    import silk_context
+    with _env(ANTHROPIC_API_KEY="k", SILK_WRITER_MAX_TOKENS="1000",
+              SILK_MAX_TOKENS_CEILING="2000", SILK_MAX_TOKENS_RETRIES="1"):
+        importlib.reload(silk_ai_judge)
+
+        class _TruncThenComplete:
+            def __init__(self):
+                self.n = 0
+
+            def complete(self, system, user, max_tokens, model, timeout):
+                silk_context.record_llm_usage(model, 400, 200)
+                self.n += 1
+                # محاولتا التصعيد (n=1,2) تُقتطعان حتى بلوغ السقف الصلب؛ نداء
+                # الإكمال (n=3) يعيد التقرير مكتملاً.
+                if self.n <= 2:
+                    silk_llm_provider._last_stop_reason.set("max_tokens")
+                    return "## 1. الخلاصة التنفيذية\nالحكم WATCH. السوق ينمو وي"
+                silk_llm_provider._last_stop_reason.set("end_turn")
+                return _FULL_REPORT
+
+            def complete_tools(self, *a, **k):
+                return None
+
+        silk_llm_provider._provider_instance = _TruncThenComplete()
+        try:
+            silk_context.begin_data_counter()
+            out = silk_ai_judge.deep_report(
+                {}, "ملخّص", {"verdict": "WATCH"}, "تمور", "Netherlands")
+        finally:
+            silk_llm_provider.reset_provider()
+    assert out                                     # اكتمل عبر نداء الإكمال
+    assert "الملاحق" in out                        # آخر قسم حاضر
+    assert "⚠" not in out and "SILK_" not in out   # §2.4/§5: لا لافتة تشغيلية
+    assert "القسم لم يكتمل" not in out
+
+
+def test_complete_writer_output_ships_without_ops_warning():
+    """§5: اكتمال طبيعي => يُشحن التقرير بلا أي لافتة اكتطاع/متغيّر بيئة."""
     import importlib
     import silk_ai_judge
     import silk_llm_provider
@@ -82,7 +132,7 @@ def test_complete_writer_output_gets_no_truncation_marker():
             def complete(self, system, user, max_tokens, model, timeout):
                 silk_context.record_llm_usage(model, 400, 200)
                 silk_llm_provider._last_stop_reason.set("end_turn")   # اكتمال طبيعي
-                return "## 1. الخلاصة التنفيذية\nالحكم WATCH. تقرير مكتمل."
+                return _FULL_REPORT
 
             def complete_tools(self, *a, **k):
                 return None
@@ -94,7 +144,7 @@ def test_complete_writer_output_gets_no_truncation_marker():
                 {}, "ملخّص", {"verdict": "WATCH"}, "تمور", "Netherlands")
         finally:
             silk_llm_provider.reset_provider()
-    assert out and silk_ai_judge._TRUNCATION_MARKER not in out   # لا علامة زائفة
+    assert out and "⚠" not in out and "SILK_" not in out
 
 
 # ═══ Q2 — معدّل نمو سنوي مركّب واحد قانوني (بوابة الجودة) ══════════════════

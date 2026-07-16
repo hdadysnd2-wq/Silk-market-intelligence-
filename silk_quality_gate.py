@@ -90,6 +90,22 @@ def _check_mid_word_truncation(text: str) -> list[dict]:
     return findings
 
 
+def _check_trailing_ellipsis(text: str) -> list[dict]:
+    """§5/§6 (أمر العمل الرئيس) — لا فقرة/حقيقة تنتهي بنقاط حذف «…»/«...»
+    (بتر غير نظيف). حارس انحدار: القصّ النظيف (silk_reports._trim_sentence)
+    يقطع عند حدّ جملة بلا نقاط حذف؛ ظهورها يعني بتراً وصل المُسلَّم."""
+    if not text:
+        return []
+    findings = []
+    for block in re.split(r"\n\s*\n", text):
+        s = block.strip()
+        if s.endswith("…") or s.endswith("..."):
+            findings.append({"check": "trailing_ellipsis", "repairable": True,
+                             "note": "نصّ ينتهي بنقاط حذف «…» — بتر غير نظيف "
+                                     "(§5): يجب القصّ عند حدّ جملة أو العرض كاملاً"})
+    return findings
+
+
 def _check_internal_plumbing_leak(text: str) -> list[dict]:
     """تسريب سباكة داخلية (اسم وكيل خام/وسم استشهاد dp) في نص التقرير
     المصدَر — بلاغ منتج من المالك. حارس انحدار: طبقة العرض
@@ -128,6 +144,83 @@ def _check_english_field_and_mission_key_leak(text: str) -> list[dict]:
                                     "مسرَّب في النص المصدَر"})
     except Exception:  # noqa: BLE001 — حارس ثانوي، لا يعطّل البوابة
         pass
+    return findings
+
+
+# §2 (أمر العمل الرئيس — سرّية: صفر سباكة داخلية في المُسلَّم): محفّزات
+# تُفشِل البوابة حتمياً إن ظهرت في نصّ التقرير أو ملخّصات المصادر. طبقة
+# العرض (silk_render._strip_internal_plumbing) تُحيّدها فعلاً قبل وصول النص
+# هنا — ظهور أيٍّ منها = ثغرة تطبيع، لا حالة طبيعية (حارس انحدار حتمي).
+#   لا تُطبَع القيمة المطابَقة في الملاحظة كي لا تُعيد البوابة تسريبها بنفسها.
+_CONFIDENTIALITY_LEAK_PATTERNS = [
+    ("tool_use_leak", re.compile(r"tool[-\s]?use", re.I), "وسم استخدام أداة"),
+    ("claude_mention", re.compile(r"\bClaude\b|كلود"), "ذكر صريح للأداة (كلود)"),
+    ("env_var_leak", re.compile(r"SILK_[A-Z_]+"), "اسم متغيّر بيئة داخلي"),
+    ("research_track_leak", re.compile(r"مسار(?:ات)?\s+(?:ال)?بحث"),
+     "نسبة الحقائق لمسار بحث داخلي"),
+    ("facts_list_leak", re.compile(r"بين\s+الحقائق"),
+     "تلميح لقائمة حقائق داخلية"),
+    ("ops_warning_leak", re.compile(r"⚠"), "رمز تحذير تشغيلي"),
+]
+
+
+# §8 (أمر العمل الرئيس — بوابة الأسلوب الحتمية): جودة العربية التجارية.
+#   FAIL: «م$» (اختزال عملة)، «(1)» ترقيم إنجليزي داخل فقرة، «بين الحقائق».
+#   WARN: «من ناحية» > مرّتين (سقف رابط)، رقم مفتاحي مميَّز مكرَّر > مرّتين.
+_MSHORT_STYLE_RE = re.compile(r"\d\s*م\$")
+_INLINE_ENUM_RE = re.compile(r"(?<![\n(])\s\(\d\)")   # «(1)» وسط سطر لا بدايته
+_CONNECTOR_RE = re.compile(r"من ناحية")
+# رقم مفتاحي مميَّز: نسبة بكسر عشري («55.28%») أو رقم بفواصل آلاف («61,000,000»)
+# أو قيمة HHI مجاورة للفظها — عادةً لا يتكرّر طبيعياً، فتكراره >مرّتين حشو.
+_KEYFIG_RES = [
+    re.compile(r"\d{1,3}\.\d+\s*%"),
+    re.compile(r"\d{1,3}(?:,\d{3}){2,}"),
+    re.compile(r"HHI[^0-9]{0,8}\d{3,5}"),
+]
+
+
+def _check_style(text: str) -> list[dict]:
+    """§8 — جودة الأسلوب الحتمية (بلا كلود). FAIL على اختزال العملة/الترقيم
+    الإنجليزي داخل الفقرة؛ WARN على تجاوز سقف الروابط أو تكرار رقم مفتاحي."""
+    findings = []
+    if not text:
+        return findings
+    if _MSHORT_STYLE_RE.search(text):
+        findings.append({"check": "style_currency_shorthand", "repairable": True,
+                         "note": "اختزال العملة «م$» — اكتب «مليون دولار» كاملةً"})
+    if _INLINE_ENUM_RE.search(text):
+        findings.append({"check": "style_inline_enumeration", "repairable": False,
+                         "note": "ترقيم إنجليزي «(1)…(2)» داخل فقرة — استعمل "
+                                 "أولاً/ثانياً أو قائمة مرقّمة"})
+    conn = len(_CONNECTOR_RE.findall(text))
+    if conn > 2:
+        findings.append({"check": "style_connector_overuse", "repairable": False,
+                         "note": f"عبارة «من ناحية» تكرّرت {conn} مرّات "
+                                 "(الحدّ مرّتان) — نوّع أدوات الربط"})
+    for rex in _KEYFIG_RES:
+        counts: dict = {}
+        for m in rex.finditer(text):
+            tok = re.sub(r"\s+", "", m.group(0))
+            counts[tok] = counts.get(tok, 0) + 1
+        for tok, n in counts.items():
+            if n > 2:
+                findings.append({
+                    "check": "style_repeated_key_figure", "repairable": False,
+                    "note": f"رقم مفتاحي «{tok}» تكرّر {n} مرّات في المتن "
+                            "(الحدّ مرّتان) — اذكره كاملاً مرّة ثم أحِل إليه"})
+    return findings
+
+
+def _check_confidentiality_leaks(text: str) -> list[dict]:
+    """§2 — تسريب سرّية في المُسلَّم (اسم أداة/متغيّر بيئة/مسار بحث/…). حارس
+    انحدار: يُفشِل البوابة إن أفلت أيّ محفّز من طبقة التطهير."""
+    findings = []
+    for check, pat, human in _CONFIDENTIALITY_LEAK_PATTERNS:
+        if pat.search(text or ""):
+            findings.append({
+                "check": check, "repairable": True,
+                "note": f"تسريب سرّية داخلي في نصّ التقرير ({human}) — "
+                        "يجب تحييده قبل التسليم"})
     return findings
 
 
@@ -372,8 +465,11 @@ def run_quality_gate(view: dict) -> dict:
     # (راجع أي AgentReport.summary في المشروع) — فحص التقطيع يقتصر على نص
     # التقرير السردي الكامل (كاتب التقرير) حيث التقطيع الحقيقي مرصود فعلاً.
     findings += _check_mid_word_truncation(text)
+    findings += _check_trailing_ellipsis(text)
     findings += _check_internal_plumbing_leak(text)
     findings += _check_english_field_and_mission_key_leak(text)
+    findings += _check_confidentiality_leaks(combined_text)
+    findings += _check_style(text)
     findings += _check_bare_partner_codes(dr)
     findings += _check_intersection_insufficiency(dr)
     findings += _check_section_structure(dr)
@@ -394,7 +490,16 @@ def run_quality_gate(view: dict) -> dict:
     # ثم تكتمه هي نفسها بدل أن تُصعِّده — لا يجوز أن يمرّ هذا بحكم أهدأ من
     # فشل بنيوي حقيقي (section_structure/agent_failed).
     _REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
-                               "mission_key_leak", "raw_confidence"}
+                               "mission_key_leak", "raw_confidence",
+                               "trailing_ellipsis", "tool_use_leak",
+                               "claude_mention", "env_var_leak",
+                               "research_track_leak", "facts_list_leak",
+                               "ops_warning_leak",
+                               # §8: اختزال العملة والترقيم الإنجليزي داخل
+                               # الفقرة يُفشِلان (FAIL)؛ سقف الروابط وتكرار
+                               # الرقم المفتاحي يبقيان WARN (تحذير أسلوبي).
+                               "style_currency_shorthand",
+                               "style_inline_enumeration"}
     guard_fired = [f for f in findings if f["check"] in _REGRESSION_GUARD_FIRED]
     severe = non_repairable + guard_fired
     if not findings:

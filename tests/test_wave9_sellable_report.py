@@ -547,7 +547,10 @@ def test_no_raw_confidence_number_in_rendered_docx_body(monkeypatch):
     assert "✓ موثّق" in text  # المحلل: 0.85 >= 0.8
 
 
-def test_technical_appendix_carries_full_confidence_numbers(monkeypatch):
+def test_evidence_log_uses_public_source_badge_no_raw_confidence(monkeypatch):
+    """§6/§7 (أمر العمل الرئيس): سجل الأدلة للمدققين أعمدته الحقيقة | المصدر |
+    الرابط | تاريخ الجمع | قوة الدليل — شارة ✓/◐/○ لا رقم ثقة خام، ولا وسم
+    «(Claude tool-use)»، ولا اسم بعثة داخلي في عمود المصدر."""
     import pytest
     pytest.importorskip("docx")
     from docx import Document
@@ -557,12 +560,20 @@ def test_technical_appendix_carries_full_confidence_numbers(monkeypatch):
     view = build_view(_deep_research_result_for_badges())
     path = render_docx(view, os.path.join(tempfile.mkdtemp(), "appx.docx"))
     doc = Document(path)
-    header_rows = ["".join(c.text for c in t.rows[0].cells) for t in doc.tables]
-    assert any("الادّعاء" in h and "الثقة" in h for h in header_rows)
+    header_rows = ["|".join(c.text for c in t.rows[0].cells) for t in doc.tables]
     matching = [t for t in doc.tables
-               if "الادّعاء" in "".join(c.text for c in t.rows[0].cells)]
-    body = ["".join(c.text for c in r.cells) for r in matching[0].rows[1:]]
-    assert any("0.6" in r for r in body)
+                if "الحقيقة" in "|".join(c.text for c in t.rows[0].cells)
+                and "قوة الدليل" in "|".join(c.text for c in t.rows[0].cells)]
+    assert matching, f"سجل الأدلة بأعمدة §6 غائب — {header_rows}"
+    hdr = "|".join(c.text for c in matching[0].rows[0].cells)
+    assert "الرابط" in hdr and "تاريخ الجمع" in hdr and "المصدر" in hdr
+    body = ["|".join(c.text for c in r.cells) for r in matching[0].rows[1:]]
+    joined = "\n".join(body)
+    # شارة قوة الدليل حاضرة، لا رقم ثقة خام في عمود القوة.
+    assert any(b for b in ("✓", "◐", "○") if b in joined)
+    import re as _re
+    assert not _re.search(r"\b0\.\d\b", joined), "رقم ثقة خام تسرّب للسجل"
+    assert "tool-use" not in joined and "Claude" not in joined
 
 
 def test_takeaway_line_renders_bold_and_detected_without_asterisks(
@@ -685,5 +696,5 @@ def test_research_sample_docx_meets_wave9_delivery_gate():
     assert 1 <= text.count("ماذا يعني هذا لقرارك") <= 2
     assert "##" not in text and "**" not in text and "```" not in text
     assert "ثقة 0" not in text  # لا رقم ثقة خام مسرَّب للسرد
-    assert "ملحق تقني" in text  # الأرقام الكاملة انتقلت للملحق
+    assert "سجل الأدلة للمدققين" in text  # §6: الملحق المُعاد تسميته
     assert "منصة سِلك لذكاء الأسواق" in text  # سطر الهوية على الغلاف
