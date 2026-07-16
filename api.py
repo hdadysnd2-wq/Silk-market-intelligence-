@@ -143,6 +143,28 @@ def create_app():
     except Exception as _e:  # noqa: BLE001
         log.warning("storage bootstrap failed (continuing): %s", _e)
 
+    # قوانين LESSONS.md البند ٤ (فقدان تحليلات مدفوعة على قرص Railway الفاني):
+    # مصيدة إقلاع صريحة. حين يضبط المشغّل SILK_REQUIRE_PERSISTENT_DATA_DIR
+    # (على النشر الإنتاجي) بلا توجيه أيّ مخزن دائم (SILK_DATA_DIR أو SILK_DB)،
+    # ترفض الخدمة الإقلاع بصوت عالٍ بدل أن تكتب على قرص يُمحى عند إعادة النشر
+    # التالية فتُفقَد كل التحليلات (وبيانات المخزن/الاستخدام/الذاكرة المؤقتة)
+    # بصمت. مطفأة افتراضياً — نفس عقد المشروع «غير مضبوط = وضع تطوير مفتوح»
+    # (كـSILK_API_KEY/SILK_PAID_DAILY_CAP)، فالمجموعة الهرمتية والتطوير بلا
+    # مفاتيح لا يتأثران؛ تحذير /health الدائم يبقى قائماً في كلتا الحالتين.
+    _require_persist = os.environ.get(
+        "SILK_REQUIRE_PERSISTENT_DATA_DIR", "").strip().lower() \
+        in ("1", "true", "yes", "on")
+    _persist_configured = bool(
+        os.environ.get("SILK_DATA_DIR", "").strip()
+        or os.environ.get("SILK_DB", "").strip())
+    if _require_persist and not _persist_configured:
+        raise RuntimeError(
+            "SILK_REQUIRE_PERSISTENT_DATA_DIR مضبوط لكن لا SILK_DATA_DIR ولا "
+            "SILK_DB موجَّه إلى تخزين دائم — الحاوية ستفقد كل التحليلات "
+            "(والمخزن/الاستخدام/الذاكرة المؤقتة) عند إعادة النشر التالية. "
+            "اضبط SILK_DATA_DIR=/data (وحدة تخزين Railway) قبل الإقلاع، أو "
+            "أزِل SILK_REQUIRE_PERSISTENT_DATA_DIR إن كان التخزين الفاني مقصوداً.")
+
     # التحديث الدوري داخل العملية (SILK_REFRESH_HOURS) — قرص Railway يُركَّب
     # على خدمة واحدة، فالمُجدول خيط خلفي هنا لا خدمة cron منفصلة. معطّل بلا
     # المتغير — الاختبارات والتطوير لا تتأثر. In-process scheduled refresh.
@@ -1736,11 +1758,17 @@ def create_app():
 
 
 # تطبيق على مستوى الوحدة — module-level app, None when fastapi is unavailable.
+# استثناء مصيدة التخزين (LESSONS.md البند ٤) لا يُبتلَع: fastapi غائبة => app=None
+# ليبقى الاستيراد يعمل؛ أما رفض التخزين الفاني الإنتاجي فيُعاد رفعه ليفشل
+# استيراد `api:app` بصوت عالٍ على Railway (رفض الإقلاع المقصود، لا خدمة صامتة).
 try:
     app = create_app()
-except RuntimeError:  # fastapi absent: keep import working, hold None.
-    app = None
-    log.warning(_PIP_HINT)
+except RuntimeError as _exc:
+    if str(_exc) == _PIP_HINT:  # fastapi absent: keep import working, hold None.
+        app = None
+        log.warning(_PIP_HINT)
+    else:  # مصيدة التخزين الدائم أو أي رفض إقلاع صريح آخر — أفشِل بصوت عالٍ.
+        raise
 
 
 if __name__ == "__main__":

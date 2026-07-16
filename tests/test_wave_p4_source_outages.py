@@ -157,6 +157,26 @@ def test_world_bank_all_three_governance_codes_mapped_to_source_3():
         assert _WB_INDICATOR_SOURCE[code] == "3"
 
 
+def test_every_mission_governance_indicator_is_source3_registered():
+    """LESSONS.md البند ٧ (حارس تناسق عبر-وحدات): كل مؤشر حوكمة (WGI، ينتهي
+    بـ`.EST`) تعرضه أداة worldbank_indicator للبعثات
+    (silk_llm_runtime._WB_INDICATORS) يجب أن يكون مسجَّلاً في خريطة المصدر
+    (silk_data_layer._WB_INDICATOR_SOURCE) بقيمة "3" — وإلا يسقط الطلب إلى
+    المصدر الأرشيفي الافتراضي (source=2) فيعيد صفحة فارغة بصمت: بالضبط
+    الفشل الذي يوجد هذا الدرس لمنعه. إضافة مؤشر .EST جديد للبعثات بلا تسجيله
+    هنا تُفشِل الاختبار فوراً بدل أن تتسرّب فجوة صامتة."""
+    from silk_llm_runtime import _WB_INDICATORS
+    from silk_data_layer import _WB_INDICATOR_SOURCE
+
+    governance = {code for code in _WB_INDICATORS.values()
+                  if code.endswith(".EST")}
+    assert governance, "لا مؤشر حوكمة معروض للبعثات — تغيّرت البنية؟"
+    for code in governance:
+        assert _WB_INDICATOR_SOURCE.get(code) == "3", (
+            f"مؤشر الحوكمة {code} معروض للبعثات لكنه غير مسجَّل في "
+            f"_WB_INDICATOR_SOURCE بـsource=3 — سيسقط لمصدر أرشيفي فارغ بصمت")
+
+
 def test_world_bank_non_wgi_indicator_keeps_default_source():
     """حارس انحدار: مؤشر WDI عادي (سكان) بلا معامل source — القاعدة
     الافتراضية تخدمه أصلاً."""
