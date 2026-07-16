@@ -30,6 +30,13 @@
   .rail-lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;padding:14px 10px 8px;font-weight:600}
   .hist{font-size:12.5px;color:var(--ink-soft);padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hist:hover{background:#EEEAE0}
+  .hist-rich{white-space:normal}
+  .hist-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .hist-top b{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hist-badge{flex-shrink:0;font-size:10px;padding:2px 7px}
+  .hist-meta{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hist-resume{margin-top:6px;font-size:11px;font-weight:600;color:var(--gold);background:var(--gold-soft);border:none;border-radius:6px;padding:4px 9px;cursor:pointer}
+  .hist-note{font-size:11.5px;color:var(--muted);padding:8px 10px;line-height:1.5}
   .rail-foot{margin-top:auto}
   .gear{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft);padding:11px 12px;border-radius:10px;cursor:pointer}
   .gear:hover{background:#EEEAE0}
@@ -554,10 +561,49 @@ function runDeepResearch(){if(S.busy)return;
     pushHist(res&&res.analysis_id||null);renderBoard();nav("board")})
   .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("فشل البحث العميق: "+e.message)})}
 $("#researchBtn").addEventListener("click",function(){runDeepResearch()});
+/* بحوثي السابقة (ITEM ١، بلاغ حي التكلفة): كانت localStorage محضة — لكل
+   متصفّح لا خادم، فتُفقد عبر الأجهزة ولا تعكس الحقيقة الخادمية. الآن مصدرها
+   GET /analyses (خادمي، مُعتمَد) — فتح صفٍّ يمرّ عبر GET /analyses/{id} فقط،
+   بلا أي نداء كلود جديد (إثبات: tests/test_analysis_history_storage.py
+   test_reopening_stored_analyses_never_calls_claude). S.hist القديمة تبقى
+   احتياطاً محلياً عند تعذّر تحميل الخادم — لا شاشة فارغة صامتة أبداً. */
+S.serverHist=null;S.serverHistStatus="idle";
+var VERDICT_TONE={"التوصية بالدخول":"s-good","دخول مشروط":"s-warn",
+  "مراقبة السوق":"s-warn","عدم الدخول حالياً":"s-mut","تعذّر إصدار توصية":"s-mut"};
+function loadServerHistory(){
+  S.serverHistStatus="loading";
+  return getJSON("/analyses").then(function(list){
+    S.serverHist=Array.isArray(list)?list:[];S.serverHistStatus="ok";drawHist()})
+  .catch(function(e){
+    S.serverHistStatus=/^HTTP 401\b/.test(e.message)?"unauthorized":"error";
+    drawHist()})}
+function histRowHtml(r){
+  var badge=r.verdict_label
+    ?'<span class="state '+(VERDICT_TONE[r.verdict_label]||"s-mut")+' hist-badge">'+esc(r.verdict_label)+'</span>'
+    :(r.status==="running"?'<span class="state s-warn hist-badge">جارٍ التشغيل…</span>'
+      :(r.status==="failed"?'<span class="state s-warn hist-badge">فشلت</span>':""));
+  var cost=r.cost_usd!=null?(" · ~$"+r.cost_usd.toFixed(2)):"";
+  var date=(r.created_at||"").slice(0,10);
+  var meta=esc(r.market_name||r.product||"—")+cost+(date?(" · "+date):"");
+  var resumeBtn=(r.status==="failed"||r.status==="running")
+    ?'<button class="hist-resume" data-resume-id="'+r.id+'">↻ استئناف</button>':"";
+  return '<div class="hist hist-rich" data-id="'+r.id+'"><div class="hist-top"><b>'+esc(r.product||"—")+'</b>'+badge+'</div>'
+    +'<div class="hist-meta">'+meta+'</div>'+resumeBtn+'</div>'}
 function pushHist(id){var label=S.product+" · "+((S.view&&S.view.header&&S.view.header.target_market)||"—");
   S.hist=[{label:label,id:id||null}].concat(S.hist.filter(function(h){return h.label!==label})).slice(0,5);
-  localStorage.setItem("silk_hist",JSON.stringify(S.hist));drawHist()}
-function drawHist(){$("#histList").innerHTML=S.hist.map(function(h){return '<div class="hist" data-id="'+(h.id||"")+'">'+esc(h.label)+'</div>'}).join("")}
+  localStorage.setItem("silk_hist",JSON.stringify(S.hist));drawHist();loadServerHistory()}
+function drawHist(){
+  var el=$("#histList");
+  if(S.serverHistStatus==="loading"){el.innerHTML='<div class="hist-note">…جارٍ التحميل</div>';return}
+  if(S.serverHistStatus==="unauthorized"){el.innerHTML='<div class="hist-note">أدخل مفتاح الخدمة لعرض بحوثك السابقة</div>';return}
+  if(S.serverHistStatus==="ok"&&S.serverHist&&S.serverHist.length){
+    el.innerHTML=S.serverHist.slice(0,12).map(histRowHtml).join("");return}
+  if(S.serverHistStatus==="ok"){el.innerHTML='<div class="hist-note">لا بحوث سابقة بعد</div>';return}
+  // تعذّر التحميل الخادمي أو لم يبدأ بعد — احتياط محلي صريح، لا شاشة فارغة صامتة.
+  if(S.hist.length){
+    el.innerHTML='<div class="hist-note">تعذّر تحميل السجلّ من الخادم — عرض احتياطي من هذا المتصفح</div>'
+      +S.hist.map(function(h){return '<div class="hist" data-id="'+(h.id||"")+'">'+esc(h.label)+'</div>'}).join("");return}
+  el.innerHTML='<div class="hist-note">تعذّر تحميل السجلّ من الخادم</div>'}
 /* بلاغ حي: عناصر «التحليلات الأخيرة» تبدو قابلة للنقر (cursor:pointer) منذ
    البداية لكن لم تُربَط بأي معالج نقر قط — سقوط صامت بلا أي فِعل مرئي عند
    النقر (نفس نمط بلاغ ٢: catch فارغ يُخفي 401). مُصلَح هنا: نقر يفتح
@@ -568,12 +614,27 @@ function openStoredAnalysis(id){
   .catch(function(e){
     if(/^HTTP 401\b/.test(e.message))toast("يتطلب مفتاح الخدمة — أدخله من القائمة");
     else toast("تعذّر فتح التحليل رقم "+id+": "+e.message)})}
+/* استئناف تشغيلة عالقة/فاشلة (ITEM ١ج) — POST /research {resume,async_run}
+   يُكمل فقط البعثات الناقصة (silk_storage.load_mission_checkpoints)، لا
+   إعادة تشغيل كاملة — يحمي من حرق اعتمادات مضاعف (docs/DEEP_RESEARCH_DECISIONS.md). */
+function resumeAnalysis(id){
+  if(S.busy){toast("تشغيلة أخرى جارية — انتظر اكتمالها");return}
+  toast("…جارٍ استئناف التحليل رقم "+id);
+  S.busy=true;sync();
+  post("/research",{resume:Number(id),async_run:true}).then(function(res){
+    if(res&&res.analysis_id&&res.status==="running"){
+      pollResearchStatus(res.analysis_id,$("#researchBtn").textContent);nav("board");return}
+    // استئناف تشغيلة كانت مكتملة أصلاً يعيدها فوراً بلا 202 (لا حرق مضاعف).
+    S.raw=res;S.view=res.view||null;S.busy=false;sync();renderBoard();pushHist(res&&res.analysis_id||id);nav("board")})
+  .catch(function(e){S.busy=false;sync();toast("تعذّر الاستئناف رقم "+id+": "+e.message)})}
 $("#histList").addEventListener("click",function(e){
+  var rb=e.target.closest("[data-resume-id]");
+  if(rb){e.stopPropagation();resumeAnalysis(rb.getAttribute("data-resume-id"));return}
   var el=e.target.closest(".hist");if(!el)return;
   var id=el.getAttribute("data-id");
   if(!id){toast("هذا العنصر قديم بلا معرّف مخزَّن — أعد البحث لفتحه");return}
   openStoredAnalysis(id)});
-drawHist();
+loadServerHistory();drawHist();
 
 /* ── اللوحة — تُبنى من view الحقيقي حصراً؛ الغائب «—» هادئة ── */
 function money(v){if(v==null)return"—";var n=+v;if(n>=1e9)return"$"+(n/1e9).toFixed(1)+" مليار";if(n>=1e6)return"$"+(n/1e6).toFixed(1)+" م";if(n>=1e3)return"$"+(n/1e3).toFixed(0)+" ألف";return"$"+n}

@@ -222,8 +222,13 @@ def test_paid_keys_protected_when_auth_set_no_503():
                                              "with_volza": True},
                             headers={"X-API-Key": "prod-secret"})
         assert r.status_code == 200
-        assert "warnings" not in client.get(
-            "/health", headers={"X-API-Key": "prod-secret"}).json()
+        # لا تحذير مفاتيح مدفوعة (هذا ما يختبره الاسم) — تحذير التخزين
+        # الفاني منفصل تماماً (بيئة الاختبار الهرمتية بلا SILK_DATA_DIR
+        # أيضاً، فقد يظهر بلا صلة بحماية المفاتيح المدفوعة قيد الاختبار هنا).
+        warnings = client.get(
+            "/health", headers={"X-API-Key": "prod-secret"}).json().get(
+            "warnings") or []
+        assert not any("paid keys" in w for w in warnings)
 
 
 def test_dev_mode_valid_only_without_paid_keys():
@@ -233,7 +238,10 @@ def test_dev_mode_valid_only_without_paid_keys():
               LOCALPRICE_API_KEY=None, ANTHROPIC_API_KEY=None,
               SILK_PAID_DAILY_CAP=None):
         client = _client()
-        assert "warnings" not in client.get("/health").json()
+        # لا تحذير مفاتيح مدفوعة (هذا ما يختبره الاسم) — تحذير التخزين
+        # الفاني منفصل (راجع تعليق الاختبار الشقيق أعلاه لنفس السبب).
+        warnings = client.get("/health").json().get("warnings") or []
+        assert not any("paid keys" in w for w in warnings)
         with patch("requests.sessions.Session.request",
                    side_effect=OSError("network disabled for hermetic test")):
             r = client.post("/deepen", json={"product": "تمور",

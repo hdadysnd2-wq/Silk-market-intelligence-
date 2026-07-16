@@ -305,6 +305,7 @@ def create_app():
         # القرص الدائم: المسارات المحلولة فعلاً لكل مخزن — للتحقق بعد النشر أن
         # كل شيء يكتب للقرص (persistent=true عندما يقع المسار تحت SILK_DATA_DIR
         # أو وُجّه بمتغير صريح). Resolved storage paths for volume verification.
+        _warnings: list[str] = []
         try:
             import silk_cache as _cache
             import silk_store as _fact_store
@@ -317,15 +318,29 @@ def create_app():
                 "usage_db": _usage._db_path(),
                 "cache_dir": _cache._cache_dir(),
             }
+            # بلاغ حي (تدقيق تكلفة): تحليلات مكتملة مدفوعة الثمن كانت تختفي
+            # بعد كل إعادة نشر — SILK_DATA_DIR فارغ يعني كل الأربعة مخازن
+            # تقع تحت المسار النسبي الافتراضي داخل حاوية Railway الفانية (لا
+            # وحدة تخزين ثابتة)، فتُمحى كل البيانات عند كل نشرة تالية. كان
+            # هذا خطراً صامتاً (data_dir: null بلا أي تحذير مرئي) — الآن
+            # تحذير صريح لا يفوّت مشغّلاً يفحص /health.
+            if not (_base or os.environ.get("SILK_DB", "").strip()):
+                _warnings.append(
+                    "SILK_DATA_DIR غير مضبوط — التخزين على مسار نسبي داخل "
+                    "حاوية Railway الفانية؛ كل التحليلات (والمخزن/الاستخدام/"
+                    "الذاكرة المؤقتة) ستُفقَد عند إعادة النشر التالية ما لم "
+                    "تُركَّب وحدة تخزين (Volume) وتُوجَّه إليها هذا المتغيّر")
         except Exception as _e:  # noqa: BLE001 — تشخيص لا شرط
             log.debug("storage health section skipped: %s", _e)
         unprotected = _unprotected_paid_keys()
         if unprotected:
-            health["warnings"] = [
+            _warnings.append(
                 "paid keys present without SILK_API_KEY ("
                 + ", ".join(unprotected)
                 + ") — paid layers will refuse with 503 until SILK_API_KEY "
-                  "is set (or the paid keys are removed)"]
+                  "is set (or the paid keys are removed)")
+        if _warnings:
+            health["warnings"] = _warnings
         return health
 
     @app.get("/resolve/{name}")
@@ -1121,7 +1136,8 @@ def create_app():
                 "product_card": product_card_dict, "own_price": own_price,
                 "agent_prefs": prefs, "allow_degraded": req.allow_degraded}
             analysis_id = create_research_run(
-                product, market_ref.iso3, hs_code, request_snapshot)
+                product, market_ref.iso3, hs_code, request_snapshot,
+                market_name=market_ref.name_ar or market_ref.name_en)
 
         if req.async_run:
             if analysis_id is None:

@@ -146,10 +146,15 @@ run("success", {ok:true, res:{view:{x:1}, analysis_id:42}}, 42)
 
 
 def _extract_click_block(html: str) -> str:
+    # ITEM ١ (شريط «بحوثي السابقة» الخادمي) وسّع هذه الكتلة: pushHist الآن
+    # يستدعي loadServerHistory/histRowHtml/VERDICT_TONE المعرَّفة قبله — لزم
+    # تحريك حدّ الاستخراج للخلف كي يبقى كل رمز مُستخدَم معرَّفاً في القِرن
+    # المعزول (Node) بلا ReferenceError.
     m = re.search(
-        r"function pushHist\(id\)\{.*?openStoredAnalysis\(id\)\}\);",
+        r"S\.serverHist=null;S\.serverHistStatus=\"idle\";.*?"
+        r"openStoredAnalysis\(id\)\}\);",
         html, re.S)
-    assert m, "could not locate the pushHist..histList-click block — did the fix move/rename?"
+    assert m, "could not locate the history-sidebar..click block — did the fix move/rename?"
     return m.group(0)
 
 
@@ -177,7 +182,10 @@ def test_real_execution_proves_every_click_path_is_visible_never_silent():
         succ = results["success"]
         assert succ["render"] == 1
         assert succ["nav"] == ["board"]
-        assert succ["getJSON"] == ["/analyses/42"]
+        # ITEM ١: فتح تحليل مخزَّن يُحدِّث الشريط من الخادم أيضاً (pushHist
+        # الآن يستدعي loadServerHistory) — نداء خلفي ثانٍ إلى /analyses
+        # بجانب /analyses/42 الأصلي؛ كلاهما GET محض (لا نداء كلود).
+        assert succ["getJSON"] == ["/analyses/42", "/analyses"]
 
         # 401: الرسالة العربية المطلوبة بالضبط — لا سقوط صامت، لا رسالة مضلِّلة.
         unauth = results["unauthorized"]
