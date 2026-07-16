@@ -143,6 +143,28 @@ def create_app():
     except Exception as _e:  # noqa: BLE001
         log.warning("storage bootstrap failed (continuing): %s", _e)
 
+    # قوانين LESSONS.md البند ٤ (فقدان تحليلات مدفوعة على قرص Railway الفاني):
+    # مصيدة إقلاع صريحة. حين يضبط المشغّل SILK_REQUIRE_PERSISTENT_DATA_DIR
+    # (على النشر الإنتاجي) بلا توجيه أيّ مخزن دائم (SILK_DATA_DIR أو SILK_DB)،
+    # ترفض الخدمة الإقلاع بصوت عالٍ بدل أن تكتب على قرص يُمحى عند إعادة النشر
+    # التالية فتُفقَد كل التحليلات (وبيانات المخزن/الاستخدام/الذاكرة المؤقتة)
+    # بصمت. مطفأة افتراضياً — نفس عقد المشروع «غير مضبوط = وضع تطوير مفتوح»
+    # (كـSILK_API_KEY/SILK_PAID_DAILY_CAP)، فالمجموعة الهرمتية والتطوير بلا
+    # مفاتيح لا يتأثران؛ تحذير /health الدائم يبقى قائماً في كلتا الحالتين.
+    _require_persist = os.environ.get(
+        "SILK_REQUIRE_PERSISTENT_DATA_DIR", "").strip().lower() \
+        in ("1", "true", "yes", "on")
+    _persist_configured = bool(
+        os.environ.get("SILK_DATA_DIR", "").strip()
+        or os.environ.get("SILK_DB", "").strip())
+    if _require_persist and not _persist_configured:
+        raise RuntimeError(
+            "SILK_REQUIRE_PERSISTENT_DATA_DIR مضبوط لكن لا SILK_DATA_DIR ولا "
+            "SILK_DB موجَّه إلى تخزين دائم — الحاوية ستفقد كل التحليلات "
+            "(والمخزن/الاستخدام/الذاكرة المؤقتة) عند إعادة النشر التالية. "
+            "اضبط SILK_DATA_DIR=/data (وحدة تخزين Railway) قبل الإقلاع، أو "
+            "أزِل SILK_REQUIRE_PERSISTENT_DATA_DIR إن كان التخزين الفاني مقصوداً.")
+
     # التحديث الدوري داخل العملية (SILK_REFRESH_HOURS) — قرص Railway يُركَّب
     # على خدمة واحدة، فالمُجدول خيط خلفي هنا لا خدمة cron منفصلة. معطّل بلا
     # المتغير — الاختبارات والتطوير لا تتأثر. In-process scheduled refresh.
@@ -305,6 +327,7 @@ def create_app():
         # القرص الدائم: المسارات المحلولة فعلاً لكل مخزن — للتحقق بعد النشر أن
         # كل شيء يكتب للقرص (persistent=true عندما يقع المسار تحت SILK_DATA_DIR
         # أو وُجّه بمتغير صريح). Resolved storage paths for volume verification.
+        _warnings: list[str] = []
         try:
             import silk_cache as _cache
             import silk_store as _fact_store
@@ -317,15 +340,29 @@ def create_app():
                 "usage_db": _usage._db_path(),
                 "cache_dir": _cache._cache_dir(),
             }
+            # بلاغ حي (تدقيق تكلفة): تحليلات مكتملة مدفوعة الثمن كانت تختفي
+            # بعد كل إعادة نشر — SILK_DATA_DIR فارغ يعني كل الأربعة مخازن
+            # تقع تحت المسار النسبي الافتراضي داخل حاوية Railway الفانية (لا
+            # وحدة تخزين ثابتة)، فتُمحى كل البيانات عند كل نشرة تالية. كان
+            # هذا خطراً صامتاً (data_dir: null بلا أي تحذير مرئي) — الآن
+            # تحذير صريح لا يفوّت مشغّلاً يفحص /health.
+            if not (_base or os.environ.get("SILK_DB", "").strip()):
+                _warnings.append(
+                    "SILK_DATA_DIR غير مضبوط — التخزين على مسار نسبي داخل "
+                    "حاوية Railway الفانية؛ كل التحليلات (والمخزن/الاستخدام/"
+                    "الذاكرة المؤقتة) ستُفقَد عند إعادة النشر التالية ما لم "
+                    "تُركَّب وحدة تخزين (Volume) وتُوجَّه إليها هذا المتغيّر")
         except Exception as _e:  # noqa: BLE001 — تشخيص لا شرط
             log.debug("storage health section skipped: %s", _e)
         unprotected = _unprotected_paid_keys()
         if unprotected:
-            health["warnings"] = [
+            _warnings.append(
                 "paid keys present without SILK_API_KEY ("
                 + ", ".join(unprotected)
                 + ") — paid layers will refuse with 503 until SILK_API_KEY "
-                  "is set (or the paid keys are removed)"]
+                  "is set (or the paid keys are removed)")
+        if _warnings:
+            health["warnings"] = _warnings
         return health
 
     @app.get("/resolve/{name}")
@@ -1121,7 +1158,8 @@ def create_app():
                 "product_card": product_card_dict, "own_price": own_price,
                 "agent_prefs": prefs, "allow_degraded": req.allow_degraded}
             analysis_id = create_research_run(
-                product, market_ref.iso3, hs_code, request_snapshot)
+                product, market_ref.iso3, hs_code, request_snapshot,
+                market_name=market_ref.name_ar or market_ref.name_en)
 
         if req.async_run:
             if analysis_id is None:
@@ -1627,23 +1665,24 @@ def create_app():
         return _json(out)
 
     class SnapshotRequest(BaseModel):
-        """لقطة سريعة لمنتج جديد (R4) — هل يستحق دراسة كاملة؟"""
+        """معاينة فورية لمنتج جديد (R4، أُعيدت للاستخدام في ITEM ٢) —
+        هل يستحق دراسة كاملة؟ مجانية دوماً — بلا حقل تأكيد/تكلفة."""
         product: str
         hs_code: "str | None" = None
         market: "str | None" = None
         refresh: bool = False
-        confirm: bool = False
 
     @app.post("/products/snapshot")
     def product_snapshot(req: SnapshotRequest, request: Request):
-        """لقطة سريعة لمنتج × سوق (R4) — تعيد استخدام بعثة الأسعار مقيَّدةً.
+        """معاينة فورية مجانية لمنتج × سوق (ITEM ٢، بلاغ حي التكلفة).
 
-        التدفق: (١) المخزن أولاً ما لم يُطلب تحديث — تكرار السؤال مجاني بلا
-        حرق أرصدة. (٢) بلا confirm=true تُعيد التكلفة المقدَّرة فقط ولا تشغّل
-        (التكلفة تُعرَض قبل التشغيل). (٣) مع confirm تمرّ بنفس حارس إضافات
-        كلود المجانية (_free_ai_extras_allowed): تحجز تفعيلة واحدة من السقف
-        اليومي، وتُحجَب على النشر غير المحمي، وتتدهور معلنةً عند النفاد —
-        ثم تشغّل وتخزّن. لا اختلاق: فجوات معلنة بلا مفتاح/شبكة.
+        **قرار حي**: كانت تعيد استخدام بعثة الأسعار (كلود) بميزانية مقيَّدة
+        خلف تأكيد صريح؛ أُزيل نداء كلود هذا نهائياً — المعاينة الآن مورّدو
+        كومتريد فقط (silk_snapshot.quick_snapshot)، بلا أي نداء مدفوع، فلا
+        حاجة لتأكيد أو حجز أو حارس إضافات كلود. المخزن أولاً ما لم يُطلب
+        تحديث — تكرار السؤال أو معاينة كانت خُزِّنت قبل هذا القرار (بلقطة
+        أسعار منافِسة حقيقية من نداء كلود سابق) يُعادان كما هما، مجاناً.
+        لا اختلاق: فجوات معلنة بلا شبكة.
         """
         _require_key(request)
         _rate_limit(request)
@@ -1669,7 +1708,7 @@ def create_app():
             if hs_code is None:
                 hs_note = dp.note   # فجوة معلنة — لا اختلاق رمز HS
 
-        # (١) المخزن أولاً — تكرار مجاني بلا حجز
+        # المخزن أولاً ما لم يُطلب تحديث — تكرار السؤال مجاني دوماً.
         if not req.refresh:
             cached = silk_storage.get_product_snapshot(hs_code, market_ref.iso3)
             if cached is not None:
@@ -1677,29 +1716,13 @@ def create_app():
                               "cost": {"claude_activations": 0,
                                        "note": "من المخزن — بلا تكلفة"}})
 
-        est = {"claude_activations": 1,
-               "note": "لقطة سريعة = تفعيلة كلود واحدة (بعثة الأسعار مقيَّدة "
-                       "الميزانية) — تُحتسب من السقف اليومي"}
-
-        # (٢) التكلفة قبل التشغيل — بلا confirm لا تشغيل ولا حجز
-        if not req.confirm:
-            return _json({"snapshot": None, "cached": False, "cost": est,
-                          "would_exceed_cap": silk_usage.would_exceed_cap(1),
-                          "hs_note": hs_note,
-                          "note": "أكّد بإرسال confirm=true للتشغيل — تُحتسب "
-                                  "تفعيلة واحدة من السقف اليومي"})
-
-        # (٣) confirm — نفس حارس المدفوع المجاني (حجز/حجب/تدهور معلن)
-        ai_ok, ai_note = _free_ai_extras_allowed()
-        if not ai_ok:
-            return _json({"snapshot": None, "cached": False, "cost": est,
-                          "blocked_note": ai_note})
-
         snap = silk_snapshot.quick_snapshot(product, hs_code, market_ref)
         if hs_note:
             snap["hs_note"] = hs_note
         silk_storage.save_product_snapshot(hs_code, market_ref.iso3, snap)
-        return _json({"snapshot": snap, "cached": False, "cost": est})
+        return _json({"snapshot": snap, "cached": False,
+                      "cost": {"claude_activations": 0,
+                               "note": "معاينة فورية مجانية — بلا أي نداء كلود"}})
 
     class OutcomeRequest(BaseModel):
         """جسم تسجيل النتيجة الفعلية — actual-outcome body (wave 1)."""
@@ -1735,11 +1758,17 @@ def create_app():
 
 
 # تطبيق على مستوى الوحدة — module-level app, None when fastapi is unavailable.
+# استثناء مصيدة التخزين (LESSONS.md البند ٤) لا يُبتلَع: fastapi غائبة => app=None
+# ليبقى الاستيراد يعمل؛ أما رفض التخزين الفاني الإنتاجي فيُعاد رفعه ليفشل
+# استيراد `api:app` بصوت عالٍ على Railway (رفض الإقلاع المقصود، لا خدمة صامتة).
 try:
     app = create_app()
-except RuntimeError:  # fastapi absent: keep import working, hold None.
-    app = None
-    log.warning(_PIP_HINT)
+except RuntimeError as _exc:
+    if str(_exc) == _PIP_HINT:  # fastapi absent: keep import working, hold None.
+        app = None
+        log.warning(_PIP_HINT)
+    else:  # مصيدة التخزين الدائم أو أي رفض إقلاع صريح آخر — أفشِل بصوت عالٍ.
+        raise
 
 
 if __name__ == "__main__":

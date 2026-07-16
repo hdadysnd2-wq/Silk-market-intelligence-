@@ -94,9 +94,37 @@ def init_db(path: str | None = None) -> None:
                    # الآن) — لقطة تُحدَّث أثناء تشغيلة /research الجارية،
                    # يقرأها GET /research/{id}/status. مستقلّة عن json_blob
                    # النهائي (لا يُكتَب إلا عند الاكتمال).
-                   "progress_json"):
+                   "progress_json",
+                   # حقول شريط «بحوثي السابقة» (بلاغ حي — تحليلات مكتملة
+                   # مدفوعة الثمن لا تظهر لاحقاً فيُعاد دفع ثمنها): تُملأ من
+                   # نفس نموذج العرض الموحّد (silk_render.build_view) عند
+                   # الحفظ — عرض سريع في القائمة بلا تفسير json_blob الكامل
+                   # لكل صفّ، نفس فلسفة market_scores أعلاه.
+                   "market_name", "verdict_label", "cost_usd"):
             if col not in existing:
                 conn.execute(f"ALTER TABLE analyses ADD COLUMN {col} TEXT")
+
+
+def _sidebar_summary_fields(result: dict) -> tuple[str | None, str | None, float | None]:
+    """(اسم السوق، تسمية الحكم، التكلفة التقديرية) لصفّ شريط «بحوثي السابقة»
+    — استيراد كسول لـ`silk_render` (يبقي هذه الوحدة بلا اعتماد وقت الاستيراد،
+    نفس نمط الاستيراد الكسول القائم في المشروع) عبر نموذج العرض الموحّد
+    فلا مسار حساب مواز؛ فشل العرض لا يكسر الحفظ أبداً (قناة جانبية صامتة)."""
+    try:
+        from silk_render import build_view, _VERDICT_LABELS_AR
+        view = build_view(result)
+        market_name = (view.get("header") or {}).get("target_market")
+        dr = view.get("deep_research")
+        if dr:
+            verdict_label = dr.get("verdict_label")
+        else:
+            tone = (view.get("decision") or {}).get("tone")
+            verdict_label = _VERDICT_LABELS_AR.get(tone)
+        cost = (view.get("data_economics") or {}).get("cost_usd_estimate")
+        return market_name, verdict_label, (float(cost) if cost is not None else None)
+    except Exception as e:  # noqa: BLE001 — عرض شريط لا شرط حفظ
+        log.warning("sidebar summary fields extraction failed: %s", e)
+        return None, None, None
 
 
 def save_analysis(result: dict, path: str | None = None,
@@ -104,7 +132,9 @@ def save_analysis(result: dict, path: str | None = None,
     """خزّن نتيجة تحليل وأعد المعرّف — store an analyze() result, return its row id.
 
     The full dict is json.dumps'd into json_blob; per-market scores are also
-    flattened into market_scores for quick listing/querying.
+    flattened into market_scores for quick listing/querying, and a sidebar
+    summary (market/verdict/cost) is derived from the same canonical view —
+    quick listing without re-parsing json_blob per row (see GET /analyses).
 
     `analysis_id`: مرّره لتحديث صفّ **موجود بالفعل** بدل إدراج صفّ جديد —
     يستعمله مسار `/research` (نقطة تفتيش/استئناف، P0) حين يكون المعرّف
@@ -115,25 +145,31 @@ def save_analysis(result: dict, path: str | None = None,
     init_db(path)
     blob = json.dumps(result, ensure_ascii=False, default=_json_default)
     now = datetime.datetime.now().isoformat(timespec="seconds")
+    market_name, verdict_label, cost_usd = _sidebar_summary_fields(result)
     with _connect(path) as conn:
         if analysis_id is not None:
             conn.execute(
                 "UPDATE analyses SET product = ?, hs_code = ?, year = ?, "
                 "preliminary = ?, json_blob = ?, status = 'completed', "
-                "updated_at = ? WHERE id = ?",
+                "updated_at = ?, market_name = ?, verdict_label = ?, "
+                "cost_usd = ? WHERE id = ?",
                 (result.get("product"), result.get("hs_code"),
                  result.get("year"), 1 if result.get("preliminary") else 0,
-                 blob, now, analysis_id),
+                 blob, now, market_name, verdict_label,
+                 str(cost_usd) if cost_usd is not None else None, analysis_id),
             )
         else:
             cur = conn.execute(
                 "INSERT INTO analyses "
                 "(product, hs_code, year, created_at, preliminary, "
-                "json_blob, status, kind, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, 'completed', 'analyze', ?)",
+                "json_blob, status, kind, updated_at, market_name, "
+                "verdict_label, cost_usd) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'completed', 'analyze', ?, ?, ?, ?)",
                 (result.get("product"), result.get("hs_code"),
                  result.get("year"), now,
-                 1 if result.get("preliminary") else 0, blob, now),
+                 1 if result.get("preliminary") else 0, blob, now,
+                 market_name, verdict_label,
+                 str(cost_usd) if cost_usd is not None else None),
             )
             analysis_id = int(cur.lastrowid)
         for row in result.get("markets", []):
@@ -152,7 +188,8 @@ def save_analysis(result: dict, path: str | None = None,
 
 def create_research_run(product: str, market_iso3: str, hs_code: str | None,
                         request_snapshot: dict,
-                        path: str | None = None) -> int:
+                        path: str | None = None,
+                        market_name: str | None = None) -> int:
     """خصّص معرّف تشغيلة بحث عميق **قبل** تشغيل أي بعثة — allocate the
     analysis_id up front so per-mission checkpoints can attach to it from
     the very first mission that finishes, not only at the very end.
@@ -160,6 +197,10 @@ def create_research_run(product: str, market_iso3: str, hs_code: str | None,
     `request_snapshot`: كل ما يلزم لاستئناف التشغيلة لاحقاً بلا إعادة
     إرسال الطلب الأصلي (product/market/hs_code/product_card/agent_prefs/...)
     — يُقرأ عبر `get_research_run` حين يُمرَّر `resume=<id>` لاحقاً.
+
+    `market_name`: اسم عرض (عربي/إنجليزي) لصفّ شريط «بحوثي السابقة» أثناء
+    التشغيلة الجارية (قبل اكتمال `save_analysis` الذي يستنتجه من العرض
+    الموحّد) — يتراجع لـ`market_iso3` إن غاب، لا يترك السطر بلا اسم سوق.
     """
     path = path or _db_path()
     init_db(path)
@@ -170,11 +211,12 @@ def create_research_run(product: str, market_iso3: str, hs_code: str | None,
         cur = conn.execute(
             "INSERT INTO analyses "
             "(product, hs_code, year, created_at, preliminary, json_blob, "
-            "status, kind, request_json, updated_at) "
-            "VALUES (?, ?, NULL, ?, 1, ?, 'running', 'research', ?, ?)",
+            "status, kind, request_json, updated_at, market_name) "
+            "VALUES (?, ?, NULL, ?, 1, ?, 'running', 'research', ?, ?, ?)",
             (product, hs_code, now, placeholder,
              json.dumps(request_snapshot, ensure_ascii=False,
-                        default=_json_default), now),
+                        default=_json_default), now,
+             market_name or market_iso3),
         )
         return int(cur.lastrowid)
 
@@ -374,7 +416,12 @@ def set_outcome(analysis_id: int, outcome: str,
 
 
 def list_analyses(path: str | None = None) -> list[dict]:
-    """اسرد التحليلات المحفوظة — list saved analyses (newest first), metadata only."""
+    """اسرد التحليلات المحفوظة — list saved analyses (newest first), metadata only.
+
+    `status` (running/completed/failed)، `market_name`/`verdict_label`
+    (شريط «بحوثي السابقة» — silk_storage._sidebar_summary_fields)، و
+    `cost_usd` (نص رقمي مُخزَّن، يُحوَّل عائماً هنا — None إن غاب أو تعذّر
+    التحويل، لا اختلاق صفر) — قائمة أقدم من هذه الحقول تعرضها `None` صراحة."""
     path = path or _db_path()
     if not os.path.exists(path):
         return []
@@ -382,9 +429,18 @@ def list_analyses(path: str | None = None) -> list[dict]:
     with _connect(path) as conn:
         rows = conn.execute(
             "SELECT id, product, hs_code, year, created_at, preliminary, "
-            "outcome, outcome_date FROM analyses ORDER BY id DESC"
+            "outcome, outcome_date, status, market_name, verdict_label, "
+            "cost_usd FROM analyses ORDER BY id DESC"
         ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["cost_usd"] = float(d["cost_usd"]) if d.get("cost_usd") else None
+        except (TypeError, ValueError):
+            d["cost_usd"] = None
+        out.append(d)
+    return out
 
 
 def get_analysis(analysis_id: int, path: str | None = None) -> dict | None:

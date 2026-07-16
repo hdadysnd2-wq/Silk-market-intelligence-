@@ -150,3 +150,120 @@ def test_redeploy_preserves_fact_store_and_serves_without_network(tmp_path):
     assert out["competitors"] and out["competitors"][0]["value_usd"] == 700000.0
     # الإسناد يعلن أن القيمة من المخزن — provenance declares the store origin.
     assert any("مخزن" in s for s in out["sources"])
+
+
+# ── LESSONS.md البند ٥: استئناف البعثات ينجو من إعادة النشر ─────────────────
+
+_CKPT_WRITER = """
+import os, sys
+sys.path.insert(0, {repo!r})
+import silk_storage as ST
+from silk_agents import AgentReport
+from silk_data_layer import DataPoint
+aid = ST.create_research_run("تمور", "NLD", "080410", {{"product": "تمور"}})
+for key in ("trade_flow", "demographics_economy", "competitors"):
+    rep = AgentReport("LLMAgent:" + key,
+                      [DataPoint(1.0, "src", 0.9, "note")], False, "ok")
+    ST.save_mission_checkpoint(aid, key, rep)
+print(aid)
+"""
+
+_CKPT_READER = """
+import json, os, sys
+sys.path.insert(0, {repo!r})
+import silk_storage as ST
+# load_mission_checkpoints مسار قرص محض (sqlite) — لا يجلب شبكةً بنيوياً؛
+# الغرض هنا إثبات أن البعثات المكتملة نجت من «إعادة النشر» على القرص الدائم.
+reports = ST.load_mission_checkpoints({aid})
+print(json.dumps(sorted(reports.keys())))
+"""
+
+
+def test_redeploy_preserves_research_checkpoints_and_resume_reads_them(tmp_path):
+    """LESSONS.md البند ٥: اكتب نقاط تفتيش بعثات، «أعد النشر» (عملية جديدة على
+    نفس القرص)، ثم اقرأها بلا شبكة — «الاستئناف بالقروش لا بالدولارات» يتطلّب
+    أن تنجو البعثات المكتملة من إعادة النشر فعلاً على القرص، لا في الذاكرة."""
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("SILK_DB", "SILK_STORE_DB", "SILK_USAGE_DB",
+                        "SILK_CACHE_DIR")}
+    env["SILK_DATA_DIR"] = str(tmp_path)
+
+    aid = _run(_CKPT_WRITER.format(repo=_REPO), env).strip()
+    assert aid.isdigit()
+    # ملف قاعدة التحليلات نجا على «القرص» — the analyses DB file survived.
+    assert os.path.exists(tmp_path / "silk.db")
+
+    keys = json.loads(_run(_CKPT_READER.format(repo=_REPO, aid=aid), env))
+    assert keys == ["competitors", "demographics_economy", "trade_flow"]
+
+
+# ── LESSONS.md البند ٤: مصيدة إقلاع التخزين الفاني (fail-fast) ──────────────
+
+def _reload_api_under(env_overrides: dict):
+    """أعِد تحميل api داخل بيئة معدَّلة — يعيد (module|None, raised_msg|None).
+    يوجَّه التخزين لمسار مؤقّت افتراضاً كي لا يكتب في مجلد المستودع."""
+    import contextlib
+    import importlib
+    keys = ("SILK_REQUIRE_PERSISTENT_DATA_DIR", "SILK_DATA_DIR", "SILK_DB",
+            "VOLZA_API_KEY", "ANTHROPIC_API_KEY", "EXPLEE_API_KEY",
+            "LOCALPRICE_API_KEY")
+    saved = {k: os.environ.get(k) for k in keys}
+    try:
+        for k in keys:
+            os.environ.pop(k, None)
+        for k, v in env_overrides.items():
+            os.environ[k] = v
+        try:
+            # الاستيراد الأول (بلا نسخة مخبّأة) ينفّذ جسم الوحدة تحت العلَم
+            # فيرفع بنفسه — لذا داخل try؛ وإن كانت مخبّأة نُعيد التحميل تحته.
+            import api
+            importlib.reload(api)
+            return api, None
+        except RuntimeError as e:
+            return None, str(e)
+    finally:
+        for k, old in saved.items():
+            if old is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = old
+        import api
+        import importlib as _il
+        _il.reload(api)  # أعِد الوحدة لحالة سليمة للاختبارات التالية
+
+
+def test_create_app_refuses_ephemeral_storage_when_require_flag_set():
+    """المصيدة مضبوطة بلا توجيه تخزين دائم => رفض الإقلاع بصوت عالٍ (RuntimeError)."""
+    import pytest
+    pytest.importorskip("fastapi")
+    mod, msg = _reload_api_under({"SILK_REQUIRE_PERSISTENT_DATA_DIR": "1"})
+    assert mod is None and msg is not None
+    assert "SILK_DATA_DIR" in msg and "SILK_REQUIRE_PERSISTENT_DATA_DIR" in msg
+
+
+def test_create_app_boots_when_require_flag_set_and_data_dir_present(tmp_path):
+    """المصيدة مضبوطة مع SILK_DATA_DIR موجَّه => إقلاع سليم، لا رفض."""
+    import pytest
+    pytest.importorskip("fastapi")
+    mod, msg = _reload_api_under({"SILK_REQUIRE_PERSISTENT_DATA_DIR": "1",
+                                  "SILK_DATA_DIR": str(tmp_path)})
+    assert msg is None and mod is not None and mod.app is not None
+
+
+def test_create_app_boots_when_require_flag_set_and_explicit_silk_db(tmp_path):
+    """SILK_DB الصريح وحده يكفي المصيدة (نفس تتالي _db_path) — لا رفض."""
+    import pytest
+    pytest.importorskip("fastapi")
+    mod, msg = _reload_api_under({
+        "SILK_REQUIRE_PERSISTENT_DATA_DIR": "1",
+        "SILK_DB": str(tmp_path / "silk.db")})
+    assert msg is None and mod is not None
+
+
+def test_create_app_boots_by_default_without_require_flag_even_with_paid_key():
+    """غياب المصيدة = وضع تطوير مفتوح (نفس عقد المشروع): حتى مع مفتاح مدفوع
+    وبلا SILK_DATA_DIR لا رفض إقلاع — التحذير الدائم على /health يكفي هنا."""
+    import pytest
+    pytest.importorskip("fastapi")
+    mod, msg = _reload_api_under({"VOLZA_API_KEY": "paid-key-present"})
+    assert msg is None and mod is not None
