@@ -1153,7 +1153,11 @@ def _docx_deep_research(doc, view: dict) -> None:
     if dr.get("limits"):
         doc.add_heading("حدود قسم البحث العميق", level=2)
         for x in dr["limits"][:12]:
-            doc.add_paragraph(_clean_report_text(x), style="List Bullet")
+            # PART B1: حدود البعثات جُمل واحدة مطهَّرة أصلاً (silk_render)؛ قصّها
+            # عند ٣٠٠ كان يُنهي سطراً منتصفَ جملة بـ«…». سقف أوسع (٦٠٠) +
+            # مصدر الحدّ صار الجملة الأولى لا الملخّص كاملاً => بلا بتر وسط جملة.
+            doc.add_paragraph(_clean_report_text(x, max_len=600),
+                              style="List Bullet")
 
     _docx_technical_appendix(doc, dr)
 
@@ -1389,10 +1393,69 @@ def _client_forbidden_hits(blob: str) -> list[str]:
     return hits
 
 
+# PART A (أمر العمل الرئيس — عائلة 501 المتكرّرة): بديل محايد آمن لكل نمط
+# ممنوع، تُستعمَل في **مسار التنقية النهائي** (لا الرفض). فلسفة «نقِّ لا
+# ترفض»: مصطلح تشغيلي متبقٍّ يُستبدَل بمفردة محايدة ويُسلَّم المستند مع سطر
+# إفصاح، بدل إسقاط التصدير كله بـ501 على تسرّب واحد. الحارس يبقى شبكة أمان
+# أخيرة لِما يستحيل تنقيته فقط.
+_CLIENT_REDACT_PLACEHOLDER = {
+    "mission": "مسار بحث",
+    "status": "الحالة",
+    "successful": "مكتملة",
+    "run": "دورة تحليل",
+    "call": "عملية جمع بيانات",
+    "declared_gap": "بند يحتاج تحققاً",
+    "tool_name": "السجلّات الرسمية",
+    "agent_role": "فريق البحث",
+    "citation_plumbing": "مصدر موثّق",
+    "algorithm_language": "التقييم",
+}
+
+
+def _client_redact_text(text: str) -> str:
+    """استبدل كل مطابقة نمط ممنوع بمفردة محايدة — مسار التنقية النهائي.
+    يُطبَّق بعد `_client_sanitize`، فيلتقط ما تبقّى (كلمات إنجليزية تشغيلية
+    عارية لم يُعرّبها المُطهِّر تفادياً لتشويه أسماء المصادر)."""
+    s = str(text or "")
+    for label, pat in _CLIENT_FORBIDDEN_PATTERNS:
+        s = pat.sub(_CLIENT_REDACT_PLACEHOLDER.get(label, "—"), s)
+    return re.sub(r"[ \t]{2,}", " ", s)
+
+
+def _redact_paragraph(par) -> bool:
+    """نقِّ فقرة python-docx في مكانها — يعيد True إن غُيِّر شيء. يعيد بناء
+    نصّ الفقرة في الجرية الأولى (يفقد تنسيقاً داخلياً نادراً، مقبول لمسار
+    شبكة أمان لا يُفعَّل إلا عند تسرّب)."""
+    if not _client_forbidden_hits(par.text):
+        return False
+    redacted = _client_redact_text(par.text)
+    if par.runs:
+        par.runs[0].text = redacted
+        for r in par.runs[1:]:
+            r.text = ""
+    else:
+        par.add_run(redacted)
+    return True
+
+
+def _client_redact_residual(doc) -> bool:
+    """مسار «نقِّ لا ترفض» (PART A): امسح كل فقرة/خلية، واستبدل أيّ مصطلح
+    ممنوع متبقٍّ بمحايد. يعيد True إن نُقِّي شيء (فيُلحَق سطر إفصاح)."""
+    changed = False
+    for par in doc.paragraphs:
+        changed = _redact_paragraph(par) or changed
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for par in cell.paragraphs:
+                    changed = _redact_paragraph(par) or changed
+    return changed
+
+
 def _client_assert_clean(doc) -> None:
-    """حارس تصدير العميل — يرفض المستند إن تسرّب أيّ مصطلح تشغيلي/خوارزمي
-    (نفس نمط _assert_production_clean: رفض بصوت عالٍ لا تسليم مسموم). يمسح
-    كل الفقرات وخلايا الجداول المُجمَّعة."""
+    """حارس تصدير العميل — شبكة الأمان الأخيرة بعد التنقية. يرفض فقط إن
+    استحال تنقية مصطلح (لا يقع في المسار العادي بعد _client_redact_residual).
+    يمسح كل الفقرات وخلايا الجداول المُجمَّعة."""
     parts = [p.text for p in doc.paragraphs]
     for table in doc.tables:
         for row in table.rows:
@@ -1402,8 +1465,8 @@ def _client_assert_clean(doc) -> None:
     hits = _client_forbidden_hits(blob)
     if hits:
         raise RuntimeError(
-            "تصدير العميل يحوي مصطلحات ممنوعة (تسريب تِلِمِتري لجمهور "
-            "العميل) — رُفض التوليد: " + "؛ ".join(hits[:8]))
+            "تصدير العميل يحوي مصطلحات ممنوعة تعذّرت تنقيتها (تسريب تِلِمِتري "
+            "لجمهور العميل) — رُفض التوليد: " + "؛ ".join(hits[:8]))
 
 
 # خريطة أقسام الكاتب (البنية الدولية بأحد عشر قسماً) → أقسام تقرير العميل
@@ -1833,7 +1896,14 @@ def render_client_docx(view: dict, path: str) -> str:
     # ٧) المنهجية وسجل الأدلة للمدققين (يحلّ محل جدول البعثات)
     _client_evidence_appendix(doc, dr)
 
-    _client_assert_clean(doc)  # الحارس النهائي — رفض إن تسرّب مصطلح ممنوع
+    # PART A (عائلة 501): نقِّ أوّلاً (استبدل أيّ متبقٍّ بمحايد + سطر إفصاح)،
+    # ثم الحارس كشبكة أمان أخيرة — فلا يسقط التصدير بـ501 على تسرّب مصطلح.
+    if _client_redact_residual(doc):
+        doc.add_paragraph(
+            "ملاحظة: نُقّيت بعض المصطلحات التقنية الداخلية من هذا التقرير "
+            "تلقائياً لتقديمها بلغة تجارية؛ الأرقام ومصادرها لم تُمَسّ.",
+            style="Intense Quote")
+    _client_assert_clean(doc)  # شبكة أمان أخيرة — لِما يستحيل تنقيته فقط
     doc.save(path)
     return path
 

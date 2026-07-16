@@ -53,13 +53,13 @@ def test_every_runbar_action_button_has_a_tooltip():
     title غير فارغ. زرّ فعل جديد بلا تلميح يُفشِل هذا فوراً (تعميم القاعدة
     خارج الأزرار الثلاثة المثبَّتة بالاسم في test_item3)."""
     html = _html()
-    # نلتقط من فتح runbar حتى عنصر snapOut التالي له مباشرةً (مرساة فريدة) —
-    # لا نستعمل </div> غير الطماع لأن runbar يحوي <div class="rsum"> متداخلاً.
-    m = re.search(r'<div class="runbar">(.*?)<div id="snapOut"', html, re.S)
+    # نلتقط من فتح runbar حتى إغلاق آخر زرّ (`</button></div>`) — مرساة ثابتة
+    # لا تعتمد على عنصر بعده (snapOut حُذف مع «معاينة فورية»، PART D).
+    m = re.search(r'<div class="runbar">(.*?</button>\s*</div>)', html, re.S)
     assert m, "لم يُعثر على شريط الفعل runbar — هل تغيّرت البنية؟"
     runbar = m.group(1)
     buttons = re.findall(r"<button\b([^>]*)>", runbar)
-    assert len(buttons) >= 3, f"عدد أزرار runbar غير متوقَّع: {len(buttons)}"
+    assert len(buttons) >= 2, f"عدد أزرار runbar غير متوقَّع: {len(buttons)}"
     missing = []
     for attrs in buttons:
         mt = re.search(r'title="([^"]*)"', attrs)
@@ -70,13 +70,12 @@ def test_every_runbar_action_button_has_a_tooltip():
         f"أزرار في شريط الفعل بلا تلميح title يشرح الغرض/التكلفة: {missing}")
 
 
-def test_runbar_holds_the_three_known_actions():
-    """حارس انحدار: شريط الفعل يضمّ المعاينة الفورية + البحث العميق + مسح
-    الأسواق — إن اختفى أحدها فقد أُزيل زرّ عمداً (يجب أن يمرّ عبر LESSONS)."""
+def test_runbar_holds_the_two_final_actions_no_snapshot():
+    """حارس انحدار: الواجهة النهائية (PART D) فعلان فقط — بحث عميق + مسح
+    الأسواق؛ «معاينة فورية» (snapBtn) محذوف بالكامل، لا يتيم متبقٍّ."""
     html = _html()
-    # نلتقط من فتح runbar حتى عنصر snapOut التالي له مباشرةً (مرساة فريدة) —
-    # لا نستعمل </div> غير الطماع لأن runbar يحوي <div class="rsum"> متداخلاً.
-    m = re.search(r'<div class="runbar">(.*?)<div id="snapOut"', html, re.S)
+    m = re.search(r'<div class="runbar">(.*?</button>\s*</div>)', html, re.S)
     runbar = m.group(1)
-    for bid in ("snapBtn", "researchBtn", "runBtn"):
+    for bid in ("researchBtn", "runBtn"):
         assert f'id="{bid}"' in runbar, f"زرّ {bid} غاب عن شريط الفعل"
+    assert 'id="snapBtn"' not in html   # الزرّ محذوف من كل الملف

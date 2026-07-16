@@ -215,8 +215,27 @@ def analyze_market(market: MarketRef, product: str,
         report.summary = _truncate_at_word(
             f"{report.summary} | تقاطعات ناقصة الأدلة: {labels}", 3000)
 
+    # PART B2 (أمر العمل الرئيس — التقاطعات الخمس «بلا أدلة كافية» رغم 40/40):
+    # السبب غير قابل للحسم إحصائياً بلا مدوّنة حيّة (فشل نداء المحلل → صفر
+    # نتائج؟ نتائج بلا وسم [فئة]؟ وسم بفئة خارج القائمة؟). بدل التخمين نشحن
+    # تشخيصاً ذاتياً (نمط الحادثة #8: عند غياب الدليل اشحن أداة قياس لا حزراً):
+    # عدّاد النتائج الخام مقابل المُصنَّفة يظهر في المدوّنة، فالحادثة القادمة
+    # تُشخِّص نفسها من `GET /analyses/{id}` بلا تخمين.
+    binned = sum(len(v) for v in by_category.values())
+    diagnostics = {
+        "raw_findings": len(report.findings),
+        "binned": binned,
+        "uncategorized": len(report.findings) - binned,
+        "analyst_failed": bool(getattr(report, "failed", False)),
+        # تفسير صريح للحالة الشائعة (كل الخمس فارغة):
+        "all_missing_cause": (
+            "analyst_call_failed" if getattr(report, "failed", False)
+            or not report.findings
+            else "findings_present_but_uncategorized" if binned == 0
+            else None),
+    }
     return {"report": report, "by_category": by_category,
-           "missing_categories": missing}
+           "missing_categories": missing, "diagnostics": diagnostics}
 
 
 def to_synthesis_input(result: dict) -> dict:
@@ -230,6 +249,9 @@ def to_synthesis_input(result: dict) -> dict:
                   "note": dp.note} for dp in dps]
             for cat, dps in result["by_category"].items()},
         "missing_categories": result["missing_categories"],
+        # PART B2: تشخيص ذاتي يُخزَّن في المدوّنة (تمييز فشل النداء عن فشل
+        # التصنيف عن غياب الوسم) — يمرّ عبر api إلى dr["analyst"].
+        "diagnostics": result.get("diagnostics") or {},
     }
 
 

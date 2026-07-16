@@ -78,8 +78,10 @@ def init_db(path: str | None = None) -> None:
             "report_json TEXT, completed_at TEXT, "
             "PRIMARY KEY (analysis_id, mission_key))"
         )
-        # R4: لقطة سريعة لكل (منتج × سوق) — تكرار السؤال يُخدَم من هنا بلا
-        # حرق أرصدة؛ زرّ «تحديث» يعيد الجلب فيستبدل الصفّ (created_at جديد).
+        # PART D (أمر العمل الرئيس): مِيزة «معاينة فورية» حُذفت — لم يبقَ
+        # مستدعٍ لدوالّ اللقطة. يُبقى إنشاء الجدول (CREATE IF NOT EXISTS
+        # خامل، إضافي) حفاظاً على أي صفوف قديمة على القرص الدائم (قاعدة عدم
+        # حذف بيانات silk.db)؛ لا كتابة/قراءة جديدة عليه بعد اليوم.
         conn.execute(
             "CREATE TABLE IF NOT EXISTS product_snapshots ("
             "hs_code TEXT, market_iso3 TEXT, product TEXT, "
@@ -460,49 +462,10 @@ def get_analysis(analysis_id: int, path: str | None = None) -> dict | None:
     return json.loads(row["json_blob"])
 
 
-def save_product_snapshot(hs_code: str | None, market_iso3: str,
-                          snapshot: dict, path: str | None = None) -> None:
-    """خزّن/استبدل لقطة سريعة لمنتج × سوق (R4) — upsert على المفتاح المركّب.
-
-    تكرار اللقطة (تحديث) يستبدل الصفّ بـcreated_at جديد؛ لا حذف بيانات أخرى.
-    رمز HS غير محلول => يُخزَّن تحت مفتاح فارغ للسوق نفسه (مسموح، صفّ واحد).
-    """
-    path = path or _db_path()
-    init_db(path)
-    blob = json.dumps(snapshot, ensure_ascii=False, default=_json_default)
-    now = datetime.datetime.now().isoformat(timespec="seconds")
-    with _connect(path) as conn:
-        conn.execute(
-            "INSERT INTO product_snapshots "
-            "(hs_code, market_iso3, product, snapshot_json, created_at) "
-            "VALUES (?, ?, ?, ?, ?) "
-            "ON CONFLICT(hs_code, market_iso3) DO UPDATE SET "
-            "product = excluded.product, "
-            "snapshot_json = excluded.snapshot_json, "
-            "created_at = excluded.created_at",
-            (hs_code or "", market_iso3, snapshot.get("product"), blob, now),
-        )
-
-
-def get_product_snapshot(hs_code: str | None, market_iso3: str,
-                         path: str | None = None) -> dict | None:
-    """أعد اللقطة المخزّنة لمنتج × سوق — None إن غابت. تُوسَم «من المخزن»
-    وتاريخها الأصلي محفوظ (لا تُقدَّم كأنها جُلبت الآن — عقد المخزن)."""
-    path = path or _db_path()
-    if not os.path.exists(path):
-        return None
-    with _connect(path) as conn:
-        row = conn.execute(
-            "SELECT snapshot_json, created_at FROM product_snapshots "
-            "WHERE hs_code = ? AND market_iso3 = ?",
-            (hs_code or "", market_iso3),
-        ).fetchone()
-    if row is None:
-        return None
-    snap = json.loads(row["snapshot_json"])
-    snap["from_store"] = True
-    snap["stored_at"] = row["created_at"]
-    return snap
+# PART D (أمر العمل الرئيس): دوالّ لقطة المنتج (save/get_product_snapshot)
+# أُزيلت مع حذف مِيزة «معاينة فورية» — لا مستدعي متبقٍّ. جدول
+# product_snapshots يبقى خاملاً (CREATE IF NOT EXISTS في init_db) حفاظاً
+# على أي صفوف قديمة، لا يُكتَب/يُقرأ بعد اليوم.
 
 
 def _json_default(obj: object) -> object:

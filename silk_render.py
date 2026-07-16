@@ -789,6 +789,97 @@ def _mission_gap_lines(name: str, summary: str) -> list[str]:
     return [f"{name}: {g.strip()}" for g in m.group(1).split("؛") if g.strip()]
 
 
+# ── PART B1: مصالحة حدود البعثة مع الحقائق النهائية + قصّ آمن للجملة ────────
+_FIRST_CLAUSE_RE = re.compile(r"^(.*?[.؟!،؛])\s")
+# مواضيع فجوات البعثات القابلة للحسم بحقيقة بعثة أخرى — كل موضوع:
+#   gap_keywords: كلمات تُميّز سطر الحدّ (لأيّ موضوع ينتمي).
+#   need_kw_in_fact: هل يلزم أن يحمل بند الحقيقة كلمةَ الموضوع نفسها بجانب
+#     الدليل (للحصص/التعريفة نعم — تفادياً لأن يحسم أيّ % عائم فجوةَ حصص؛
+#     للأسعار لا — فنمط السعر بالعملة/الوحدة يُعرّف نفسه بلا كلمة «سعر»).
+#   evidence_re: نمط الدليل الرقمي الذي يجب أن يظهر في **بندٍ واحد**.
+# تحفّظ صارم: لا يُحسَم حدٌّ إلا بدليل صريح مطابق الموضوع (عقد عدم الاختلاق).
+_LIMIT_TOPICS = [
+    {"name": "حصص",  # حصص المورّدين وتركّزهم (الحالة الحيّة: 3.39%/55.28%/HHI)
+     "gap_keywords": ("حصص", "حصة", "مورّد", "مورد", "موردين", "الموردين",
+                      "شركاء", "المصدّرين", "hhi", "تركّز"),
+     "need_kw_in_fact": True,
+     "evidence_re": re.compile(r"\d+(?:[.,]\d+)?\s*%|\bHHI\b", re.I)},
+    {"name": "أسعار",  # أسعار المنافسين / التجزئة (تُعرّفها العملة/الوحدة)
+     "gap_keywords": ("سعر", "أسعار", "تسعير", "التجزئة"),
+     "need_kw_in_fact": False,
+     "evidence_re": re.compile(
+         r"\d+(?:[.,]\d+)?\s*(?:€|\$|£|ريال|يورو|دولار|درهم)"
+         r"|(?:€|\$|£)\s*\d|\d+(?:[.,]\d+)?\s*/?\s*(?:كجم|كيلو|كغ|للكيلو)")},
+    {"name": "تعريفة",  # التعريفة الجمركية (نسبة + كلمة تعريفة/رسوم)
+     "gap_keywords": ("تعريفة", "جمرك", "رسوم", "tariff"),
+     "need_kw_in_fact": True,
+     "evidence_re": re.compile(r"\d+(?:[.,]\d+)?\s*%")},
+]
+
+
+def _first_clause(text: str, max_len: int = 180) -> str:
+    """أول جملة/شبه-جملة من نصّ — يمنع تضمين ملخّص طويل (≤٧٠٠ محرف) في سطر
+    حدٍّ تعيد طبقة docx قصّه عند ٣٠٠ منتصفَ جملة بـ«…». يقطع عند أول علامة
+    وقف؛ وإلا عند حدّ متحفّظ بحدود الكلمة (بلا «…» وسط جملة)."""
+    s = str(text or "").strip()
+    if not s:
+        return s
+    m = _FIRST_CLAUSE_RE.match(s + " ")
+    if m and len(m.group(1)) <= max_len + 40:
+        return m.group(1).strip()
+    if len(s) <= max_len:
+        return s
+    cut = s[:max_len].rsplit(" ", 1)[0].strip()
+    return cut or s[:max_len].strip()
+
+
+def _final_fact_texts(missions: dict, by_category: dict) -> list[str]:
+    """قائمة نصوص البنود النهائية (قيمة+ملاحظة كل بند) من كل البعثات
+    والتقاطعات — كل عنصر بندٌ واحد كي يُشترَط اجتماع الموضوع والرقم فيه."""
+    out: list[str] = []
+    for v in (missions or {}).values():
+        if not isinstance(v, dict):
+            continue
+        for f in (v.get("findings") or []):
+            out.append(f"{f.get('value')} {f.get('note') or ''}")
+    for dps in (by_category or {}).values():
+        for f in (dps or []):
+            out.append(f"{f.get('value')} {f.get('note') or ''}")
+    return out
+
+
+def _topic_resolved(gap_line: str, fact_texts: list[str]) -> "str | None":
+    """اسم الموضوع إن كان سطر الحدّ محسوماً بدليل رقمي فعلي، وإلا None.
+    الحسم: سطر الحدّ ينتمي لموضوع، وبندُ حقيقةٍ يحمل دليل ذلك الموضوع
+    (نمطه الرقمي، ومعه كلمة الموضوع حين need_kw_in_fact). متحفّظ عمداً."""
+    low = gap_line.lower()
+    for topic in _LIMIT_TOPICS:
+        kws = topic["gap_keywords"]
+        if not any(k in low for k in kws):
+            continue
+        for t in fact_texts:
+            if not topic["evidence_re"].search(t):
+                continue
+            if topic["need_kw_in_fact"] and not any(k in t.lower() for k in kws):
+                continue
+            return topic["name"]
+    return None
+
+
+def _reconcile_mission_limits(lines: list[str],
+                              fact_texts: list[str]) -> list[str]:
+    """PART B1: أعد وسم كل سطر حدٍّ مشتقٍّ من بعثة حُسم لاحقاً بدليل رقمي
+    فعلي في الحقائق النهائية «حُسمت لاحقاً: …»، وأبقِ الباقي حرفياً (لا
+    إخفاء فجوة حقيقية). عقد عدم الاختلاق: لا يُحسَم إلا ما له دليل صريح."""
+    out: list[str] = []
+    for line in lines:
+        if _topic_resolved(line, fact_texts):
+            out.append(f"حُسمت لاحقاً (وردت في الحقائق المرصودة): {line}")
+        else:
+            out.append(line)
+    return out
+
+
 # تصنيف لون/تسمية شارة الحكم — مصدر واحد يستهلكه ثلاثة عارضين (لوحة
 # الويب، غلاف docx، خلاصة docx التنفيذية) بدل تكرار نفس المنطق بايثون +
 # JS بمعيارين قد يختلفان لنفس الرمز (سدّ تسريب الطبقة ٦: كانت لوحة الويب
@@ -908,14 +999,27 @@ def _deep_research_view(result: dict) -> dict | None:
                         for n in (report_out.get("unresolved_notes") or [])]
     clean_failure_reason = (_strip_internal_plumbing(report_out.get("failure_reason"))
                             if report_out.get("failure_reason") else "")
+    # PART B1 (أمر العمل الرئيس — «حدود هذا البحث» تناقض المتن): البعثات
+    # تُعلن فجواتها معزولةً وقت تشغيلها المتوازي، فتبقى فجوة بعثة «حصص
+    # الموردين غير متاحة» في الحدود حتى لو رصدت بعثة المنافسين لاحقاً
+    # 55.28%/HHI. مصالحة متحفّظة: سطر حدٍّ **مشتقّ من بعثة** (فاشلة أو فجوة
+    # جزئية) يُعاد وسمه «حُسمت لاحقاً» فقط إن حمل موضوعاً وُجد له دليل رقمي
+    # فعلي في الحقائق النهائية (نفس الموضوع + رقم في بند واحد) — وإلا يبقى
+    # حرفياً (لا إخفاء فجوة حقيقية، عقد عدم الاختلاق). حدود المحلل/المراجع/
+    # الفشل/HS/كلود لا تُمَسّ (ليست فجوات بعثة قابلة للحسم بحقائق بعثة أخرى).
+    _fact_texts = _final_fact_texts(missions, by_category)
     # v["summary"] مُطبَّع أصلاً أعلاه (clean_summary) — لا حاجة لإعادة التنظيف.
-    limits = ([f"فرصة {_mission_label(k)} بلا نتائج مبنية على استشهاد: "
-              f"{v['summary']}"
-              for k, v in missions.items() if v["failed"]]
-             # فجوات جزئية داخل بعثات "ناجحة" (نتائج ≥١ لكن ببنود ناقصة
-             # معلنة) — كانت هذه تُسقَط صامتة من حدود التقرير قبل هذا الإصلاح.
-             + [g for k, v in missions.items()
-               for g in _mission_gap_lines(_mission_label(k), v["summary"])]
+    # سطر البعثة الفاشلة يحمل الجملة الأولى فقط من الملخّص لا الملخّص كاملاً
+    # (كان ≤٧٠٠ محرفاً فتعيد طبقة docx قصّه عند ٣٠٠ منتصفَ جملة بـ"…").
+    mission_limits = _reconcile_mission_limits(
+        [f"فرصة {_mission_label(k)} بلا نتائج مبنية على استشهاد: "
+         f"{_first_clause(v['summary'])}"
+         for k, v in missions.items() if v["failed"]]
+        # فجوات جزئية داخل بعثات "ناجحة" (نتائج ≥١ لكن ببنود ناقصة معلنة).
+        + [g for k, v in missions.items()
+           for g in _mission_gap_lines(_mission_label(k), v["summary"])],
+        _fact_texts)
+    limits = (mission_limits
              # سدّ تسريب (الطبقة ٩): مفتاح تقاطع خام إنجليزي ("entry_cost")
              # كان يصل حدّاً معروضاً للعميل حرفياً — الاسم التجاري العربي
              # (نفس معجم silk_market_analyst._CATEGORY_LABELS المستعمَل في
@@ -944,7 +1048,11 @@ def _deep_research_view(result: dict) -> dict | None:
         "missions": missions,
         "analyst": {"summary": analyst_report["summary"],
                    "missing_categories": analyst.get("missing_categories") or [],
-                   "by_category": by_category},
+                   "by_category": by_category,
+                   # PART B2: التشخيص الذاتي (عدّاد الخام مقابل المُصنَّف +
+                   # سبب «كل التقاطعات فارغة») يصل المدوّنة والواجهة فيُقرأ من
+                   # GET /analyses/{id} مباشرة — الحادثة القادمة تُشخِّص نفسها.
+                   "diagnostics": analyst.get("diagnostics") or {}},
         # سدّ تسريب (الطبقة ٦): تصنيف/تسمية الحكم مُحسَّبان هنا مرة واحدة —
         # لوحة الويب تستهلكهما بدل حساب تصنيفها الخاص من الرمز الخام
         # وعرض الرمز نفسه كنص ظاهر (كان "CONDITIONAL-GO"/"WATCH" يظهر

@@ -339,6 +339,12 @@ def create_app():
                 "fact_store_db": _fact_store._db_path(),
                 "usage_db": _usage._db_path(),
                 "cache_dir": _cache._cache_dir(),
+                # PART E (أمر العمل الرئيس): حالة مصيدة الإقلاع مرئية من
+                # /health — كانت غير قابلة للتفتيش عن بُعد فلا يعرف المالك
+                # إن كان صمّام «رفض الإقلاع على قرص فانٍ» مفعّلاً فعلاً.
+                "persist_guard": os.environ.get(
+                    "SILK_REQUIRE_PERSISTENT_DATA_DIR", "").strip().lower()
+                    in ("1", "true", "yes", "on"),
             }
             # بلاغ حي (تدقيق تكلفة): تحليلات مكتملة مدفوعة الثمن كانت تختفي
             # بعد كل إعادة نشر — SILK_DATA_DIR فارغ يعني كل الأربعة مخازن
@@ -871,7 +877,10 @@ def create_app():
             _ctr = silk_context.data_counter() or {}
             tail_over_budget = ai_ok and _ctr.get("llm_calls", 0) >= _llm_cap
             tail_with_ai = ai_ok and not tail_over_budget
-            tail_max_cycles = 1 if tail_over_budget else 2
+            # PART C1: تجاوز الميزانية يفرض دورة واحدة؛ وإلا None = افتراض
+            # البيئة (SILK_MAX_REVIEW_CYCLES، افتراضياً ١ — التنقيح الثاني
+            # للمشاكل الحاجبة فقط حتى حين يُرفَع السقف إلى ٢).
+            tail_max_cycles = 1 if tail_over_budget else None
             # بلاغ حي (تمور/هولندا، تشغيلة ثانية): trace_context البعثات
             # الاثنتي عشرة يُغلَق فور عودة deep_research() أعلاه — نداءا
             # المحلل الشامل والكاتب/المراجع كانا يجريان **بلا أي تتبّع**،
@@ -1664,65 +1673,12 @@ def create_app():
             out["answer"] = _strip_internal_plumbing(out["answer"])
         return _json(out)
 
-    class SnapshotRequest(BaseModel):
-        """معاينة فورية لمنتج جديد (R4، أُعيدت للاستخدام في ITEM ٢) —
-        هل يستحق دراسة كاملة؟ مجانية دوماً — بلا حقل تأكيد/تكلفة."""
-        product: str
-        hs_code: "str | None" = None
-        market: "str | None" = None
-        refresh: bool = False
-
-    @app.post("/products/snapshot")
-    def product_snapshot(req: SnapshotRequest, request: Request):
-        """معاينة فورية مجانية لمنتج × سوق (ITEM ٢، بلاغ حي التكلفة).
-
-        **قرار حي**: كانت تعيد استخدام بعثة الأسعار (كلود) بميزانية مقيَّدة
-        خلف تأكيد صريح؛ أُزيل نداء كلود هذا نهائياً — المعاينة الآن مورّدو
-        كومتريد فقط (silk_snapshot.quick_snapshot)، بلا أي نداء مدفوع، فلا
-        حاجة لتأكيد أو حجز أو حارس إضافات كلود. المخزن أولاً ما لم يُطلب
-        تحديث — تكرار السؤال أو معاينة كانت خُزِّنت قبل هذا القرار (بلقطة
-        أسعار منافِسة حقيقية من نداء كلود سابق) يُعادان كما هما، مجاناً.
-        لا اختلاق: فجوات معلنة بلا شبكة.
-        """
-        _require_key(request)
-        _rate_limit(request)
-        import silk_snapshot
-        product = (req.product or "").strip()
-        if not product:
-            raise HTTPException(status_code=422, detail="product required")
-
-        from silk_market_resolver import resolve_market
-        market_ref, suggestions = resolve_market(
-            req.market or silk_snapshot._DEFAULT_PROBE_MARKET)
-        if market_ref is None:
-            raise HTTPException(status_code=422, detail={
-                "error": f"unknown or ambiguous market {req.market!r}",
-                "suggestions": suggestions})
-
-        hs_code = (req.hs_code or "").strip() or None
-        hs_note = None
-        if not hs_code:
-            from silk_hs_resolver import resolve as resolve_hs
-            dp = resolve_hs(product)
-            hs_code = dp.value
-            if hs_code is None:
-                hs_note = dp.note   # فجوة معلنة — لا اختلاق رمز HS
-
-        # المخزن أولاً ما لم يُطلب تحديث — تكرار السؤال مجاني دوماً.
-        if not req.refresh:
-            cached = silk_storage.get_product_snapshot(hs_code, market_ref.iso3)
-            if cached is not None:
-                return _json({"snapshot": cached, "cached": True,
-                              "cost": {"claude_activations": 0,
-                                       "note": "من المخزن — بلا تكلفة"}})
-
-        snap = silk_snapshot.quick_snapshot(product, hs_code, market_ref)
-        if hs_note:
-            snap["hs_note"] = hs_note
-        silk_storage.save_product_snapshot(hs_code, market_ref.iso3, snap)
-        return _json({"snapshot": snap, "cached": False,
-                      "cost": {"claude_activations": 0,
-                               "note": "معاينة فورية مجانية — بلا أي نداء كلود"}})
+    # PART D (أمر العمل الرئيس، قرار مالك نهائي): مِيزة «معاينة فورية»
+    # (/products/snapshot + silk_snapshot + زرّها) حُذفت بالكامل — لا مسار
+    # داخلي يعتمد عليها (البحث العميق لا يعيد استخدامها)، فبقاؤها زرٌّ ثالث
+    # يشوّش الإجراء الرئيس. الواجهة النهائية: فعلان (بحث عميق رئيسي + مسح
+    # الأسواق ثانوي) + شريط «بحوثي السابقة». دوالّ التخزين
+    # (get/save_product_snapshot) والجدول أُزيلت أيضاً (لا مستدعي متبقٍّ).
 
     class OutcomeRequest(BaseModel):
         """جسم تسجيل النتيجة الفعلية — actual-outcome body (wave 1)."""

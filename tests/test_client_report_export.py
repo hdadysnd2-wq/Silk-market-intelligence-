@@ -130,22 +130,24 @@ def test_each_forbidden_category_absent_explicitly(tmp_path):
     assert "UN Comtrade" in text  # اسم مصدر بشري — مسموح
 
 
-# ── سلوك الرفض: الحارس يرمي إن تسرّب مصطلح ─────────────────────────────────
+# ── سلوك «نقِّ لا ترفض» (PART A، أمر العمل الرئيس — عائلة 501) ──────────────
 
-def test_guard_rejects_export_when_forbidden_term_leaks(tmp_path):
-    """قلب المتطلب (بلاغ المالك النقطة ١): الحارس يرفض التصدير إن ظهر مصطلح
-    ممنوع لا يلتقطه المُطهِّر. نُدرج مصطلحاً إنجليزياً تشغيلياً لا يطهّره
-    المُطهِّر (mission بالإنجليزية) في سرد الكاتب."""
+def test_leaked_term_is_redacted_not_a_501(tmp_path):
+    """التغيير البنيوي المُلزَم (أمر العمل الرئيس، PART A): بعد ثلاث حوادث
+    501 (#90/#103/#106)، مصطلح تشغيلي متسرّب لا يُسقِط التصدير بعد الآن —
+    يُنقّى بمحايد ويُسلَّم المستند مع سطر إفصاح. الحارس شبكة أمان أخيرة فقط.
+    (كان هذا الاختبار سابقاً يؤكّد الرفض بـRuntimeError — العقد تغيّر عمداً.)"""
     import silk_reports as R
     leaky = ("## 1. الخلاصة التنفيذية\n"
              "This mission was successful.\n"
              "**ماذا يعني هذا لقرارك:** ابدأ.\n")
     view = _mock_view(report_text=leaky)
     with block_network():
-        import pytest
-        with pytest.raises(RuntimeError) as exc:
-            _render(view, tmp_path)
-    assert "مصطلحات ممنوعة" in str(exc.value)
+        out = _render(view, tmp_path)          # لا استثناء — يُنتِج ملفاً
+    text = docx_all_text(out)
+    assert R._client_forbidden_hits(text) == []  # نُقّي كل متسرّب
+    assert "mission" not in text.lower() and "successful" not in text.lower()
+    assert "نُقّيت بعض المصطلحات" in text        # سطر الإفصاح حاضر
 
 
 def test_forbidden_hits_helper_detects_each_pattern():

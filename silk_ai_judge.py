@@ -1104,31 +1104,61 @@ def review_report(draft: str, mission_reports: dict,
         "ولا سلسلة معادلة رياضية داخل جملة نثرية؟ هل تظهر كلمة 'الدرجة' أو "
         "'النتيجة الرقمية' أو أي لغة خوارزمية خارج جدول التوصيات الصغير؟ "
         "عدّ أي غياب من كل ما سبق كمشكلة صريحة في issues.\n"
-        'أعِد JSON فقط: {"issues":["مشكلة محددة قابلة للإصلاح", ...], "approved":'
+        'أعِد JSON فقط: {"issues":["مشكلة محددة قابلة للإصلاح", ...], '
+        '"blocking":["المشاكل الحاجبة فقط — رقم غير مسنود/تناقض/قسم محذوف '
+        'بالكامل؛ مشاكل الأسلوب والصياغة ليست حاجبة", ...], "approved":'
         'true|false}. "approved":true فقط إن لم توجد مشاكل جوهرية.')
     raw = _traced_call(
         trace_id, "review", 30,
         lambda: _call(_PRINCIPLE, user, max_tokens=900, model=_FAST_MODEL,
                      timeout=30))
     if not raw:
-        return {"issues": structural_issues,
+        return {"issues": structural_issues, "blocking": structural_issues,
                "approved": not structural_issues} if structural_issues else None
     obj = _extract_json(raw)  # noqa: BLE001 — رد غير-JSON = لا مراجعة، لا اختلاق
     if obj is None:
-        return {"issues": structural_issues,
+        return {"issues": structural_issues, "blocking": structural_issues,
                "approved": not structural_issues} if structural_issues else None
     llm_issues = [str(i) for i in (obj.get("issues") or []) if str(i).strip()]
     issues = structural_issues + llm_issues
-    return {"issues": issues, "approved": bool(obj.get("approved")) and not issues}
+    # PART C1 (أمر العمل الرئيس — انحدار التكلفة $1.6→$2.0): المشاكل «الحاجبة»
+    # وحدها تبرّر دورة تنقيح ثانية (نداء كاتب Opus كامل إضافي). الحاجب =
+    # مشاكل البنية الحتمية (أقسام ناقصة/بترتيب خاطئ) دوماً + ما صنّفه المراجع
+    # نفسه حاجباً (رقم غير مسنود/تناقض). غياب الحقل من ردّ المراجع = لا شيء
+    # حاجب من جهته (تفسير متحفّظ يوفّر النداء، والملاحظات تُعلَن في «حدود
+    # هذا التقرير» بدل الضياع).
+    llm_blocking = [str(i) for i in (obj.get("blocking") or [])
+                    if str(i).strip()]
+    blocking = structural_issues + llm_blocking
+    return {"issues": issues, "blocking": blocking,
+            "approved": bool(obj.get("approved")) and not issues}
+
+
+def _max_review_cycles() -> int:
+    """سقف دورات المراجعة — PART C1 (انحدار التكلفة): SILK_MAX_REVIEW_CYCLES،
+    افتراضياً ١ (مراجعة واحدة، لا تنقيح تلقائي)، مقيَّد بـ[1..2] — الدورة
+    الثانية نداء كاتب Opus كامل إضافي (~+$0.4 و+حتى ٣٠٠ ثانية) فلا تُفتح
+    إلا قصداً، وحتى عندها لا تعمل إلا لمشاكل حاجبة (راجع الحلقة أدناه)."""
+    try:
+        n = int(os.environ.get("SILK_MAX_REVIEW_CYCLES", "1"))
+    except ValueError:
+        n = 1
+    return max(1, min(2, n))
 
 
 def write_reviewed_report(mission_reports: dict, analyst_summary: str,
                           verdict: dict, product: str, market_name: str,
-                          max_cycles: int = 2,
+                          max_cycles: "int | None" = None,
                           trace_id: str | None = None,
                           hs_code: str | None = None,
                           on_stage: Callable[[str], None] | None = None) -> dict:
-    """حلقة الكتابة والمراجعة — Writer → Reviewer، أقصى دورتين (التكليف).
+    """حلقة الكتابة والمراجعة — Writer → Reviewer.
+
+    `max_cycles=None` (الافتراضي) يقرأ SILK_MAX_REVIEW_CYCLES (افتراضياً ١،
+    سقفه ٢) — PART C1: الدورة الثانية (تنقيح) لا تنطلق إلا إذا صنّف مراجعُ
+    الدورة الأولى مشكلةً ما **حاجبة** (بنية ناقصة/رقم غير مسنود/تناقض)؛
+    ملاحظات الأسلوب غير الحاجبة تبقى معلَنة في «حدود هذا التقرير» بلا نداء
+    كاتب إضافي. تمرير قيمة صريحة يتجاوز البيئة (المستدعي أعلم).
 
     يعيد {"report": نص أو None, "review_cycles": عدد الدورات الفعلية,
     "unresolved_notes": ملاحظات لم تُعالَج (تظهر في «حدود هذا التقرير»)}.
@@ -1142,6 +1172,8 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
     `GET /research/{id}/status` بين المرحلتين بدل تسمية الذيل كله "كاتب".
     استثناء داخل `on_stage` لا يُسقط الكتابة (نفس مبدأ القناة الجانبية).
     """
+    if max_cycles is None:
+        max_cycles = _max_review_cycles()
     def _stage(name: str) -> None:
         if on_stage is None:
             return
@@ -1167,6 +1199,10 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
             break
         notes = review["issues"]
         if cycles >= max_cycles:
+            break
+        # PART C1: التنقيح (نداء كاتب كامل إضافي) للمشاكل الحاجبة حصراً —
+        # ملاحظات أسلوبية غير حاجبة تُعلَن في «حدود هذا التقرير» بلا إنفاق.
+        if not review.get("blocking"):
             break
         _stage("writer")
         fixed = deep_report(mission_reports, analyst_summary, verdict,
