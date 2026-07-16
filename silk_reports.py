@@ -1118,6 +1118,8 @@ def _docx_deep_research(doc, view: dict) -> None:
                 doc.add_paragraph(stripped)
             i += 1
 
+    _docx_glossary(doc, dr)  # B1: مسرد المصطلحات بعد السرد قبل ملحق الأدلة
+
     doc.add_heading("ملحق — الأدلة الرقمية الداعمة للتقاطعات الخمسة", level=2)
     _stamp_degraded_banner(doc, view)
     doc.add_paragraph("كل نقطة أدناه هي الحقيقة الخام (بمصدرها) التي بُني "
@@ -1896,6 +1898,10 @@ def render_client_docx(view: dict, path: str) -> str:
     # ٧) المنهجية وسجل الأدلة للمدققين (يحلّ محل جدول البعثات)
     _client_evidence_appendix(doc, dr)
 
+    # B1 (SPEC-v2): مسرد المصطلحات — تقرير العميل يعيد ترتيب الأقسام فلا يرث
+    # المسرد من نصّ السرد؛ يُعرَض هنا صراحةً من بنية النموذج (مُطهَّراً).
+    _docx_glossary(doc, dr, sanitize=_client_sanitize)
+
     # PART A (عائلة 501): نقِّ أوّلاً (استبدل أيّ متبقٍّ بمحايد + سطر إفصاح)،
     # ثم الحارس كشبكة أمان أخيرة — فلا يسقط التصدير بـ501 على تسرّب مصطلح.
     if _client_redact_residual(doc):
@@ -2299,6 +2305,31 @@ def _md_cell(x: object) -> str:
     return str(x if x is not None else "—").replace("|", "/").replace("\n", " ")
 
 
+def _md_glossary(dr: dict, L: list) -> None:
+    """B1 (SPEC-v2): ذيّل «مسرد المصطلحات» في Markdown من بنية النموذج
+    (`dr["glossary"]`) — المصطلحات المستعملة فعلاً فقط."""
+    from silk_style_contract import GLOSSARY_HEADING
+    gloss = dr.get("glossary") or []
+    if not gloss:
+        return
+    L += [f"## {GLOSSARY_HEADING}", ""]
+    L += [f"- **{g['term']}**: {g['gloss']}" for g in gloss]
+    L.append("")
+
+
+def _docx_glossary(doc, dr: dict, sanitize=None) -> None:
+    """B1 (SPEC-v2): اعرض «مسرد المصطلحات» في مستند Word (المدقّق والعميل)
+    من بنية النموذج. `sanitize` اختياري (مُطهِّر تقرير العميل)."""
+    from silk_style_contract import GLOSSARY_HEADING
+    gloss = dr.get("glossary") or []
+    if not gloss:
+        return
+    doc.add_heading(GLOSSARY_HEADING, level=2)
+    for g in gloss:
+        line = f"{g['term']}: {g['gloss']}"
+        doc.add_paragraph(sanitize(line) if sanitize else line, style="List Bullet")
+
+
 def _md_deep_research(view: dict, prefix: list[str]) -> str:
     """التقرير الكامل Markdown لنتيجة /research — يُصيَّر من `view["deep_research"]`
     (نفس مصدر اللوحة وتصدير Word عبر `_docx_deep_research`)، لا من قالب /analyze.
@@ -2348,6 +2379,7 @@ def _md_deep_research(view: dict, prefix: list[str]) -> str:
     report_text = (dr.get("report") or {}).get("text")
     if report_text:
         L += [str(report_text).rstrip(), ""]
+        _md_glossary(dr, L)  # B1: مسرد المصطلحات المستعملة فعلاً
     else:
         fr = (dr.get("report") or {}).get("failure_reason")
         L += ["## التقرير السردي الكامل", "",
