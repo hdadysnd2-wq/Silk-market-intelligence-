@@ -323,4 +323,9 @@ def test_md_download_guards_response_ok():
     md_lines = [ln for ln in html.splitlines()
                 if "report.md" in ln and "fetch(" in ln]
     assert md_lines, "لم يُعثر على نداء تنزيل .md"
-    assert "if(!r.ok)throw" in md_lines[0], md_lines[0]
+    # الثابت: فحص r.ok قبل استعمال الجسم. الصياغة تطوّرت من `throw` عارية
+    # إلى `dlFail(r)` (تقرأ جسم الخطأ وتعرض تفصيله — عائلة 501 الثالثة،
+    # LESSONS البند ١١) — كلاهما يحقّق الحارس؛ الحرفية القديمة كانت أضيق
+    # من الثابت المقصود.
+    assert "if(!r.ok)" in md_lines[0], md_lines[0]
+    assert ("throw" in md_lines[0] or "dlFail(r)" in md_lines[0]), md_lines[0]

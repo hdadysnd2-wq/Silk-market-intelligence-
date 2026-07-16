@@ -88,6 +88,9 @@ _TEST_ANCHORS = [
      ["def test_all_three_action_buttons_have_honest_tooltips_and_distinct_labels"]),
     (9, "tests/test_ui_action_buttons_have_purpose.py",
      ["def test_every_runbar_action_button_has_a_tooltip"]),
+    (11, "tests/test_client_sanitizer_covers_guard.py",
+     ["def test_every_arabic_guard_trigger_is_neutralized_by_the_sanitizer",
+      "def test_dlreport_surfaces_the_501_detail_not_bare_status"]),
 ]
 
 
@@ -142,10 +145,19 @@ def test_every_named_behavioral_test_still_present():
     assert not missing, "اختبارات إنفاذ مسمّاة اختفت:\n" + "\n".join(missing)
 
 
-def test_all_ten_rules_are_covered_by_at_least_one_anchor():
-    """كل درس من العشرة له مرساة إنفاذ واحدة على الأقل — لا صفّ بلا حارس."""
+def test_all_ledger_rules_are_covered_by_at_least_one_anchor():
+    """كل درس في السجلّ له مرساة إنفاذ واحدة على الأقل — لا صفّ بلا حارس.
+    عدد الصفوف يُقرأ من docs/LESSONS.md نفسه (أسطر `| N |`) فلا يتخلّف هذا
+    الاختبار عن السجلّ عند إضافة درس جديد (بروتوكول التحديث الذاتي)."""
+    import re as _re
+    ledger = _read("docs/LESSONS.md")
+    rows = {int(m.group(1))
+            for m in _re.finditer(r"^\|\s*(\d+)\s*\|", ledger, _re.M)}
+    assert rows and rows == set(range(1, max(rows) + 1)), (
+        f"أرقام صفوف السجلّ غير متتابعة: {sorted(rows)}")
     covered = {r for r, _, _ in _SYMBOL_ANCHORS}
     covered |= {r for r, _, _ in _DOC_ANCHORS}
     covered |= {r for r, _, _ in _TEST_ANCHORS}
-    assert covered == set(range(1, 11)), (
-        f"دروس بلا أي مرساة إنفاذ: {sorted(set(range(1, 11)) - covered)}")
+    assert covered == rows, (
+        f"دروس بلا أي مرساة إنفاذ: {sorted(rows - covered)}؛ "
+        f"مراسٍ بلا صفّ في السجلّ: {sorted(covered - rows)}")
