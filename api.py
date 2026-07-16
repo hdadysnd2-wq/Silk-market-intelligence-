@@ -1673,13 +1673,6 @@ def create_app():
             out["answer"] = _strip_internal_plumbing(out["answer"])
         return _json(out)
 
-    # PART D (أمر العمل الرئيس، قرار مالك نهائي): مِيزة «معاينة فورية»
-    # (/products/snapshot + silk_snapshot + زرّها) حُذفت بالكامل — لا مسار
-    # داخلي يعتمد عليها (البحث العميق لا يعيد استخدامها)، فبقاؤها زرٌّ ثالث
-    # يشوّش الإجراء الرئيس. الواجهة النهائية: فعلان (بحث عميق رئيسي + مسح
-    # الأسواق ثانوي) + شريط «بحوثي السابقة». دوالّ التخزين
-    # (get/save_product_snapshot) والجدول أُزيلت أيضاً (لا مستدعي متبقٍّ).
-
     class OutcomeRequest(BaseModel):
         """جسم تسجيل النتيجة الفعلية — actual-outcome body (wave 1)."""
         outcome: str

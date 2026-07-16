@@ -159,7 +159,7 @@ def analyze_market(market: MarketRef, product: str,
                    correlation_threads: dict | None = None,
                    budget: dict | None = None,
                    product_card: dict | None = None) -> dict:
-    """حلّل السوق تحليلاً شاملاً — the 5 intersections + SWOT as one AgentReport.
+    """التحليل الشامل للسوق — the 5 intersections + SWOT as one AgentReport.
 
     `mission_reports`: خرْج `silk_missions.run_all_missions()` (١٢ تقريراً).
     `correlation_threads`: خيوط `correlation.py` الجاهزة إن حُسبت مسبقاً من

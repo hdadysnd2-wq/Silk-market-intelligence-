@@ -78,10 +78,9 @@ def init_db(path: str | None = None) -> None:
             "report_json TEXT, completed_at TEXT, "
             "PRIMARY KEY (analysis_id, mission_key))"
         )
-        # PART D (أمر العمل الرئيس): مِيزة «معاينة فورية» حُذفت — لم يبقَ
-        # مستدعٍ لدوالّ اللقطة. يُبقى إنشاء الجدول (CREATE IF NOT EXISTS
-        # خامل، إضافي) حفاظاً على أي صفوف قديمة على القرص الدائم (قاعدة عدم
-        # حذف بيانات silk.db)؛ لا كتابة/قراءة جديدة عليه بعد اليوم.
+        # جدول خامل: لم يبقَ مستدعٍ لدوالّه. يُبقى إنشاؤه (CREATE IF NOT
+        # EXISTS، إضافي) حفاظاً على أي صفوف قديمة على القرص الدائم (قاعدة
+        # عدم حذف بيانات silk.db)؛ لا كتابة/قراءة جديدة عليه بعد اليوم.
         conn.execute(
             "CREATE TABLE IF NOT EXISTS product_snapshots ("
             "hs_code TEXT, market_iso3 TEXT, product TEXT, "
@@ -462,10 +461,9 @@ def get_analysis(analysis_id: int, path: str | None = None) -> dict | None:
     return json.loads(row["json_blob"])
 
 
-# PART D (أمر العمل الرئيس): دوالّ لقطة المنتج (save/get_product_snapshot)
-# أُزيلت مع حذف مِيزة «معاينة فورية» — لا مستدعي متبقٍّ. جدول
-# product_snapshots يبقى خاملاً (CREATE IF NOT EXISTS في init_db) حفاظاً
-# على أي صفوف قديمة، لا يُكتَب/يُقرأ بعد اليوم.
+# جدول product_snapshots خاملٌ — لا دوالّ قراءة/كتابة له بعد اليوم. يبقى
+# إنشاؤه (CREATE IF NOT EXISTS في init_db) حفاظاً على أي صفوف قديمة على
+# القرص الدائم (قاعدة عدم حذف بيانات silk.db).
 
 
 def _json_default(obj: object) -> object:
