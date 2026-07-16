@@ -452,10 +452,6 @@ function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#r
     pushHist(res&&res.analysis_id||null);renderBoard();if(then)then(res);else nav("board")})
   .catch(function(e){S.busy=false;$("#runBtn").textContent=t("run");sync();toast("فشل الطلب: "+e.message)})}
 $("#runBtn").addEventListener("click",function(){runAnalysis()});
-/* PART D (أمر العمل الرئيس، قرار مالك نهائي): مِيزة «معاينة فورية»
-   (الزرّ + quickSnapshot/renderSnap + /products/snapshot) حُذفت بالكامل —
-   الواجهة النهائية: بحث عميق (رئيسي) + مسح الأسواق (ثانوي) + شريط «بحوثي
-   السابقة». لا مسار داخلي كان يعتمد عليها. */
 
 /* بحث عميق — ١٢ بعثة كلود + محلل شامل + كاتب/مراجع (POST /research، لا
    /analyze). يتطلب سوقاً واحداً محدداً (S.market) — البحث العميق يحلّل سوقاً

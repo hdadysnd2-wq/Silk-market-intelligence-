@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """تشغيلة قبول R1 الحيّة — سكربت واحد: POST /research ← استطلاع حتى الاكتمال
-← سحب docx العميل + المختصر + Markdown + ثلاثة أسئلة دردشة + لقطة سريعة،
+← سحب docx العميل + المختصر + Markdown + ثلاثة أسئلة دردشة،
 وحفظ كل شيء في مجلّد للمراجعة، مع فحوص آلية (مصطلحات محظورة/تكلفة/تغطية).
 
 الاستعمال (الصقْ مفتاحك وشغّل):
@@ -148,7 +148,6 @@ def main() -> int:
     ap.add_argument("--key", default=os.environ.get("SILK_API_KEY", ""))
     ap.add_argument("--poll-interval", type=int, default=15)
     ap.add_argument("--timeout", type=int, default=2400, help="ثوانٍ حتى الاكتمال")
-    ap.add_argument("--skip-snapshot", action="store_true")
     ap.add_argument("--outdir", default="")
     a = ap.parse_args()
 
@@ -248,18 +247,7 @@ def main() -> int:
     summary.append(f"[5] الدردشة: {len(questions)} أسئلة محفوظة "
                    "(راجِع الإرضاء + سؤال الضبط يدوياً)")
 
-    # ٦. المعاينة الفورية — مجانية دوماً منذ ITEM ٢ (بلا خطوة تأكيد/تكلفة)
-    if not a.skip_snapshot:
-        c1, snap = api.json("POST", "/products/snapshot",
-                            {"product": a.product, "market": a.market,
-                             "hs_code": a.hs})
-        _save(out, "snapshot_result.json",
-              json.dumps(snap, ensure_ascii=False, indent=2))
-        shown = (snap.get("cost") or {}).get("claude_activations")
-        summary.append(f"[6] المعاينة الفورية: {shown} تفعيلة كلود "
-                       f"(cached={snap.get('cached')})")
-
-    # ٧. فحوص آلية على المخرَج الحيّ
+    # ٦. فحوص آلية على المخرَج الحيّ
     econ = result.get("data_economics") or {}
     cost_usd = econ.get("cost_usd_estimate")
     unpriced = econ.get("cost_usd_by_model") and econ.get("cost_unpriced_models")
