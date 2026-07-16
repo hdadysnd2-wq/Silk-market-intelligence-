@@ -21,6 +21,7 @@ import logging
 
 from silk_agents import AgentReport
 from silk_ai_judge import _LONG_TIMEOUT
+from silk_ai_judge import _MODEL as _SMART_MODEL  # E2: النموذج الذكي للمحلل
 from silk_llm_runtime import _truncate_at_word, run_llm_agent
 from silk_market_resolver import MarketRef
 
@@ -212,10 +213,12 @@ def analyze_market(market: MarketRef, product: str,
         ctx_parts.append(card_ctx)
     extra_context = "\n".join(ctx_parts)
 
+    # E2 (SPEC-v2): التحليل الشامل استدلال ثقيل — يبقى على النموذج الذكي
+    # (Opus) صراحةً بينما بعثات الاستخلاص تُوجَّه للنموذج السريع (Haiku).
     report = run_llm_agent(
         _ANALYST_MISSION, market, product=product, hs_code=hs_code,
         budget=budget, extra_findings=tagged, extra_context=extra_context,
-        timeout=_LONG_TIMEOUT)
+        timeout=_LONG_TIMEOUT, model=_SMART_MODEL)
 
     by_category: dict[str, list] = {c: [] for c in REQUIRED_CATEGORIES}
     # بلاغ حي (الموجة ٩): مطابقة حرفية صارمة (cat in by_category) كانت

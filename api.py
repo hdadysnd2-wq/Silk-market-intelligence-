@@ -872,6 +872,9 @@ def create_app():
             import silk_gmaps
             _scrape_future = silk_gmaps.submit_scrape_async(product, market_ref)
             _scrape_t0 = _mono.monotonic()
+            # E3 (SPEC-v2): علامات زمن الجدار لكل مرحلة — تُحسَب منها المصارف
+            # الثلاثة الكبرى (stage_top_sinks) وتُطبَع في data_economics.
+            _stage_marks = {"missions": _scrape_t0}
 
             # deep_research() (لا run_all_missions مباشرة) — يفعّل التتبّع
             # الكامل دوماً (data/traces/{trace_id}.jsonl، الموجة ٦) فيبقى كل
@@ -883,6 +886,7 @@ def create_app():
                                          resume_reports=resume_reports)
             mission_reports = research_run["reports"]
             trace_id = research_run.get("trace_id")
+            _stage_marks["analyst"] = _mono.monotonic()  # E3: نهاية البعثات
             silk_context.snapshot_research_progress(analysis_id, "analyst")
             # H5 (تدقيق): حارس إنفاق على مستوى التشغيلة للذيل. السقف الكلي
             # (SILK_RESEARCH_MAX_LLM_CALLS) كان يُستشار داخل حلقة البعثات
@@ -912,10 +916,12 @@ def create_app():
                     market_ref, product, mission_reports, hs_code=hs_code,
                     product_card=product_card_dict)
             analyst_input = to_synthesis_input(analyst_out)
+            _stage_marks["synthesis"] = _mono.monotonic()  # E3: نهاية المحلل
             verdict = synthesize(
                 list(mission_reports.values()), product=product,
                 market=market_ref.name_en, with_ai=tail_with_ai,
                 analyst_assessment=analyst_input)
+            _stage_marks["writer"] = _mono.monotonic()  # E3: نهاية التوليف
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
                 product, market_ref.name_en, max_cycles=tail_max_cycles,
@@ -923,8 +929,25 @@ def create_app():
                 on_stage=lambda s: silk_context.snapshot_research_progress(
                     analysis_id, s)) if ai_ok else
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
+            _stage_marks["end"] = _mono.monotonic()  # E3: نهاية الكاتب/المراجع
             economics = dict(silk_context.data_counter() or {})
             economics["tail_degraded"] = tail_over_budget
+            # E3 (SPEC-v2): زمن الجدار لكل مرحلة + أكبر ثلاثة مصارف — يُطبَع في
+            # data_economics كي يقيس المالك أين تذهب الدقائق (البعثات متوازية،
+            # الذيل متسلسل)، وهدف < ١٠ دقائق يُقاس عليه.
+            _order = ["missions", "analyst", "synthesis", "writer", "end"]
+            _labels = {"missions": "البعثات (متوازية)", "analyst": "المحلل الشامل",
+                       "synthesis": "التوليف/الحكم", "writer": "الكاتب+المراجع"}
+            _ss = {}
+            for _i in range(len(_order) - 1):
+                a, b = _order[_i], _order[_i + 1]
+                if a in _stage_marks and b in _stage_marks:
+                    _ss[a] = round(_stage_marks[b] - _stage_marks[a], 1)
+            economics["stage_seconds"] = _ss
+            economics["stage_total_seconds"] = round(sum(_ss.values()), 1)
+            economics["stage_top_sinks"] = [
+                {"stage": _labels.get(k, k), "seconds": v}
+                for k, v in sorted(_ss.items(), key=lambda kv: -kv[1])[:3]]
             if not report_out.get("report"):
                 # ITEM 5ب: فشل الكاتب في التشغيلة الرئيسية (لا مسار regen) —
                 # السبب مُطهَّر قبل التخزين (نفس مُطهِّر H1/H4 القائم).
