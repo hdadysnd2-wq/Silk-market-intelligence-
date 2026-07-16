@@ -687,6 +687,23 @@ _FINALIZE_NUDGE = (
     "إن لم تجد شيئاً مؤكَّداً بعد، أعد findings فارغة وفصّل السبب في gaps — "
     "لا تخترع بياناً لتملأ الحقل.")
 
+# بلاغ حي إنتاجي (opportunity_gaps + الطبقة ٣ SWOT، تمور/هولندا): فشل تفسير
+# JSON نهائي بعد الإنهاء القسري كان يستسلم فوراً بفجوة معلنة بلا أي محاولة
+# تصحيح — رغم أن الجولة الإنهائية القسرية تنجح غالباً في انتزاع رد "يشبه"
+# JSON نهائياً، السياج/نصّ زائد لاحق أحياناً يفسد التفسير رغم استراتيجيات
+# _json_candidates المتعددة. محاولة إصلاح واحدة فقط (ليست حلقة — نفس انضباط
+# _FINALIZE_NUDGE أحادي الطلقة، §mission-tuning-and-evals) تقتبس سبب الفشل
+# صراحة وتُذكِّر بالصيغة الدقيقة. فشلها أيضاً = فجوة معلنة كالسابق، لا اختلاق.
+_JSON_PARSE_FAILURE_GAP = "رد كلود غير قابل للتفسير كـ JSON"
+_JSON_REPAIR_NUDGE = (
+    "ردّك السابق تعذّر تفسيره كـJSON صالح. أعد الإجابة الآن — **بصيغة JSON "
+    "فقط، لا نص قبلها أو بعدها، لا سياج ```، لا تعليق توضيحي** — مطابقة "
+    "تماماً لهذا الشكل: "
+    '{"findings":[{"claim":"...","datapoint_ids":["dp1"],'
+    '"confidence":0.0-1.0}],"gaps":["..."],"summary":"..."}. '
+    "إن تعذّر توثيق أي بند بمعرّف نقطة بيانات صالح، أعد findings فارغة "
+    "وفصّل السبب في gaps — لا تخترع بياناً لتملأ الحقل.")
+
 
 def _looks_like_final_answer(text: str) -> bool:
     """هل يشبه هذا النص رداً نهائياً صالحاً (JSON بمفاتيح findings/gaps/
@@ -962,6 +979,33 @@ def _run_loop(mission: dict, ctx: dict, budget: dict,
         messages.append({"role": "user", "content": tool_results})
 
     parsed = _parse_output(final_text, registry)
+    # محاولة إصلاح واحدة فقط — فقط عند فشل تفسير JSON تام (لا بنود مُسقَطة
+    # لعدم استشهاد صحيح، تلك فجوة أصيلة لا عطل تقني)، وبشرط عدم بلوغ السقف
+    # العام (لا تجاوز ميزانية النداءات لمحاولة إصلاح واحدة).
+    if parsed["gaps"] == [_JSON_PARSE_FAILURE_GAP] and not global_cap_hit:
+        messages.append({"role": "user", "content": _JSON_REPAIR_NUDGE})
+        _mark_cache_boundary(messages)
+        t_repair = _time.monotonic()
+        resp2 = _call_tools(system, messages, tools=None, max_tokens=max_tokens,
+                            model=_MODEL, timeout=timeout)
+        silk_context.count_data("llm_calls")
+        elapsed_ms2 = round((_time.monotonic() - t_repair) * 1000)
+        if resp2 is None:
+            silk_trace.record_event(
+                kind="llm_call", mission=mission_key, round="json_repair",
+                tools_offered=False, elapsed_ms=elapsed_ms2,
+                result=f"no_response ({_ai_failure_reason()})")
+        else:
+            content2 = resp2.get("content") or []
+            repair_text = "".join(b.get("text", "") for b in content2
+                                  if b.get("type") == "text")
+            silk_trace.record_event(
+                kind="llm_call", mission=mission_key, round="json_repair",
+                tools_offered=False, elapsed_ms=elapsed_ms2,
+                stop_reason=resp2.get("stop_reason"))
+            repaired = _parse_output(repair_text, registry)
+            if repaired["gaps"] != [_JSON_PARSE_FAILURE_GAP]:
+                parsed = repaired  # الإصلاح نجح — لا محاولة ثانية بأي حال
     if global_cap_hit:
         parsed["gaps"] = list(parsed.get("gaps") or []) + [
             "السقف الكلي لنداءات كلود/الأدوات عبر هذا التحليل بأكمله "
