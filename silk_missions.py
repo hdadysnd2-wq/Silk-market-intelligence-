@@ -387,6 +387,74 @@ def _checkpoint(analysis_id: int | None, key: str, report: AgentReport) -> None:
     silk_context.snapshot_research_progress(analysis_id, "missions")
 
 
+# ── D3 (SPEC-v2): جلب حوكمة حتمي لبعثة risk_news ─────────────────────────
+# §9 «تقييم المخاطر» كانت تفتقد أرقام WGI (الاستقرار السياسي/سيادة القانون/
+# جودة التنظيم): بعثة risk_news تعتمد كلّياً على أن يستدعي كلود أداة
+# worldbank_indicator للمؤشرات الثلاثة — إن أغفل واحداً خرج §9 ناقصاً
+# (خطأ ربط/إظهار البعثة، لا خطأ جلب — الجلب مُصلَح ومقفول، تدقيق #1).
+# الإصلاح: جلب حتمي للثلاثة يُلحَق بحقائق البعثة بعد تشغيلها — حاضرة دائماً
+# حين ينجح الجلب، فجوة معلنة (None، ثقة 0.0) حين يفشل. لا اختلاق. يشمل
+# RL.EST (سيادة القانون) الذي يغفله حتى RiskAgent في مسار /analyze.
+_WGI_GOVERNANCE = (
+    ("PV.EST", "political_stability", "الاستقرار السياسي (WGI)"),
+    ("RL.EST", "rule_of_law", "سيادة القانون (WGI)"),
+    ("RQ.EST", "regulatory_quality", "جودة التنظيم (WGI)"),
+)
+
+
+def _wgi_governance_datapoints(iso3: str) -> list:
+    """المؤشرات الثلاثة كـDataPoints — قيمة من المخزن أولاً ثم World Bank
+    الحيّ (source=3 مُسجَّل في silk_data_layer)، أو فجوة معلنة عند الفشل.
+    كل ملاحظة موسومة [risk] كي يربطها كاتب §9 ببعثة المخاطر."""
+    from silk_data_layer import DataPoint, world_bank
+    out: list = []
+    for ind, _metric, label in _WGI_GOVERNANCE:
+        got = None
+        try:
+            import silk_store
+            got = silk_store.get_indicator(iso3, ind)
+        except Exception:  # noqa: BLE001 — المخزن تحسين لا شرط
+            got = None
+        if got and got.get("value") is not None:
+            out.append(DataPoint(
+                round(float(got["value"]), 3),
+                got.get("source", "World Bank"),
+                float(got.get("confidence") or 0.9),
+                f"[risk] {label} — {ind} سنة {got.get('year')} (مخزن الحقائق)"))
+            continue
+        try:
+            dp = world_bank(iso3, ind)
+        except Exception as e:  # noqa: BLE001 — فشل الجلب = فجوة معلنة لا كسر
+            dp = DataPoint(None, "World Bank", 0.0,
+                           f"{ind} تعذّر: {type(e).__name__}")
+        if dp.value is not None:
+            out.append(DataPoint(dp.value, dp.source, dp.confidence,
+                                 f"[risk] {label} — {ind} ({dp.note})"))
+        else:
+            out.append(DataPoint(None, dp.source or "World Bank", 0.0,
+                                 f"[risk] {label} غير متاح — {ind} ({dp.note})"))
+    return out
+
+
+def _augment_risk_news_wgi(report: AgentReport, iso3: str) -> AgentReport:
+    """ألحِق مؤشرات WGI الثلاثة بحقائق بعثة risk_news إن لم تكن حاضرة أصلاً
+    (مطابقة على رمز المؤشر في ملاحظات البنود — لا تكرار ما رصده كلود، ولا
+    استبدال بنده) — §9 تحصل على أرقام الحوكمة حتماً لا اعتماداً على نداء
+    كلود وحده."""
+    if not iso3:
+        return report
+    findings = getattr(report, "findings", None)
+    if findings is None:
+        return report
+    existing = " ".join(str(getattr(dp, "note", "")) for dp in findings)
+    for dp in _wgi_governance_datapoints(iso3):
+        code = next((c for c, _m, _l in _WGI_GOVERNANCE if c in str(dp.note)), "")
+        if code and code in existing:
+            continue  # كلود رصد هذا المؤشر فعلاً — لا تكرار
+        findings.append(dp)
+    return report
+
+
 def run_all_missions(market: MarketRef, product: str = "",
                      hs_code: str | None = None,
                      product_card: dict | None = None,
@@ -478,6 +546,13 @@ def run_all_missions(market: MarketRef, product: str = "",
             "market": market, "product": product, "hs_code": hs_code,
             "budget": _MISSION_BUDGET, "extra_findings": prior_findings})
         _checkpoint(analysis_id, "opportunity_gaps", reports["opportunity_gaps"])
+
+    # D3 (SPEC-v2): أرقام WGI للحوكمة تُلحَق حتماً ببعثة المخاطر — §9 لا
+    # تعتمد على نداء كلود وحده (تشغيلات كانت تخرج §9 بلا أرقام استقرار/
+    # سيادة قانون/تنظيم). يُعاد الحساب كل تشغيلة (مطابقة الرمز تمنع التكرار)،
+    # فمسار الاستئناف من نقطة تفتيش بلا WGI يحصل عليها أيضاً.
+    if "risk_news" in reports:
+        _augment_risk_news_wgi(reports["risk_news"], getattr(market, "iso3", ""))
     return reports
 
 

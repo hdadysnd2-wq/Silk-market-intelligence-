@@ -38,6 +38,35 @@ _CATEGORY_LABELS = {
     "swot": "SWOT من منظور المصدّر السعودي",
 }
 
+# D2 (SPEC-v2): أحد الأسباب الثلاثة المُشخَّصة (#107) لظهور التقاطعات
+# «بلا أدلة كافية» هو **وسم كلود بمرادف فئة خارج القائمة الحرفية** رغم
+# التعليمة (مثل [pricing] بدل [price_competitiveness]). خريطة مرادفات
+# تحفّظية تُنقذ البند الموسوم بمرادف صريح فقط — لا تخمّن محتوى بند غير
+# موسوم (يبقى مُشخَّصاً، احتراماً لنمط الحادثة #8: عند غياب الدليل اشحن
+# أداة قياس لا حزراً). كل مفتاح هنا يقابل فئة واحدة قانونية بلا لبس.
+_CATEGORY_SYNONYMS = {
+    # demand
+    "consumer_demand": "demand", "market_demand": "demand",
+    "demand_size": "demand", "addressable_demand": "demand",
+    "الطلب": "demand",
+    # entry_cost
+    "cost": "entry_cost", "costs": "entry_cost", "entry_costs": "entry_cost",
+    "market_entry_cost": "entry_cost", "logistics": "entry_cost",
+    "التكلفة": "entry_cost",
+    # price_competitiveness
+    "price": "price_competitiveness", "pricing": "price_competitiveness",
+    "price_competition": "price_competitiveness",
+    "competition": "price_competitiveness",
+    "competitiveness": "price_competitiveness",
+    "التسعير": "price_competitiveness",
+    # entry_door
+    "entry": "entry_door", "channels": "entry_door", "channel": "entry_door",
+    "distribution": "entry_door", "door": "entry_door",
+    "الدخول": "entry_door",
+    # swot
+    "swot_analysis": "swot", "strengths_weaknesses": "swot",
+}
+
 _ANALYST_MISSION = {
     "key": "market_analyst", "name": "المحلل الشامل للسوق",
     "allowed_tools": [],
@@ -195,11 +224,19 @@ def analyze_market(market: MarketRef, product: str,
     # رغم أن كلود حلّل فعلاً وأنتج بنوداً حقيقية، لمجرد فشل التصنيف لاحقاً.
     # الآن: تطبيع (خفض الأحرف + قصّ المسافات) قبل المطابقة.
     _norm_map = {c.lower(): c for c in REQUIRED_CATEGORIES}
+    synonym_rescued = 0
     for dp in report.findings:
         note = str(dp.note or "")
-        if note.startswith("["):
+        if note.startswith("[") and "]" in note:
             raw_cat = note[1:note.find("]")].strip()
-            cat = _norm_map.get(raw_cat.lower())
+            key = raw_cat.lower()
+            cat = _norm_map.get(key)
+            if not cat:
+                # D2: انجراف مرادف صريح — أنقِذه إلى فئته القانونية (لا
+                # تخمين محتوى؛ الوسم موجود، فئته فقط خارج القائمة الحرفية).
+                cat = _CATEGORY_SYNONYMS.get(key)
+                if cat:
+                    synonym_rescued += 1
             if cat:
                 by_category[cat].append(dp)
     missing = [c for c in REQUIRED_CATEGORIES if not by_category[c]]
@@ -226,6 +263,9 @@ def analyze_market(market: MarketRef, product: str,
         "raw_findings": len(report.findings),
         "binned": binned,
         "uncategorized": len(report.findings) - binned,
+        # D2: كم بنداً أُنقذ عبر خريطة المرادفات (وسم خارج القائمة الحرفية)
+        # — مؤشر حيّ على انجراف صيغة الوسم يظهر في المدوّنة.
+        "synonym_rescued": synonym_rescued,
         "analyst_failed": bool(getattr(report, "failed", False)),
         # تفسير صريح للحالة الشائعة (كل الخمس فارغة):
         "all_missing_cause": (
