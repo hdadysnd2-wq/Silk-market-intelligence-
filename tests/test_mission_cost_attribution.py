@@ -93,7 +93,7 @@ def test_run_llm_agent_tags_calls_with_its_own_mission_key(monkeypatch):
 
     seen_mission_during_call = {}
 
-    def fake_run_loop(mission, ctx, budget, timeout=None):
+    def fake_run_loop(mission, ctx, budget, timeout=None, model=None):
         # وسم البعثة يجب أن يكون مضبوطاً بالفعل أثناء _run_loop نفسها.
         seen_mission_during_call["key"] = silk_context.current_mission()
         silk_context.record_llm_usage("claude-opus-4-8", 300, 150)

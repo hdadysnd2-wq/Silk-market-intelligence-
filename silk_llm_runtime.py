@@ -32,7 +32,13 @@ import os
 import re
 
 from silk_agents import AgentReport, BaseAgent
-from silk_ai_judge import _MODEL, _PRINCIPLE, _call_tools, _isolate
+from silk_ai_judge import _FAST_MODEL, _MODEL, _PRINCIPLE, _call_tools, _isolate
+
+# E2 (SPEC-v2، انحدار التكلفة): بعثات الاستخلاص/التنسيق الاثنتا عشرة تعمل
+# على النموذج السريع (Haiku) افتراضياً — استخلاص أدوات وتنسيق حقائق لا
+# يتطلّب النموذج الذكي (Opus). النموذج الذكي محجوز للتحليل الشامل والكاتب
+# (استدلال ثقيل)، والمراجع أصلاً على السريع. قابل للضبط/الرجوع بمتغيّر واحد.
+_MISSION_MODEL = os.environ.get("SILK_MISSION_MODEL", "").strip() or _FAST_MODEL
 from silk_ai_judge import failure_reason as _ai_failure_reason
 from silk_data_layer import (
     DataPoint, comtrade_trade, comtrade_trade_mirror_total, primary_qty,
@@ -810,7 +816,7 @@ def _mark_cache_boundary(messages: list[dict]) -> None:
 
 
 def _run_loop(mission: dict, ctx: dict, budget: dict,
-              timeout: float | None = None) -> dict:
+              timeout: float | None = None, model: str | None = None) -> dict:
     """الحلقة المحكومة بالميزانية — tool_use/tool_result rounds until a final
     JSON answer or budget exhaustion (then one forced tools-off round).
 
@@ -919,7 +925,7 @@ def _run_loop(mission: dict, ctx: dict, budget: dict,
         _mark_cache_boundary(messages)
         t_round = _time.monotonic()
         resp = _call_tools(system, messages, tools=offer_tools,
-                           max_tokens=max_tokens, model=_MODEL, timeout=timeout)
+                           max_tokens=max_tokens, model=(model or _MODEL), timeout=timeout)
         silk_context.count_data("llm_calls")
         elapsed_ms = round((_time.monotonic() - t_round) * 1000)
         if resp is None:
@@ -987,7 +993,7 @@ def _run_loop(mission: dict, ctx: dict, budget: dict,
         _mark_cache_boundary(messages)
         t_repair = _time.monotonic()
         resp2 = _call_tools(system, messages, tools=None, max_tokens=max_tokens,
-                            model=_MODEL, timeout=timeout)
+                            model=(model or _MODEL), timeout=timeout)
         silk_context.count_data("llm_calls")
         elapsed_ms2 = round((_time.monotonic() - t_repair) * 1000)
         if resp2 is None:
@@ -1027,7 +1033,8 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
                   instruction: str = "",
                   extra_findings: list[DataPoint] | None = None,
                   extra_context: str = "",
-                  timeout: float | None = None) -> AgentReport:
+                  timeout: float | None = None,
+                  model: str | None = None) -> AgentReport:
     """شغّل وكيل مهمة كلود — the mission-driven tool-use loop as an AgentReport.
 
     `mission`: {"key","name","instructions","allowed_tools":[...]} — شكل
@@ -1057,9 +1064,13 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
     # data_counter()["mission_usage"][key] فوق الإجمالي القائم. آمن تحت
     # ThreadPoolExecutor (كل خيط بعثة موازٍ يملك نسخة سياق مستقلة عبر
     # copy_context()، فلا تختلط وسوم بعثتين متزامنتين).
+    # E2: بعثة على النموذج السريع افتراضياً؛ المستدعي (المحلل الشامل) يمرّر
+    # النموذج الذكي صراحةً. `model` صريح يتجاوز الافتراضي.
+    eff_model = model or _MISSION_MODEL
     import silk_context
     with silk_context.mission_context(eff_mission.get("key")):
-        result = _run_loop(eff_mission, ctx, eff_budget, timeout=timeout)
+        result = _run_loop(eff_mission, ctx, eff_budget, timeout=timeout,
+                           model=eff_model)
     today = _today()
     label = eff_mission.get("name") or eff_mission.get("key") or "LLM agent"
     registry = result.get("registry", {})
