@@ -790,12 +790,17 @@ function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class
   var ax=$("#askBox");if(ax)ax.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();askAnalysis()}});
   var dq=$("#deepBtn");if(dq)dq.addEventListener("click",function(){toast("الدراسة العميقة تتطلب مفاتيح مصادر مدفوعة تُضبط على الخادم (Railway) — غير متاح في هذا التشغيل")});
 }
-/* تنزيل التقرير — fetch يحمل X-API-Key ثم blob (الرابط العادي لا يرسل الترويسة) */
+/* تنزيل التقرير — fetch يحمل X-API-Key ثم blob (الرابط العادي لا يرسل الترويسة).
+   البلاغ الحي الثالث لعائلة 501: جسم الـ501 يسمّي المصطلح المرفوض بالضبط
+   (رسالة حارس التصدير) — كان يُبتلَع هنا فيصل المستخدم «HTTP 501» عارية بلا
+   أي قدرة على التشخيص (نفس عائلة «401 المبتلَع»، بلاغ ٢). يُقرأ الآن ويُعرَض. */
+function dlFail(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}
+  throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,300))})}
 function dlReport(kind){var id=S.raw&&S.raw.analysis_id;if(id==null){toast("شغّل تحليلاً أولاً");return}
-  if(kind==="docx"){fetch(base()+"/analyses/"+id+"/report.docx",{headers:hdrs(false)}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.blob()})
+  if(kind==="docx"){fetch(base()+"/analyses/"+id+"/report.docx",{headers:hdrs(false)}).then(function(r){if(!r.ok)return dlFail(r);return r.blob()})
     .then(function(b){var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="silk_report_"+id+".docx";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)})
     .catch(function(e){toast("فشل التنزيل: "+e.message)});return}
-  fetch(base()+"/analyses/"+id+"/report.md",{headers:hdrs(false)}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.text()}).then(function(t){
+  fetch(base()+"/analyses/"+id+"/report.md",{headers:hdrs(false)}).then(function(r){if(!r.ok)return dlFail(r);return r.text()}).then(function(t){
     var w=window.open("","_blank");if(!w)return;var pre=w.document.createElement("pre");pre.style.cssText="white-space:pre-wrap;font-family:monospace;padding:28px;max-width:900px;margin:0 auto";pre.textContent=t;w.document.body.appendChild(pre)}).catch(function(e){toast("فشل: "+e.message)})}
 $("#pdfBtn").addEventListener("click",function(){dlReport("docx")});
 $("#mdBtn").addEventListener("click",function(){dlReport("md")});
