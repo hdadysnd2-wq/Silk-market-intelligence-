@@ -247,11 +247,9 @@
         </div>
         <div class="runbar">
           <div class="rsum" id="runSum">اختر منتجاً للبدء</div>
-          <button class="runbtn" id="snapBtn" disabled title="معاينة فورية مجانية من بيانات محفوظة (مورّدو كومتريد) — بلا أي نداء كلود؛ لا تشمل أسعار منافِسة على منتج جديد لم يُبحَث عمقياً بعد">معاينة فورية</button>
           <button class="runbtn" id="researchBtn" disabled title="يتطلب اختيار سوق واحد — ١٢ بعثة كلود + محلل شامل + تقرير مراجَع">بحث عميق (كلود) ←</button>
           <button class="runbtn" id="runBtn" disabled data-t="run" title="مسح أوّلي: يرتّب الأسواق المرشّحة على بيانات تجارة/اقتصاد حرة + حكم كلود تقريبي (تفعيلة واحدة إن كان مفتاح كلود مضبوطاً) — للحكم الموثوق على سوق واحد استخدم «بحث عميق»">مسح الأسواق ←</button>
         </div>
-        <div id="snapOut" style="margin-top:12px"></div>
       </div>
     </div>
 
@@ -404,7 +402,7 @@ function getJSON(path){return fetch(base()+path,{headers:hdrs(false)}).then(func
 var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim();clearTimeout(pT);
   // MED (تدقيق الواجهة، M12): أي تعديل يُبطل الحلّ السابق فوراً — وإلا يبقى
   // S.product/S.hs قديمَين (من اختيار سابق) فيُحلَّل منتج غير الظاهر في
-  // الصندوق صامتاً حين يُنقَر «حلّل السوق» بلا اختيار صفٍّ جديد من القائمة.
+  // الصندوق صامتاً حين يُنقَر «مسح الأسواق» بلا اختيار صفٍّ جديد من القائمة.
   if(S.product&&q!==S.product){S.product=null;S.hs=null;$("#pResolved").classList.remove("on");sync()}
   if(!q){$("#pDrop").classList.remove("open");return}
   pT=setTimeout(function(){fetch(base()+"/index?q="+encodeURIComponent(q)+"&limit=10").then(function(r){return r.json()}).then(function(list){
@@ -435,7 +433,6 @@ function years(){var to=CURY-1,from=to-S.span+1;return[from,to]}
 function sync(){var y=years();$("#yearLabel").textContent=y[0]+" – "+y[1];$("#yearSpanLbl").textContent=S.span+" "+(S.span>2?t("yearsWord"):t("yearWord"));
   $("#runBtn").disabled=!S.product||S.busy;
   $("#researchBtn").disabled=!S.product||!S.market||S.busy;
-  var sb=$("#snapBtn");if(sb)sb.disabled=!S.product||S.busy;
   // تدقيق الواجهة (HIGH#1): زر الإرسال في الدردشة كان يبقى فعّالاً بصرياً أثناء
   // انشغال المحرّك، فالنقر يعود بصمت (نفس صنف #98). عطّله مع S.busy كبقية الأزرار.
   var sd=$("#sendBtn");if(sd)sd.disabled=S.busy;
@@ -455,35 +452,10 @@ function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#r
     pushHist(res&&res.analysis_id||null);renderBoard();if(then)then(res);else nav("board")})
   .catch(function(e){S.busy=false;$("#runBtn").textContent=t("run");sync();toast("فشل الطلب: "+e.message)})}
 $("#runBtn").addEventListener("click",function(){runAnalysis()});
-/* ITEM ٢ (بلاغ حي التكلفة، قرار مُعلَن): كانت «لقطة سريعة» تحجز تفعيلة كلود
-   واحدة خلف تأكيد صريح؛ أُزيل نداء كلود هذا نهائياً — مجانية دوماً، مورّدو
-   كومتريد فقط من المخزن/المصادر الحرة، فلا حاجة لخطوة تكلفة/تأكيد بعد الآن. */
-function quickSnapshot(){
-  if(!S.product)return;var out=$("#snapOut");
-  var body={product:S.product,hs_code:S.hs||null,market:S.market?S.market.name:null};
-  out.innerHTML='<div class="note">…جارٍ التحقق من المخزن</div>';
-  post("/products/snapshot",body).then(renderSnap)
-    .catch(function(e){out.innerHTML='<div class="gap">تعذّر: '+esc(e.message)+'</div>'})}
-function renderSnap(d){
-  var out=$("#snapOut");
-  var s=d&&d.snapshot;if(!s){out.innerHTML='<div class="gap">لا نتيجة</div>';return}
-  var w=s.worth_full_study||{};
-  var badge=w.worth===true?'<span class="state s-good">يستحق دراسة كاملة</span>':'<span class="state s-warn">لا حسم — فجوة معلنة</span>';
-  var comp=(s.competing_products||[]),sup=(s.top_suppliers||[]);
-  var html='<div class="bcard" style="padding:14px"><h3>معاينة فورية <span class="note">(مجانية — من بيانات محفوظة'+(d.cached?'، من طلب سابق':'')+')</span></h3>'
-    +'<p>'+badge+' — '+esc(w.why||"")+'</p>'
-    +'<p class="note">منتجات منافِسة مرصودة: '+comp.length+' · مورّدون: '+sup.length+'</p>';
-  if(comp.length)html+='<ul style="font-size:13px;padding-inline-start:18px">'+comp.slice(0,6).map(function(c){return '<li>'+esc(c.item||"")+' <span class="note">'+esc(c.evidence||"")+' '+esc(c.source||"")+'</span></li>'}).join("")+'</ul>';
-  else html+='<p class="gap">لا أسعار منافِسة مرصودة هنا — المعاينة المجانية لا تشمل بحث أسعار حيّ. '
-    +'<b>البحث العميق</b> يرصدها ببحث حقيقي مسعَّر بشفافية قبل التشغيل.</p>';
-  if(sup.length)html+='<p class="note">أبرز المورّدين: '+sup.slice(0,5).map(function(x){return esc(x.partner||"")+(x.share!=null?(' '+x.share+'%'):'')}).join("، ")+'</p>';
-  html+='<button class="runbtn" id="snapRefresh" style="background:transparent">تحديث المعاينة</button></div>';
-  out.innerHTML=html;
-  var rf=$("#snapRefresh");if(rf)rf.addEventListener("click",function(){
-    out.innerHTML='<div class="note">…جارٍ التحديث</div>';
-    post("/products/snapshot",{product:s.product,hs_code:s.hs_code,market:(s.market||{}).name_en||null,refresh:true})
-      .then(renderSnap).catch(function(e){out.innerHTML='<div class="gap">تعذّر: '+esc(e.message)+'</div>'})})}
-var snb=$("#snapBtn");if(snb)snb.addEventListener("click",quickSnapshot);
+/* PART D (أمر العمل الرئيس، قرار مالك نهائي): مِيزة «معاينة فورية»
+   (الزرّ + quickSnapshot/renderSnap + /products/snapshot) حُذفت بالكامل —
+   الواجهة النهائية: بحث عميق (رئيسي) + مسح الأسواق (ثانوي) + شريط «بحوثي
+   السابقة». لا مسار داخلي كان يعتمد عليها. */
 
 /* بحث عميق — ١٢ بعثة كلود + محلل شامل + كاتب/مراجع (POST /research، لا
    /analyze). يتطلب سوقاً واحداً محدداً (S.market) — البحث العميق يحلّل سوقاً

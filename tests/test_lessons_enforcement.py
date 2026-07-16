@@ -85,7 +85,7 @@ _TEST_ANCHORS = [
     (8, "tests/test_smoke.py",
      ["def test_tradeflow_all_records_missing_value_is_declared_gap"]),
     (9, "tests/test_item3_analyze_screen_button.py",
-     ["def test_all_three_action_buttons_have_honest_tooltips_and_distinct_labels"]),
+     ["def test_all_action_buttons_have_honest_tooltips_and_distinct_labels"]),
     (9, "tests/test_ui_action_buttons_have_purpose.py",
      ["def test_every_runbar_action_button_has_a_tooltip"]),
     (11, "tests/test_client_sanitizer_covers_guard.py",

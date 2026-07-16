@@ -49,11 +49,13 @@ def test_i18n_dict_mirrors_the_new_label_both_languages():
     assert 'run:{ar:"مسح الأسواق ←",en:"Screen markets →"}' in html
 
 
-def test_all_three_action_buttons_have_honest_tooltips_and_distinct_labels():
-    """كل زرّ فعل (معاينة/بحث عميق/مسح) يحمل تلميحاً — لا زرّ لا يمكن لصاحب
-    المنصة نفسه أن يشرح غرضه (شرط المستخدم الصريح لهذا البند)."""
+def test_all_action_buttons_have_honest_tooltips_and_distinct_labels():
+    """كل زرّ فعل (بحث عميق/مسح الأسواق) يحمل تلميحاً — لا زرّ لا يمكن لصاحب
+    المنصة نفسه أن يشرح غرضه (شرط المستخدم الصريح لهذا البند). زرّ «معاينة
+    فورية» (snapBtn) حُذف بالكامل (PART D، قرار مالك نهائي) فلم يعد يُختبَر."""
     html = _html()
-    for btn_id in ("snapBtn", "researchBtn", "runBtn"):
+    assert 'id="snapBtn"' not in html      # الزرّ محذوف — لا يتيم متبقٍّ
+    for btn_id in ("researchBtn", "runBtn"):
         start = html.index(f'id="{btn_id}"')
         end = html.index("</button>", start)
         tag = html[start:end]
