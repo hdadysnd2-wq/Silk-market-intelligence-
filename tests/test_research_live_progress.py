@@ -153,7 +153,9 @@ def test_write_reviewed_report_emits_reviewer_then_writer_on_revision_cycle():
         calls["n"] += 1
         return f"## 1. الخلاصة\nمسوّدة رقم {calls['n']}."
 
-    reviews = iter([{"approved": False, "issues": ["أضف السعر"]},
+    # PART C1: التنقيح يتطلّب مشكلة حاجبة صراحةً — بدونها لا دورة ثانية.
+    reviews = iter([{"approved": False, "issues": ["أضف السعر"],
+                     "blocking": ["أضف السعر"]},
                     {"approved": True, "issues": []}])
 
     def fake_review(draft, mission_reports, trace_id=None):

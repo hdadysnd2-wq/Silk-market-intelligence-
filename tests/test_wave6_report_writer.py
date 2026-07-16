@@ -66,12 +66,16 @@ def test_loop_stops_early_when_reviewer_approves():
     assert calls["n"] == 2  # كاتب + مراجع، بلا دورة ثانية
 
 
-def test_max_two_cycles_and_unresolved_notes_surface():
+def test_default_is_single_cycle_notes_surface_without_revision():
+    """PART C1 (انحدار التكلفة $1.6→$2.0): الافتراضي دورة واحدة — المراجع
+    يرصد الملاحظات فتُعلَن في «حدود هذا التقرير»، بلا نداء تنقيح إضافي."""
     import silk_ai_judge as aj
+    calls = {"writer": 0}
 
     def fake_call(system, user, max_tokens=1600, model=None, timeout=None):
         if model == aj._FAST_MODEL:
-            return '{"issues": ["مشكلة مستمرة"], "approved": false}'
+            return '{"issues": ["مشكلة مستمرة"], "blocking": ["مشكلة مستمرة"], "approved": false}'
+        calls["writer"] += 1
         return _complete_draft()
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test"}), \
@@ -79,9 +83,66 @@ def test_max_two_cycles_and_unresolved_notes_surface():
         out = aj.write_reviewed_report(_mission_reports(), "x",
                                        {"verdict": "WATCH"}, "تمور", "نيجيريا")
 
-    assert out["review_cycles"] == 2
+    assert out["review_cycles"] == 1
     assert out["unresolved_notes"] == ["مشكلة مستمرة"]
-    assert out["report"]  # التسليم يحدث رغم الملاحظات غير المحلولة
+    assert out["report"]           # التسليم يحدث رغم الملاحظات غير المحلولة
+    assert calls["writer"] == 1    # لا تنقيح — الافتراض دورة واحدة
+
+
+def test_env_two_cycles_with_blocking_issue_triggers_revision():
+    """SILK_MAX_REVIEW_CYCLES=2 + مشكلة حاجبة => دورة تنقيح فعلية."""
+    import silk_ai_judge as aj
+
+    def fake_call(system, user, max_tokens=1600, model=None, timeout=None):
+        if model == aj._FAST_MODEL:
+            return '{"issues": ["رقم بلا سند"], "blocking": ["رقم بلا سند"], "approved": false}'
+        return _complete_draft()
+
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test",
+                                 "SILK_MAX_REVIEW_CYCLES": "2"}), \
+         patch("silk_ai_judge._call", side_effect=fake_call):
+        out = aj.write_reviewed_report(_mission_reports(), "x",
+                                       {"verdict": "WATCH"}, "تمور", "نيجيريا")
+
+    assert out["review_cycles"] == 2
+    assert out["unresolved_notes"] == ["رقم بلا سند"]
+    assert out["report"]
+
+
+def test_env_two_cycles_with_only_style_issues_skips_revision():
+    """السقف ٢ مفتوح لكن المشاكل غير حاجبة (أسلوبية) => لا نداء تنقيح —
+    البوابة توفّر نداء الكاتب الإضافي، والملاحظات تبقى معلَنة."""
+    import silk_ai_judge as aj
+    calls = {"writer": 0}
+
+    def fake_call(system, user, max_tokens=1600, model=None, timeout=None):
+        if model == aj._FAST_MODEL:
+            return '{"issues": ["صياغة ركيكة"], "blocking": [], "approved": false}'
+        calls["writer"] += 1
+        return _complete_draft()
+
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test",
+                                 "SILK_MAX_REVIEW_CYCLES": "2"}), \
+         patch("silk_ai_judge._call", side_effect=fake_call):
+        out = aj.write_reviewed_report(_mission_reports(), "x",
+                                       {"verdict": "WATCH"}, "تمور", "نيجيريا")
+
+    assert out["review_cycles"] == 1
+    assert out["unresolved_notes"] == ["صياغة ركيكة"]
+    assert calls["writer"] == 1
+
+
+def test_max_review_cycles_env_is_clamped_1_to_2():
+    import silk_ai_judge as aj
+    with patch.dict(os.environ, {"SILK_MAX_REVIEW_CYCLES": "7"}):
+        assert aj._max_review_cycles() == 2
+    with patch.dict(os.environ, {"SILK_MAX_REVIEW_CYCLES": "0"}):
+        assert aj._max_review_cycles() == 1
+    with patch.dict(os.environ, {"SILK_MAX_REVIEW_CYCLES": "abc"}):
+        assert aj._max_review_cycles() == 1
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("SILK_MAX_REVIEW_CYCLES", None)
+        assert aj._max_review_cycles() == 1
 
 
 def test_reviewer_none_reply_treated_as_no_review_not_rejection():

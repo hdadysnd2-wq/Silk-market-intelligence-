@@ -339,6 +339,12 @@ def create_app():
                 "fact_store_db": _fact_store._db_path(),
                 "usage_db": _usage._db_path(),
                 "cache_dir": _cache._cache_dir(),
+                # PART E (أمر العمل الرئيس): حالة مصيدة الإقلاع مرئية من
+                # /health — كانت غير قابلة للتفتيش عن بُعد فلا يعرف المالك
+                # إن كان صمّام «رفض الإقلاع على قرص فانٍ» مفعّلاً فعلاً.
+                "persist_guard": os.environ.get(
+                    "SILK_REQUIRE_PERSISTENT_DATA_DIR", "").strip().lower()
+                    in ("1", "true", "yes", "on"),
             }
             # بلاغ حي (تدقيق تكلفة): تحليلات مكتملة مدفوعة الثمن كانت تختفي
             # بعد كل إعادة نشر — SILK_DATA_DIR فارغ يعني كل الأربعة مخازن
@@ -871,7 +877,10 @@ def create_app():
             _ctr = silk_context.data_counter() or {}
             tail_over_budget = ai_ok and _ctr.get("llm_calls", 0) >= _llm_cap
             tail_with_ai = ai_ok and not tail_over_budget
-            tail_max_cycles = 1 if tail_over_budget else 2
+            # PART C1: تجاوز الميزانية يفرض دورة واحدة؛ وإلا None = افتراض
+            # البيئة (SILK_MAX_REVIEW_CYCLES، افتراضياً ١ — التنقيح الثاني
+            # للمشاكل الحاجبة فقط حتى حين يُرفَع السقف إلى ٢).
+            tail_max_cycles = 1 if tail_over_budget else None
             # بلاغ حي (تمور/هولندا، تشغيلة ثانية): trace_context البعثات
             # الاثنتي عشرة يُغلَق فور عودة deep_research() أعلاه — نداءا
             # المحلل الشامل والكاتب/المراجع كانا يجريان **بلا أي تتبّع**،

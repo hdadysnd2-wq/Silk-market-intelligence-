@@ -122,6 +122,22 @@ def test_health_no_storage_warning_when_silk_data_dir_set():
     assert body["storage"]["data_dir"] == tmp
 
 
+def test_health_exposes_persist_guard_state():
+    """PART E (أمر العمل الرئيس): حالة SILK_REQUIRE_PERSISTENT_DATA_DIR
+    مرئية من /health — كانت غير قابلة للتفتيش عن بُعد إطلاقاً."""
+    tmp = tempfile.mkdtemp()
+    with _env(SILK_DATA_DIR=tmp, SILK_REQUIRE_PERSISTENT_DATA_DIR="1",
+              SILK_API_KEY=None, ANTHROPIC_API_KEY=None, VOLZA_API_KEY=None,
+              EXPLEE_API_KEY=None, LOCALPRICE_API_KEY=None):
+        on = _client().get("/health").json()
+    with _env(SILK_DATA_DIR=tmp, SILK_REQUIRE_PERSISTENT_DATA_DIR=None,
+              SILK_API_KEY=None, ANTHROPIC_API_KEY=None, VOLZA_API_KEY=None,
+              EXPLEE_API_KEY=None, LOCALPRICE_API_KEY=None):
+        off = _client().get("/health").json()
+    assert on["storage"]["persist_guard"] is True
+    assert off["storage"]["persist_guard"] is False
+
+
 def test_health_no_storage_warning_when_explicit_silk_db_set():
     """لا تحذير أيضاً حين يُوجَّه SILK_DB صراحةً بلا SILK_DATA_DIR — نفس
     منطق تراجُع _db_path نفسه (لا انحدار على المسارات الصريحة الفردية)."""
