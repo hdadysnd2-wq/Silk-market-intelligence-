@@ -1119,6 +1119,7 @@ def _docx_deep_research(doc, view: dict) -> None:
             i += 1
 
     _docx_glossary(doc, dr)  # B1: مسرد المصطلحات بعد السرد قبل ملحق الأدلة
+    _docx_leads(doc, dr)     # C5: قائمة المستوردين القابلين للتواصل
 
     doc.add_heading("ملحق — الأدلة الرقمية الداعمة للتقاطعات الخمسة", level=2)
     _stamp_degraded_banner(doc, view)
@@ -1901,6 +1902,8 @@ def render_client_docx(view: dict, path: str) -> str:
     # B1 (SPEC-v2): مسرد المصطلحات — تقرير العميل يعيد ترتيب الأقسام فلا يرث
     # المسرد من نصّ السرد؛ يُعرَض هنا صراحةً من بنية النموذج (مُطهَّراً).
     _docx_glossary(doc, dr, sanitize=_client_sanitize)
+    # C5 (SPEC-v2): جدول المستوردين القابلين للتواصل — قسم الدخول (مُطهَّر).
+    _docx_leads(doc, dr, sanitize=_client_sanitize)
 
     # PART A (عائلة 501): نقِّ أوّلاً (استبدل أيّ متبقٍّ بمحايد + سطر إفصاح)،
     # ثم الحارس كشبكة أمان أخيرة — فلا يسقط التصدير بـ501 على تسرّب مصطلح.
@@ -2330,6 +2333,65 @@ def _docx_glossary(doc, dr: dict, sanitize=None) -> None:
         doc.add_paragraph(sanitize(line) if sanitize else line, style="List Bullet")
 
 
+_LEADS_TITLE = "قائمة مستوردين وموزعين قابلين للتواصل"
+_LEADS_HEADER = ["الاسم", "العنوان", "الهاتف", "الإيميل", "الموقع", "التقييم",
+                 "مستوى التوثيق"]
+
+
+def _leads_data(dr: dict):
+    il = dr.get("importer_leads") or {}
+    return (il.get("leads") or []), (il.get("note") or "")
+
+
+def _lead_cells(lead: dict) -> list:
+    """C5: خلايا صفّ رائد — الحقل الغائب «—» (لا اختلاق). التقييم مع عدد
+    المراجعات إن توفّرا."""
+    def g(k):
+        v = lead.get(k)
+        return str(v).strip() if v not in (None, "") else "—"
+    rating, rc = lead.get("rating"), lead.get("review_count")
+    rating_s = (f"{rating} ({rc})" if rating and rc
+                else str(rating) if rating else "—")
+    site = lead.get("website") or lead.get("maps_link") or ""
+    return [g("name"), g("address"), g("phone"), g("email"),
+            site.strip() or "—", rating_s, g("doc_level")]
+
+
+def _md_leads(dr: dict, L: list) -> None:
+    """C5: جدول «قائمة مستوردين وموزعين قابلين للتواصل» في Markdown."""
+    from silk_gmaps import MAPS_DISCLAIMER
+    leads, note = _leads_data(dr)
+    L += [f"## {_LEADS_TITLE}", ""]
+    if not leads:
+        L += ["لم تُرصَد جهات اتصال قابلة للتواصل في هذا التشغيل — فجوة معلنة"
+              + (f" ({note})" if note else "") + ".", ""]
+        return
+    L += ["| " + " | ".join(_LEADS_HEADER) + " |",
+          "|" + "|".join(["---"] * len(_LEADS_HEADER)) + "|"]
+    for lead in leads:
+        L.append("| " + " | ".join(c.replace("|", "／")
+                                   for c in _lead_cells(lead)) + " |")
+    L += ["", MAPS_DISCLAIMER, ""]
+
+
+def _docx_leads(doc, dr: dict, sanitize=None) -> None:
+    """C5: جدول الروابط في Word (المدقّق والعميل) من بنية النموذج."""
+    from silk_gmaps import MAPS_DISCLAIMER
+    leads, note = _leads_data(dr)
+    doc.add_heading(_LEADS_TITLE, level=2)
+    if not leads:
+        msg = ("لم تُرصَد جهات اتصال قابلة للتواصل في هذا التشغيل — فجوة معلنة"
+               + (f" ({note})" if note else ""))
+        doc.add_paragraph(sanitize(msg) if sanitize else msg)
+        return
+    rows = [[(sanitize(c) if sanitize else c) for c in _lead_cells(lead)]
+            for lead in leads]
+    _add_table(doc, _LEADS_HEADER, rows)
+    line = MAPS_DISCLAIMER
+    doc.add_paragraph(sanitize(line) if sanitize else line,
+                      style="Intense Quote")
+
+
 def _md_deep_research(view: dict, prefix: list[str]) -> str:
     """التقرير الكامل Markdown لنتيجة /research — يُصيَّر من `view["deep_research"]`
     (نفس مصدر اللوحة وتصدير Word عبر `_docx_deep_research`)، لا من قالب /analyze.
@@ -2380,6 +2442,7 @@ def _md_deep_research(view: dict, prefix: list[str]) -> str:
     if report_text:
         L += [str(report_text).rstrip(), ""]
         _md_glossary(dr, L)  # B1: مسرد المصطلحات المستعملة فعلاً
+        _md_leads(dr, L)     # C5: قائمة المستوردين القابلين للتواصل
     else:
         fr = (dr.get("report") or {}).get("failure_reason")
         L += ["## التقرير السردي الكامل", "",

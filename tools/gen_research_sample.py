@@ -280,6 +280,25 @@ result = {
         },
         "report": {"report": REPORT_TEXT, "review_cycles": 2,
                   "unresolved_notes": []},
+        # C5 (Command #5b): قائمة مستوردين قابلين للتواصل — عيّنة مموّهة
+        # موسومة المصدر (خرائط قوقل + مرشّح ويب) لعرض الجدول في النموذج.
+        "importer_leads": {"path": "scraper",
+            "note": "مرصود عبر مكشطة خرائط قوقل (هاتف/إيميل) — عيّنة توضيحية",
+            "leads": [
+                {"name": "Ejmar Import BV", "address": "Barcelona (نموذج)",
+                 "phone": "+34 93 000 0000", "email": "info@ejmar.example",
+                 "website": "ejmar.example", "rating": 4.4, "review_count": 76,
+                 "maps_link": "https://maps.google/ejmar",
+                 "doc_level": "◐ مرصود عبر خرائط قوقل"},
+                {"name": "Halal Mayorista SL", "address": "Madrid (نموذج)",
+                 "phone": "+34 91 000 0000", "email": "ventas@halalm.example",
+                 "website": "halalm.example", "rating": 4.1, "review_count": 41,
+                 "maps_link": "https://maps.google/halalm",
+                 "doc_level": "◐ مرصود عبر خرائط قوقل"},
+                {"name": "All4Trade (مرشّح ويب)", "address": "—", "phone": "—",
+                 "email": "—", "website": "—", "rating": None,
+                 "review_count": None, "maps_link": "—",
+                 "doc_level": "○ مرشّح ويب غير موثَّق"}]},
     },
 }
 
