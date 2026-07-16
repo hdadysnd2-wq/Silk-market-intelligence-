@@ -1048,7 +1048,11 @@ def _deep_research_view(result: dict) -> dict | None:
         "missions": missions,
         "analyst": {"summary": analyst_report["summary"],
                    "missing_categories": analyst.get("missing_categories") or [],
-                   "by_category": by_category},
+                   "by_category": by_category,
+                   # PART B2: التشخيص الذاتي (عدّاد الخام مقابل المُصنَّف +
+                   # سبب «كل التقاطعات فارغة») يصل المدوّنة والواجهة فيُقرأ من
+                   # GET /analyses/{id} مباشرة — الحادثة القادمة تُشخِّص نفسها.
+                   "diagnostics": analyst.get("diagnostics") or {}},
         # سدّ تسريب (الطبقة ٦): تصنيف/تسمية الحكم مُحسَّبان هنا مرة واحدة —
         # لوحة الويب تستهلكهما بدل حساب تصنيفها الخاص من الرمز الخام
         # وعرض الرمز نفسه كنص ظاهر (كان "CONDITIONAL-GO"/"WATCH" يظهر
