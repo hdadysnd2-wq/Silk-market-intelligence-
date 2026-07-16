@@ -248,21 +248,16 @@ def main() -> int:
     summary.append(f"[5] الدردشة: {len(questions)} أسئلة محفوظة "
                    "(راجِع الإرضاء + سؤال الضبط يدوياً)")
 
-    # ٦. اللقطة السريعة — التكلفة قبل التشغيل ثم التشغيل
+    # ٦. المعاينة الفورية — مجانية دوماً منذ ITEM ٢ (بلا خطوة تأكيد/تكلفة)
     if not a.skip_snapshot:
-        c1, cost = api.json("POST", "/products/snapshot",
+        c1, snap = api.json("POST", "/products/snapshot",
                             {"product": a.product, "market": a.market,
-                             "hs_code": a.hs, "confirm": False})
-        _save(out, "snapshot_cost.json",
-              json.dumps(cost, ensure_ascii=False, indent=2))
-        shown = (cost.get("cost") or {}).get("claude_activations")
-        summary.append(f"[6] اللقطة: التكلفة قبل التشغيل = "
-                       f"{shown} تفعيلة (snapshot={cost.get('snapshot')})")
-        c2, snap = api.json("POST", "/products/snapshot",
-                            {"product": a.product, "market": a.market,
-                             "hs_code": a.hs, "confirm": True}, timeout=180)
+                             "hs_code": a.hs})
         _save(out, "snapshot_result.json",
               json.dumps(snap, ensure_ascii=False, indent=2))
+        shown = (snap.get("cost") or {}).get("claude_activations")
+        summary.append(f"[6] المعاينة الفورية: {shown} تفعيلة كلود "
+                       f"(cached={snap.get('cached')})")
 
     # ٧. فحوص آلية على المخرَج الحيّ
     econ = result.get("data_economics") or {}

@@ -1,9 +1,12 @@
-"""لقطة سريعة لمنتج جديد — «هل يستحق دراسة كاملة؟» (R4).
+"""معاينة فورية لمنتج جديد — «هل يستحق دراسة كاملة؟» (R4، أُعيد تصميمها ITEM ٢).
 
-يعيد استخدام بعثة pricing_scout (R1، القطعة المركزية) في **وضع مقيَّد
-الميزانية** + مورّدي كومتريد مباشرة (بلا كلود) — نداء كلود واحد رخيص لا
-تشغيلة الاثنتي عشرة بعثة كاملة. المخرَج: منتجات منافِسة، نطاق سعر، أبرز
-مورّدين، وحكم أولي عمّا إذا كان المنتج يستحق دراسة كاملة.
+**قرار حي (تدقيق تكلفة، راجع docs/DEEP_RESEARCH_DECISIONS.md)**: النسخة
+الأصلية كانت تعيد استخدام بعثة pricing_scout بميزانية مقيَّدة — نداء كلود
+حقيقي واحد على كل زوج (منتج × سوق) جديد. أُزيل هذا النداء نهائياً: المعاينة
+الآن **مجانية دوماً** — مورّدو كومتريد فقط (بلا كلود إطلاقاً)، وأي لقطة أسعار
+منافِسة كانت خُزِّنت قبل هذا القرار تبقى تُعرَض من المخزن (بيانات مدفوعة
+الثمن سلفاً، إعادة عرضها مجانية بحق). على زوج جديد لم يُلقَط قط: لا سعر
+منافِس، فجوة معلنة صريحة — لا اختلاق، ولا نداء يسدّها تلقائياً.
 
 المبدأ المؤسِّس: بلا شبكة/مفتاح => كل حقل فجوة معلنة، لا اختلاق. اللقطة
 تُخزَّن لكل (منتج، سوق) فتكرار السؤال يُخدَم من المخزن بلا حرق أرصدة
@@ -18,28 +21,9 @@ from silk_data_layer import _today
 
 log = logging.getLogger(__name__)
 
-# ميزانية مقيَّدة — لقطة رخيصة لا بحث كامل (بعثة pricing_scout العميقة = 9).
-_QUICK_TOOL_CALLS = 3
-_QUICK_MAX_TOKENS = 1500
 # سوق مرجعي افتراضي للقطة حين لا يحدّد المستخدم سوقاً — الدراسة الكاملة
 # وحدها ترتّب كل الأسواق؛ اللقطة تفحص إشارة تنافسية ضد سوق واحد شفافاً.
 _DEFAULT_PROBE_MARKET = "ARE"
-
-
-def _competing_from_report(report) -> list[dict]:
-    """استخرج المنتجات المنافِسة من تقرير pricing_scout — كل بند بمصدره
-    وشارة دليله (✓/◐). قيمة غير نصية (dict/list) تُتخطّى؛ لا اختلاق."""
-    out: list[dict] = []
-    for f in getattr(report, "findings", None) or []:
-        val = getattr(f, "value", None)
-        if val is None or isinstance(val, (list, dict)):
-            continue
-        note = str(getattr(f, "note", "") or "")
-        evidence = "◐" if ("غير موثَّق" in note or "◐" in note) else "✓"
-        out.append({"item": str(val), "source": getattr(f, "source", "") or "",
-                    "evidence": evidence,
-                    "date": getattr(f, "retrieved_at", "") or ""})
-    return out
 
 
 def _top_suppliers(hs_code: str | None, market, top_n: int = 5) -> list[dict]:
@@ -80,34 +64,25 @@ def _worth_full_study(competing: list, suppliers: list, note: str) -> dict:
                    "(فجوة). الدراسة الكاملة تحسم عبر مصادر أوسع."}
 
 
-def quick_snapshot(product: str, hs_code: str | None, market,
-                   tool_calls: int = _QUICK_TOOL_CALLS) -> dict:
-    """لقطة سريعة لمنتج × سوق — تعيد بنية جاهزة للتخزين/العرض.
+def quick_snapshot(product: str, hs_code: str | None, market) -> dict:
+    """معاينة فورية مجانية لمنتج × سوق — تعيد بنية جاهزة للتخزين/العرض.
 
-    نداء كلود واحد (بعثة pricing_scout بميزانية مقيَّدة) + مورّدو كومتريد.
-    بلا شبكة/مفتاح => بعثة تعيد تقريراً فاشلاً/فارغاً بفجوات معلنة (حارس
-    BaseAgent) فتخرج competing=[]، والحكم «لا حسم» — لا اختلاق.
+    مورّدو كومتريد فقط — **بلا أي نداء كلود** (ITEM ٢، بلاغ حي التكلفة).
+    لا سعر منافِس على زوج جديد لم يُلقَط قط: فجوة معلنة صريحة توجّه إلى
+    البحث العميق، لا اختلاق ولا نداء يسدّها تلقائياً.
     """
-    from silk_missions import MISSIONS
-    from silk_llm_runtime import LLMMissionAgent
-
-    budget = {"tool_calls": int(tool_calls), "max_output_tokens": _QUICK_MAX_TOKENS}
-    report = LLMMissionAgent(MISSIONS["pricing_scout"]).run(
-        {"market": market, "product": product, "hs_code": hs_code,
-         "budget": budget})
-    competing = _competing_from_report(report)
     suppliers = _top_suppliers(hs_code, market)
-    summary = getattr(report, "summary", "") or ""
     return {
         "product": product,
         "hs_code": hs_code,
         "market": {"iso3": market.iso3, "m49": market.m49,
                    "name_ar": market.name_ar, "name_en": market.name_en},
-        "competing_products": competing,
+        "competing_products": [],
         "top_suppliers": suppliers,
-        "worth_full_study": _worth_full_study(competing, suppliers, summary),
-        "note": ("لقطة أولية ضد سوق مرجعي واحد — الدراسة الكاملة ترتّب كل "
-                 "الأسواق. " + summary).strip(),
+        "worth_full_study": _worth_full_study([], suppliers, ""),
+        "note": ("معاينة مجانية من بيانات محفوظة (كومتريد) — الأسعار "
+                 "التنافسية غير مرصودة هنا؛ البحث العميق يرصدها ببحث حقيقي "
+                 "مسعَّر بشفافية."),
         "generated_at": _today(),
         "from_store": False,
     }

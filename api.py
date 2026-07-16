@@ -1643,23 +1643,24 @@ def create_app():
         return _json(out)
 
     class SnapshotRequest(BaseModel):
-        """لقطة سريعة لمنتج جديد (R4) — هل يستحق دراسة كاملة؟"""
+        """معاينة فورية لمنتج جديد (R4، أُعيدت للاستخدام في ITEM ٢) —
+        هل يستحق دراسة كاملة؟ مجانية دوماً — بلا حقل تأكيد/تكلفة."""
         product: str
         hs_code: "str | None" = None
         market: "str | None" = None
         refresh: bool = False
-        confirm: bool = False
 
     @app.post("/products/snapshot")
     def product_snapshot(req: SnapshotRequest, request: Request):
-        """لقطة سريعة لمنتج × سوق (R4) — تعيد استخدام بعثة الأسعار مقيَّدةً.
+        """معاينة فورية مجانية لمنتج × سوق (ITEM ٢، بلاغ حي التكلفة).
 
-        التدفق: (١) المخزن أولاً ما لم يُطلب تحديث — تكرار السؤال مجاني بلا
-        حرق أرصدة. (٢) بلا confirm=true تُعيد التكلفة المقدَّرة فقط ولا تشغّل
-        (التكلفة تُعرَض قبل التشغيل). (٣) مع confirm تمرّ بنفس حارس إضافات
-        كلود المجانية (_free_ai_extras_allowed): تحجز تفعيلة واحدة من السقف
-        اليومي، وتُحجَب على النشر غير المحمي، وتتدهور معلنةً عند النفاد —
-        ثم تشغّل وتخزّن. لا اختلاق: فجوات معلنة بلا مفتاح/شبكة.
+        **قرار حي**: كانت تعيد استخدام بعثة الأسعار (كلود) بميزانية مقيَّدة
+        خلف تأكيد صريح؛ أُزيل نداء كلود هذا نهائياً — المعاينة الآن مورّدو
+        كومتريد فقط (silk_snapshot.quick_snapshot)، بلا أي نداء مدفوع، فلا
+        حاجة لتأكيد أو حجز أو حارس إضافات كلود. المخزن أولاً ما لم يُطلب
+        تحديث — تكرار السؤال أو معاينة كانت خُزِّنت قبل هذا القرار (بلقطة
+        أسعار منافِسة حقيقية من نداء كلود سابق) يُعادان كما هما، مجاناً.
+        لا اختلاق: فجوات معلنة بلا شبكة.
         """
         _require_key(request)
         _rate_limit(request)
@@ -1685,7 +1686,7 @@ def create_app():
             if hs_code is None:
                 hs_note = dp.note   # فجوة معلنة — لا اختلاق رمز HS
 
-        # (١) المخزن أولاً — تكرار مجاني بلا حجز
+        # المخزن أولاً ما لم يُطلب تحديث — تكرار السؤال مجاني دوماً.
         if not req.refresh:
             cached = silk_storage.get_product_snapshot(hs_code, market_ref.iso3)
             if cached is not None:
@@ -1693,29 +1694,13 @@ def create_app():
                               "cost": {"claude_activations": 0,
                                        "note": "من المخزن — بلا تكلفة"}})
 
-        est = {"claude_activations": 1,
-               "note": "لقطة سريعة = تفعيلة كلود واحدة (بعثة الأسعار مقيَّدة "
-                       "الميزانية) — تُحتسب من السقف اليومي"}
-
-        # (٢) التكلفة قبل التشغيل — بلا confirm لا تشغيل ولا حجز
-        if not req.confirm:
-            return _json({"snapshot": None, "cached": False, "cost": est,
-                          "would_exceed_cap": silk_usage.would_exceed_cap(1),
-                          "hs_note": hs_note,
-                          "note": "أكّد بإرسال confirm=true للتشغيل — تُحتسب "
-                                  "تفعيلة واحدة من السقف اليومي"})
-
-        # (٣) confirm — نفس حارس المدفوع المجاني (حجز/حجب/تدهور معلن)
-        ai_ok, ai_note = _free_ai_extras_allowed()
-        if not ai_ok:
-            return _json({"snapshot": None, "cached": False, "cost": est,
-                          "blocked_note": ai_note})
-
         snap = silk_snapshot.quick_snapshot(product, hs_code, market_ref)
         if hs_note:
             snap["hs_note"] = hs_note
         silk_storage.save_product_snapshot(hs_code, market_ref.iso3, snap)
-        return _json({"snapshot": snap, "cached": False, "cost": est})
+        return _json({"snapshot": snap, "cached": False,
+                      "cost": {"claude_activations": 0,
+                               "note": "معاينة فورية مجانية — بلا أي نداء كلود"}})
 
     class OutcomeRequest(BaseModel):
         """جسم تسجيل النتيجة الفعلية — actual-outcome body (wave 1)."""

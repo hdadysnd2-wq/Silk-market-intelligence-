@@ -1,6 +1,10 @@
-"""اختبارات PR-E (R4 لقطة المنتج الجديد السريعة): «هل يستحق دراسة كاملة؟»
-تعيد استخدام بعثة pricing_scout مقيَّدةً + تخزين لكل (منتج × سوق) فتكرار
-السؤال يُخدَم من المخزن بلا حرق أرصدة، والتكلفة تُعرَض قبل التشغيل.
+"""اختبارات R4/ITEM٢ (معاينة المنتج الفورية): «هل يستحق دراسة كاملة؟»
+
+قرار حي (بلاغ تدقيق التكلفة): كانت تعيد استخدام بعثة pricing_scout (كلود)
+بميزانية مقيَّدة خلف تأكيد صريح؛ أُزيل نداء كلود هذا نهائياً — المعاينة
+الآن **مجانية دوماً** (مورّدو كومتريد فقط)، مع تخزين لكل (منتج × سوق) يخدم
+التكرار من المخزن. لا سعر منافِس على زوج جديد لم يُلقَط — فجوة معلنة صريحة
+توجّه إلى البحث العميق، لا اختلاق.
 
 المبدأ المؤسِّس: بلا شبكة/مفتاح => فجوات معلنة لا اختلاق.
 Run:  python3 -m pytest tests/test_r4_product_snapshot.py -q
@@ -102,45 +106,45 @@ def _client():
         importlib.reload(api)
 
 
-def test_snapshot_precheck_shows_cost_without_running():
-    """بلا confirm: تُعاد التكلفة المقدَّرة ولا تشغيل ولا تخزين."""
-    ran = {"n": 0}
+def test_snapshot_runs_immediately_free_no_confirm_needed():
+    """لا خطوة تأكيد بعد الآن — المعاينة تُشغَّل وتُخزَّن فوراً، مجاناً."""
+    canned = {"product": "تمر", "hs_code": "080410",
+              "market": {"iso3": "ARE"}, "competing_products": [],
+              "top_suppliers": [], "worth_full_study": {"worth": None, "why": "y"},
+              "from_store": False}
+    calls = {"n": 0}
 
-    def spy(*a, **k):
-        ran["n"] += 1
-        return {}
+    def fake(product, hs, ref):
+        calls["n"] += 1
+        return dict(canned)
 
-    with _client() as client, mock.patch("silk_snapshot.quick_snapshot", spy):
-        r = client.post("/products/snapshot",
-                        json={"product": "تمر", "market": "United Arab Emirates"})
+    with _client() as client, mock.patch("silk_snapshot.quick_snapshot", fake):
+        r = client.post("/products/snapshot", json={
+            "product": "تمر", "hs_code": "080410",
+            "market": "United Arab Emirates"})
     assert r.status_code == 200
     body = r.json()
-    assert body["snapshot"] is None
-    assert body["cost"]["claude_activations"] == 1     # التكلفة معروضة
-    assert body["cached"] is False
-    assert ran["n"] == 0                               # لم يُشغَّل شيء
+    assert body["snapshot"] is not None
+    assert body["cached"] is False and calls["n"] == 1
+    assert body["cost"]["claude_activations"] == 0     # مجانية دوماً الآن
 
 
-def test_snapshot_confirm_runs_stores_and_repeat_is_cached():
-    """confirm يشغّل ويخزّن؛ تكرار السؤال (بلا refresh) يُخدَم من المخزن
-    بتكلفة صفر — لا حرق أرصدة."""
+def test_snapshot_repeat_without_refresh_is_cached_no_rerun():
     canned = {"product": "تمر", "hs_code": "080410",
               "market": {"iso3": "ARE"}, "competing_products": [{"item": "x"}],
               "top_suppliers": [], "worth_full_study": {"worth": True, "why": "y"},
               "from_store": False}
     calls = {"n": 0}
 
-    def fake(product, hs, ref, **k):
+    def fake(product, hs, ref):
         calls["n"] += 1
         return dict(canned)
 
     with _client() as client, mock.patch("silk_snapshot.quick_snapshot", fake):
         r1 = client.post("/products/snapshot", json={
             "product": "تمر", "hs_code": "080410",
-            "market": "United Arab Emirates", "confirm": True})
-        assert r1.status_code == 200 and r1.json()["snapshot"] is not None
+            "market": "United Arab Emirates"})
         assert r1.json()["cached"] is False and calls["n"] == 1
-        # تكرار بلا refresh => من المخزن، صفر تشغيل
         r2 = client.post("/products/snapshot", json={
             "product": "تمر", "hs_code": "080410",
             "market": "United Arab Emirates"})
@@ -153,7 +157,7 @@ def test_snapshot_confirm_runs_stores_and_repeat_is_cached():
 def test_snapshot_refresh_reruns_even_if_cached():
     calls = {"n": 0}
 
-    def fake(product, hs, ref, **k):
+    def fake(product, hs, ref):
         calls["n"] += 1
         return {"product": product, "hs_code": hs, "market": {"iso3": "ARE"},
                 "competing_products": [], "top_suppliers": [],
@@ -163,19 +167,41 @@ def test_snapshot_refresh_reruns_even_if_cached():
     with _client() as client, mock.patch("silk_snapshot.quick_snapshot", fake):
         client.post("/products/snapshot", json={
             "product": "تمر", "hs_code": "080410",
-            "market": "United Arab Emirates", "confirm": True})
+            "market": "United Arab Emirates"})
         client.post("/products/snapshot", json={
             "product": "تمر", "hs_code": "080410",
-            "market": "United Arab Emirates", "refresh": True, "confirm": True})
+            "market": "United Arab Emirates", "refresh": True})
     assert calls["n"] == 2                             # التحديث أعاد التشغيل
 
 
+def test_snapshot_never_calls_claude():
+    """إثبات بنيوي — لا نداء كلود إطلاقاً من هذا المسار بعد الآن (ITEM ٢).
+
+    (لا block_network هنا — يقطع socket.socket عالمياً فيكسر نقل TestClient
+    الداخلي؛ نفس القيد الموثَّق في CLAUDE.md، الحجب هنا عبر requests فقط.)
+    """
+    def _boom(*a, **k):
+        raise AssertionError("quick snapshot must never call Claude")
+
+    with _client() as client, \
+         mock.patch("silk_llm_provider.AnthropicProvider.complete", side_effect=_boom), \
+         mock.patch("silk_llm_provider.AnthropicProvider.complete_tools", side_effect=_boom), \
+         mock.patch("requests.sessions.Session.request",
+                    side_effect=OSError("network disabled for hermetic test")):
+        r = client.post("/products/snapshot", json={
+            "product": "تمر", "hs_code": "080410",
+            "market": "United Arab Emirates"})
+    assert r.status_code == 200
+    assert r.json()["snapshot"]["competing_products"] == []   # فجوة معلنة لا اختلاق
+
+
 def test_snapshot_ui_wired():
-    """الواجهة: زرّ «لقطة سريعة» + تدفق التكلفة-قبل-التشغيل موصولان."""
+    """الواجهة: زرّ «معاينة فورية» + مسار مجاني مباشر بلا تأكيد."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     html = open(os.path.join(root, "web", "index.html"), encoding="utf-8").read()
     assert 'id="snapBtn"' in html
     assert "function quickSnapshot" in html
     assert "/products/snapshot" in html
-    assert "confirm:true" in html                      # مسار التأكيد
+    assert "confirm:true" not in html                  # مسار التأكيد أُزيل
     assert "من المخزن" in html                          # وسم الخدمة من المخزن
+    assert "بلا أي نداء كلود" in html or "مجانية" in html
