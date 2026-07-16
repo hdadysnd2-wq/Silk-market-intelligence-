@@ -96,6 +96,10 @@ _TEST_ANCHORS = [
       "def test_genuinely_unresolved_gap_stays_verbatim"]),
     (13, "tests/test_client_export_redact_not_refuse.py",
      ["def test_render_client_docx_does_not_501_on_english_source_title"]),
+    (14, "tests/test_report_output_overhaul.py",
+     ["def test_quality_gate_fails_on_confidentiality_leak_tokens",
+      "def test_docx_is_rtl_document_wide",
+      "def test_finding_assembly_uses_public_source_not_tool_use"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
@@ -103,6 +107,12 @@ _SYMBOL_ANCHORS_EXTRA = [
     (12, "silk_render.py", ["_reconcile_mission_limits", "_first_clause"]),
     (13, "silk_reports.py", ["_client_redact_residual"]),
     (13, "tools/post_deploy_smoke.py", ["report.docx"]),
+    # البند ١٤ — تحديث مخرجات تقرير البحث (سرّية/عملة/RTL/اكتمال/PDF/أسلوب)
+    (14, "silk_quality_gate.py", ["_check_confidentiality_leaks",
+                                  "_check_style", "_check_trailing_ellipsis"]),
+    (14, "silk_reports.py", ["def _apply_rtl", "def docx_to_pdf",
+                            "def _clean_source_label", "def _trim_sentence"]),
+    (14, "silk_render.py", ["_map_mission_keys", "_CLAUDE_WORD_RE"]),
 ]
 
 

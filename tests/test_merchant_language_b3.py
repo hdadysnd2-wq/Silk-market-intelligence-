@@ -98,13 +98,24 @@ def test_glossary_lists_only_terms_actually_used():
     assert "EORI" not in glossary and "TRACES" not in glossary
 
 
-def test_usd_amount_contextualized_in_sar():
-    """129.6 مليون دولار يُسيَّق بمقابله التقريبي بالريال (سعر الربط 3.75)."""
+def test_usd_amount_stays_usd_no_sar_conversion():
+    """§1 (أمر العمل الرئيس): العملة تبقى بالدولار كما وردت — لا تحويل إلى
+    الريال ولا مقابل مُقوَّس. «129.6 مليون دولار» تظهر كما هي، ولا «ريال»
+    ولا «بسعر الربط» في أي مخرَج (يُلغى تسييق B1 الريالي)."""
     import silk_render
     from silk_reports import render_markdown
     md = render_markdown(silk_render.build_view(_blob()))
-    assert "ريال" in md, "لم يُسيَّق مبلغ الدولار بالريال"
-    assert "486" in md  # 129.6 × 3.75 ≈ 486
+    assert "129.6 مليون دولار" in md, "المبلغ الدولاري تغيّرت صياغته"
+    assert "ريال" not in md, "تسرّب تحويل ريالي رغم إلغائه في §1"
+    assert "بسعر الربط" not in md and "486" not in md
+
+
+def test_million_dollar_shorthand_is_unified():
+    """§1: الاختزال «م$» يُوحَّد إلى الصيغة الكاملة «مليون دولار» ولا يبقى."""
+    import silk_render
+    txt, _ = silk_render._apply_merchant_language(  # noqa: SLF001
+        "بلغت الواردات 61م$ عام 2023.")
+    assert "61 مليون دولار" in txt and "م$" not in txt
 
 
 def test_no_fabrication_gloss_only_annotates_never_invents_numbers():

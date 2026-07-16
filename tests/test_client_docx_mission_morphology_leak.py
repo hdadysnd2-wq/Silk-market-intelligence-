@@ -68,12 +68,15 @@ def test_other_dual_and_pronoun_suffixed_mission_forms_also_covered():
 
 
 def test_preexisting_singular_and_plural_conversions_unchanged():
-    """لا انحدار: الصيغ الأصلية (مفرد/جمع بلا أداة تعريف) يجب أن تستمر
-    بالتحويل تماماً كما كانت قبل هذا الإصلاح."""
-    assert sr._client_sanitize("بعثة واحدة") == "مسار بحث واحدة"
-    assert sr._client_sanitize("البعثات الاثنتي عشرة") == "المسارات البحث الاثنتي عشرة"
+    """§2.2 (أمر العمل الرئيس): «بعثة»/«بعثات» لم تعد تُحوَّل إلى «مسار بحث»
+    (نسبة داخلية لمسار بحث) بل إلى صياغة محايدة «جمع البيانات» — لا كشف
+    بنية. باقي التحويلات (الفجوات المعلنة) كما هي."""
+    assert sr._client_sanitize("بعثة واحدة") == "جمع البيانات واحدة"
+    assert sr._client_sanitize("البعثات الاثنتي عشرة") == "العمليات جمع البيانات الاثنتي عشرة"
     assert sr._client_sanitize("وهي فجوة معلنة صريحة") == "وهي بند يحتاج تحققاً صريحة"
     assert sr._client_sanitize("فجوات معلنة عديدة") == "بنود تحتاج تحققاً عديدة"
+    # §2.2: لا «مسار بحث» في المخرَج بعد التطهير.
+    assert "مسار بحث" not in sr._client_sanitize("بعثة وبعثات ومهمّة")
 
 
 def test_full_live_report_excerpt_survives_client_docx_guard_cleanly():

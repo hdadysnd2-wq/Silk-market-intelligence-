@@ -74,7 +74,9 @@ def _deep_research_result():
     }
 
 
-def test_cover_wordmark_placeholder_present_without_logo(monkeypatch):
+def test_cover_wordmark_is_real_not_bracketed_placeholder(monkeypatch):
+    """§7 (أمر العمل الرئيس): الغلاف بلا نصّ نائب مُقوَّس «[شعار سِلك]» —
+    علامة اسمية حقيقية «سِلك» بلون العلامة، لا قوس نائب."""
     from silk_render import build_view
     from silk_reports import render_docx
     monkeypatch.setenv("SILK_HERMETIC", "1")
@@ -82,7 +84,8 @@ def test_cover_wordmark_placeholder_present_without_logo(monkeypatch):
     path = os.path.join(tempfile.mkdtemp(), "brand.docx")
     render_docx(view, path)
     text = docx_all_text(path)
-    assert "شعار سِلك" in text
+    assert "[شعار سِلك]" not in text and "شعار سِلك" not in text
+    assert "سِلك" in text
 
 
 def test_page_header_and_footer_present(monkeypatch):
@@ -122,7 +125,9 @@ def test_table_header_row_shaded_with_primary_color(monkeypatch):
     assert found
 
 
-def test_markdown_table_has_a_caption(monkeypatch):
+def test_markdown_table_has_no_machine_caption(monkeypatch):
+    """§7 (أمر العمل الرئيس): لا تعليق آليّ «جدول: المؤشر · القيمة» قبل
+    الجداول — الأعمدة تعرّف نفسها بترويستها. عنوان حقيقي أو لا شيء."""
     from silk_render import build_view
     from silk_reports import render_docx
     monkeypatch.setenv("SILK_HERMETIC", "1")
@@ -130,7 +135,7 @@ def test_markdown_table_has_a_caption(monkeypatch):
     path = os.path.join(tempfile.mkdtemp(), "caption.docx")
     render_docx(view, path)
     text = docx_all_text(path)
-    assert "جدول: الدولة" in text
+    assert "جدول: " not in text
 
 
 def test_sample_docx_regenerated_reflects_new_branding_and_structure():
@@ -138,7 +143,7 @@ def test_sample_docx_regenerated_reflects_new_branding_and_structure():
     path = os.path.join(root, "samples", "research_report_latest.docx")
     assert os.path.exists(path)
     text = docx_all_text(path)
-    assert "شعار سِلك" in text
+    assert "[شعار سِلك]" not in text  # §7: لا نصّ نائب مُقوَّس
     assert "منهجية البحث ونطاقه" in text
     assert "التوصيات الاستراتيجية" in text
     assert "سِلك لذكاء الأسواق" in text

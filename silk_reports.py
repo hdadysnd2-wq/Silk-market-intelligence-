@@ -52,7 +52,7 @@ def _degraded_banner_text(view: dict) -> str | None:
     مرئياً في كل مشتق بدل هيكل يبدو كالمنتج النهائي)."""
     if not view.get("degraded"):
         return None
-    reason = view.get("degraded_reason") or "طبقة كلود غير متاحة"
+    reason = view.get("degraded_reason") or "خدمة التحليل الآلي غير متاحة"
     return f"⚠ DEGRADED — نظام الذكاء الاصطناعي غير متاح ({reason})"
 
 
@@ -103,6 +103,49 @@ def _clean_report_text(s: object, max_len: int = 300) -> str:
     if text.lstrip().startswith(("{", "```")):
         return "بند تقني غير قابل للعرض المباشر — التفاصيل الكاملة في أثر التتبّع."
     return _truncate_at_word(text, max_len)
+
+
+# §5/§6 (أمر العمل الرئيس): قصّ نظيف بلا «…» متدلٍّ + رابط عمومي + مصدر نظيف.
+_URL_RE = re.compile(r"https?://[^\s)>\]،؛]+")
+_TOOLUSE_RE = re.compile(r"\s*\((?:Claude\s*)?tool[-\s]?use\)\s*", re.I)
+
+
+def _first_url(*texts: object) -> str:
+    """أول رابط http(s) في أيٍّ من النصوص — لعمود «الرابط» في سجل الأدلة.
+    لا اختلاق: «—» إن لم يُرصَد رابط فعلي (DataPoint لا يحمل حقل رابط مستقلّ)."""
+    for t in texts:
+        m = _URL_RE.search(str(t or ""))
+        if m:
+            return m.group(0).rstrip(".,،؛)")
+    return "—"
+
+
+def _clean_source_label(s: object) -> str:
+    """اسم مصدر نظيف لسجل الأدلة (§2/§6) — يُزال وسم «(Claude tool-use)»
+    وأي بادئة وكيل داخلية، فيبقى اسم المصدر العمومي (UN Comtrade …) وحده.
+    شبكة أمان أخيرة فوق الإصلاح في المصدر (silk_llm_runtime finding assembly)."""
+    txt = _TOOLUSE_RE.sub(" ", str(s or ""))
+    txt = re.sub(r"LLM(?:Mission)?Agent:\s*[A-Za-z_]+", "", txt)
+    return re.sub(r"\s{2,}", " ", txt).strip(" ،-—") or "—"
+
+
+def _trim_sentence(s: object, max_len: int = 240) -> str:
+    """قصّ نظيف عند حدّ جملة (§5/§6 — «سجل الأدلة» لا يعرض حقيقة مبتورة
+    بـ«…»): النص كاملاً إن كان ضمن الحدّ، وإلا يُقصّ عند آخر علامة ترقيم
+    ختامية قبل الحدّ (. ! ؟ ؛ ،) بلا نقاط حذف؛ فإن غابت فعند آخر كلمة كاملة."""
+    text = str(s or "").strip()
+    if not text:
+        return text
+    if text.lstrip().startswith(("{", "```")):
+        return "بند تقني غير قابل للعرض المباشر — التفاصيل في أثر التتبّع."
+    if len(text) <= max_len:
+        return text
+    cut = text[:max_len]
+    best = max((cut.rfind(ch) for ch in ".!؟؛،"), default=-1)
+    if best > max_len * 0.4:
+        return cut[:best + 1].rstrip()
+    sp = cut.rfind(" ")
+    return (cut[:sp] if sp > 0 else cut).rstrip()
 
 
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
@@ -202,6 +245,122 @@ def _set_cell_shading(cell, hex_color: str) -> None:
     cell._tc.get_or_add_tcPr().append(shd)
 
 
+# §4 (أمر العمل الرئيس — RTL): عائلة خطّ عربية الشكل. Word يعرضها مباشرة؛
+# LibreOffice (مسار PDF) يبدّلها بأقرب عائلة عربية متاحة. تُضبط على ascii+cs
+# فتُشكَّل الحروف موصولةً بلا مربّعات tofu.
+_RTL_BODY_FONT = "Arial"
+
+
+def _set_rtl_paragraph(ppr) -> None:
+    """§4: أضِف <w:bidi/> + محاذاة يمين على خصائص فقرة (pPr) عبر oxml —
+    اتجاه أساس RTL فتتدفّق الفقرة والقوائم من اليمين."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    if ppr.find(qn("w:bidi")) is None:
+        ppr.append(OxmlElement("w:bidi"))
+    jc = ppr.find(qn("w:jc"))
+    if jc is None:
+        jc = OxmlElement("w:jc")
+        ppr.append(jc)
+    jc.set(qn("w:val"), "right")
+
+
+def _set_rtl_run_fonts(rpr, font: str = _RTL_BODY_FONT) -> None:
+    """§4: أضِف <w:rtl/> + خطّ عربي (ascii+hAnsi+cs مع szCs) على rPr — كي
+    يُشكَّل النصّ العربي فعلاً (python-docx لا يضبط w:cs)."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    if rpr.find(qn("w:rtl")) is None:
+        rpr.append(OxmlElement("w:rtl"))
+    rfonts = rpr.find(qn("w:rFonts"))
+    if rfonts is None:
+        rfonts = OxmlElement("w:rFonts")
+        rpr.insert(0, rfonts)
+    for attr in ("w:ascii", "w:hAnsi", "w:cs"):
+        rfonts.set(qn(attr), font)
+    # szCs بجانب sz (المطلوب في §4) — إن وُجد sz انسخه إلى szCs.
+    sz = rpr.find(qn("w:sz"))
+    if sz is not None and rpr.find(qn("w:szCs")) is None:
+        szcs = OxmlElement("w:szCs")
+        szcs.set(qn("w:val"), sz.get(qn("w:val")))
+        rpr.append(szcs)
+
+
+def _set_table_rtl(table) -> None:
+    """§4: اجعل الجدول من اليمين لليسار — <w:bidiVisual/> على tblPr (تتدفّق
+    الأعمدة يميناً) + محاذاة كل خلية يميناً + عرض أعمدة حقيقي بوحدات DXA."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Twips
+    tblPr = table._tbl.tblPr
+    if tblPr.find(qn("w:bidiVisual")) is None:
+        tblPr.append(OxmlElement("w:bidiVisual"))
+    # عرض أعمدة حقيقي (DXA): توزيع عرض الصفحة المتاح (~9360 twips لـA4 بهوامش)
+    # بالتساوي — الجداول لم تكن تحدّد أيّ عرض (autofit فقط).
+    cols = len(table.columns)
+    if cols:
+        table.autofit = False
+        total = 9360
+        each = Twips(total // cols)
+        for col in table.columns:
+            for cell in col.cells:
+                cell.width = each
+    for row in table.rows:
+        for cell in row.cells:
+            for p in cell.paragraphs:
+                _set_rtl_paragraph(p._p.get_or_add_pPr())
+
+
+def _apply_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
+    """§4 (أمر العمل الرئيس): اجعل المستند كلّه من اليمين لليسار على مستوى
+    الافتراضات لا ترقيعاً لكل عنصر — (١) كل مقطع يحمل <w:bidi/>؛ (٢) نمط
+    Normal وكل أنماط الفقرات/العناوين: bidi + محاذاة يمين + <w:rtl/> + خطّ
+    عربي (ascii+cs). الرموز اللاتينية (الدولار، HS، الروابط، أرقام اللوائح)
+    تبقى LTR داخل الفقرة تلقائياً عبر خوارزمية bidi (اتجاه الأساس RTL)."""
+    from docx.enum.style import WD_STYLE_TYPE
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    for section in doc.sections:
+        sectPr = section._sectPr
+        if sectPr.find(qn("w:bidi")) is None:
+            sectPr.append(OxmlElement("w:bidi"))   # <w:jc> غير صالح على sectPr
+    for style in doc.styles:
+        if getattr(style, "type", None) != WD_STYLE_TYPE.PARAGRAPH:
+            continue
+        try:
+            _set_rtl_paragraph(style.element.get_or_add_pPr())
+            _set_rtl_run_fonts(style.element.get_or_add_rPr(), font)
+        except Exception:  # noqa: BLE001 — نمط بلا pPr/rPr صالح يُتخطّى
+            continue
+
+
+def _finalize_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
+    """§4: تمريرة ختامية تضمن أن **كل** فقرة (bidi+محاذاة يمين) و**كل** run
+    (<w:rtl/> + خطّ عربي ascii+cs) تحمل الاتجاه صراحةً — لا اعتماداً على وراثة
+    النمط وحدها (بعض إصدارات Word لا تُورِّث rtl للتنسيق المباشر). تشمل المتن
+    والجداول (المتداخلة) وترويسات/تذييلات المقاطع."""
+    def _do_paragraph(p):
+        _set_rtl_paragraph(p._p.get_or_add_pPr())
+        for run in p.runs:
+            _set_rtl_run_fonts(run._r.get_or_add_rPr(), font)
+
+    def _walk_tables(tables):
+        for t in tables:
+            for row in t.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        _do_paragraph(p)
+                    _walk_tables(cell.tables)   # جداول متداخلة (SWOT وغيرها)
+
+    for p in doc.paragraphs:
+        _do_paragraph(p)
+    _walk_tables(doc.tables)
+    for section in doc.sections:
+        for hf in (section.header, section.footer):
+            for p in hf.paragraphs:
+                _do_paragraph(p)
+
+
 def _add_page_number_field(paragraph) -> None:
     """أدرج حقل رقم الصفحة الديناميكي (PAGE) — python-docx لا يعرض حقول
     Word كخاصية عليا؛ نمط oxml موثَّق شائع (w:fldChar begin/instrText/end)."""
@@ -222,8 +381,9 @@ def _add_page_number_field(paragraph) -> None:
 
 def _add_cover_wordmark(doc, branding: dict) -> None:
     """شعار سِلك على الغلاف — صورة فعلية إن وُجد `logo_path` صالح، وإلا
-    نص نائب ("[شعار سِلك]") بلون سِلك الأساس. لا استثناء يُسقِط التوليد
-    إن تعذّرت قراءة الصورة (مسار خاطئ/صيغة غير مدعومة) — رجوع للنص النائب."""
+    علامة اسمية نصّية حقيقية «سِلك» بلون العلامة الأساس (§7، أمر العمل
+    الرئيس: لا نصّ نائب بين أقواس «[شعار سِلك]»). لا استثناء يُسقِط التوليد
+    إن تعذّرت قراءة الصورة (مسار خاطئ/صيغة غير مدعومة) — رجوع للعلامة النصّية."""
     logo_path = branding.get("logo_path")
     if logo_path:
         try:
@@ -233,9 +393,11 @@ def _add_cover_wordmark(doc, branding: dict) -> None:
                 return
         except Exception as e:  # noqa: BLE001 — الشعار تحسين عرض لا شرط
             log.warning("cover logo unavailable (%s): %s", logo_path, e)
+    from docx.shared import Pt
     p = doc.add_paragraph()
-    run = p.add_run("[شعار سِلك]")
+    run = p.add_run("سِلك")   # علامة اسمية حقيقية لا نصّ نائب مُقوَّس
     run.bold = True
+    run.font.size = Pt(28)
     run.font.color.rgb = _hex_to_rgbcolor(branding["primary_color"])
 
 
@@ -305,8 +467,9 @@ def _render_markdown_table(doc, table_lines: list[str]) -> None:
     headers, *data = rows
     n = len(headers)
     norm = [(r + [""] * n)[:n] for r in data]
-    caption = "جدول: " + " · ".join(h for h in headers if h)  # الموجة ١١
-    _add_table(doc, headers, norm, caption=caption)
+    # §7 (أمر العمل الرئيس): لا تعليق آليّ («جدول: المؤشر · القيمة») قبل
+    # الجداول — عناوينها من ترويستها. عنوان حقيقي أو لا شيء، لا وصف آلة.
+    _add_table(doc, headers, norm, caption=None)
 
 
 def _narrative_exec_summary(view: dict) -> list[str]:
@@ -670,6 +833,7 @@ def _add_table(doc, headers: list[str], rows: list[list],
         if row_idx % 2 == 1:  # شريط متناوب خفيف كل صف زوجي (١-مرتكز)
             for c in cells:
                 _set_cell_shading(c, "F2F2F2")
+    _set_table_rtl(table)   # §4: تدفّق أعمدة يميناً + محاذاة خلايا + عرض DXA
 
 
 def _docx_entry_strategy(doc, m: dict) -> None:
@@ -946,6 +1110,7 @@ def _docx_swot(doc, m: dict) -> None:
             for it in items:
                 cell.add_paragraph(f"{it.get('text')} — الدليل: "
                                    f"{it.get('evidence')}", style="List Bullet")
+    _set_table_rtl(table)   # §4: شبكة SWOT ٢×٢ من اليمين لليسار كذلك
     if sw.get("note"):
         doc.add_paragraph(str(sw["note"]))
 
@@ -1137,7 +1302,8 @@ def _docx_deep_research(doc, view: dict) -> None:
             continue
         for f in items:
             doc.add_paragraph(str(f.get("value")), style="List Bullet")
-            doc.add_paragraph(f"[{f.get('source')} — {_evidence_badge(f.get('confidence'))}] "
+            doc.add_paragraph(f"[{_clean_source_label(f.get('source'))} — "
+                              f"{_evidence_badge(f.get('confidence'))}] "
                               f"{f.get('note') or ''}", style="Intense Quote")
 
     # سدّ خلل (الطبقة ٨): كان هذا الشرط متداخلاً داخل حلقة التقاطعات
@@ -1166,27 +1332,29 @@ def _docx_deep_research(doc, view: dict) -> None:
 
 
 def _docx_technical_appendix(doc, dr: dict) -> None:
-    """ملحق تقني للمدقّقين — بلاغ حي (P0-B، الموجة ٩): الأرقام الكاملة
-    (ثقة/مصدر/تاريخ) نُقلت من متن السرد (شارات مبسّطة فقط هناك) لجدول واحد
-    شامل هنا — لا معلومة ضاعت، فقط انتقلت لموضع المدقّق لا القارئ العادي."""
+    """سجل الأدلة للمدققين (§6، أمر العمل الرئيس) — كل استشهاد بحقيقته
+    الكاملة ومصدره العمومي الحقيقي ورابطه (إن رُصد) وتاريخ جمعه وقوة دليله.
+    لا اسم بعثة داخلي، لا وسم «(Claude tool-use)»، لا رقم ثقة خام (شارة
+    ✓/◐/○ فقط، §7)، ولا حقيقة مبتورة بـ«…» (§5 — قصّ عند حدّ جملة)."""
     rows = []
-    for key, m in (dr.get("missions") or {}).items():
+    for _key, m in (dr.get("missions") or {}).items():
         findings = m.get("findings") if isinstance(m, dict) else None
-        label = (m.get("label") if isinstance(m, dict) else None) or key
         for f in (findings or []):
             rows.append([
-                label, _clean_report_text(f.get("value"), max_len=120),
-                f.get("source") or "—",
+                _trim_sentence(f.get("value"), 240),
+                _clean_source_label(f.get("source")),
+                _first_url(f.get("note"), f.get("source"), f.get("value")),
                 f.get("retrieved_at") or "—",
-                f"{f.get('confidence')} ({_evidence_badge(f.get('confidence'))})"])
+                _evidence_badge(f.get("confidence"))])
     if not rows:
         return
-    doc.add_heading("ملحق تقني — كل الاستشهادات بثقتها الرقمية الكاملة",
-                    level=2)
-    doc.add_paragraph("للمدقّقين فقط — القيمة الرقمية الكاملة لكل بند مذكور "
-                      "أعلاه بشارته المبسّطة.", style="Intense Quote")
-    _add_table(doc, ["البعثة", "الادّعاء", "المصدر", "تاريخ الجلب", "الثقة"],
-              rows[:80])
+    doc.add_heading("سجل الأدلة للمدققين", level=2)
+    doc.add_paragraph("لكل حقيقة مصدرها العمومي ورابطها (إن توفّر) وتاريخ "
+                      "جمعها وقوة دليلها (✓ موثّق، ◐ مُقدَّر، ○ غير متحقّق).",
+                      style="Intense Quote")
+    _add_table(doc,
+               ["الحقيقة", "المصدر", "الرابط", "تاريخ الجمع", "قوة الدليل"],
+               rows[:80])
 
 
 def _render_research_docx(doc, view: dict) -> None:
@@ -1330,13 +1498,13 @@ _CLIENT_SANITIZE = [
     (re.compile(r"\b(?:" + "|".join(_CLIENT_TOOL_NAMES) + r")\b"),
      "السجلّات الرسمية"),
     (re.compile(r"من\s+السجلّات الرسمية"), "من السجلّات الرسمية"),
-    (re.compile(r"LLMMissionAgent|LLMAgent"), "مسار البحث"),
-    # صيغ المثنى/الضمير المتصل لـ"بعثة" (ة→ت نحوياً) — يجب أن تُحوَّل قبل
-    # الصيغتين المفردة/الجمع أدناه وإلا يلتقطها فرع الحارس "ت" الجديد فيُسقِط
-    # التصدير بدل تحويله لمفردة تجارية آمنة.
-    (re.compile(r"بعثت\w*"), "مسار بحث"),
-    (re.compile(r"بعثات"), "مسارات البحث"),
-    (re.compile(r"بعثة"), "مسار بحث"),
+    (re.compile(r"LLMMissionAgent|LLMAgent"), "مصدر البيانات"),
+    # §2.2 (أمر العمل الرئيس): لا تُنسَب الحقائق لمسارات بحث داخلية — الصياغة
+    # المحايدة «جمع البيانات» تحلّ محل «بعثة»/«مسار بحث». صيغ المثنى/الضمير
+    # المتصل لـ"بعثة" (ة→ت نحوياً) تُحوَّل قبل الصيغتين المفردة/الجمع أدناه.
+    (re.compile(r"بعثت\w*"), "جمع البيانات"),
+    (re.compile(r"بعثات"), "عمليات جمع البيانات"),
+    (re.compile(r"بعثة"), "جمع البيانات"),
     (re.compile(r"نجحت في جمع"), "أنتجت"),
     (re.compile(r"ناجحة"), "مكتملة"),
     (re.compile(r"نجحت"), "اكتملت"),
@@ -1402,7 +1570,7 @@ def _client_forbidden_hits(blob: str) -> list[str]:
 # إفصاح، بدل إسقاط التصدير كله بـ501 على تسرّب واحد. الحارس يبقى شبكة أمان
 # أخيرة لِما يستحيل تنقيته فقط.
 _CLIENT_REDACT_PLACEHOLDER = {
-    "mission": "مسار بحث",
+    "mission": "مصدر البيانات",
     "status": "الحالة",
     "successful": "مكتملة",
     "run": "دورة تحليل",
@@ -1563,20 +1731,18 @@ def _client_render_body_block(doc, lines: list[str]) -> None:
 
 
 def _client_methodology_paragraph(dr: dict) -> str:
-    """فقرة المنهجية المضبوطة (٣ أسطر) — تحلّ محل جدول البعثات التشغيلي في
-    تصدير العميل (بلاغ المالك، النقطة ٤): عدد مسارات البحث، المصادر، تاريخ
-    الجلب — بمفردات تجارية بحتة، من حقول محسوبة فعلاً لا اختلاق."""
+    """فقرة المنهجية المضبوطة (§2.5، أمر العمل الرئيس) — صياغة عامة لا تكشف
+    بنية النظام: المصادر المُستشارة، تاريخ الجمع، وأسلوب التحقّق. **لا ذكر
+    لوكلاء أو أدوات أو مسارات بحث أو عدد مكوّنات داخلية** — من حقول محسوبة
+    فعلاً (المصادر العمومية وتواريخها) لا اختلاق."""
     missions = dr.get("missions") or {}
-    n_tracks = len(missions)
-    n_producing = sum(
-        1 for m in missions.values()
-        if not (m.get("failed") if isinstance(m, dict) else False))
     # المصادر البشرية الفريدة الظاهرة فعلاً في النتائج (لا أسماء أدوات).
     sources = set()
     for m in missions.values():
         for f in (m.get("findings") or []) if isinstance(m, dict) else []:
-            src = str(f.get("source") or "").strip()
-            if src and not _client_forbidden_hits(src):
+            src = _client_sanitize(_clean_source_label(f.get("source")))
+            src = str(src or "").strip()
+            if src and src != "—" and not _client_forbidden_hits(src):
                 # اسم مصدر بشري فقط (قبل أيّ شرطة توضيحية).
                 sources.add(re.split(r"\s+[—\-(]", src)[0].strip())
     src_list = "، ".join(sorted(s for s in sources if s)[:6]) or "مصادر رسمية عامة"
@@ -1588,10 +1754,10 @@ def _client_methodology_paragraph(dr: dict) -> str:
     date_txt = (f"أحدث تاريخ جمع بيانات: {dates[-1]}" if dates
                 else "تواريخ الجمع مسجّلة في سجل الأدلة أدناه")
     return (
-        f"اعتمد هذا التقرير على {n_tracks} مسار بحث مستقل، أنتج منها "
-        f"{n_producing} نتائج موثّقة بمصادرها، مع تحليل تقاطعي ومراجعة "
-        f"للاتساق. المصادر الأساسية: {src_list}. {date_txt}. تفاصيل كل "
-        "رقم بمصدره وتاريخه في «سجل الأدلة للمدققين» ختام التقرير.")
+        f"اعتمد هذا التقرير على مصادر رسمية عامة ({src_list})، مع تحليل "
+        "تقاطعي بينها ومراجعة للاتساق قبل الاعتماد. خضعت كل معلومة للتحقّق "
+        f"من مصدرها العمومي المباشر. {date_txt}. تفاصيل كل رقم بمصدره "
+        "وتاريخه في «سجل الأدلة للمدققين» ختام التقرير.")
 
 
 # صياغة تجارية لكل فجوة في قسم "ما لم يكتمل للقرار" (بلاغ المالك، النقطة ٣):
@@ -1820,6 +1986,7 @@ def render_client_docx(view: dict, path: str) -> str:
                            "لتقارير /analyze الكلاسيكية")
 
     doc = Document()
+    _apply_rtl(doc)   # §4: المستند كله من اليمين لليسار (تقرير العميل)
     h = view.get("header") or {}
     market = dr.get("market") or {}
     verdict = dr.get("verdict") or {}
@@ -1913,6 +2080,7 @@ def render_client_docx(view: dict, path: str) -> str:
             "تلقائياً لتقديمها بلغة تجارية؛ الأرقام ومصادرها لم تُمَسّ.",
             style="Intense Quote")
     _client_assert_clean(doc)  # شبكة أمان أخيرة — لِما يستحيل تنقيته فقط
+    _finalize_rtl(doc)         # §4: اتجاه RTL صريح على كل فقرة/run قبل الحفظ
     doc.save(path)
     return path
 
@@ -1949,6 +2117,83 @@ def _client_body_or_fallback(doc, bodies: list[list[str]], dr: dict,
             "التقرير.")
 
 
+# ── §3 (أمر العمل الرئيس): التصدير النهائي PDF غير قابل للتحرير ────────────
+# يُبنى المستند docx أولاً (كل منطق العرض/RTL/التطهير فيه) ثم يُحوَّل PDF عبر
+# LibreOffice headless كخطوة أخيرة، ويُسلَّم الـPDF فقط. تدهور رشيق: إن غاب
+# المحرّك أو فشل التحويل يُرفع RuntimeError برسالة نظيفة (لا docx بديل صامت،
+# لا PDF جزئي) — يلتقطها المسار الأعلى فيعيد خطأً معلَناً للعميل.
+
+_PDF_SOFFICE_CANDIDATES = ("soffice", "libreoffice")
+_PDF_UNAVAILABLE = ("تعذّر إنتاج ملف PDF: محرّك تحويل المستندات غير متاح على "
+                    "الخادم حالياً")
+_PDF_FAILED = "تعذّر إنتاج ملف PDF من المستند"
+
+
+def _find_soffice() -> "str | None":
+    """مسار ثنائي LibreOffice (soffice/libreoffice) إن وُجد على الخادم."""
+    import shutil
+    for name in _PDF_SOFFICE_CANDIDATES:
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def docx_to_pdf(docx_path: str, pdf_path: "str | None" = None,
+                timeout: int = 180) -> str:
+    """§3: حوّل مستند Word إلى PDF عبر LibreOffice headless — يعيد مسار الـPDF.
+
+    تدهور رشيق: RuntimeError برسالة نظيفة إن غاب المحرّك أو فشل التحويل — لا
+    يُسلَّم docx بديلاً صامتاً ولا PDF جزئي (§3/§5). التحويل بلا تعديل على أي
+    رقم أو نصّ — المستند مبنيّ بالكامل في طبقة docx (RTL/تطهير/بوابة الجودة)."""
+    import os
+    import subprocess
+    import tempfile
+    soffice = _find_soffice()
+    if not soffice:
+        raise RuntimeError(_PDF_UNAVAILABLE)
+    if not os.path.exists(docx_path):
+        raise RuntimeError(_PDF_FAILED)
+    out_dir = os.path.dirname(os.path.abspath(pdf_path or docx_path)) or "."
+    profile = tempfile.mkdtemp(prefix="silk_lo_")
+    try:
+        proc = subprocess.run(
+            [soffice, "--headless", "--norestore",
+             f"-env:UserInstallation=file://{profile}",
+             "--convert-to", "pdf", "--outdir", out_dir, docx_path],
+            capture_output=True, timeout=timeout,
+            env={**os.environ, "HOME": profile})
+    except Exception as e:  # noqa: BLE001 — أي فشل تحويل = خطأ معلَن نظيف
+        raise RuntimeError(_PDF_FAILED) from e
+    produced = os.path.join(
+        out_dir, os.path.splitext(os.path.basename(docx_path))[0] + ".pdf")
+    if proc.returncode != 0 or not os.path.exists(produced):
+        raise RuntimeError(_PDF_FAILED)
+    if pdf_path and os.path.abspath(pdf_path) != os.path.abspath(produced):
+        os.replace(produced, pdf_path)
+        return pdf_path
+    return produced
+
+
+def render_client_pdf(view: dict, path: str) -> str:
+    """§3: التقرير النهائي للعميل PDF — يُبنى تقرير العميل docx (المُطهَّر،
+    RTL) ثم يُحوَّل، ويُسلَّم الـPDF فقط."""
+    import os
+    import tempfile
+    tmp_docx = os.path.join(tempfile.mkdtemp(prefix="silk_pdf_"), "client.docx")
+    render_client_docx(view, tmp_docx)
+    return docx_to_pdf(tmp_docx, path)
+
+
+def render_research_pdf(view: dict, path: str) -> str:
+    """§3: تقرير المدقّق PDF — يُبنى تقرير البحث docx (RTL) ثم يُحوَّل."""
+    import os
+    import tempfile
+    tmp_docx = os.path.join(tempfile.mkdtemp(prefix="silk_pdf_"), "research.docx")
+    render_docx(view, tmp_docx)
+    return docx_to_pdf(tmp_docx, path)
+
+
 def render_docx(view: dict, path: str) -> str:
     """التقرير الكامل Word (§10.3) — من القالب الموحّد حصراً.
 
@@ -1966,9 +2211,11 @@ def render_docx(view: dict, path: str) -> str:
 
     _assert_production_clean(view)
     doc = Document()
+    _apply_rtl(doc)   # §4: المستند كله من اليمين لليسار (المدقّق + الكلاسيكي)
 
     if view.get("deep_research"):
         _render_research_docx(doc, view)
+        _finalize_rtl(doc)   # §4: اتجاه RTL صريح على كل فقرة/run قبل الحفظ
         doc.save(path)
         return path
 
@@ -2299,6 +2546,7 @@ def render_docx(view: dict, path: str) -> str:
 
     _docx_deep_research(doc, view)
 
+    _finalize_rtl(doc)   # §4: اتجاه RTL صريح على كل فقرة/run قبل الحفظ
     doc.save(path)
     return path
 
@@ -2462,7 +2710,7 @@ def _md_deep_research(view: dict, prefix: list[str]) -> str:
             for f in items:
                 badge = f.get("confidence_badge") or ""
                 L.append(f"- {_md_cell(f.get('value'))} "
-                         f"[{_md_cell(f.get('source'))} {badge}] "
+                         f"[{_md_cell(_clean_source_label(f.get('source')))} {badge}] "
                          f"{_md_cell(f.get('note') or '')}".rstrip())
             L.append("")
 

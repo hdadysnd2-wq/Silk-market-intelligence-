@@ -1599,6 +1599,45 @@ def create_app():
             media_type="application/vnd.openxmlformats-officedocument"
                        ".wordprocessingml.document")
 
+    @app.get("/analyses/{analysis_id}/report.pdf")
+    def report_pdf(analysis_id: int, request: Request):
+        """§3 (أمر العمل الرئيس): المُسلَّم النهائي PDF غير قابل للتحرير —
+        يُبنى تقرير العميل docx (RTL، مُطهَّر) ثم يُحوَّل PDF ويُسلَّم الـPDF
+        فقط. نفس فصل الجمهور: العميل افتراضاً، المدقّق عبر `?internal=1`.
+        503 نظيف إن غاب محرّك التحويل أو فشل — لا docx بديل صامت، لا PDF جزئي.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        found = silk_storage.get_analysis(analysis_id)
+        if found is None:
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        import tempfile
+        from silk_render import build_view
+        from silk_reports import render_client_pdf, render_research_pdf
+        from fastapi.responses import FileResponse
+        view = build_view(found)
+        internal = str(request.query_params.get("internal") or "").lower() in (
+            "1", "true", "yes")
+        is_research = bool(view.get("deep_research"))
+        out = os.path.join(tempfile.mkdtemp(), "report.pdf")
+        try:
+            if is_research and not internal:
+                path = render_client_pdf(view, out)
+                fname = f"silk_client_report_{analysis_id}.pdf"
+            else:
+                path = render_research_pdf(view, out)
+                fname = f"silk_report_{analysis_id}.pdf"
+        except RuntimeError as e:
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "pdf_export_failure",
+                "فشل إنتاج PDF (محرّك التحويل غير متاح أو فشل) — التفصيل في "
+                "استجابة الطلب الأصلي",
+                context={"analysis_id": analysis_id})
+            raise HTTPException(status_code=503, detail=str(e))
+        return FileResponse(path, filename=fname, media_type="application/pdf")
+
     @app.get("/analyses/{analysis_id}/report.md")
     def report_md(analysis_id: int, request: Request):
         """التقرير الكامل Markdown (Stage 5، §7) — من القالب الموحّد نفسه.

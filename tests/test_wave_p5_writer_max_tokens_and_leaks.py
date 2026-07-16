@@ -195,15 +195,14 @@ def test_writer_escalation_meters_every_attempt_in_cost():
         c = silk_context.begin_data_counter()
         out = aj.deep_report(_mission_reports(), "محلل",
                              {"verdict": "WATCH"}, "تمور", "هولندا")
-    # أوفى جزئي، لا None — ومنذ Q1 (تدقيق التسليم المقتطع) يُلحَق به إعلانُ
-    # اكتمالٍ صريح بدل قطع خام صامت (نفس النص الجزئي في صدره).
-    assert out.startswith("جزء")
-    import silk_ai_judge as _aj
-    assert _aj._TRUNCATION_MARKER in out          # فجوة اكتمال معلنة عند بلوغ السقف
-    assert c["llm_calls"] == 2                     # عُدّت كلتا المحاولتين (8000→16000)
-    # رموز المحاولتين تراكمت (2×50 إخراج) وتظهر في تقدير التكلفة.
+    # §5 (أمر العمل الرئيس): اقتطاع دائم حتى بعد نداء الإكمال الواحد =>
+    # إخفاق داخلي صريح (None)، لا تقرير جزئي يُشحن. القياس يبقى شرطاً: كلّ
+    # محاولة تصعيد + نداء الإكمال عُدّت ورموزها تراكمت في التكلفة.
+    assert out is None
+    assert c["llm_calls"] == 3                     # محاولتا التصعيد + نداء الإكمال
     usage = c["llm_usage"]
-    assert any(v.get("output_tokens") == 100 for v in usage.values())
+    total_out = sum(v.get("output_tokens", 0) for v in usage.values())
+    assert total_out >= 150                        # 3×50 إخراج متراكم
     assert estimate_cost_usd(usage)["total_usd"] > 0
 
 
@@ -272,14 +271,18 @@ def test_fenced_findings_json_with_tool_calls_suffix_becomes_declared_gap():
     out = _strip_internal_plumbing(_LEAK_FENCED_FINDINGS)
     _assert_no_raw_plumbing(out)
     assert "json" not in out.lower()
-    assert "تعذّر تفسير" in out                 # فجوة معلنة بدل JSON خام
+    # §2 (أمر العمل الرئيس): جملة الفجوة لا تذكر «كلود» — صياغة محايدة.
+    assert "تعذّرت قراءة" in out                # فجوة معلنة بدل JSON خام
+    assert "كلود" not in out
 
 
 def test_unparseable_gap_line_keeps_message_but_drops_tool_calls_suffix():
     from silk_render import _strip_internal_plumbing
     out = _strip_internal_plumbing(_LEAK_UNPARSEABLE_SUFFIX)
     assert "tool calls" not in out and "|" not in out
-    assert "غير قابل للتفسير" in out            # جملة الفجوة تبقى، بلا سباكة
+    # §2: بلا ذكر «كلود» — الفجوة تُصاغ محايدةً موجَّهةً للقارئ.
+    assert "تعذّرت قراءة بيانات هذا البند" in out
+    assert "كلود" not in out
 
 
 def test_quality_gate_flags_arabic_keyed_raw_json():
