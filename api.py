@@ -281,6 +281,11 @@ def create_app():
             log.warning("view build failed: %s", e)
             return {"error": f"view error: {type(e).__name__}: {e}"}
 
+    def _gmaps_health_status() -> str:
+        """C1: حالة مكشطة الخرائط لـ/health — تعطيل نظيف إن غاب المتغيّر."""
+        import silk_gmaps
+        return silk_gmaps.health_status()
+
     @app.get("/health")
     def health():
         """فحص الصحّة — liveness plus optional-dep availability flags."""
@@ -315,6 +320,9 @@ def create_app():
             "google_maps": ("on" if os.environ.get(
                 "GOOGLE_MAPS_API_KEY", "").strip()
                 else "off — GOOGLE_MAPS_API_KEY غائب"),
+            # C1 (SPEC-v2): مكشطة الخرائط خدمة Railway ثانية — حالة إخبارية
+            # فقط (تعطيل نظيف؛ لا تحجب research_ready ولا تتأثر بها المهام).
+            "gmaps_scraper": _gmaps_health_status(),
             "claude": _claude,
         }
         # جهوزية البحث العميق (/research) — بلاغ حي: كلود شرط تشغيل هناك لا
