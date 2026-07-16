@@ -1109,6 +1109,9 @@ def _deep_research_view(result: dict) -> dict | None:
         # B1 (SPEC-v2): مسرد المصطلحات المستعملة فعلاً — بنية يعرضها كل
         # مُصدِّر صراحةً (md/docx المدقّق/docx العميل).
         "glossary": _glossary,
+        # C5 (SPEC-v2): قائمة مستوردين/موزعين قابلين للتواصل — بنية يعرضها
+        # كل مُصدِّر كجدول في قسم الدخول (خرائط قوقل/Places + مرشّحو ويب).
+        "importer_leads": dr.get("importer_leads") or {"leads": [], "path": "gap"},
         "limits": limits,
         "next_step": ("فعّل خدمة التعميق المدفوعة للتحقق من المستوردين "
                      "وجهات الاتصال (Volza/Explee)"

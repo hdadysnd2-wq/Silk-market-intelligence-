@@ -863,6 +863,16 @@ def create_app():
             silk_context.snapshot_research_progress(
                 analysis_id, "missions", started_at=_started_at)
 
+            # C2/D-02 (Command #5b): قدّم مهمة كشط الخرائط **مبكراً** (قبل
+            # البعثات) على خيط منفصل — مهلتها (٨ دقائق) تتراكب مع زمن البعثات
+            # والذيل فلا تزيد زمن التشغيلة الكلي، والتشغيلة لا تنتظرها (تُجمَع
+            # بمهلة قصيرة قبل بناء النتيجة، وإلا السلسلة الاحتياطية/فجوة).
+            # تعطيل نظيف: إن كانت المكشطة غير مُهيَّأة يعود None بلا أي أثر.
+            import time as _mono
+            import silk_gmaps
+            _scrape_future = silk_gmaps.submit_scrape_async(product, market_ref)
+            _scrape_t0 = _mono.monotonic()
+
             # deep_research() (لا run_all_missions مباشرة) — يفعّل التتبّع
             # الكامل دوماً (data/traces/{trace_id}.jsonl، الموجة ٦) فيبقى كل
             # تشغيل /research إنتاجي قابلاً للتدقيق، لا التشغيلات التجريبية فقط.
@@ -956,6 +966,23 @@ def create_app():
         silk_usage.reconcile_usd(reserved=_reserved_usd, actual=cost["total_usd"])
         budget_status = _research_budget_status(economics)
 
+        # C2–C5 (Command #5b): اجمع روابط المستوردين بمهلة **قصيرة** (لا
+        # انتظار أبعد من D-02 — الكشط تراكب مع البعثات والذيل أصلاً). إن لم
+        # يكن قد اكتمل، السلسلة الاحتياطية Places ثم فجوة معلنة. path يُسجَّل.
+        try:
+            _grace = float(os.environ.get("SILK_GMAPS_COLLECT_GRACE_S", "30"))
+            _web_cands = silk_gmaps.extract_web_candidates(mission_reports)
+            importer_leads = silk_gmaps.finalize_leads(
+                _scrape_future, product, market_ref, _web_cands,
+                timeout_s=_grace)
+            log.info("gmaps leads path=%s count=%d (%.1fs after submit)",
+                     importer_leads.get("path"), len(importer_leads.get("leads") or []),
+                     _mono.monotonic() - _scrape_t0)
+        except Exception as e:  # noqa: BLE001 — الروابط تحسين لا شرط؛ لا تُسقط التشغيلة
+            log.warning("gmaps finalize failed: %s", e)
+            importer_leads = {"leads": [], "path": "gap",
+                             "note": f"تعذّر جمع الروابط: {type(e).__name__}"}
+
         result: dict = {
             "product": product, "hs_code": hs_code, "year": None,
             "preliminary": True,
@@ -966,6 +993,9 @@ def create_app():
             "deep_research": {
                 "missions": mission_reports, "analyst": analyst_out,
                 "verdict": verdict, "report": report_out,
+                # C5 (Command #5b): قائمة مستوردين/موزعين قابلين للتواصل
+                # (خرائط قوقل/Places + مرشّحو ويب) — تُعرَض في قسم الدخول.
+                "importer_leads": importer_leads,
                 "trace_id": research_run.get("trace_id"),
                 # P1 (حادثة نفاد الاعتمادات): سقف بلغ حدّه = إنهاء رشيق
                 # بفجوات معلنة، لا خطأ صلب — لكن يُذكَر صراحةً أيّ سقف.

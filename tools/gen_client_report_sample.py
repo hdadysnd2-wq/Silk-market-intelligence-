@@ -327,6 +327,20 @@ result = {
         },
         "report": {"report": REPORT_TEXT, "review_cycles": 2,
                   "unresolved_notes": []},
+        # C5 (Command #5b): قائمة مستوردين قابلين للتواصل — عيّنة مموّهة
+        # لعرض الجدول في تقرير العميل (مُطهَّراً عبر الحارس).
+        "importer_leads": {"path": "scraper",
+            "note": "مرصود عبر مكشطة خرائط قوقل (هاتف/إيميل) — عيّنة توضيحية",
+            "leads": [
+                {"name": "Ejmar Import BV", "address": "Barcelona (نموذج)",
+                 "phone": "+34 93 000 0000", "email": "info@ejmar.example",
+                 "website": "ejmar.example", "rating": 4.4, "review_count": 76,
+                 "maps_link": "https://maps.google/ejmar",
+                 "doc_level": "◐ مرصود عبر خرائط قوقل"},
+                {"name": "All4Trade (مرشّح ويب)", "address": "—", "phone": "—",
+                 "email": "—", "website": "—", "rating": None,
+                 "review_count": None, "maps_link": "—",
+                 "doc_level": "○ مرشّح ويب غير موثَّق"}]},
     },
 }
 
