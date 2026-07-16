@@ -45,7 +45,7 @@ with no way to attribute it.*
 | # | Command | Scope | Closing gate | Status |
 |---|---|---|---|---|
 | 1 | Triage & baseline | read-only | Report + frozen BASELINE + ledger updated | ☑ 2026-07-16 — `docs/BASELINE-2026-07-16.md` + ledger below + report in PR |
-| 2 | UI cleanup | A1–A3 | Zero orphan strings (grep pasted) + live UI: 2 actions + sidebar | ☐ |
+| 2 | UI cleanup | A1–A3 | Zero orphan strings (grep pasted) + live UI: 2 actions + sidebar | ☑ 2026-07-16 — grep 0 orphans (prod) + live `GET /`→200, runbar 2 buttons + `#histList` |
 | 3 | Assembly defects | D1–D3 | 3 green lock-tests + live run excerpts pasted | ☐ |
 | 4 | Merchant language | B1–B3 | Green lock-test on md AND docx + glossary pasted | ☐ |
 | 5a | Scraper: owner steps | C1 | Steps written + clean-disable wired + owner confirms service live | ☐ |
@@ -81,16 +81,17 @@ Out-of-scope findings are **logged here, not fixed**. Standing instruction to Cl
 
 Two states only: **DONE-with-artifact** or **NOT DONE**. No third state.
 
-Triage note (Command #1): nothing has been fixed yet — Command #1 is read-only,
-so every SPEC item is **NOT DONE**. The evidence column records the current
-`file:line` state and any partial scaffolding from prior PRs (#104/#105/#106) so
-the later command starts from truth, not a blank slate.
+Triage note (Command #1): at triage time nothing had been fixed — Command #1 is
+read-only, so every SPEC item started **NOT DONE**, with the evidence column
+recording the current `file:line` state and any partial scaffolding from prior
+PRs. Rows flip to **DONE-with-artifact** only as each later command lands its
+live proof (e.g. A1–A3 closed by Command #2).
 
 | Item | Status | Evidence (path / grep / URL / printed output) | Date |
 |---|---|---|---|
-| A1 | NOT DONE | Snapshot feature fully live: `#snapBtn` `web/index.html:250`, `snapOut` `:254`, `quickSnapshot` `:465`; `/products/snapshot` route `api.py:1675`; `silk_snapshot.py` module intact; `save/get_product_snapshot` `silk_storage.py:463,487`. No internal callers (see open Q). | 2026-07-16 |
-| A2 | NOT DONE | "حلّل السوق" leftovers remain: `silk_market_analyst.py:162` (docstring), `web/index.html:407` (stale comment), `docs/mockups/silk_prototype.html:273`. "مسح الأسواق" correctly present `web/index.html:252,316` (KEEP). | 2026-07-16 |
-| A3 | NOT DONE | THREE runbar buttons `web/index.html:248-253` (snapBtn/researchBtn/runBtn), not two. History sidebar present `#histList` `web/index.html:202`. Deleting snapBtn (A1) reaches the 2-action end state. | 2026-07-16 |
+| A1 | DONE-with-artifact | Feature deleted by #107 (module/endpoint/button gone); Command #2 removed the leftover orphan strings. Prod grep (excl tests/docs) «معاينة فورية» = 0, `snapBtn`/`quickSnapshot`/`products/snapshot`/`silk_snapshot` = 0. `tools/acceptance_run.py` step 6 (live POST to deleted `/products/snapshot`) removed. Stale `test_r4` `.pyc` deleted. `product_snapshots` table kept dormant (no-delete-silk.db rule), comment de-named. | 2026-07-16 |
+| A2 | DONE-with-artifact | Exact button label «حلّل السوق» reworded off `silk_market_analyst.py:162` docstring (→ «التحليل الشامل للسوق»). Prod grep (excl tests/docs) exact «حلّل السوق» = 0. «مسح الأسواق» kept `web/index.html:251,316`; legit verb uses («حلّل سوق تصدير», chat examples, STOP-word) untouched. Enforcement tests keep the phrase as absence-guards. | 2026-07-16 |
+| A3 | DONE-with-artifact | Live `GET /` → 200: runbar serves exactly TWO action buttons — `researchBtn` «بحث عميق» (primary) + `runBtn` «مسح الأسواق» (secondary); `id="snapBtn"` absent from served page; `#histList` sidebar present. Guards: `tests/test_ui_action_buttons_have_purpose.py`, `tests/test_item3_analyze_screen_button.py` green. | 2026-07-16 |
 | B1 | NOT DONE | No versioned writer style-contract file (grep hits only SPEC/DECISIONS). Writer prompt *permits* standalone HHI/CAGR/TAM/SAM/SOM `silk_ai_judge.py:824-827`; no first-use gloss, no auto-glossary, no USD→SAR (`:880-882` forbids currency conversion). | 2026-07-16 |
 | B2 | NOT DONE | Reviewer checklist `silk_ai_judge.py:1084-1106` has no undefined-jargon / missing-gloss blocking check. | 2026-07-16 |
 | B3 | NOT DONE | No lock-test for glossary-present / no-standalone-jargon on md or docx (grep of `tests/` finds only unrelated `test_p1_narrative.py:32`, `test_research_report_quality.py:5`). Sample: glossary count 0, HHI ×6 / LPI ×1 standalone, ريال count 0. | 2026-07-16 |
