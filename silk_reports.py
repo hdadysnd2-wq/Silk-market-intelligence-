@@ -1153,7 +1153,11 @@ def _docx_deep_research(doc, view: dict) -> None:
     if dr.get("limits"):
         doc.add_heading("حدود قسم البحث العميق", level=2)
         for x in dr["limits"][:12]:
-            doc.add_paragraph(_clean_report_text(x), style="List Bullet")
+            # PART B1: حدود البعثات جُمل واحدة مطهَّرة أصلاً (silk_render)؛ قصّها
+            # عند ٣٠٠ كان يُنهي سطراً منتصفَ جملة بـ«…». سقف أوسع (٦٠٠) +
+            # مصدر الحدّ صار الجملة الأولى لا الملخّص كاملاً => بلا بتر وسط جملة.
+            doc.add_paragraph(_clean_report_text(x, max_len=600),
+                              style="List Bullet")
 
     _docx_technical_appendix(doc, dr)
 

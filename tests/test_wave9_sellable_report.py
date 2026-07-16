@@ -647,7 +647,9 @@ def test_review_report_uses_extract_json(monkeypatch):
     draft = "\n".join(f"## {i}. {s}\nنص." for i, s in
                       enumerate(silk_ai_judge._REPORT_SECTIONS, 1))
     result = silk_ai_judge.review_report(draft, {})
-    assert result == {"issues": [], "approved": True}
+    # حقل blocking أُضيف في PART C1 (بوابة دورة المراجعة الثانية) — additive.
+    assert result["issues"] == [] and result["approved"] is True
+    assert result.get("blocking") == []
 
 
 def test_reviewer_rubric_checks_thesis_roadmap_takeaway_and_arithmetic():
