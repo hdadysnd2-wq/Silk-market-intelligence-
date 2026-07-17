@@ -698,6 +698,33 @@ def create_app():
                            "مستنفد — أعد المحاولة غداً أو ارفع السقف.")
         return True, ""
 
+    def _market_in_coverage(hs_code, iso3: str) -> tuple[bool, bool]:
+        """هل السوق ضمن التغطية لهذا الرمز؟ — (covered, determinable).
+
+        اتفاق المالك: التغطية = Tier-1 المنسّقة **أو** الظهور ضمن مجموعة أكبر
+        مستوردي هذا الرمز (Tier-1+Tier-2 الديناميكية من نداء العالم الواحد).
+        سوقٌ خارجها => لا دراسة هزيلة بل رسالة صادقة. تعذّر تحديد المجموعة (بلا
+        رمز/ميزانية كومتريد منفدة/شبكة) => (True, False): نفتح البوّابة (يعمل
+        كاليوم، فجوات معلنة) بدل حجب سوقٍ مشروع على عطلٍ عابر — فشلٌ آمن.
+        """
+        from silk_market_ranker import (COUNTRIES, world_import_totals,
+                                        _TIER1_N, _TIER2_MAX)
+        if iso3 in {c["iso3"] for c in COUNTRIES}:
+            return True, True               # Tier-1 منسّقة — مغطّاة دائماً
+        if not hs_code:
+            return True, False              # لا رمز => لا يمكن حساب المجموعة
+        import datetime as _dt
+        year = _dt.date.today().year - 1
+        try:
+            totals = world_import_totals(hs_code, year)
+        except Exception as e:  # noqa: BLE001 — عطل قياس لا يحجب سوقاً
+            log.warning("coverage probe failed: %s", e)
+            totals = []
+        if not totals:
+            return True, False              # تعذّر التحديد => فتح البوّابة
+        covered = {t["iso3"] for t in totals[:_TIER1_N + _TIER2_MAX]}
+        return iso3 in covered, True
+
     @app.post("/analyze")
     def analyze(req: AnalyzeRequest, request: Request):
         """حلّل منتجًا عبر الأسواق (المسار العادي، مجاني حصراً) — free-only path.
@@ -1295,6 +1322,34 @@ def create_app():
             raise HTTPException(status_code=422, detail={
                 "error": f"unknown or ambiguous market {market_name!r}",
                 "suggestions": suggestions})
+
+        # بوابة «خارج التغطية» (اتفاق المالك) — تسبق الجهوزية/الحجز: مع تفعيل
+        # تغطية العالم، سوقٌ ليس Tier-1 ولا ضمن مجموعة أكبر مستوردي هذا الرمز
+        # (Tier-2 الديناميكية) يُعاد برسالةٍ صادقة «تواصل معنا لإضافتها» بدل
+        # دراسةٍ هزيلة، ويُسجَّل إشارةَ طلبٍ في سجلّ العمليات (طلب فعلي غير مغطّى).
+        # الصمّام مُطفأ => السلوك كاليوم (أيّ دولة تعمل، فجوات معلنة) بلا انحدار.
+        from silk_market_ranker import _world_markets_enabled
+        if _world_markets_enabled():
+            _cov_hs = req.hs_code or stored_request.get("hs_code")
+            if not _cov_hs and product:
+                from silk_hs_resolver import resolve as _resolve_hs_cov
+                _cov_hs = _resolve_hs_cov(product).value
+            _covered, _determinable = _market_in_coverage(
+                _cov_hs, market_ref.iso3)
+            if _determinable and not _covered:
+                import silk_ops_log
+                silk_ops_log.record_error(
+                    "out_of_coverage_demand",
+                    f"طلب بحث لسوقٍ خارج التغطية الحالية: "
+                    f"{market_ref.name_en} ({market_ref.iso3}) "
+                    f"لرمز HS {_cov_hs}",
+                    context={"product": product,
+                             "market_iso3": market_ref.iso3,
+                             "hs_code": _cov_hs})
+                raise HTTPException(status_code=422, detail={
+                    "error": "out_of_coverage",
+                    "message": "هذه السوق خارج التغطية الحالية — "
+                               "تواصل معنا لإضافتها"})
 
         # بوابة ما قبل التشغيل بعد التحقق من صحة الإدخال (422 على خطأ
         # الطالب يسبق 409 على جهوزية الخادم — خطأ العميل يستحق أن يُشرَح

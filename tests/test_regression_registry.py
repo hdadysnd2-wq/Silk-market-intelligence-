@@ -315,6 +315,29 @@ def _guard_world_tier2_no_fabrication():
         assert f"def {fn}" in lock, f"قفل الميزة أ مفقود: {fn}"
 
 
+def _guard_out_of_coverage_thin_study():
+    """LESSONS ٢٢ — عائلة out-of-coverage-thin-study (مواصفة المالك، الميزة أ):
+    سوقٌ خارج التغطية يجب ألّا يشغّل دراسةً هزيلة بل يُعاد برسالةٍ صادقة ويُسجَّل
+    إشارةَ طلب. الحارس (قراءة مصدر): البوّابة + الرسالة الحرفية + التسجيل +
+    تسطيح الواجهة + ملف القفل."""
+    api = _read("api.py")
+    assert "def _market_in_coverage" in api, "دالّة فحص التغطية غائبة"
+    assert '"error": "out_of_coverage"' in api, "بوّابة خارج التغطية غائبة"
+    assert "هذه السوق خارج التغطية الحالية" in api and \
+        "تواصل معنا لإضافتها" in api, "الرسالة الصادقة الحرفية غائبة"
+    assert '"out_of_coverage_demand"' in api, "تسجيل إشارة الطلب غائب"
+    assert "_world_markets_enabled()" in api, "البوّابة غير مقيّدة بالصمّام"
+    html = _read("web/index.html")
+    assert "x.message||x.reason||x.error" in html, \
+        "الواجهة لا تُسطّح رسالة detail (لن تظهر رسالة خارج التغطية)"
+    assert _exists("tests/test_out_of_coverage_guard.py"), "ملف قفل البوّابة مفقود"
+    lock = _read("tests/test_out_of_coverage_guard.py")
+    for fn in ("test_out_of_coverage_market_returns_honest_message_and_logs_demand",
+               "test_tier1_curated_market_is_always_covered",
+               "test_flag_off_no_coverage_guard_any_country_works_todays_way"):
+        assert f"def {fn}" in lock, f"قفل البوّابة مفقود: {fn}"
+
+
 def _guard_intake_no_silent_guess():
     """LESSONS ٢١ — عائلة intake-silent-guess (تصميم الميزة ب، قفل استباقي):
     استقبال المنتج من صورة يجب ألّا يختلق اسماً ولا يبدأ تحليلاً قبل تأكيد
@@ -389,6 +412,7 @@ _LESSONS = {
     19: _guard_export_format_contract,   # بلاغ المُشرِف — زرّ PDF كان ينزّل docx
     20: _guard_world_tier2_no_fabrication,  # الميزة أ — لا تلفيق فئة-٢/تفجّر ميزانية
     21: _guard_intake_no_silent_guess,      # الميزة ب — لا اختلاق منتج من صورة
+    22: _guard_out_of_coverage_thin_study,  # الميزة أ — سوق خارج التغطية لا دراسة هزيلة
 }
 
 _TRAPS = [

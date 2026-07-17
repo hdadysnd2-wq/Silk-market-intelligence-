@@ -145,6 +145,13 @@ _TEST_ANCHORS = [
       "def test_endpoint_image_call_is_metered_from_the_cap"]),
     (21, "tests/test_regression_registry.py",
      ["def _guard_intake_no_silent_guess"]),
+    # البند ٢٢ — بوّابة «خارج التغطية» (الميزة أ): سوق خارج التغطية لا دراسة
+    # هزيلة بل رسالة صادقة + إشارة طلب؛ الأقفال + الحارس السلوكي في السجل.
+    (22, "tests/test_out_of_coverage_guard.py",
+     ["def test_out_of_coverage_market_returns_honest_message_and_logs_demand",
+      "def test_flag_off_no_coverage_guard_any_country_works_todays_way"]),
+    (22, "tests/test_regression_registry.py",
+     ["def _guard_out_of_coverage_thin_study"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

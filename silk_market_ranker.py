@@ -132,7 +132,11 @@ def top_import_markets(hs_code: str, year: int, n: int = 38) -> list[dict]:
 # دخل/سكان البنك الدولي المجمّع) — بلا أيّ قيمة محلية مختلَقة (اتفاقيات/لوجستيات/
 # ثقافة): الفجوات تُعلَن حرفياً. Tier-2 = universally-available data only.
 _TIER1_N = 38                        # الفئة-١: أعلى n مستورداً (تسجيل كامل)
-_TIER2_MAX = int(os.environ.get("SILK_WORLD_TIER2_MAX", "160") or "160")
+# سقف الفئة-٢ (اتفاق المالك): ٦٢ فتصير التغطية الكلّية ≈ ١٠٠ سوقاً (٣٨+٦٢).
+# الاختيار **ديناميكيّ لكل رمز HS** من نداء العالم الواحد (أكبر مستوردي هذا
+# الرمز فعلاً) — قرار المالك المعتمَد بديلاً عن قائمة countries_tier2.csv
+# ساكنة: التغطية تتبع تجارة الرمز الحقيقية لا قائمةً يدوية عامة. env يظلّ ضابطاً.
+_TIER2_MAX = int(os.environ.get("SILK_WORLD_TIER2_MAX", "62") or "62")
 _TIER2_CONF_CAP = 0.5                # سقف ثقة الفئة-٢ (بيانات جزئية بنيوياً)
 _WORLD_BUDGET_RESERVE = int(
     os.environ.get("SILK_WORLD_BUDGET_RESERVE", "1") or "1")

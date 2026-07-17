@@ -403,7 +403,7 @@ $$("#langSeg .mode").forEach(function(m){m.addEventListener("click",function(){L
 /* ── الشبكة ── */
 function hdrs(json){var h=json?{"Content-Type":"application/json"}:{};if(S.adminKey)h["X-API-Key"]=S.adminKey;return h}
 function toast(m){var el=document.createElement("div");el.className="toast";el.textContent=m;document.body.appendChild(el);setTimeout(function(){el.remove()},3200)}
-function detailText(d,raw){var x=d&&d.detail;if(x==null)return raw;if(typeof x==="string")return x;return x.reason||x.error||JSON.stringify(x)}
+function detailText(d,raw){var x=d&&d.detail;if(x==null)return raw;if(typeof x==="string")return x;return x.message||x.reason||x.error||JSON.stringify(x)}
 function post(path,body){return fetch(base()+path,{method:"POST",headers:hdrs(true),body:JSON.stringify(body)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));return d})})}
 /* حادثة نفاد الاعتمادات — الطلب لا يساوي التشغيلة (P0): GET بسيط لاستطلاع
    الحالة، تُستعمل مع /research/{id}/status و/analyses/{id}. */
