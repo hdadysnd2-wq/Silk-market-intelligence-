@@ -254,6 +254,17 @@ def create_app():
         agent_prefs: dict | None = None
         persist: bool = False
 
+    class IntakeRequest(BaseModel):
+        """طلب استقبال منتج متعدّد الوسائط — {name} أو {image_base64,kind}.
+
+        محوّلٌ أماميّ (الميزة ب): لا يبدأ أيّ تحليل — يُعيد اسماً مؤكَّداً/قابلاً
+        للتعديل يدخل بعده المسارَ القائم. لا حقول مدفوعة/تحليل هنا بنيوياً.
+        """
+        name: str | None = None
+        image_base64: str | None = None
+        kind: str = "product"                 # "product" | "ingredients_label"
+        media_type: str = "image/jpeg"        # jpeg/png/webp
+
     class DeepenRequest(BaseModel):
         """طلب تعميق (المسار المدفوع) — the /deepen request body (wave 2).
 
@@ -401,6 +412,72 @@ def create_app():
         return _json({"hs_code": dp.value, "confidence": dp.confidence,
                       "note": dp.note, "source": dp.source,
                       "retrieved_at": dp.retrieved_at})
+
+    @app.get("/config")
+    def config(request: Request):
+        """أعلامُ الميزات العلنية للواجهة — public feature flags (لا أسرار).
+
+        الواجهة تقرؤها مرّة عند الإقلاع لتفعيل تبويبات الصورة (الميزة ب) —
+        القيَم أعلامٌ بيئية علنية لا مفاتيح، فآمنٌ كشفها بلا مصادقة."""
+        _rate_limit(request)
+        import silk_product_intake as intake
+        from silk_market_ranker import _world_markets_enabled
+        return _json({"image_intake": intake.enabled(),
+                      "world_markets": _world_markets_enabled()})
+
+    def _intake_vision_allowed() -> tuple[bool, str]:
+        """هل يُسمح نداء الرؤية الواحد؟ — (allowed, reason). يعكس منطق
+        `_free_ai_extras_allowed`: نداء الرؤية مقيسٌ كأيّ نداء مدفوع (حجز
+        تفعيلة واحدة ذرّياً من SILK_PAID_DAILY_CAP). الرفض يتدهور بصدق إلى
+        «تعذّرت القراءة» — لا اختلاق منتج، ولا 429 على مسار مجاني أصلاً.
+
+        بلا مفتاح كلود => لا رؤية ممكنة (تعذّر قراءة صادق، لا اختلاق). مفتاحٌ
+        مدفوع بلا SILK_API_KEY => محجوب (حارس 503) بلا إنفاق. سقفٌ مستنفد =>
+        محجوب. غير ذلك => تُحجَز تفعيلة واحدة قبل النداء."""
+        if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+            return False, ("طبقة الرؤية تتطلّب ANTHROPIC_API_KEY — "
+                           "تعذّرت قراءة الصورة، اكتب الاسم يدوياً.")
+        if _unprotected_paid_keys():
+            return False, ("ANTHROPIC_API_KEY مضبوط بلا SILK_API_KEY — "
+                           "طبقة الرؤية محجوبة (حارس 503) حتى تُضبط المصادقة.")
+        if not silk_usage.try_reserve_paid_calls(1):
+            return False, ("سقف الاستهلاك اليومي (SILK_PAID_DAILY_CAP) "
+                           "مستنفد — تعذّرت قراءة الصورة لهذا الطلب.")
+        return True, ""
+
+    @app.post("/products/intake")
+    def products_intake(req: IntakeRequest, request: Request):
+        """استقبال منتج متعدّد الوسائط — اسمٌ مكتوب أو صورة منتج/بطاقة مكوّنات.
+
+        محوّلٌ أماميّ (الميزة ب): يُعيد اسماً مؤكَّداً/قابلاً للتعديل **بلا بدء
+        تحليل**. مسار الصورة = نداء رؤية واحد مقيس؛ ثقةٌ منخفضة/غير مقروءة =>
+        «تعذّرت القراءة — اكتب الاسم يدوياً» (لا اختلاق). الاسم المؤكَّد يدخل
+        بعده `/resolve → /analyze|/research` القائم بلا تغيير.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        import silk_product_intake as intake
+        if not intake.enabled():
+            raise HTTPException(status_code=404, detail={
+                "error": "image_intake_disabled",
+                "reason": "استقبال الصور مُعطَّل — اضبط SILK_IMAGE_INTAKE=1."})
+        # مسار الاسم المكتوب: لا نداء كلود، لا حجز.
+        if req.name and not req.image_base64:
+            return _json(intake.intake_name(req.name))
+        if not req.image_base64:
+            raise HTTPException(status_code=422, detail={
+                "error": "name_or_image_required",
+                "reason": "مرّر name أو image_base64."})
+        # مسار الصورة: تحقّق الحجم/النوع أولاً (لا حجز على إدخالٍ باطل)، ثم
+        # احجز تفعيلة الرؤية الواحدة. الحجز يقع فقط حين نعتزم النداء فعلاً.
+        raw, why = intake._decode_and_check(req.image_base64, req.media_type)
+        if raw is None:
+            return _json(intake.intake_image(req.image_base64, req.media_type,
+                                             req.kind))
+        allow, reason = _intake_vision_allowed()
+        return _json(intake.intake_image(
+            req.image_base64, req.media_type, req.kind,
+            allow_vision=allow, blocked_reason=reason))
 
     @app.get("/index")
     def index(request: Request, q: str = "", limit: int = 20):

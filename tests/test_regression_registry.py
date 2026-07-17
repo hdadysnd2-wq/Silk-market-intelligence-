@@ -315,6 +315,53 @@ def _guard_world_tier2_no_fabrication():
         assert f"def {fn}" in lock, f"قفل الميزة أ مفقود: {fn}"
 
 
+def _guard_intake_no_silent_guess():
+    """LESSONS ٢١ — عائلة intake-silent-guess (تصميم الميزة ب، قفل استباقي):
+    استقبال المنتج من صورة يجب ألّا يختلق اسماً ولا يبدأ تحليلاً قبل تأكيد
+    المستخدم، والمحوّل أماميّ معزول عن طبقات التحليل. الحارس (قراءة مصدر):
+    (١) عقد عدم الاختلاق (فرع readable/العتبة => تعذّر قراءة صادق)؛ (٢) حدود
+    الصورة + التقييس + العزل؛ (٣) القياس (حجز واحد) في نقطة النهاية؛ (٤) المحوّل
+    لا يستورد/يستدعي طبقات التحليل؛ (٥) ملف القفل قائم."""
+    import ast as _ast
+    src = _read("silk_product_intake.py")
+    # (١) عقد عدم الاختلاق + الرسالة الموحّدة + العتبة.
+    for needle in ('READ_FAILED_MSG = "تعذّرت القراءة — اكتب الاسم يدوياً"',
+                   'def _read_failed', 'def intake_image', 'readable',
+                   '_MIN_CONFIDENCE', 'def enabled'):
+        assert needle in src, f"علامة إنفاذ الاستقبال مفقودة: {needle}"
+    # (٢) حدود الصورة + التقييس + العزل.
+    for needle in ('MAX_IMAGE_BYTES', 'ALLOWED_MEDIA_TYPES', 'def _decode_and_check',
+                   'def _sanitize', 'def _isolate', '_MAGIC'):
+        assert needle in src, f"علامة سلامة الصورة مفقودة: {needle}"
+    # (٣) القياس — نقطة النهاية تحجز تفعيلة واحدة كأيّ نداء مدفوع.
+    api = _read("api.py")
+    assert 'def _intake_vision_allowed' in api and \
+        'try_reserve_paid_calls(1)' in api, "قياس نداء الرؤية غائب"
+    assert '@app.post("/products/intake")' in api, "نقطة نهاية الاستقبال غائبة"
+    assert 'intake.enabled()' in api, "صمّام SILK_IMAGE_INTAKE غير مفحوص"
+    # (٤) المحوّل أماميّ معزول — لا يستورد أيّ طبقة تحليل، ولا يستدعيها نصّاً.
+    tree = _ast.parse(src)
+    imported = {n.names[0].name.split(".")[0] for n in _ast.walk(tree)
+                if isinstance(n, _ast.Import)}
+    imported |= {(n.module or "").split(".")[0] for n in _ast.walk(tree)
+                 if isinstance(n, _ast.ImportFrom)}
+    forbidden = {"silk_engine", "silk_missions", "silk_market_analyst",
+                 "silk_ai_judge", "silk_market_ranker", "correlation",
+                 "silk_synthesis", "silk_llm_runtime"}
+    assert imported.isdisjoint(forbidden), imported & forbidden
+    for banned in ("analyze(", "deep_research(", "write_reviewed_report",
+                   "ResearchManager", "rank_markets("):
+        assert banned not in src, f"الاستقبال يمسّ مسار التحليل: {banned}"
+    # (٥) ملف القفل قائم بأقفاله المركزية.
+    assert _exists("tests/test_product_intake_featureB.py"), "ملف قفل الميزة ب مفقود"
+    lock = _read("tests/test_product_intake_featureB.py")
+    for fn in ("test_low_confidence_or_unreadable_never_fabricates",
+               "test_intake_module_imports_no_pipeline_code",
+               "test_endpoint_image_call_is_metered_from_the_cap",
+               "test_image_validation_rejects_bad_inputs"):
+        assert f"def {fn}" in lock, f"قفل الميزة ب مفقود: {fn}"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -341,6 +388,7 @@ _LESSONS = {
     18: _guard_vendor_name_leak,         # بلاغ UK — تسريب اسم مزوّد للعميل
     19: _guard_export_format_contract,   # بلاغ المُشرِف — زرّ PDF كان ينزّل docx
     20: _guard_world_tier2_no_fabrication,  # الميزة أ — لا تلفيق فئة-٢/تفجّر ميزانية
+    21: _guard_intake_no_silent_guess,      # الميزة ب — لا اختلاق منتج من صورة
 }
 
 _TRAPS = [

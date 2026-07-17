@@ -70,6 +70,16 @@ class LLMProvider(ABC):
         """رد الـMessages API الخام (غير مُحلَّل) أو None — يقود `silk_llm_runtime`
         حلقة tool_use/tool_result فوقه."""
 
+    def complete_vision(self, system: str, text: str, image_b64: str,
+                        media_type: str, max_tokens: int, model: str,
+                        timeout: float) -> str | None:
+        """نداء رؤية واحد (صورة + نصّ) — نص الرد أو None عند غياب مفتاح/فشل/رفض.
+
+        اختياري (تنفيذ افتراضي = None) كي لا يُلزَم كل مزوّد به؛ يُستعمله مسار
+        استقبال المنتج المتعدد الوسائط (بطاقة مكوّنات/صورة منتج). لا استثناء
+        يتسرّب للمستدعي — فشلٌ = None => «تعذّرت القراءة» لا اختلاق."""
+        return None
+
 
 class AnthropicProvider(LLMProvider):
     """التنفيذ الوحيد اليوم — يغلّف api.anthropic.com/v1/messages حرفياً
@@ -190,6 +200,56 @@ class AnthropicProvider(LLMProvider):
             return data
         except Exception as e:  # noqa: BLE001 — optional layer must never crash analysis
             log.warning("AI tool call failed: %s: %s", type(e).__name__, e)
+            _last_error.set(self._error_detail(e))
+            return None
+
+    def complete_vision(self, system, text, image_b64, media_type,
+                        max_tokens, model, timeout):
+        """نداء رؤية واحد — صورة base64 + نصّ في رسالة مستخدم واحدة.
+
+        يعكس `complete` حرفياً لكن المحتوى قائمةُ كتلٍ (صورة ثم نص). يسجّل
+        الرموز في عدّاد اقتصاد البيانات (قناة جانبية) فتُحتسب كلفتُه كأيّ
+        نداء. غياب المفتاح/الرفض/الفشل => None (فجوة معلنة، لا اختلاق)."""
+        _last_error.set(None)
+        _last_stop_reason.set(None)
+        key = self._key()
+        if not key:
+            return None
+        try:
+            import requests  # lazy: keep core import offline-safe
+            resp = requests.post(
+                self._ENDPOINT, timeout=self._timeout_pair(timeout),
+                headers=self._headers(key),
+                json={"model": model, "max_tokens": max_tokens,
+                      "system": [{"type": "text", "text": system,
+                                  "cache_control": {"type": "ephemeral"}}],
+                      "messages": [{"role": "user", "content": [
+                          {"type": "image",
+                           "source": {"type": "base64",
+                                      "media_type": media_type,
+                                      "data": image_b64}},
+                          {"type": "text", "text": text}]}]})
+            resp.raise_for_status()
+            data = resp.json()
+            self._record_usage(model, data)
+            stop_reason = data.get("stop_reason")
+            _last_stop_reason.set(stop_reason)
+            if stop_reason == "refusal":
+                log.warning("vision call refused by the model")
+                _last_error.set({"type": "refusal",
+                                 "message": "model refused the request"})
+                return None
+            out = "".join(b.get("text", "") for b in data.get("content", [])
+                          if b.get("type") == "text").strip()
+            if not out:
+                _last_error.set({"type": "empty_response",
+                                 "message": f"HTTP 200 بلا نص — "
+                                            f"stop_reason={stop_reason!r}"})
+                return None
+            _last_error.set(None)
+            return out
+        except Exception as e:  # noqa: BLE001 — optional layer must never crash
+            log.warning("vision call failed: %s: %s", type(e).__name__, e)
             _last_error.set(self._error_detail(e))
             return None
 

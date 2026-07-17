@@ -137,6 +137,14 @@ _TEST_ANCHORS = [
       "def test_budget_exhausted_degrades_to_tier1_only"]),
     (20, "tests/test_regression_registry.py",
      ["def _guard_world_tier2_no_fabrication"]),
+    # البند ٢١ — استقبال المنتج من صورة (الميزة ب): لا اختلاق منتج، والمحوّل
+    # أماميّ معزول؛ الأقفال السلوكية + الحارس السلوكي في السجل.
+    (21, "tests/test_product_intake_featureB.py",
+     ["def test_low_confidence_or_unreadable_never_fabricates",
+      "def test_intake_module_imports_no_pipeline_code",
+      "def test_endpoint_image_call_is_metered_from_the_cap"]),
+    (21, "tests/test_regression_registry.py",
+     ["def _guard_intake_no_silent_guess"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

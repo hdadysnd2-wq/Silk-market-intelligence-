@@ -214,8 +214,15 @@
           <div class="sub" data-t="h1sub">اكتب المنتج، اختر السوق، وحدّد سنوات الدراسة — والمنصة تسحب البيانات الحقيقية.</div></div>
         <div class="card">
           <label class="flabel" data-t="q1">١ · ما المنتج؟</label>
+          <div class="itabs" id="intakeTabs" hidden style="display:flex;gap:6px;margin-bottom:8px">
+            <button type="button" class="itab sel" data-mode="name" data-t="tabName" style="flex:1;padding:7px 6px;font-size:12.5px;border:1px solid var(--line);border-radius:9px;background:var(--card);cursor:pointer">اكتب الاسم</button>
+            <button type="button" class="itab" data-mode="product" data-t="tabProduct" style="flex:1;padding:7px 6px;font-size:12.5px;border:1px solid var(--line);border-radius:9px;background:transparent;cursor:pointer">صوّر المنتج</button>
+            <button type="button" class="itab" data-mode="ingredients_label" data-t="tabLabel" style="flex:1;padding:7px 6px;font-size:12.5px;border:1px solid var(--line);border-radius:9px;background:transparent;cursor:pointer">صوّر بطاقة المكوّنات</button>
+          </div>
           <div class="search"><input id="pSearch" placeholder="تمر، زعفران، عسل، رطب…" autocomplete="off">
             <div class="drop" id="pDrop"></div></div>
+          <input type="file" id="pCam" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+          <div id="intakeCard" hidden style="margin-top:9px;padding:10px 11px;border:1px solid var(--line);border-radius:11px;background:var(--card)"></div>
           <div class="resolved" id="pResolved"></div>
         </div>
         <div class="row2">
@@ -325,6 +332,8 @@ var T={
  readyFor:{ar:"جاهز لتحليل",en:"Ready to analyze"},inM:{ar:"في",en:"in"},over:{ar:"عبر",en:"over"},allM:{ar:"كل الأسواق",en:"all markets"},pickFirst:{ar:"اختر منتجاً للبدء",en:"Pick a product to start"},
  yearsWord:{ar:"سنوات",en:"years"},yearWord:{ar:"سنة",en:"year"},resolvedAs:{ar:"✓ صُنّف تلقائياً — رمز HS ",en:"✓ Auto-classified — HS code "},
  searchPh:{ar:"تمر، زعفران، عسل، رطب…",en:"dates, saffron, honey…"},chatPh:{ar:"اسأل عن أي منتج أو سوق…",en:"Ask about any product or market…"},
+ tabName:{ar:"اكتب الاسم",en:"Type name"},tabProduct:{ar:"صوّر المنتج",en:"Photo product"},tabLabel:{ar:"صوّر بطاقة المكوّنات",en:"Photo label"},
+ intakeReading:{ar:"جارٍ قراءة الصورة…",en:"Reading image…"},intakeConfirm:{ar:"أكّد اسم المنتج قبل التحليل:",en:"Confirm the product name before analysis:"},intakeConfirmBtn:{ar:"تأكيد ومتابعة",en:"Confirm & continue"},intakeCat:{ar:"الفئة",en:"Category"},intakeIng:{ar:"المكوّنات",en:"Ingredients"},intakeConf:{ar:"ثقة القراءة",en:"Read confidence"},
  keyPh:{ar:"مفتاح الخدمة X-API-Key (إن كانت المصادقة مفعّلة)",en:"Service key X-API-Key (if auth is enabled)"}
 };
 var LANG=localStorage.getItem("silk_lang")||"ar";
@@ -414,6 +423,52 @@ var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim()
 $("#pDrop").addEventListener("click",function(e){var r=e.target.closest(".drow");if(!r)return;
   S.product=r.dataset.n;S.hs=r.dataset.hs;$("#pSearch").value=S.product;$("#pDrop").classList.remove("open");
   $("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+S.hs;sync()});
+
+/* ── استقبال المنتج متعدّد الوسائط (الميزة ب) — three-tab intake ──
+   التبويبات مخفيّة حتى يؤكّد /config أن SILK_IMAGE_INTAKE مفعَّل (الافتراضي
+   مُطفأ => الواجهة كاليوم حرفياً). مسار الصورة يُرسَل لكلود فقط، والاستخلاص
+   يُعرَض في بطاقةٍ قابلة للتعديل تُؤكَّد قبل أن يبدأ أيّ تحليل — لا اختلاق. */
+var INTAKE_KIND="name";
+fetch(base()+"/config").then(function(r){return r.json()}).then(function(c){
+  if(c&&c.image_intake){$("#intakeTabs").hidden=false}}).catch(function(){});
+$("#intakeTabs").addEventListener("click",function(e){var b=e.target.closest(".itab");if(!b)return;
+  $$(".itab").forEach(function(x){x.classList.remove("sel");x.style.background="transparent"});
+  b.classList.add("sel");b.style.background="var(--card)";INTAKE_KIND=b.dataset.mode;
+  $("#intakeCard").hidden=true;
+  if(INTAKE_KIND==="name"){$("#pSearch").style.display="";}
+  else{$("#pSearch").style.display="none";$("#pCam").value="";$("#pCam").click();}});
+$("#pCam").addEventListener("change",function(){var f=this.files&&this.files[0];if(!f)return;
+  if(f.size>5*1024*1024){intakeCardMsg(t("readFailMsg")||"حجم الصورة يتجاوز ٥ ميغابايت — اكتب الاسم يدوياً");return}
+  var rd=new FileReader();rd.onload=function(){
+    var b64=String(rd.result).split(",")[1]||"";
+    intakeCardMsg(t("intakeReading"));
+    fetch(base()+"/products/intake",{method:"POST",headers:hdrs(true),
+      body:JSON.stringify({image_base64:b64,kind:INTAKE_KIND,media_type:f.type||"image/jpeg"})})
+      .then(function(r){return r.json()}).then(renderIntake)
+      .catch(function(){intakeCardMsg("تعذّرت القراءة — اكتب الاسم يدوياً")})};
+  rd.readAsDataURL(f)});
+function intakeCardMsg(msg){var c=$("#intakeCard");c.hidden=false;c.innerHTML='<div style="font-size:12.5px;color:var(--muted)">'+esc(msg)+'</div>'}
+function renderIntake(res){
+  if(!res||res.ok!==true){
+    // تعذّر القراءة الصادق — أعِد المستخدم لتبويب الاسم بلا اختلاق منتج.
+    intakeCardMsg((res&&res.message)||"تعذّرت القراءة — اكتب الاسم يدوياً");
+    $("#pSearch").style.display="";return}
+  var x=res.extraction||{};var c=$("#intakeCard");c.hidden=false;
+  var ing=(x.ingredients&&x.ingredients.length)?('<div style="font-size:11.5px;color:var(--muted);margin-top:5px">'+esc(t("intakeIng"))+": "+esc(x.ingredients.slice(0,8).join("، "))+'</div>'):"";
+  var cat=x.category_hint?('<div style="font-size:11.5px;color:var(--muted);margin-top:3px">'+esc(t("intakeCat"))+": "+esc(x.category_hint)+'</div>'):"";
+  c.innerHTML='<div style="font-size:12px;font-weight:700;margin-bottom:6px">'+esc(t("intakeConfirm"))+'</div>'
+    +'<input id="intakeName" value="'+esc(res.product_name||"")+'" style="width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:9px;background:var(--card);font-size:13px">'
+    +cat+ing
+    +'<div style="font-size:11px;color:var(--muted);margin-top:5px">'+esc(t("intakeConf"))+": "+Math.round((x.confidence||0)*100)+'%</div>'
+    +'<button type="button" id="intakeGo" style="margin-top:8px;padding:7px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;font-size:12.5px;cursor:pointer">'+esc(t("intakeConfirmBtn"))+'</button>';
+  $("#intakeGo").addEventListener("click",function(){
+    var nm=($("#intakeName").value||"").trim();if(!nm)return;
+    // الاسم المؤكَّد يدخل المسار القائم: يملأ الصندوق ويُحلّ عبر /resolve كالمعتاد.
+    $("#pSearch").style.display="";$("#pSearch").value=nm;S.product=nm;S.hs=null;
+    c.hidden=true;
+    fetch(base()+"/resolve/"+encodeURIComponent(nm),{headers:hdrs(false)}).then(function(r){return r.json()}).then(function(d){
+      if(d&&d.hs_code){S.hs=d.hs_code;$("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+d.hs_code}sync()}).catch(function(){sync()});
+    sync()})}
 
 /* ── الأسواق ── */
 function drawMarkets(list){
