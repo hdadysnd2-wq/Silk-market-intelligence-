@@ -628,6 +628,15 @@ function renderDeepResearch(v){
   else html+='<div class="bcard" style="margin:18px 0"><h3>التقرير الكامل</h3><p class="gap">'+esc(rep.failure_reason||"يتطلب مفتاح كلود (ANTHROPIC_API_KEY) على الخادم — غير متوفر في هذا التشغيل")+'</p></div>';
   // الخطوة التالية (تعميق) — فقط عند حكم GO، ملاصقة للتقرير لأنها دعوة الفعل
   if(dr.next_step)html+='<div class="next"><div><h4>الخطوة التالية</h4><p>'+esc(dr.next_step)+'</p></div><button class="cta" id="deepBtn">فعّل التعميق ←</button></div>';
+  // إكمال بيانات المستوردين للتقارير السابقة — تعبئة رجعية فقط (أمر المالك
+  // المُحدَّث ITEM 2): التشغيلات الجديدة تُكمِل تلقائياً في المسار، وهذا الزرّ
+  // يخصّ التقارير المحفوظة قبل تفعيل المكشطة (POST /analyses/{id}/enrich-leads،
+  // بلا نداء كلود ولا إعادة تشغيل بعثات — قروش بدل ~3$). المكشطة غير مُهيَّأة
+  // ⇒ تعطيل نظيف بإبلاغ صريح.
+  html+='<div class="bcard" style="margin:18px 0"><h3>بيانات المستوردين للتواصل</h3>'
+    +'<div class="note">التشغيلات الجديدة تُكمِل الهاتف/الإيميل/الموقع تلقائياً. لتقرير محفوظ قبل تفعيل الخدمة، أكملها رجعياً عبر كشط الخرائط — بلا ذكاء اصطناعي، شبه مجاني.</div>'
+    +'<button class="cta" id="enrichLeadsBtn">إكمال بيانات المستوردين للتقارير السابقة</button>'
+    +'<span id="enrichLeadsStatus" class="note" style="display:block;margin-top:8px"></span></div>';
   // الأدلة الخام (البعثات الاثنتا عشرة + تقاطعات المحلل) — قسم ثانوي مطويّ
   // افتراضياً للتدقيق، بعد أن أصبح التقرير المكتوب هو المحتوى الأساسي أعلاه.
   var missions=dr.missions||{},mkeys=Object.keys(missions);
@@ -669,9 +678,32 @@ function renderDeepResearch(v){
     +'<button class="sendb" id="askBtn">↑</button></div></div>';
   $("#boardBody").innerHTML=html;
   var dq=$("#deepBtn");if(dq)dq.addEventListener("click",function(){toast("التعميق يتطلب مفاتيح مصادر مدفوعة تُضبط على الخادم (Railway) — غير متاح في هذا التشغيل")});
+  var eb=$("#enrichLeadsBtn");if(eb)eb.addEventListener("click",enrichLeads);
   var ab=$("#askBtn");if(ab)ab.addEventListener("click",askAnalysis);
   var ax=$("#askBox");if(ax)ax.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();askAnalysis()}});
 }
+/* إكمال بيانات المستوردين للتقارير السابقة (تعبئة رجعية) — POST
+   /analyses/{id}/enrich-leads بالمفتاح المخزَّن، بلا نداء كلود. يعطّل الزرّ
+   أثناء الطلب ويعرض التقدّم ثم عدد جهات الاتصال بالعربية. */
+function enrichLeads(){
+  var id=S.raw&&S.raw.analysis_id;
+  var btn=$("#enrichLeadsBtn"),st=$("#enrichLeadsStatus");
+  if(id==null){toast("شغّل تحليلاً أولاً");return}
+  var label=btn?btn.textContent:"";
+  if(btn){btn.disabled=true;btn.textContent="جارٍ إكمال البيانات…"}
+  if(st)st.textContent="يجري كشط الخرائط لجهات الاتصال… قد يستغرق دقائق";
+  fetch(base()+"/analyses/"+id+"/enrich-leads",{method:"POST",headers:hdrs(true)})
+    .then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}
+      if(!r.ok)throw new Error(detailText(d,t).toString().slice(0,200));return d||{}})})
+    .then(function(d){
+      var n=d.leads_count!=null?d.leads_count:0;
+      if(st)st.textContent=d.enriched?("اكتمل — "+n+" جهة اتصال مرصودة (تظهر في تصدير Word/Markdown)"):("لم تُحدَّث — "+(d.note||"لا جديد"));
+      if(btn){btn.disabled=false;btn.textContent=label||"إكمال بيانات المستوردين للتقارير السابقة"}
+      toast(d.enriched?("حُدِّثت بيانات المستوردين — "+n+" جهة اتصال"):(d.note||"لم تُرصَد جهات اتصال جديدة"))})
+    .catch(function(e){
+      if(st)st.textContent="تعذّر الإكمال: "+e.message;
+      if(btn){btn.disabled=false;btn.textContent=label||"إكمال بيانات المستوردين للتقارير السابقة"}
+      toast("تعذّر إكمال البيانات: "+e.message)})}
 /* HIGH#4 (تدقيق الواجهة): إفصاح سنة البيانات — لوحة الويب كانت الوحيدة التي
    تُسقط تنبيه تراجُع السنة الذي يُظهره Word/Markdown/الطرفية (silk_reports._data_year_label)،
    فتُقرأ أرقام سنةٍ أقدم كأنها للسنة المطلوبة — خرقٌ لمبدأ «الفجوات تُعلَن».

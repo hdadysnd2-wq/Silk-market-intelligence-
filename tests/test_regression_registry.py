@@ -217,7 +217,14 @@ def _guard_vendor_name_leak():
         cleaned = _client_redact_text(_client_sanitize(line))
         assert not _client_forbidden_hits(cleaned), (
             f"اسم مزوّد بقي بعد التنقية: {_client_forbidden_hits(cleaned)}")
-    # (٢) سطر next_step المُولَّد لا يحمل اسم مزوّد إطلاقاً.
+    # (٢) الحارس الصارم يملك أسماء المزوّدين لاتينيةً وعربيةً معاً — لا يعتمد
+    # على المُطهِّر وحده (متغيّر مستقبلي يفلت المُطهِّر يبقى يُرفَع بصوت عالٍ).
+    for v in ("Volza", "Explee", "إكسبلي", "فولزا", "LocalPrice", "Serper",
+              "SerpApi", "pytrends", "GDELT"):
+        hits = _client_forbidden_hits(f"مبنيّ على {v} التجارية")
+        assert any(h.startswith("vendor_name") for h in hits), (
+            f"اسم مزوّد ليس في قائمة الرفض الصارم (_client_assert_clean): {v}")
+    # (٣) سطر next_step المُولَّد لا يحمل اسم مزوّد إطلاقاً.
     import silk_render
     from canonical_netherlands import netherlands_research_blob
     blob = netherlands_research_blob()
