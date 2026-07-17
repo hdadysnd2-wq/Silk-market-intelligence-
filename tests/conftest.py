@@ -108,14 +108,28 @@ def pytest_configure(config):
         "markers",
         "live: real-network integration smoke test — skipped unless "
         "SILK_RUN_LIVE=1 (opt-in lane, never runs on default CI).")
+    # رُتبتا ٢–٣ (خادم حقيقي + متصفّح حقيقي) — تُقلِعان uvicorn فعلياً (وrung 3
+    # تشغّل chromium)، أبطأ من الحزمة الهرمتية وخارج ضمانتها «بلا شبكة/بلا
+    # عملية خارجية». تُجمَع في وظيفة CI المخصّصة `e2e-live-shape` حصراً
+    # (SILK_RUN_E2E=1)، فتبقى `pytest tests/ -q` الافتراضية هرمتية سريعة.
+    config.addinivalue_line(
+        "markers",
+        "e2e: real-server / real-browser rung — boots uvicorn (rung 2) and "
+        "may drive chromium (rung 3); skipped unless SILK_RUN_E2E=1 "
+        "(the e2e-live-shape CI job — see .github/workflows/e2e-live-shape.yml).")
 
 
 def pytest_collection_modifyitems(config, items):
-    if os.environ.get("SILK_RUN_LIVE") == "1":
-        return
+    live_on = os.environ.get("SILK_RUN_LIVE") == "1"
+    e2e_on = os.environ.get("SILK_RUN_E2E") == "1"
     skip_live = pytest.mark.skip(
         reason="live-network test; set SILK_RUN_LIVE=1 to run "
                "(opt-in lane — see .github/workflows/live-smoke.yml)")
+    skip_e2e = pytest.mark.skip(
+        reason="real-server/browser rung; set SILK_RUN_E2E=1 to run "
+               "(the e2e-live-shape CI job).")
     for item in items:
-        if "live" in item.keywords:
+        if "live" in item.keywords and not live_on:
             item.add_marker(skip_live)
+        if "e2e" in item.keywords and not e2e_on:
+            item.add_marker(skip_e2e)

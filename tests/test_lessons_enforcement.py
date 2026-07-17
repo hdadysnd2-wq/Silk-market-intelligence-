@@ -61,6 +61,9 @@ _DOC_ANCHORS = [
     (10, "docs/AUDIT_STATUS.md", ["قراءة فقط", "غير موجود"]),
     (10, ".claude/skills/pr-and-wave-discipline/SKILL.md",
      ["no sufficient evidence — pending"]),
+    # البند ١٥ — دلاء الصدق المنقسمة (hermetic only مقابل real-server+browser)
+    (15, ".claude/skills/pr-and-wave-discipline/SKILL.md",
+     ["hermetic only", "passed real-server + browser e2e", "e2e-live-shape"]),
 ]
 
 # كل مدخلة: (رقم الدرس، ملف الاختبار، دوال اختبار يجب أن تبقى).
@@ -100,6 +103,11 @@ _TEST_ANCHORS = [
      ["def test_quality_gate_fails_on_confidentiality_leak_tokens",
       "def test_docx_is_rtl_document_wide",
       "def test_finding_assembly_uses_public_source_not_tool_use"]),
+    (15, "tests/test_rung2_real_server.py",
+     ["def test_report_md_serves_real_narrative_not_the_empty_analyze_template",
+      "def test_report_docx_downloads_a_real_openable_document_no_501"]),
+    (15, "tests/test_rung3_playwright_e2e.py",
+     ["def test_rung3_full_browser_flow_word_and_md_export_and_sidebar"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
@@ -113,6 +121,12 @@ _SYMBOL_ANCHORS_EXTRA = [
     (14, "silk_reports.py", ["def _apply_rtl", "def docx_to_pdf",
                             "def _clean_source_label", "def _trim_sentence"]),
     (14, "silk_render.py", ["_map_mission_keys", "_CLAUDE_WORD_RE"]),
+    # البند ١٥ — المالك آخِر تأكيد لا أوّل مكتشف؛ رُتب الاختبار ٢–٣ + الوظيفة
+    # المطلوبة e2e-live-shape + المُنشئ القانوني للمدوّنة الحقيقية الشكل.
+    (15, "tools/live_shape_server.py",
+     ["class LiveShapeServer", "def seed_db", "netherlands_research_blob"]),
+    (15, "tools/canonical_netherlands.py", ["def netherlands_research_blob"]),
+    (15, ".github/workflows/e2e-live-shape.yml", ["e2e-live-shape"]),
 ]
 
 
