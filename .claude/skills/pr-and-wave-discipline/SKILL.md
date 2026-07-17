@@ -74,6 +74,30 @@ Every diagnosis you write down carries its evidence class, explicitly:
   `last_error()`, timeout split, traced calls) so the NEXT occurrence
   self-diagnoses.
 
+**Honesty buckets for "it passes" (owner is the LAST confirmation, never the
+FIRST discoverer).** "PASSES TESTS" is no longer one claim — it splits by which
+rung the change actually cleared:
+
+- **"hermetic only"** — the `pytest tests/ -q` suite is green. This proves
+  *contracts* (graceful degradation, sanitization, budget bounds) on a
+  TestClient/models. It does **not** boot the real server and would not have
+  caught the two export bugs or the dead sidebar. A change touching
+  production-facing behavior that is only hermetic-green is **NOT** "ready for
+  the owner."
+- **"passed real-server + browser e2e"** — rungs 2–3 are green too: the actual
+  app booted under uvicorn on a real SQLite file seeded with the canonical
+  real-shape Netherlands blob (`tools/live_shape_server.py`), every touched
+  endpoint hit over real HTTP (rung 2, `tests/test_rung2_real_server.py`), and
+  headless chromium clicked the real UI end-to-end — sidebar → report render →
+  Word export (non-empty `.docx`) → md export (real content, not the empty
+  template) → progress box (rung 3, `tests/test_rung3_playwright_e2e.py`).
+  **Only this bucket may be presented to the owner as "ready for your one-tap
+  confirmation."** The owner's role shrinks to one final tap on the live site
+  AFTER deploy — zero-cost, expected to succeed.
+- **Rung 4 (cost-path dry run)** — any change near the money path also runs the
+  acceptance harness (`tools/acceptance_run.py`) against the local rung-2 server
+  with mocked providers before the owner sees it.
+
 Never claim to have read logs you didn't read — the wave-7 post-mortem states
 that doing so would itself violate the platform's founding principle. The same
 honesty contract that governs the product's numbers governs your engineering
@@ -81,11 +105,18 @@ writing.
 
 ## 6. Pre-merge checklist
 
-1. `python3 -m pytest tests/ -q` — green, full suite, no selection tricks.
+1. `python3 -m pytest tests/ -q` — green, full suite, no selection tricks
+   (**rung 1 — hermetic**).
 2. New tests included for the new behavior (hermetic, same day).
 3. Render touched ⇒ samples regenerated and committed (§2).
 4. Prompt touched ⇒ `evals/scores.json` updated and committed
    (`python3 -m silk_evals`; >10-point drop is a declared regression).
 5. PR description: file:line anchors, evidence labels, declared deviations,
-   suite count.
+   suite count, and the **honesty bucket** it reached (§5).
 6. Branch is one wave from fresh main; no unrelated drive-by changes.
+7. **Rungs 2–3 for any production-facing change** (and MANDATORY for anything
+   touching `web/index.html` or an export/report path):
+   `SILK_RUN_E2E=1 python3 -m pytest tests/test_rung2_real_server.py
+   tests/test_rung3_playwright_e2e.py -q` — real uvicorn + headless chromium.
+   The CI job `e2e-live-shape` runs this and is a required check on `main`;
+   such a PR cannot merge without the Playwright flow green.

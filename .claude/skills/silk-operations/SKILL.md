@@ -13,6 +13,26 @@ instead of being re-discovered every session. **Update this skill at the end of
 every work package** (see the closing rule) — a skill that goes stale is worse
 than no skill, because it looks authoritative while being wrong.
 
+## 0. THE FREEZE — post-merge, incident response only (owner authority)
+
+**بعد الدمج، النظامُ مُجمَّد.** لا ميزة جديدة، ولا إعادة هيكلة، ولا «تحسين»
+استباقي — **إلا بموافقة المالك الصريحة**. العمل المسموح بلا إذن جديد محصورٌ في
+**الاستجابة للحوادث**: بلاغ حيّ بدليل → سبب جذري من الشيفرة → إصلاح عند الطبقة
+الصحيحة + اختبار قفله في نفس الـPR (البروتوكول §4). أيّ شيء أوسع من ذلك —
+ميزة، تبسيط، ترحيل، تعديل نطاق — يتطلّب أمراً صريحاً من المالك عبر تسلسل القيادة
+(‏CLAUDE.md §LAW: المُشرِف Fable 5 يوجّه، المُنفِّذ ينفّذ، المالك يوافق).
+
+**Post-merge the system is FROZEN.** No new feature, refactor, or speculative
+"improvement" ships without the owner's explicit approval. The only work
+allowed without a fresh owner order is **incident response**: live evidence →
+root cause from code → fix at the right layer + its lock-test in the same PR.
+Anything broader — a feature, a cleanup, a migration, a scope change — needs an
+explicit owner order through the chain of command (CLAUDE.md §LAW). When in
+doubt, it is frozen; ask, do not proceed.
+
+هذه القاعدة تحرس ضدّ التوسّع الزاحف بعد أن يستقرّ النظام: كل تغيير غير حادثيّ
+سطحٌ جديد لخطأ جديد. «إن لم يكن بلاغاً، فهو مُجمَّد.»
+
 ## 1. THE RULES — non-negotiable, checked on every PR
 
 1. **No fabrication.** A missing value is `None` + `confidence=0.0` + a

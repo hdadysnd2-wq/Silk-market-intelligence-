@@ -1,0 +1,50 @@
+# رُتبتا الاختبار ٢–٣ كوظيفة CI مطلوبة (e2e-live-shape).
+#
+# القاعدة الجديدة (تأكيد المالك آخِراً لا أوّلاً): قبل أن يُوسَم أيّ PR يمسّ
+# سلوكاً إنتاجياً «جاهزاً»، نستنفد كل رُتب الاختبار. هذه الوظيفة تُشغّل:
+#   • رُتبة ٢ — خادم uvicorn حقيقي على SQLite مبذور بالمدوّنة القانونية، يُضرَب
+#     بـHTTP حقيقي (tests/test_rung2_real_server.py).
+#   • رُتبة ٣ — chromium (headless) ينقر الواجهة الفعلية: لوحة ← شريط جانبي ←
+#     تقرير ← تصدير Word/Markdown ← صندوق التقدّم (tests/test_rung3_*).
+#
+# **حماية الفرع (يضبطها المالك في GitHub):** اجعل الفحص «e2e-live-shape»
+# مطلوباً على main. أيّ PR يمسّ web/index.html أو أيّ مسار تصدير/تقرير لا
+# يُدمَج حتى يخضرّ تدفّق Playwright — هذا التدفّق كان سيلتقط خطأَي التصدير
+# والشريط الجانبي الميت قبل المالك.
+
+name: e2e-live-shape
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e-live-shape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pytest httpx
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # playwright مثبّتة عمومياً كي يحلّها require عبر NODE_PATH (مثل البيئة
+      # المُدارة). الإصدار مثبَّت مطابقاً لما جُرّب حياً (1.56.1).
+      - name: Install Playwright + chromium
+        run: |
+          npm install -g playwright@1.56.1
+          npx --yes playwright@1.56.1 install --with-deps chromium
+
+      - name: Run rungs 2-3 (real server + real browser)
+        env:
+          SILK_RUN_E2E: "1"
+        run: python -m pytest tests/test_rung2_real_server.py tests/test_rung3_playwright_e2e.py -q
