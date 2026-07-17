@@ -79,6 +79,28 @@ async function main() {
       fail("sidebar_click", "board leaked empty /analyze template markers");
     ok("sidebar_click", "report rendered from stored analysis");
 
+    // ٣ب) زرّ التعبئة الرجعية لبيانات المستوردين (تقرير محفوظ قديم) — انقره،
+    // تأكّد تعطيله أثناء الطلب ثم عودته بنتيجة عربية غير فارغة. المكشطة غير
+    // مُهيَّأة في هذه البيئة ⇒ تعطيل نظيف (enriched=false مع إبلاغ صريح)، لكن
+    // الزرّ يجب أن يكون حاضراً وينفّذ الدورة كاملة (تقدّم ← نتيجة).
+    const enrichBtn = page.locator("#enrichLeadsBtn");
+    if ((await enrichBtn.count()) < 1)
+      fail("enrich_leads_backfill",
+        "no backfill enrich-leads button on stored research report");
+    await enrichBtn.click();
+    await page.waitForFunction(
+      () => {
+        const b = document.querySelector("#enrichLeadsBtn");
+        const s = document.querySelector("#enrichLeadsStatus");
+        return b && !b.disabled && s && (s.textContent || "").trim().length > 0;
+      },
+      { timeout: 25000 },
+    );
+    const enrichStatus = await page.locator("#enrichLeadsStatus").innerText();
+    if (!enrichStatus.trim())
+      fail("enrich_leads_backfill", "status stayed empty after click");
+    ok("enrich_leads_backfill", enrichStatus.slice(0, 80));
+
     // ٤) تصدير Word — نقر #pdfBtn ينزّل .docx غير فارغ (توقيع ZIP).
     const dlPromise = page.waitForEvent("download", { timeout: 20000 });
     await page.locator("#pdfBtn").click();

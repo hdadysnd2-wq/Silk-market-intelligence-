@@ -847,6 +847,31 @@ def create_app():
         except Exception as e:  # noqa: BLE001 — البوابة تحسين لا شرط تسليم
             log.warning("quality gate skipped: %s", e)
 
+    def _collect_importer_leads(scrape_future, product: str, market_ref,
+                                mission_reports: dict, scrape_t0: float,
+                                mono) -> dict:
+        """اجمع جهات اتصال المستوردين بسقف زمني كلّي — نفس مسار الروابط الوحيد
+        (مكشطة → احتياط Places → فجوة معلنة). بلا نداء كلود. أمر المالك
+        المُحدَّث ITEM 1: يُنادى تلقائياً في التشغيلة قبل الكاتب.
+
+        السقف الكلّي `SILK_ENRICH_TIMEOUT_S` (٦٠ث افتراضياً) يحدّ زمن الجمع —
+        الكشط راكَب البعثات أصلاً فيكون عادةً جاهزاً. مهلة/فشل = فجوة معلنة
+        `{leads:[], path:"gap"}`، لا تشغيلة عالقة ولا رقم مخترَع."""
+        import silk_gmaps
+        try:
+            _cap = float(os.environ.get("SILK_ENRICH_TIMEOUT_S", "60"))
+            _web_cands = silk_gmaps.extract_web_candidates(mission_reports)
+            leads = silk_gmaps.finalize_leads(
+                scrape_future, product, market_ref, _web_cands, timeout_s=_cap)
+            log.info("gmaps leads path=%s count=%d (%.1fs after submit)",
+                     leads.get("path"), len(leads.get("leads") or []),
+                     mono.monotonic() - scrape_t0)
+            return leads
+        except Exception as e:  # noqa: BLE001 — الروابط تحسين لا شرط؛ لا تُسقط التشغيلة
+            log.warning("gmaps enrich failed: %s", e)
+            return {"leads": [], "path": "gap",
+                    "note": f"تعذّر جمع الروابط: {type(e).__name__}"}
+
     def _run_research_pipeline(market_ref, product: str, hs_code: str | None,
                                hs_note: str | None, product_card_dict: dict | None,
                                ai_ok: bool, ai_note: str, prefs: dict | None,
@@ -935,7 +960,19 @@ def create_app():
                 list(mission_reports.values()), product=product,
                 market=market_ref.name_en, with_ai=tail_with_ai,
                 analyst_assessment=analyst_input)
-            _stage_marks["writer"] = _mono.monotonic()  # E3: نهاية التوليف
+            _stage_marks["enrich"] = _mono.monotonic()  # E3: نهاية التوليف
+            # إكمال بيانات المستوردين تلقائياً (أمر المالك المُحدَّث ITEM 1):
+            # حين تكون المكشطة مُهيَّأة، تُجمَع جهات الاتصال (هاتف/إيميل/موقع)
+            # **قبل الكاتب** فيشحن التقرير كاملاً من التشغيلة الأولى. الكشط
+            # قُدِّم مبكراً (submit_scrape_async قبل البعثات) فتراكب زمنه مع
+            # البعثات/المحلل؛ هنا يُجمَع بسقف زمني كلّي (SILK_ENRICH_TIMEOUT_S،
+            # ٦٠ث افتراضياً). فشل/مهلة = فجوة معلنة «—»، لا تشغيلة عالقة، لا
+            # نداء كلود. صندوق التقدّم يعرض المرحلة «إكمال بيانات المستوردين».
+            silk_context.snapshot_research_progress(analysis_id, "enrich_leads")
+            importer_leads = _collect_importer_leads(
+                _scrape_future, product, market_ref, mission_reports,
+                _scrape_t0, _mono)
+            _stage_marks["writer"] = _mono.monotonic()  # E3: نهاية الإكمال
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
                 product, market_ref.name_en, max_cycles=tail_max_cycles,
@@ -949,9 +986,12 @@ def create_app():
             # E3 (SPEC-v2): زمن الجدار لكل مرحلة + أكبر ثلاثة مصارف — يُطبَع في
             # data_economics كي يقيس المالك أين تذهب الدقائق (البعثات متوازية،
             # الذيل متسلسل)، وهدف < ١٠ دقائق يُقاس عليه.
-            _order = ["missions", "analyst", "synthesis", "writer", "end"]
+            _order = ["missions", "analyst", "synthesis", "enrich", "writer",
+                      "end"]
             _labels = {"missions": "البعثات (متوازية)", "analyst": "المحلل الشامل",
-                       "synthesis": "التوليف/الحكم", "writer": "الكاتب+المراجع"}
+                       "synthesis": "التوليف/الحكم",
+                       "enrich": "إكمال بيانات المستوردين",
+                       "writer": "الكاتب+المراجع"}
             _ss = {}
             for _i in range(len(_order) - 1):
                 a, b = _order[_i], _order[_i + 1]
@@ -1003,23 +1043,9 @@ def create_app():
         silk_usage.reconcile_usd(reserved=_reserved_usd, actual=cost["total_usd"])
         budget_status = _research_budget_status(economics)
 
-        # C2–C5 (Command #5b): اجمع روابط المستوردين بمهلة **قصيرة** (لا
-        # انتظار أبعد من D-02 — الكشط تراكب مع البعثات والذيل أصلاً). إن لم
-        # يكن قد اكتمل، السلسلة الاحتياطية Places ثم فجوة معلنة. path يُسجَّل.
-        try:
-            _grace = float(os.environ.get("SILK_GMAPS_COLLECT_GRACE_S", "30"))
-            _web_cands = silk_gmaps.extract_web_candidates(mission_reports)
-            importer_leads = silk_gmaps.finalize_leads(
-                _scrape_future, product, market_ref, _web_cands,
-                timeout_s=_grace)
-            log.info("gmaps leads path=%s count=%d (%.1fs after submit)",
-                     importer_leads.get("path"), len(importer_leads.get("leads") or []),
-                     _mono.monotonic() - _scrape_t0)
-        except Exception as e:  # noqa: BLE001 — الروابط تحسين لا شرط؛ لا تُسقط التشغيلة
-            log.warning("gmaps finalize failed: %s", e)
-            importer_leads = {"leads": [], "path": "gap",
-                             "note": f"تعذّر جمع الروابط: {type(e).__name__}"}
-
+        # روابط المستوردين جُمِعت تلقائياً **قبل الكاتب** (أمر المالك المُحدَّث
+        # ITEM 1) في مرحلة «إكمال بيانات المستوردين» أعلاه — تُشحن مع التقرير
+        # من التشغيلة الأولى. `importer_leads` جاهز هنا لبناء النتيجة.
         result: dict = {
             "product": product, "hs_code": hs_code, "year": None,
             "preliminary": True,
@@ -1290,6 +1316,7 @@ def create_app():
     # بلا لقطة بعد) تعرض None لا تسمية مُخترَعة.
     _STAGE_LABEL_AR = {
         "missions": "بحث البعثات", "analyst": "تحليل شامل",
+        "enrich_leads": "إكمال بيانات المستوردين",
         "writer": "كتابة التقرير", "reviewer": "مراجعة التقرير",
         "done": "اكتمل"}
 
@@ -1760,6 +1787,92 @@ def create_app():
         _attach_quality_gate(found, trace_id)
         silk_storage.save_analysis(found, analysis_id=analysis_id)
         return _json(found)
+
+    @app.post("/analyses/{analysis_id}/enrich-leads")
+    def enrich_leads(analysis_id: int, request: Request):
+        """أعد رصد جهات اتصال المستوردين لبحث محفوظ — كشط الخرائط فقط، بلا
+        أيّ نداء كلود ولا إعادة تشغيل البعثات (المسار الرخيص).
+
+        السياق (بلاغ UK الحي، أمر العمل الرئيس ITEM 2): المكشطة (`silk_gmaps`)
+        نُشرت متأخّراً (SILK_GMAPS_SCRAPER_URL ضُبط بعد إنجاز تقارير سابقة)،
+        فتقرير المالك القائم يحمل «فجوة معلنة» في جدول المستوردين رغم أن
+        المكشطة صارت حيّة الآن. إعادة تشغيل /research كاملة تكلّف ~3$ (١٢ بعثة
+        + محلل + كاتب) لمجرّد تعبئة هاتف/إيميل — هذه النقطة تُنجزها بقروش:
+        تكشط الخرائط للسوق/المنتج المخزَّنَين، تدمج مرشّحي الويب من نقاط
+        تفتيش البعثات المحفوظة، وتحدّث `importer_leads` في مكانه ثم تعيد بناء
+        القالب الموحّد قبل الحفظ. لا نداء كلود، ولا حجز من السقف اليومي
+        المدفوع — المكشطة خدمة منفصلة رخيصة. عقد عدم الاختلاق مقدَّس: فشل/غياب
+        المكشطة = فجوة معلنة، لا صفّ مخترَع.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        found = silk_storage.get_analysis(analysis_id)
+        if found is None:
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        dr = found.get("deep_research")
+        if not dr:
+            raise HTTPException(
+                status_code=400,
+                detail=f"analysis {analysis_id} is not a /research run "
+                       "(no deep_research section) — no importer leads to enrich")
+        import silk_gmaps
+        if not silk_gmaps.enabled():
+            # تعطيل نظيف: المكشطة غير مُهيَّأة — لا نلمس التحليل المخزَّن، نُبلّغ.
+            return _json({
+                "enriched": False, "path": (dr.get("importer_leads") or {})
+                .get("path", "gap"),
+                "leads_count": len((dr.get("importer_leads") or {})
+                                   .get("leads") or []),
+                "note": "مكشطة الخرائط غير مُهيَّأة (SILK_GMAPS_SCRAPER_URL "
+                        "غائب) — لم تُحدَّث الروابط."})
+
+        product = found.get("product") or ""
+        market_blob = found.get("market") or {}
+        from silk_market_resolver import resolve_market
+        market_ref, _sugg = resolve_market(
+            market_blob.get("name_en") or market_blob.get("iso3") or "")
+        if market_ref is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"stored market {market_blob!r} could not be resolved "
+                       "— cannot target the scraper")
+
+        # مرشّحو الويب من نقاط تفتيش البعثات المحفوظة (اسم فقط، للمضاهاة/الدمج)
+        # — تُقرأ من نفس آلية استئناف /research، لا إعادة تشغيل بعثة.
+        mission_reports = silk_storage.load_mission_checkpoints(analysis_id) or {}
+        web_cands = silk_gmaps.extract_web_candidates(mission_reports)
+
+        # كشط متزامن بمهلة سخيّة (نداء المالك اليدوي، لا مسار البوّابة الحسّاس
+        # للزمن) — قابلة للضبط. الخيط يخزّن النتائج فور اكتمالها فنداء لاحق
+        # يستعملها من التخزين المؤقت بلا كشط جديد.
+        grace = float(os.environ.get("SILK_GMAPS_ENRICH_GRACE_S", "300"))
+        fut = silk_gmaps.submit_scrape_async(product, market_ref)
+        new_leads = silk_gmaps.finalize_leads(
+            fut, product, market_ref, web_cands, timeout_s=grace)
+
+        # لا تطمس روابط قائمة بفجوة: نُحدّث فقط إن أتى الكشط بروابط فعلية.
+        prev = dr.get("importer_leads") or {"leads": [], "path": "gap"}
+        if new_leads.get("leads"):
+            found["deep_research"]["importer_leads"] = new_leads
+            found["analysis_id"] = analysis_id
+            found["view"] = _view(found)
+            silk_storage.save_analysis(found, analysis_id=analysis_id)
+            enriched = True
+            note = new_leads.get("note") or "حُدِّثت الروابط عبر كشط الخرائط."
+        else:
+            # لا روابط جديدة — نُبقي المخزَّن كما هو (لا اختلاق، لا طمس).
+            enriched = False
+            note = ("لم تُرصَد جهات اتصال قابلة للتواصل في هذا الكشط — "
+                    "الروابط السابقة محفوظة كما هي دون تغيير.")
+
+        current = found["deep_research"].get("importer_leads") or prev
+        return _json({
+            "enriched": enriched,
+            "path": current.get("path", "gap"),
+            "leads_count": len(current.get("leads") or []),
+            "importer_leads": current,
+            "note": note})
 
     class AskRequest(BaseModel):
         """سؤال فوق تحليل قائم (10b) — question over a stored analysis."""

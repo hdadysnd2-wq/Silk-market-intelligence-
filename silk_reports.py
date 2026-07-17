@@ -1459,6 +1459,21 @@ _CLIENT_TOOL_NAMES = (
     "gdelt_news", "openalex_search", "channels_importers", "lookup_reference",
     "eurostat_eu_signals")
 
+# أسماء المزوّدين الداخليين — عقد المالك الصريح (بلاغ UK الحي، 2026-07-17):
+# لا يُسمّى مزوّد بيانات داخلي/مدفوع لعميل نهائي إطلاقاً (Volza/Explee/Serper/
+# SerpApi/LocalPrice/pytrends/GDELT وصيغها العربية إكسبلي/فولزا). أسماء
+# المصادر البشرية العمومية (UN Comtrade/World Bank/Eurostat…) تبقى مسموحة —
+# استشهاد مشروع لا سباكة داخلية. السطح التشغيلي (?internal=1) قد يُبقيها.
+# الطبقة اللاتينية بحدود كلمة (لا تخترق كلمة أطول)، والعربية مطابقة مباشرة.
+_CLIENT_VENDOR_NAMES_LATIN = (
+    "Volza", "Explee", "Serper", "SerpApi", "LocalPrice", "pytrends", "GDELT")
+_CLIENT_VENDOR_NAMES_AR = ("إكسبلي", "فولزا")
+# اللغة التجارية العامة التي تحلّ محلّ أيّ اسم مزوّد على سطح العميل.
+_CLIENT_VENDOR_GENERIC = "خدمة التحقق المدفوعة من المشترين وجهات الاتصال"
+_CLIENT_VENDOR_RE = re.compile(
+    r"\b(?:" + "|".join(_CLIENT_VENDOR_NAMES_LATIN) + r")\b|"
+    + "|".join(_CLIENT_VENDOR_NAMES_AR), re.I)
+
 # أنماط الرفض — كلٌّ يُطابَق ضد نص التصدير المُجمَّع كاملاً (فقرات + خلايا
 # جداول). عربية تشغيلية + أسماء أدوات snake_case + كلمات إنجليزية تشغيلية
 # ككلمات كاملة (لا تظهر في نثر عربي إلا تسرّباً). أسماء المصادر البشرية
@@ -1480,6 +1495,8 @@ _CLIENT_FORBIDDEN_PATTERNS = [
         r"(?:ال)?فجوة\s+(?:ال)?معلنة|(?:ال)?فجوات\s+(?:ال)?معلنة")),
     ("tool_name", re.compile(
         r"\b(?:" + "|".join(_CLIENT_TOOL_NAMES) + r")\b")),
+    # عقد المالك (بلاغ UK الحي): اسم مزوّد داخلي/مدفوع = تسريب لجمهور العميل.
+    ("vendor_name", _CLIENT_VENDOR_RE),
     ("agent_role", re.compile(
         r"المحلل الشامل|كاتب التقرير|بوابة الجودة|LLMMissionAgent|LLMAgent")),
     ("citation_plumbing", re.compile(r"مبنيّ?ة?\s+على استشهاد|بلا استشهاد|"
@@ -1506,6 +1523,10 @@ _CLIENT_SANITIZE = [
     (re.compile(r"\b(?:" + "|".join(_CLIENT_TOOL_NAMES) + r")\b"),
      "السجلّات الرسمية"),
     (re.compile(r"من\s+السجلّات الرسمية"), "من السجلّات الرسمية"),
+    # عقد المالك (بلاغ UK الحي): أيّ اسم مزوّد داخلي متسرّب (من سرد الكاتب أو
+    # ملاحظة مُعرَّبة مثل «إكسبلي غير متاح حالياً») يُحوَّل للغة أعمال عامة قبل
+    # أن يراه العميل. الحارس النهائي (vendor_name) شبكة أمان لِما فات.
+    (_CLIENT_VENDOR_RE, _CLIENT_VENDOR_GENERIC),
     (re.compile(r"LLMMissionAgent|LLMAgent"), "مصدر البيانات"),
     # §2.2 (أمر العمل الرئيس): لا تُنسَب الحقائق لمسارات بحث داخلية — الصياغة
     # المحايدة «جمع البيانات» تحلّ محل «بعثة»/«مسار بحث». صيغ المثنى/الضمير
@@ -1588,6 +1609,7 @@ _CLIENT_REDACT_PLACEHOLDER = {
     "agent_role": "فريق البحث",
     "citation_plumbing": "مصدر موثّق",
     "algorithm_language": "التقييم",
+    "vendor_name": _CLIENT_VENDOR_GENERIC,
 }
 
 

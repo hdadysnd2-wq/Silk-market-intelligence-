@@ -117,6 +117,13 @@ _TEST_ANCHORS = [
     # الحارس: النمط المرن + شبكة الأمان، وسلاسل المشرف الحرفية في السجل.
     (17, "tests/test_regression_registry.py",
      ["def _guard_datapoint_repr_flexible"]),
+    # البند ١٨ — تسريب اسم مزوّد داخلي للعميل (بلاغ UK الحي): كنس المدوّنة
+    # القانونية + شكل UK بزيرو تطابق، والحارس السلوكي في السجل.
+    (18, "tests/test_vendor_name_leak_item1.py",
+     ["def test_client_export_names_no_vendor_across_canonical_and_uk_shapes",
+      "def test_client_vendor_guard_fails_loud_on_injected_vendor_name"]),
+    (18, "tests/test_regression_registry.py",
+     ["def _guard_vendor_name_leak"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
@@ -142,6 +149,10 @@ _SYMBOL_ANCHORS_EXTRA = [
     (16, "silk_market_analyst.py", ["_ANALYST_MAX_TOKENS"]),
     # البند ١٧ — النمط المرن + شبكة أمان DataPoint في المعقِّم نفسه.
     (17, "silk_render.py", ["_DATAPOINT_REPR_RE", "_DATAPOINT_ANY_RE"]),
+    # البند ١٨ — قائمة أسماء المزوّدين الممنوعة على سطح العميل (بلاغ UK الحي):
+    # المُطهِّر + المنقِّي + الحارس، وسطر next_step بلا اسم مزوّد.
+    (18, "silk_reports.py", ["_CLIENT_VENDOR_RE", "_CLIENT_VENDOR_GENERIC",
+                             "vendor_name"]),
 ]
 
 

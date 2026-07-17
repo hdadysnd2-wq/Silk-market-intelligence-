@@ -195,6 +195,47 @@ def _guard_datapoint_repr_flexible():
     assert _r._strip_internal_plumbing(cases[1]).strip().startswith("12.5")
 
 
+def _guard_vendor_name_leak():
+    """LESSONS ١٨ — اسم مزوّد داخلي (Volza/Explee/…) تسرّب لسطح العميل (بلاغ
+    UK الحي). الحارس السلوكي: الأسطر الحرفية المسرّبة (سطر «الخطوة التالية»
+    القديم + ترجمة `silk_narrative` التي تُسمّي المزوّد) تُحيَّد فعلياً بمنقِّي
+    العميل فلا يبقى اسم مزوّد في مخرَج التصدير؛ وسطر next_step المُولَّد لم
+    يعُد يحمل اسم مزوّد أصلاً."""
+    from silk_reports import (_client_redact_text, _client_forbidden_hits,
+                              _client_sanitize)
+    # (١) الأسطر الحرفية المسرّبة من البلاغ الحي — كلٌّ يتسرّب أولاً ثم يُحيَّد.
+    leaked = [
+        "فعّل خدمة التعميق المدفوعة للتحقق من المستوردين وجهات الاتصال (Volza/Explee)",
+        "إكسبلي غير متاح حالياً",
+        "فولزا: لا مستوردون بالاسم مرصودون لرمز 0804 في GBR",
+        "buyers via Serper and SerpApi, priced by LocalPrice",
+        "seasonality from pytrends; risk news from GDELT",
+    ]
+    for line in leaked:
+        assert _client_forbidden_hits(line), (
+            f"التهيئة خاطئة — يجب أن يتسرّب أولاً: {line!r}")
+        cleaned = _client_redact_text(_client_sanitize(line))
+        assert not _client_forbidden_hits(cleaned), (
+            f"اسم مزوّد بقي بعد التنقية: {_client_forbidden_hits(cleaned)}")
+    # (٢) الحارس الصارم يملك أسماء المزوّدين لاتينيةً وعربيةً معاً — لا يعتمد
+    # على المُطهِّر وحده (متغيّر مستقبلي يفلت المُطهِّر يبقى يُرفَع بصوت عالٍ).
+    for v in ("Volza", "Explee", "إكسبلي", "فولزا", "LocalPrice", "Serper",
+              "SerpApi", "pytrends", "GDELT"):
+        hits = _client_forbidden_hits(f"مبنيّ على {v} التجارية")
+        assert any(h.startswith("vendor_name") for h in hits), (
+            f"اسم مزوّد ليس في قائمة الرفض الصارم (_client_assert_clean): {v}")
+    # (٣) سطر next_step المُولَّد لا يحمل اسم مزوّد إطلاقاً.
+    import silk_render
+    from canonical_netherlands import netherlands_research_blob
+    blob = netherlands_research_blob()
+    blob["deep_research"]["verdict"] = {"verdict": "GO", "confidence": 0.7,
+                                        "ai": {"verdict": "GO"}}
+    view = silk_render.build_view(blob)
+    nxt = (view.get("deep_research") or {}).get("next_step") or ""
+    assert nxt and not _client_forbidden_hits(nxt), (
+        f"سطر الخطوة التالية يحمل اسم مزوّد: {nxt!r}")
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -218,6 +259,7 @@ _LESSONS = {
     16: _needles("silk_ai_judge.py", "_WRITER_MAX_TOKENS", "_MAX_TOKENS_CEILING",
                  "max_tokens=_MAX_TOKENS_CEILING"),
     17: _guard_datapoint_repr_flexible,  # هجوم المشرف — ريبر DataPoint المرن
+    18: _guard_vendor_name_leak,         # بلاغ UK — تسريب اسم مزوّد للعميل
 }
 
 _TRAPS = [
