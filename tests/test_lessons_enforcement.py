@@ -128,6 +128,30 @@ _TEST_ANCHORS = [
     # السجل + تدفّق المتصفّح الحقيقي يؤكّد توقيع %PDF.
     (19, "tests/test_regression_registry.py",
      ["def _guard_export_format_contract"]),
+    # البند ٢٠ — تغطية العالم (الميزة أ): لا تلفيق فئة-٢ ولا تفجّر ميزانية؛
+    # الأقفال السلوكية + الحارس السلوكي في السجل.
+    (20, "tests/test_world_coverage_tierA.py",
+     ["def test_tier_separation_and_labels",
+      "def test_tier2_never_carries_a_local_csv_value",
+      "def test_tier2_gather_makes_zero_comtrade_calls",
+      "def test_budget_exhausted_degrades_to_tier1_only"]),
+    (20, "tests/test_regression_registry.py",
+     ["def _guard_world_tier2_no_fabrication"]),
+    # البند ٢١ — استقبال المنتج من صورة (الميزة ب): لا اختلاق منتج، والمحوّل
+    # أماميّ معزول؛ الأقفال السلوكية + الحارس السلوكي في السجل.
+    (21, "tests/test_product_intake_featureB.py",
+     ["def test_low_confidence_or_unreadable_never_fabricates",
+      "def test_intake_module_imports_no_pipeline_code",
+      "def test_endpoint_image_call_is_metered_from_the_cap"]),
+    (21, "tests/test_regression_registry.py",
+     ["def _guard_intake_no_silent_guess"]),
+    # البند ٢٢ — بوّابة «خارج التغطية» (الميزة أ): سوق خارج التغطية لا دراسة
+    # هزيلة بل رسالة صادقة + إشارة طلب؛ الأقفال + الحارس السلوكي في السجل.
+    (22, "tests/test_out_of_coverage_guard.py",
+     ["def test_out_of_coverage_market_returns_honest_message_and_logs_demand",
+      "def test_flag_off_no_coverage_guard_any_country_works_todays_way"]),
+    (22, "tests/test_regression_registry.py",
+     ["def _guard_out_of_coverage_thin_study"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

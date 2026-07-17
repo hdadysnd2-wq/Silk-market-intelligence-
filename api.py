@@ -254,6 +254,17 @@ def create_app():
         agent_prefs: dict | None = None
         persist: bool = False
 
+    class IntakeRequest(BaseModel):
+        """طلب استقبال منتج متعدّد الوسائط — {name} أو {image_base64,kind}.
+
+        محوّلٌ أماميّ (الميزة ب): لا يبدأ أيّ تحليل — يُعيد اسماً مؤكَّداً/قابلاً
+        للتعديل يدخل بعده المسارَ القائم. لا حقول مدفوعة/تحليل هنا بنيوياً.
+        """
+        name: str | None = None
+        image_base64: str | None = None
+        kind: str = "product"                 # "product" | "ingredients_label"
+        media_type: str = "image/jpeg"        # jpeg/png/webp
+
     class DeepenRequest(BaseModel):
         """طلب تعميق (المسار المدفوع) — the /deepen request body (wave 2).
 
@@ -402,6 +413,72 @@ def create_app():
                       "note": dp.note, "source": dp.source,
                       "retrieved_at": dp.retrieved_at})
 
+    @app.get("/config")
+    def config(request: Request):
+        """أعلامُ الميزات العلنية للواجهة — public feature flags (لا أسرار).
+
+        الواجهة تقرؤها مرّة عند الإقلاع لتفعيل تبويبات الصورة (الميزة ب) —
+        القيَم أعلامٌ بيئية علنية لا مفاتيح، فآمنٌ كشفها بلا مصادقة."""
+        _rate_limit(request)
+        import silk_product_intake as intake
+        from silk_market_ranker import _world_markets_enabled
+        return _json({"image_intake": intake.enabled(),
+                      "world_markets": _world_markets_enabled()})
+
+    def _intake_vision_allowed() -> tuple[bool, str]:
+        """هل يُسمح نداء الرؤية الواحد؟ — (allowed, reason). يعكس منطق
+        `_free_ai_extras_allowed`: نداء الرؤية مقيسٌ كأيّ نداء مدفوع (حجز
+        تفعيلة واحدة ذرّياً من SILK_PAID_DAILY_CAP). الرفض يتدهور بصدق إلى
+        «تعذّرت القراءة» — لا اختلاق منتج، ولا 429 على مسار مجاني أصلاً.
+
+        بلا مفتاح كلود => لا رؤية ممكنة (تعذّر قراءة صادق، لا اختلاق). مفتاحٌ
+        مدفوع بلا SILK_API_KEY => محجوب (حارس 503) بلا إنفاق. سقفٌ مستنفد =>
+        محجوب. غير ذلك => تُحجَز تفعيلة واحدة قبل النداء."""
+        if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+            return False, ("طبقة الرؤية تتطلّب ANTHROPIC_API_KEY — "
+                           "تعذّرت قراءة الصورة، اكتب الاسم يدوياً.")
+        if _unprotected_paid_keys():
+            return False, ("ANTHROPIC_API_KEY مضبوط بلا SILK_API_KEY — "
+                           "طبقة الرؤية محجوبة (حارس 503) حتى تُضبط المصادقة.")
+        if not silk_usage.try_reserve_paid_calls(1):
+            return False, ("سقف الاستهلاك اليومي (SILK_PAID_DAILY_CAP) "
+                           "مستنفد — تعذّرت قراءة الصورة لهذا الطلب.")
+        return True, ""
+
+    @app.post("/products/intake")
+    def products_intake(req: IntakeRequest, request: Request):
+        """استقبال منتج متعدّد الوسائط — اسمٌ مكتوب أو صورة منتج/بطاقة مكوّنات.
+
+        محوّلٌ أماميّ (الميزة ب): يُعيد اسماً مؤكَّداً/قابلاً للتعديل **بلا بدء
+        تحليل**. مسار الصورة = نداء رؤية واحد مقيس؛ ثقةٌ منخفضة/غير مقروءة =>
+        «تعذّرت القراءة — اكتب الاسم يدوياً» (لا اختلاق). الاسم المؤكَّد يدخل
+        بعده `/resolve → /analyze|/research` القائم بلا تغيير.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        import silk_product_intake as intake
+        if not intake.enabled():
+            raise HTTPException(status_code=404, detail={
+                "error": "image_intake_disabled",
+                "reason": "استقبال الصور مُعطَّل — اضبط SILK_IMAGE_INTAKE=1."})
+        # مسار الاسم المكتوب: لا نداء كلود، لا حجز.
+        if req.name and not req.image_base64:
+            return _json(intake.intake_name(req.name))
+        if not req.image_base64:
+            raise HTTPException(status_code=422, detail={
+                "error": "name_or_image_required",
+                "reason": "مرّر name أو image_base64."})
+        # مسار الصورة: تحقّق الحجم/النوع أولاً (لا حجز على إدخالٍ باطل)، ثم
+        # احجز تفعيلة الرؤية الواحدة. الحجز يقع فقط حين نعتزم النداء فعلاً.
+        raw, why = intake._decode_and_check(req.image_base64, req.media_type)
+        if raw is None:
+            return _json(intake.intake_image(req.image_base64, req.media_type,
+                                             req.kind))
+        allow, reason = _intake_vision_allowed()
+        return _json(intake.intake_image(
+            req.image_base64, req.media_type, req.kind,
+            allow_vision=allow, blocked_reason=reason))
+
     @app.get("/index")
     def index(request: Request, q: str = "", limit: int = 20):
         """فهرس المنتجات للبحث — product search index for the dashboard combobox.
@@ -418,16 +495,34 @@ def create_app():
         against — يُبنى مرة واحدة، لا نداء شبكة، ثابت لكل التشغيلات.
         """
         _rate_limit(request)
-        from silk_market_ranker import COUNTRIES
+        from silk_market_ranker import (
+            COUNTRIES, TIER2_LABEL, _world_markets_enabled)
         from silk_data_layer import partner_name
         from silk_narrative import COUNTRY_AR
         # P3 (بلاغ المالك): الاسم العربي إلى جانب الإنجليزي — الواجهة تعرض
         # العربية في وضعها العربي بدل أسماء إنجليزية خام.
-        return _json([{"iso3": c["iso3"], "m49": c["m49"],
-                      "name": partner_name(c["m49"]),
-                      "name_ar": COUNTRY_AR.get(c["iso3"],
-                                                partner_name(c["m49"]))}
-                      for c in COUNTRIES])
+        out = [{"iso3": c["iso3"], "m49": c["m49"],
+                "name": partner_name(c["m49"]),
+                "name_ar": COUNTRY_AR.get(c["iso3"], partner_name(c["m49"])),
+                "tier": 1}
+               for c in COUNTRIES]
+        # تغطية العالم (SILK_WORLD_MARKETS): أضِف بقية دول العالم كفئة-٢ موسومة
+        # «تغطية أساسية» ليجمعها منسدل الواجهة تحت «كل دول العالم». مُطفأ افتراضياً
+        # => الرد نفسه حرفياً كاليوم (تغطية-١ فقط، بلا حقل tier مؤثِّر على العرض).
+        if _world_markets_enabled():
+            from silk_market_resolver import _load as _load_countries
+            seen = {c["iso3"] for c in COUNTRIES}
+            for row in _load_countries():
+                iso3 = (row.get("iso3") or "").strip()
+                if len(iso3) != 3 or iso3 in seen:
+                    continue
+                seen.add(iso3)
+                out.append({
+                    "iso3": iso3, "m49": row.get("m49", ""),
+                    "name": row.get("name_en") or iso3,
+                    "name_ar": row.get("name_ar") or row.get("name_en") or iso3,
+                    "tier": 2, "coverage": TIER2_LABEL})
+        return _json(out)
 
     def _require_key(request: Request) -> None:
         """حارس المصادقة — 401 when the key mismatches, constant-time (L-1).
@@ -602,6 +697,33 @@ def create_app():
             return False, ("سقف الاستهلاك اليومي (SILK_PAID_DAILY_CAP) "
                            "مستنفد — أعد المحاولة غداً أو ارفع السقف.")
         return True, ""
+
+    def _market_in_coverage(hs_code, iso3: str) -> tuple[bool, bool]:
+        """هل السوق ضمن التغطية لهذا الرمز؟ — (covered, determinable).
+
+        اتفاق المالك: التغطية = Tier-1 المنسّقة **أو** الظهور ضمن مجموعة أكبر
+        مستوردي هذا الرمز (Tier-1+Tier-2 الديناميكية من نداء العالم الواحد).
+        سوقٌ خارجها => لا دراسة هزيلة بل رسالة صادقة. تعذّر تحديد المجموعة (بلا
+        رمز/ميزانية كومتريد منفدة/شبكة) => (True, False): نفتح البوّابة (يعمل
+        كاليوم، فجوات معلنة) بدل حجب سوقٍ مشروع على عطلٍ عابر — فشلٌ آمن.
+        """
+        from silk_market_ranker import (COUNTRIES, world_import_totals,
+                                        _TIER1_N, _TIER2_MAX)
+        if iso3 in {c["iso3"] for c in COUNTRIES}:
+            return True, True               # Tier-1 منسّقة — مغطّاة دائماً
+        if not hs_code:
+            return True, False              # لا رمز => لا يمكن حساب المجموعة
+        import datetime as _dt
+        year = _dt.date.today().year - 1
+        try:
+            totals = world_import_totals(hs_code, year)
+        except Exception as e:  # noqa: BLE001 — عطل قياس لا يحجب سوقاً
+            log.warning("coverage probe failed: %s", e)
+            totals = []
+        if not totals:
+            return True, False              # تعذّر التحديد => فتح البوّابة
+        covered = {t["iso3"] for t in totals[:_TIER1_N + _TIER2_MAX]}
+        return iso3 in covered, True
 
     @app.post("/analyze")
     def analyze(req: AnalyzeRequest, request: Request):
@@ -1200,6 +1322,34 @@ def create_app():
             raise HTTPException(status_code=422, detail={
                 "error": f"unknown or ambiguous market {market_name!r}",
                 "suggestions": suggestions})
+
+        # بوابة «خارج التغطية» (اتفاق المالك) — تسبق الجهوزية/الحجز: مع تفعيل
+        # تغطية العالم، سوقٌ ليس Tier-1 ولا ضمن مجموعة أكبر مستوردي هذا الرمز
+        # (Tier-2 الديناميكية) يُعاد برسالةٍ صادقة «تواصل معنا لإضافتها» بدل
+        # دراسةٍ هزيلة، ويُسجَّل إشارةَ طلبٍ في سجلّ العمليات (طلب فعلي غير مغطّى).
+        # الصمّام مُطفأ => السلوك كاليوم (أيّ دولة تعمل، فجوات معلنة) بلا انحدار.
+        from silk_market_ranker import _world_markets_enabled
+        if _world_markets_enabled():
+            _cov_hs = req.hs_code or stored_request.get("hs_code")
+            if not _cov_hs and product:
+                from silk_hs_resolver import resolve as _resolve_hs_cov
+                _cov_hs = _resolve_hs_cov(product).value
+            _covered, _determinable = _market_in_coverage(
+                _cov_hs, market_ref.iso3)
+            if _determinable and not _covered:
+                import silk_ops_log
+                silk_ops_log.record_error(
+                    "out_of_coverage_demand",
+                    f"طلب بحث لسوقٍ خارج التغطية الحالية: "
+                    f"{market_ref.name_en} ({market_ref.iso3}) "
+                    f"لرمز HS {_cov_hs}",
+                    context={"product": product,
+                             "market_iso3": market_ref.iso3,
+                             "hs_code": _cov_hs})
+                raise HTTPException(status_code=422, detail={
+                    "error": "out_of_coverage",
+                    "message": "هذه السوق خارج التغطية الحالية — "
+                               "تواصل معنا لإضافتها"})
 
         # بوابة ما قبل التشغيل بعد التحقق من صحة الإدخال (422 على خطأ
         # الطالب يسبق 409 على جهوزية الخادم — خطأ العميل يستحق أن يُشرَح

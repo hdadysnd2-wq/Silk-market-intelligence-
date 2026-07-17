@@ -282,6 +282,109 @@ def _guard_export_format_contract():
         "تدفّق e2e لا يؤكّد توقيع %PDF لزرّ PDF"
 
 
+def _guard_world_tier2_no_fabrication():
+    """LESSONS ٢٠ — عائلة tier2-fabrication (تصميم الميزة أ، قفل استباقي): توسيع
+    الترتيب لكل دول العالم يجب ألّا يختلق قيمة فئة-٢ ولا يفجّر ميزانية كومتريد.
+    الحارس (قراءة مصدر + سلوك حيّ): (١) وحدة الترتيب لا تقرأ أيّ CSV محلّي؛
+    (٢) الفئة-٢ تحمل الوسم التعاقدي + فجوتَي موقع السعودية/المنافسة معلنتين؛
+    (٣) نداء العالم الواحد + التدهور عند نفاد الميزانية موجودان؛ (٤) ملف القفل
+    قائم."""
+    src = _read("silk_market_ranker.py")
+    # (١) لا CSV محلّي في وحدة الترتيب إطلاقاً.
+    for forbidden in ("agreements_l1", "demographics_l1", "market_locale",
+                      "muslim_share", "requirements_l1"):
+        assert forbidden not in src, f"الترتيب يقرأ CSV محلّياً: {forbidden}"
+    # (٢) الوسم التعاقدي + الفجوة المعلنة + المسجّل + الصمّام.
+    for needle in ('TIER2_LABEL = "تغطية أساسية — بيانات محلية محدودة"',
+                   'def _tier2_gather_row', 'status="tier2_gap"',
+                   'def _world_markets_enabled', 'def world_import_totals',
+                   'def _comtrade_budget_left'):
+        assert needle in src, f"علامة إنفاذ الفئة-٢ مفقودة: {needle}"
+    # (٣) نداء العالم الواحد (partner=0) مشترك للفئتين + تدهور الميزانية.
+    assert 'flow="M", partner=0' in src, "نداء العالم الواحد (partner=0) غائب"
+    assert '_comtrade_budget_left()' in src and '_WORLD_BUDGET_RESERVE' in src, \
+        "فرع التدهور عند نفاد الميزانية غائب"
+    # (٤) ملف القفل قائم بأقفاله السبعة.
+    assert _exists("tests/test_world_coverage_tierA.py"), "ملف قفل الميزة أ مفقود"
+    lock = _read("tests/test_world_coverage_tierA.py")
+    for fn in ("test_tier_separation_and_labels",
+               "test_tier2_never_carries_a_local_csv_value",
+               "test_tier2_gather_makes_zero_comtrade_calls",
+               "test_budget_exhausted_degrades_to_tier1_only",
+               "test_ranking_is_deterministic_on_fixture"):
+        assert f"def {fn}" in lock, f"قفل الميزة أ مفقود: {fn}"
+
+
+def _guard_out_of_coverage_thin_study():
+    """LESSONS ٢٢ — عائلة out-of-coverage-thin-study (مواصفة المالك، الميزة أ):
+    سوقٌ خارج التغطية يجب ألّا يشغّل دراسةً هزيلة بل يُعاد برسالةٍ صادقة ويُسجَّل
+    إشارةَ طلب. الحارس (قراءة مصدر): البوّابة + الرسالة الحرفية + التسجيل +
+    تسطيح الواجهة + ملف القفل."""
+    api = _read("api.py")
+    assert "def _market_in_coverage" in api, "دالّة فحص التغطية غائبة"
+    assert '"error": "out_of_coverage"' in api, "بوّابة خارج التغطية غائبة"
+    assert "هذه السوق خارج التغطية الحالية" in api and \
+        "تواصل معنا لإضافتها" in api, "الرسالة الصادقة الحرفية غائبة"
+    assert '"out_of_coverage_demand"' in api, "تسجيل إشارة الطلب غائب"
+    assert "_world_markets_enabled()" in api, "البوّابة غير مقيّدة بالصمّام"
+    html = _read("web/index.html")
+    assert "x.message||x.reason||x.error" in html, \
+        "الواجهة لا تُسطّح رسالة detail (لن تظهر رسالة خارج التغطية)"
+    assert _exists("tests/test_out_of_coverage_guard.py"), "ملف قفل البوّابة مفقود"
+    lock = _read("tests/test_out_of_coverage_guard.py")
+    for fn in ("test_out_of_coverage_market_returns_honest_message_and_logs_demand",
+               "test_tier1_curated_market_is_always_covered",
+               "test_flag_off_no_coverage_guard_any_country_works_todays_way"):
+        assert f"def {fn}" in lock, f"قفل البوّابة مفقود: {fn}"
+
+
+def _guard_intake_no_silent_guess():
+    """LESSONS ٢١ — عائلة intake-silent-guess (تصميم الميزة ب، قفل استباقي):
+    استقبال المنتج من صورة يجب ألّا يختلق اسماً ولا يبدأ تحليلاً قبل تأكيد
+    المستخدم، والمحوّل أماميّ معزول عن طبقات التحليل. الحارس (قراءة مصدر):
+    (١) عقد عدم الاختلاق (فرع readable/العتبة => تعذّر قراءة صادق)؛ (٢) حدود
+    الصورة + التقييس + العزل؛ (٣) القياس (حجز واحد) في نقطة النهاية؛ (٤) المحوّل
+    لا يستورد/يستدعي طبقات التحليل؛ (٥) ملف القفل قائم."""
+    import ast as _ast
+    src = _read("silk_product_intake.py")
+    # (١) عقد عدم الاختلاق + الرسالة الموحّدة + العتبة.
+    for needle in ('READ_FAILED_MSG = "تعذّرت القراءة — اكتب الاسم يدوياً"',
+                   'def _read_failed', 'def intake_image', 'readable',
+                   '_MIN_CONFIDENCE', 'def enabled'):
+        assert needle in src, f"علامة إنفاذ الاستقبال مفقودة: {needle}"
+    # (٢) حدود الصورة + التقييس + العزل.
+    for needle in ('MAX_IMAGE_BYTES', 'ALLOWED_MEDIA_TYPES', 'def _decode_and_check',
+                   'def _sanitize', 'def _isolate', '_MAGIC'):
+        assert needle in src, f"علامة سلامة الصورة مفقودة: {needle}"
+    # (٣) القياس — نقطة النهاية تحجز تفعيلة واحدة كأيّ نداء مدفوع.
+    api = _read("api.py")
+    assert 'def _intake_vision_allowed' in api and \
+        'try_reserve_paid_calls(1)' in api, "قياس نداء الرؤية غائب"
+    assert '@app.post("/products/intake")' in api, "نقطة نهاية الاستقبال غائبة"
+    assert 'intake.enabled()' in api, "صمّام SILK_IMAGE_INTAKE غير مفحوص"
+    # (٤) المحوّل أماميّ معزول — لا يستورد أيّ طبقة تحليل، ولا يستدعيها نصّاً.
+    tree = _ast.parse(src)
+    imported = {n.names[0].name.split(".")[0] for n in _ast.walk(tree)
+                if isinstance(n, _ast.Import)}
+    imported |= {(n.module or "").split(".")[0] for n in _ast.walk(tree)
+                 if isinstance(n, _ast.ImportFrom)}
+    forbidden = {"silk_engine", "silk_missions", "silk_market_analyst",
+                 "silk_ai_judge", "silk_market_ranker", "correlation",
+                 "silk_synthesis", "silk_llm_runtime"}
+    assert imported.isdisjoint(forbidden), imported & forbidden
+    for banned in ("analyze(", "deep_research(", "write_reviewed_report",
+                   "ResearchManager", "rank_markets("):
+        assert banned not in src, f"الاستقبال يمسّ مسار التحليل: {banned}"
+    # (٥) ملف القفل قائم بأقفاله المركزية.
+    assert _exists("tests/test_product_intake_featureB.py"), "ملف قفل الميزة ب مفقود"
+    lock = _read("tests/test_product_intake_featureB.py")
+    for fn in ("test_low_confidence_or_unreadable_never_fabricates",
+               "test_intake_module_imports_no_pipeline_code",
+               "test_endpoint_image_call_is_metered_from_the_cap",
+               "test_image_validation_rejects_bad_inputs"):
+        assert f"def {fn}" in lock, f"قفل الميزة ب مفقود: {fn}"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -307,6 +410,9 @@ _LESSONS = {
     17: _guard_datapoint_repr_flexible,  # هجوم المشرف — ريبر DataPoint المرن
     18: _guard_vendor_name_leak,         # بلاغ UK — تسريب اسم مزوّد للعميل
     19: _guard_export_format_contract,   # بلاغ المُشرِف — زرّ PDF كان ينزّل docx
+    20: _guard_world_tier2_no_fabrication,  # الميزة أ — لا تلفيق فئة-٢/تفجّر ميزانية
+    21: _guard_intake_no_silent_guess,      # الميزة ب — لا اختلاق منتج من صورة
+    22: _guard_out_of_coverage_thin_study,  # الميزة أ — سوق خارج التغطية لا دراسة هزيلة
 }
 
 _TRAPS = [

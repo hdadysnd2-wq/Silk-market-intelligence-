@@ -70,14 +70,19 @@ ISO2: dict[str, str] = {
     "ESP": "ES", "NLD": "NL", "USA": "US", "CAN": "CA",
 }
 
-def top_import_markets(hs_code: str, year: int, n: int = 38) -> list[dict]:
-    """أكبر مستوردي هذا الرمز عالمياً — dynamic candidates from Comtrade (8c).
+def world_import_totals(hs_code: str, year: int) -> list[dict]:
+    """كل مستوردي هذا الرمز عالمياً بقيمهم — every world importer of this HS, ONE call.
 
-    نداء واحد (كل الدول المبلّغة، partner=0=العالم، flow=M) ثم ترتيب تنازلي
-    بقيمة الاستيراد. مواصفة المالك: تغطية شاملة ذاتية الصيانة بدل قائمة
-    يدوية. صف بلا قيمة رقمية يُسقط؛ رمز m49 بلا ترجمة iso3 في خريطتنا
-    يُسقط مع تسجيل (تدهور معلن لا صامت). فشل كومتريد/غياب الشبكة => []
-    والمستدعي يتراجع للقائمة المنسّقة COUNTRIES — سلوك اليوم بلا انحدار.
+    نداءٌ واحدٌ فقط (كل الدول المبلّغة، partner=0=العالم، flow=M) يُعدِّد **كل**
+    سوقٍ في العالم مع إجمالي وارداته، مرتَّباً تنازلياً بالقيمة. هذا هو نفس
+    النداء الذي كان `top_import_markets` يجريه — لكنه الآن يُعيد القيمة أيضاً كي
+    تُشتَقّ منه علامةُ «حجم السوق» لصفوف الفئة-٢ (تغطية العالم) **بلا أيّ نداءٍ
+    إضافيٍّ لكل دولة**. صفٌّ بلا قيمة رقمية يُسقط؛ رمز m49 بلا ترجمة iso3 يُسقط
+    مع تسجيل (تدهور معلن). فشل كومتريد/غياب الشبكة => [] والمستدعي يتراجع.
+
+    ONE Comtrade call enumerating every reporting country with its import total —
+    the shared source both for Tier-1 dynamic candidates AND for Tier-2 market
+    size (zero extra per-country calls). Returns [{iso3, m49, total_usd}] desc.
     """
     from silk_data_layer import M49_TO_ISO3, comtrade_trade, primary_value
     recs = comtrade_trade(hs_code, None, year, flow="M", partner=0) or []
@@ -97,19 +102,112 @@ def top_import_markets(hs_code: str, year: int, n: int = 38) -> list[dict]:
             continue
         rows.append((val, iso3, m49))
     if skipped:
-        log.info("top_import_markets: %d reporter(s) skipped — no ISO3 "
+        log.info("world_import_totals: %d reporter(s) skipped — no ISO3 "
                  "mapping (declared degradation)", skipped)
     rows.sort(reverse=True)
     seen: set[str] = set()
     out: list[dict] = []
-    for _val, iso3, m49 in rows:
+    for val, iso3, m49 in rows:
         if iso3 in seen:
             continue
         seen.add(iso3)
-        out.append({"iso3": iso3, "m49": m49})
-        if len(out) >= n:
-            break
+        out.append({"iso3": iso3, "m49": m49, "total_usd": val})
     return out
+
+
+def top_import_markets(hs_code: str, year: int, n: int = 38) -> list[dict]:
+    """أكبر مستوردي هذا الرمز عالمياً — top-N dynamic candidates (8c).
+
+    قشرةٌ رقيقة فوق `world_import_totals`: نفس النداء الواحد، أول n سوقاً فقط،
+    بنفس شكل مخرجات اليوم `{iso3, m49}` حرفياً (بلا انحدار للمستدعين القدامى).
+    Thin slice over `world_import_totals` — identical legacy output shape.
+    """
+    return [{"iso3": t["iso3"], "m49": t["m49"]}
+            for t in world_import_totals(hs_code, year)[:n]]
+
+
+# ═══ تغطية العالم (SILK_WORLD_MARKETS) — two-tier world coverage ═══
+# الفئة-١: الأسواق المنسّقة (تسجيل محلّي كامل). الفئة-٢: بقية العالم، تُسجَّل
+# **حصراً** على بياناتٍ متاحةٍ عالمياً (إجمالي وارداتها من نداء العالم الواحد +
+# دخل/سكان البنك الدولي المجمّع) — بلا أيّ قيمة محلية مختلَقة (اتفاقيات/لوجستيات/
+# ثقافة): الفجوات تُعلَن حرفياً. Tier-2 = universally-available data only.
+_TIER1_N = 38                        # الفئة-١: أعلى n مستورداً (تسجيل كامل)
+# سقف الفئة-٢ (اتفاق المالك): ٦٢ فتصير التغطية الكلّية ≈ ١٠٠ سوقاً (٣٨+٦٢).
+# الاختيار **ديناميكيّ لكل رمز HS** من نداء العالم الواحد (أكبر مستوردي هذا
+# الرمز فعلاً) — قرار المالك المعتمَد بديلاً عن قائمة countries_tier2.csv
+# ساكنة: التغطية تتبع تجارة الرمز الحقيقية لا قائمةً يدوية عامة. env يظلّ ضابطاً.
+_TIER2_MAX = int(os.environ.get("SILK_WORLD_TIER2_MAX", "62") or "62")
+_TIER2_CONF_CAP = 0.5                # سقف ثقة الفئة-٢ (بيانات جزئية بنيوياً)
+_WORLD_BUDGET_RESERVE = int(
+    os.environ.get("SILK_WORLD_BUDGET_RESERVE", "1") or "1")
+# النصّ التعاقدي الحرفي لكل صفّ فئة-٢ (مُختبَر بالمطابقة التامة) — the exact
+# contract label stamped on every Tier-2 row (asserted by exact match).
+TIER2_LABEL = "تغطية أساسية — بيانات محلية محدودة"
+
+
+def _world_markets_enabled() -> bool:
+    """صمّام المالك — SILK_WORLD_MARKETS=1 يفعّل تغطية العالم (افتراضي مُطفأ)."""
+    return os.environ.get("SILK_WORLD_MARKETS", "0").strip() == "1"
+
+
+def _comtrade_budget_left() -> int:
+    """المتبقّي من ميزانية كومتريد اليومية — lazy import (تفادي دورة استيراد).
+
+    فشل القراءة => نعتبر الميزانية متاحة (لا نكسر المسار على عطل قياس) —
+    لكن نفاد الميزانية المؤكَّد يُسقط الفئة-٢ (تدهور معلن للفئة-١ فقط).
+    """
+    try:
+        from silk_collectors import comtrade_budget_left
+        return comtrade_budget_left()
+    except Exception as e:      # noqa: BLE001 — عطل قياس لا يكسر الترتيب
+        log.warning("comtrade_budget_left probe failed: %s", e)
+        return _WORLD_BUDGET_RESERVE + 1
+
+
+def _tier2_gather_row(hs_code: str, entry: dict, year: int) -> dict:
+    """اجمع صفّ فئة-٢ — a Tier-2 row from the ONE world call + WB (no Comtrade call).
+
+    حجم السوق يُشتَقّ من `entry["total_usd"]` (نداء العالم الواحد، لا نداء لكل
+    دولة). الدخل/السكان من البنك الدولي المجمّع (خارج ميزانية كومتريد). موقع
+    السعودية والمنافسة **فجوتان معلنتان** — لا يُطلَب تفصيل المورّدين لكل دولةٍ
+    في العالم (كلفةً وعقداً)؛ ولا قيمة اتفاقية/لوجستية/ثقافية محلية تُنسَب لسوقٍ
+    غير منسَّق. NO local-CSV value ever attributed here — declared gaps only.
+    """
+    iso3, m49 = entry["iso3"], entry["m49"]
+    total = entry.get("total_usd")
+    inc = _income_dp(iso3, year)
+    pop = population(iso3, year)
+    ms = (DataPoint(float(total), "UN Comtrade", _TIER2_CONF_CAP,
+                    note=f"إجمالي واردات HS{hs_code} {year} (USD) — {TIER2_LABEL}"
+                         " · من نداء استيراد العالم الواحد",
+                    retrieved_at=_today())
+          if total is not None else
+          DataPoint(None, "UN Comtrade", 0.0,
+                    note=f"{TIER2_LABEL} — لا إجمالي واردات لهذا السوق",
+                    retrieved_at=_today(), status="no_record"))
+    comp_dps = {
+        "market_size": ms,
+        "saudi_position": DataPoint(
+            None, "UN Comtrade", 0.0,
+            note=f"{TIER2_LABEL} — تفصيل المورّدين غير مطلوب لسوقٍ غير منسَّق "
+                 "(فجوة معلنة لا صفر مختلَق)",
+            retrieved_at=_today(), status="tier2_gap"),
+        "demand_capacity": _demand_capacity_component(inc, iso3, year),
+        "competition": DataPoint(
+            None, "UN Comtrade", 0.0,
+            note=f"{TIER2_LABEL} — لا رصد لتركّز المورّدين (فجوة معلنة)",
+            retrieved_at=_today(), status="tier2_gap"),
+    }
+    return {
+        "iso3": iso3, "m49": m49,
+        "iso2": ISO2.get(iso3),      # قد يكون None لدولٍ خارج خريطة سِلك
+        "components": comp_dps,
+        "income_ppp": inc.value,
+        "population": pop.value,
+        "year_used": year, "year_fell_back": False,
+        "competitors": [], "top_competitor": None,
+        "tier": 2, "coverage": TIER2_LABEL,
+    }
 
 
 # أوزان المكوّنات — tunable component weights (sum ~1.0). Audit/tune here.
@@ -330,7 +428,8 @@ def _normalize(raw: dict[str, float], value: float) -> float:
 
 
 def rank_markets(hs_code: str, countries: list[dict] | None = None,
-                 year: int = 2022, max_workers: int = 16) -> list[dict]:
+                 year: int = 2022, max_workers: int = 16,
+                 world: bool | None = None) -> list[dict]:
     """رتّب الأسواق لرمز HS — rank markets best-first by a weighted, audited score.
 
     Each result: {country, iso3, m49, total_score, confidence, components}
@@ -348,6 +447,27 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
     => تراجع معلن للقائمة المنسّقة COUNTRIES — سلوك اليوم حرفياً.
     SILK_DYNAMIC_MARKETS=0 يعطّل الديناميكي (صمام مالك).
     """
+    # تغطية العالم (SILK_WORLD_MARKETS) — نداءُ العالم الواحد يخدم الفئتين معاً:
+    # أعلى _TIER1_N مرشَّحاً للفئة-١ (تسجيل كامل، نداء لكل دولة كالمعتاد)، والباقي
+    # للفئة-٢ (تسجيل رخيص من نفس النداء + البنك الدولي، صفر نداء كومتريد إضافي).
+    # نفاد ميزانية كومتريد => تدهور معلن للفئة-١ المنسّقة فقط (لا تلفيق جزئي).
+    world_on = _world_markets_enabled() if world is None else world
+    tier2_entries: list[dict] = []
+    if countries is None and world_on:
+        left = _comtrade_budget_left()
+        if left > _WORLD_BUDGET_RESERVE:
+            totals = world_import_totals(hs_code, year)   # ← النداء الواحد
+            if totals:
+                countries = [{"iso3": t["iso3"], "m49": t["m49"]}
+                             for t in totals[:_TIER1_N]]
+                tier2_entries = totals[_TIER1_N:_TIER1_N + _TIER2_MAX]
+                log.info("rank_markets: world coverage — Tier-1 %d + Tier-2 %d "
+                         "(one world call, zero extra Comtrade)",
+                         len(countries), len(tier2_entries))
+        else:
+            log.info("rank_markets: Comtrade budget exhausted (%d) — degrading "
+                     "to Tier-1 curated only (no Tier-2 fabrication)", left)
+
     if countries is None and os.environ.get(
             "SILK_DYNAMIC_MARKETS", "1").strip() != "0":
         dyn = top_import_markets(hs_code, year)
@@ -358,10 +478,14 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
     countries = countries or COUNTRIES
 
     # 1) اجمع المكوّنات الخام لكل دولة بالتوازي — gather raw components concurrently.
-    workers = max(1, min(max_workers, len(countries)))
+    #    الفئة-٢ (إن وُجدت) تُجمَع بنفس المُنفِّذ لكن عبر مسارٍ رخيص بلا نداء كومتريد.
+    tasks: list[tuple[bool, dict]] = (
+        [(False, c) for c in countries] + [(True, e) for e in tier2_entries])
+    workers = max(1, min(max_workers, len(tasks)))
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        rows: list[dict] = list(
-            ex.map(lambda c: _gather_row(hs_code, c, year), countries))
+        rows: list[dict] = list(ex.map(
+            lambda t: (_tier2_gather_row(hs_code, t[1], year) if t[0]
+                       else _gather_row(hs_code, t[1], year)), tasks))
 
     # 2) جداول القيم الخام لكل مكوّن عبر الدول — per-component raw value tables.
     raw_tables: dict[str, dict[str, float]] = {k: {} for k in WEIGHTS}
@@ -389,7 +513,10 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
         total = round(score / wsum, 4) if wsum else 0.0
         # ثقة الصف تنخفض بنقص المكوّنات — confidence drops with missing components.
         confidence = round(present / len(WEIGHTS), 2)
-        out.append({
+        tier = row.get("tier", 1)
+        if tier == 2:            # الفئة-٢ مُقيَّدة الثقة بنيوياً (بيانات جزئية)
+            confidence = round(min(confidence, _TIER2_CONF_CAP), 2)
+        entry = {
             "country": _name(iso3, row["m49"]),
             "iso3": iso3, "m49": row["m49"],
             "iso2": row.get("iso2"),   # يغذي Trends geo وبحث التسوّق gl (P0-3)
@@ -401,9 +528,17 @@ def rank_markets(hs_code: str, countries: list[dict] | None = None,
             "year_fell_back": row.get("year_fell_back", False),
             "competitors": row["competitors"],
             "top_competitor": row["top_competitor"],
-        })
+            "tier": tier,
+        }
+        if tier == 2:
+            entry["coverage"] = row.get("coverage", TIER2_LABEL)
+        out.append(entry)
 
-    out.sort(key=lambda r: (r["total_score"], r["confidence"]), reverse=True)
+    # الفئة-١ أولاً دائماً ثم الفئة-٢ (التغطية الأساسية لا تزحزح المنسّق) — كلٌّ
+    # داخلياً بالنقاط ثم الثقة. فالعرض الافتراضي (أعلى ٣) يبقى فئةً-١ حرفياً.
+    # Tier-1 always precedes Tier-2 so the default top-N view is unchanged.
+    out.sort(key=lambda r: (r.get("tier", 1),
+                            -r["total_score"], -r["confidence"]))
     return out
 
 
