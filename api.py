@@ -165,9 +165,23 @@ def create_app():
             "اضبط SILK_DATA_DIR=/data (وحدة تخزين Railway) قبل الإقلاع، أو "
             "أزِل SILK_REQUIRE_PERSISTENT_DATA_DIR إن كان التخزين الفاني مقصوداً.")
 
+    # حاصد التشغيلات اليتيمة عند الإقلاع — إعادة النشر تقتل عمليةً منتصف
+    # تشغيلة /research، فيبقى صفّها 'running' أبداً وحجزُ الدولار المسبق بلا
+    # مصالحة يسدّ السقف اليومي. المكنَس يوسم العالق 'failed' ويصالح حجزه إلى
+    # الفعلي-حتى-الآن. الإقلاع أهمّ نقطة تشغيل (يلتقط ما خلّفته العملية الميتة).
+    try:
+        import silk_storage
+        _reaped = silk_storage.reap_orphan_research_runs()
+        if _reaped:
+            log.warning("startup orphan reaper marked %d stale runs failed: %s",
+                        len(_reaped), _reaped)
+    except Exception as _e:  # noqa: BLE001 — الحصاد لا يُسقِط الإقلاع أبداً
+        log.warning("startup orphan reaper failed: %s", _e)
+
     # التحديث الدوري داخل العملية (SILK_REFRESH_HOURS) — قرص Railway يُركَّب
     # على خدمة واحدة، فالمُجدول خيط خلفي هنا لا خدمة cron منفصلة. معطّل بلا
     # المتغير — الاختبارات والتطوير لا تتأثر. In-process scheduled refresh.
+    # (الحلقة الدورية تحصد اليتيمة أيضاً — راجع silk_collectors._loop).
     try:
         import silk_collectors
         silk_collectors.start_scheduler()
@@ -1394,6 +1408,21 @@ def create_app():
         """
         _require_key(request)
         _rate_limit(request)
+        # البند ٣ (حزمة الإغلاق): /diagnostics يُطلق نداءات مدفوعة حيّة
+        # (Serper/Maps/Claude) بمفاتيح الخادم، فيجب أن يحجز وحدة من السقف
+        # المدفوع كأيّ مسار مدفوع — وإلا فهو ثقب يستنزف الرصيد تحت السقف. يُحجَز
+        # فقط حين السقف مضبوط (بلا سقف: لا شيء يُحمى، فالسلوك الافتراضي غير
+        # متأثّر). المالك يُعفيه صراحةً بـ SILK_DIAG_EXEMPT=1 (تشخيص متكرر أثناء
+        # تصحيح النشر بلا استهلاك السقف — موثَّق في .env.example).
+        _diag_exempt = os.environ.get("SILK_DIAG_EXEMPT", "").strip().lower() in (
+            "1", "true", "yes", "on")
+        if (not _diag_exempt and silk_usage.daily_cap() is not None
+                and not silk_usage.try_reserve_paid_calls(1)):
+            raise HTTPException(status_code=429, detail={
+                "error": "daily_paid_cap_exhausted",
+                "reason": "السقف المدفوع اليومي مُستنفَد — التشخيص يُطلق نداءات "
+                          "مدفوعة حيّة فيُحجَز منه وحدة واحدة. اضبط "
+                          "SILK_DIAG_EXEMPT=1 لإعفائه، أو ارفع SILK_PAID_DAILY_CAP."})
         import silk_diagnostics
         try:
             return silk_diagnostics.run_diagnostics(year)

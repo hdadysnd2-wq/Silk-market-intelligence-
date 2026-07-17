@@ -141,6 +141,29 @@ def _guard_trap_redaction_mangling():
     _needles("silk_diagnostics.py", "def _redact")()
 
 
+def _guard_trap_strip_plumbing_three_leaks():
+    """TRAP «_strip_internal_plumbing leaked three raw forms» — الحارس يبني
+    السلاسل الإنتاجية الحرفية الثلاث ويؤكّد تحييد كلٍّ منها (silk-operations §4:
+    القفل بالسلسلة الحرفية). الثلاث: ريبر DataPoint(...) يُحيَّد كاملاً بلا
+    نصف-ترجمة؛ JSON مضمَّن بمفاتيح score/summary يُحيَّد؛ رمز حكم بأي حالة أحرف."""
+    from silk_render import _strip_internal_plumbing
+    # (١) ريبر DataPoint(...) — كامل التحييد، لا نصف-ترجمة، تُستخرَج القيمة
+    dp = ("مبنيّ على DataPoint(value='واردات 120 مليون دولار', source='UN "
+          "Comtrade', confidence=0.9, note='n', retrieved_at='2026-07-01', "
+          "status='')")
+    o1 = _strip_internal_plumbing(dp)
+    assert "DataPoint(" not in o1 and "confidence=" not in o1, o1
+    assert "درجة الثقة=" not in o1, f"نصف-ترجمة: {o1}"
+    assert "واردات 120 مليون دولار" in o1, o1
+    # (٢) JSON مضمَّن بمفاتيح score/summary
+    o2 = _strip_internal_plumbing('التوصية: {"score": 0.72, "summary": "سوق واعد"}')
+    assert "{" not in o2 and '"summary"' not in o2, o2
+    assert "سوق واعد" in o2, o2
+    # (٣) رمز حكم بأي حالة أحرف
+    o3 = _strip_internal_plumbing("الحكم go — مراقبة قبل الدخول")
+    assert not re.search(r"\bgo\b", o3, re.I), f"رمز حكم خام بقي: {o3}"
+
+
 def _guard_trap_parallel_cache_window():
     # فخّ معروف غير مُصلَح بعد (نافذة الذاكرة المؤقتة عبر ١٢ بعثة متوازية).
     # الحارس يُبقيه مُتتبَّعاً: آلية التوازي (ThreadPoolExecutor) لا تزال في
@@ -152,6 +175,26 @@ def _guard_trap_parallel_cache_window():
 # كل مدخلة: Incident(key, source, match, check)
 #   source: "LESSONS" (key=رقم الصفّ int) أو "trap" (key=slug، match=جزء من
 #   اسم الفخّ العريض في §2). check: callable يُفشِل على عودة الانحدار.
+
+
+def _guard_datapoint_repr_flexible():
+    """LESSONS ١٧ — ريبر DataPoint المختصر/الشاذ كان يمرّ نصف مترجم (هجوم
+    المشرف الحي). الحارس: النمط المرن + شبكة الأمان يمسكان كل العائلة."""
+    import silk_render as _r
+    cases = [
+        "DataPoint(value=None, confidence=0.0)",
+        "DataPoint(value='12.5', source='comtrade', confidence=0.9, "
+        "note='ok (x)', retrieved_at='2026', status='ok')",
+        "DataPoint(confidence=0.5, value=None)",
+        "قبل DataPoint(value=None, confidence=0.0) بعد",
+    ]
+    for c in cases:
+        out = _r._strip_internal_plumbing(c)
+        assert "DataPoint" not in out and "confidence" not in out and \
+               "درجة الثقة=" not in out, f"leak: {c!r} -> {out!r}"
+    assert _r._strip_internal_plumbing(cases[1]).strip().startswith("12.5")
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -172,6 +215,9 @@ _LESSONS = {
                  "_check_style"),
     15: _needles("tools/live_shape_server.py", "class LiveShapeServer",
                  "def seed_db"),
+    16: _needles("silk_ai_judge.py", "_WRITER_MAX_TOKENS", "_MAX_TOKENS_CEILING",
+                 "max_tokens=_MAX_TOKENS_CEILING"),
+    17: _guard_datapoint_repr_flexible,  # هجوم المشرف — ريبر DataPoint المرن
 }
 
 _TRAPS = [
@@ -191,9 +237,20 @@ _TRAPS = [
      _needles("web/index.html", 'data-id="',
               '$("#histList").addEventListener("click"')),
     ("silent_noop_family", "silent no-op has three forms",
-     _needles("web/index.html", "function openStoredAnalysis")),
+     _needles("web/index.html", "function openStoredAnalysis",
+              # حزمة الإغلاق، البند ٤: سلسلة /markets في بناء نيّة الدردشة
+              # اكتسبت .catch عربياً (كانت ترفض صامتةً فتُعلّق مؤشّر الانتظار).
+              "تعذّر تحميل قائمة الأسواق")),
     ("view_after_persist", "view attached AFTER persist",
      _guard_trap_view_after_persist),
+    ("strip_plumbing_three_leaks", "leaked three raw forms",
+     _guard_trap_strip_plumbing_three_leaks),
+    ("orphan_reservation_leak", "Orphaned runs leak their USD reservation",
+     lambda: (
+         _needles("silk_storage.py", "def reap_orphan_research_runs",
+                  "reconcile_usd", "SILK_ORPHAN_STALE_MINUTES")(),
+         _needles("api.py", "reap_orphan_research_runs")(),
+         _needles("silk_collectors.py", "reap_orphan_research_runs")())),
 ]
 
 

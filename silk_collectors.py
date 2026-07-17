@@ -410,6 +410,17 @@ def start_scheduler():
         delay = initial
         while True:
             time.sleep(delay)
+            # حصاد التشغيلات اليتيمة دورياً (فوق حصاد الإقلاع) — يلتقط تعطّلاً
+            # حدث أثناء حياة العملية لا عند إعادة النشر فقط. مستقل عن refresh:
+            # فشل أحدهما لا يمنع الآخر (الخيط يبقى في كل الأحوال).
+            try:
+                import silk_storage
+                reaped = silk_storage.reap_orphan_research_runs()
+                if reaped:
+                    log.warning("periodic orphan reaper marked %d stale runs "
+                                "failed: %s", len(reaped), reaped)
+            except Exception as e:  # noqa: BLE001 — الحصاد يفشل، الخيط يبقى
+                log.warning("periodic orphan reaper failed: %s", e)
             try:
                 got = refresh()
                 log.info("scheduled refresh done: %s", got)
