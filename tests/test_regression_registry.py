@@ -236,6 +236,52 @@ def _guard_vendor_name_leak():
         f"سطر الخطوة التالية يحمل اسم مزوّد: {nxt!r}")
 
 
+def _guard_export_format_contract():
+    """LESSONS ١٩ — عائلة export-format-contract (بلاغ المُشرِف عند السطر): زرّ
+    «تصدير التقرير» الأساسي كان موصولاً بـ`dlReport("docx")` فينزّل Word بينما
+    المُسلَّم النهائي للعميل PDF غير قابل للتحرير (§3، اتفاق المالك). الحارس:
+    (١) زرّ PDF موصول بـ`dlReport("pdf")` لا docx؛ (٢) `dlReport` يملك فرع pdf
+    بامتداد `.pdf` ورسالة 503 عربية صريحة؛ (٣) بطاقة الدردشة المصغّرة تُصدِّر
+    PDF؛ (٤) الخادم يخدم report.pdf بنوع application/pdf؛ (٥) صورة النشر
+    (Dockerfile) + وظيفة e2e تُثبّتان محرّك التحويل فلا يموت الزرّ حياً."""
+    html = _read("web/index.html")
+    # (١) الوصلة الأساسية: PDF لا docx (السطر المعطوب الأصلي غائب).
+    assert '$("#pdfBtn").addEventListener("click",function(){dlReport("pdf")})' \
+        in html, "زرّ PDF غير موصول بـdlReport(\"pdf\")"
+    assert '$("#pdfBtn").addEventListener("click",function(){dlReport("docx")})' \
+        not in html, "زرّ PDF لا يزال موصولاً بتنزيل docx (البلاغ الأصلي)"
+    # زرّ Word ثانوي حاضر (النسخة القابلة للتحرير للمشغّل، لا العميل).
+    assert 'id="wordBtn"' in html and \
+        '$("#wordBtn").addEventListener("click",function(){dlReport("docx")})' \
+        in html, "زرّ Word الثانوي غائب أو غير موصول"
+    # (٢) فرع pdf في dlReport: امتداد .pdf + رسالة 503 العربية الصريحة.
+    assert 'kind==="pdf"' in html, "dlReport بلا فرع pdf"
+    assert '"سِلك_تقرير_"+id+".pdf"' in html, "اسم/امتداد ملف الـPDF خاطئ"
+    assert "محرّك التحويل غير متاح — جرّب Word مؤقتاً" in html, \
+        "رسالة 503 العربية الصريحة غائبة"
+    assert "r.status===503" in html, "فرع pdf لا يعالج 503 صراحةً"
+    # (٣) بطاقة الدردشة المصغّرة تُصدِّر PDF لا docx.
+    assert 'data-act="pdf"' in html, "بطاقة الدردشة المصغّرة لا تُصدِّر PDF"
+    assert 'this.dataset.act==="board"?nav("board"):dlReport("pdf")' in html, \
+        "معالج بطاقة الدردشة لا يستدعي dlReport(\"pdf\")"
+    # (٤) الخادم يخدم report.pdf بنوع application/pdf.
+    api = _read("api.py")
+    assert "/analyses/{analysis_id}/report.pdf" in api and \
+        'media_type="application/pdf"' in api, "نقطة نهاية report.pdf غائبة/خاطئة"
+    # (٥) محرّك التحويل مثبَّت على النشر (Dockerfile) وفي وظيفة e2e — كي يعمل
+    # الزرّ حيّاً لا في CI فقط (البند ٦ من أمر العمل).
+    dockerfile = _read("Dockerfile")
+    assert "libreoffice-writer" in dockerfile, \
+        "محرّك تحويل PDF غير مثبَّت في صورة النشر — الزرّ سيموت حياً بـ503"
+    e2e = _read(".github/workflows/e2e-live-shape.yml")
+    assert "libreoffice-writer" in e2e, \
+        "وظيفة e2e لا تثبّت محرّك التحويل — تأكيد %PDF سيفشل"
+    # التدفّق يؤكّد توقيع %PDF على المسار الأساسي.
+    flow = _read("tests/e2e/live_shape_flow.cjs")
+    assert 'pdfBuf[0] === 0x25 && pdfBuf[1] === 0x50' in flow, \
+        "تدفّق e2e لا يؤكّد توقيع %PDF لزرّ PDF"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -260,6 +306,7 @@ _LESSONS = {
                  "max_tokens=_MAX_TOKENS_CEILING"),
     17: _guard_datapoint_repr_flexible,  # هجوم المشرف — ريبر DataPoint المرن
     18: _guard_vendor_name_leak,         # بلاغ UK — تسريب اسم مزوّد للعميل
+    19: _guard_export_format_contract,   # بلاغ المُشرِف — زرّ PDF كان ينزّل docx
 }
 
 _TRAPS = [

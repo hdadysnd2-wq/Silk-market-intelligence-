@@ -124,6 +124,10 @@ _TEST_ANCHORS = [
       "def test_client_vendor_guard_fails_loud_on_injected_vendor_name"]),
     (18, "tests/test_regression_registry.py",
      ["def _guard_vendor_name_leak"]),
+    # البند ١٩ — عقد صيغة التصدير (زرّ PDF كان ينزّل docx): الحارس السلوكي في
+    # السجل + تدفّق المتصفّح الحقيقي يؤكّد توقيع %PDF.
+    (19, "tests/test_regression_registry.py",
+     ["def _guard_export_format_contract"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
@@ -153,6 +157,12 @@ _SYMBOL_ANCHORS_EXTRA = [
     # المُطهِّر + المنقِّي + الحارس، وسطر next_step بلا اسم مزوّد.
     (18, "silk_reports.py", ["_CLIENT_VENDOR_RE", "_CLIENT_VENDOR_GENERIC",
                              "vendor_name"]),
+    # البند ١٩ — عقد صيغة التصدير: الزرّ الأساسي يُسلّم PDF، والخادم يخدمه،
+    # ومحرّك التحويل مثبَّت على صورة النشر (لا CI فقط).
+    (19, "web/index.html", ['dlReport("pdf")', 'kind==="pdf"',
+                            'data-act="pdf"']),
+    (19, "api.py", ["report.pdf", 'media_type="application/pdf"']),
+    (19, "Dockerfile", ["libreoffice-writer"]),
 ]
 
 

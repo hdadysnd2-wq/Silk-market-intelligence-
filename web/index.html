@@ -257,7 +257,8 @@
     <div class="view" id="v-board">
       <div class="topbar"><span class="ttl" id="bTitle">اللوحة</span>
         <div style="display:flex;gap:8px">
-          <button class="expbtn" id="pdfBtn" data-t="export">⇩ تصدير التقرير (Word/PDF)</button>
+          <button class="expbtn" id="pdfBtn" data-t="export" title="المُسلَّم النهائي للعميل — PDF غير قابل للتحرير (§3، اتفاق المالك)">⇩ تصدير التقرير (PDF)</button>
+          <button class="abtn" id="wordBtn" title="نسخة تشغيلية قابلة للتحرير — للمشغّل لا العميل">Word (نسخة قابلة للتحرير)</button>
           <button class="abtn" id="mdBtn">Markdown</button>
         </div></div>
       <div class="wrap" id="boardBody"><div class="empty" data-t="boardEmpty">شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.</div></div>
@@ -312,7 +313,7 @@ var T={
  cost:{ar:"تكلفتك / وحدة",en:"Cost / unit"},price:{ar:"سعرك المستهدف",en:"Your target price"},tier:{ar:"الفئة",en:"Tier"},cap:{ar:"الطاقة الشهرية",en:"Monthly capacity"},
  certs:{ar:"الشهادات (مفصولة بفواصل)",en:"Certifications (comma-separated)"},
  run:{ar:"مسح الأسواق ←",en:"Screen markets →"},running:{ar:"جارٍ المسح…",en:"Screening…"},
- export:{ar:"⇩ تصدير التقرير (Word/PDF)",en:"⇩ Export report (Word/PDF)"},
+ export:{ar:"⇩ تصدير التقرير (PDF)",en:"⇩ Export report (PDF)"},
  boardEmpty:{ar:"شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.",en:"Run an analysis from “New analysis” or chat — the board is built from real results."},
  chatIntro:{ar:"اسأل عن أي منتج وسوق — مثال: «حلّل التمور في الصين لآخر ٥ سنوات». أستخدم نفس الوكلاء ونفس إعداداتهم في المسار الأساسي.",en:"Ask about any product and market — e.g. “analyze dates in China for the last 5 years”. Same agents, same settings as the main flow."},
  chatNote:{ar:"كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي",en:"Every question runs the enabled agents · same settings as the main flow"},
@@ -796,13 +797,27 @@ function renderBoard(){var v=S.view;if(!v){$("#boardBody").innerHTML='<div class
    أي قدرة على التشخيص (نفس عائلة «401 المبتلَع»، بلاغ ٢). يُقرأ الآن ويُعرَض. */
 function dlFail(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}
   throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,300))})}
+/* دالة تنزيل مساعدة لملف ثنائي (docx/pdf) — تحمل الترويسة، تفحص r.ok، تنزّل blob. */
+function dlBlob(url,accept,filename){return fetch(base()+url,{headers:Object.assign({Accept:accept},hdrs(false))})
+  .then(function(r){if(!r.ok)return dlFail(r);return r.blob()})
+  .then(function(b){var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)})}
 function dlReport(kind){var id=S.raw&&S.raw.analysis_id;if(id==null){toast("شغّل تحليلاً أولاً");return}
-  if(kind==="docx"){fetch(base()+"/analyses/"+id+"/report.docx",{headers:hdrs(false)}).then(function(r){if(!r.ok)return dlFail(r);return r.blob()})
-    .then(function(b){var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="silk_report_"+id+".docx";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)})
+  // PDF — المُسلَّم النهائي للعميل (§3، اتفاق المالك): غير قابل للتحرير.
+  // 503 = محرّك التحويل (LibreOffice) غائب على الخادم — رسالة عربية صريحة
+  // تقترح Word مؤقتاً، لا «HTTP 503» عارية (عائلة البلاغ المبتلَع، البند ٢/١١).
+  if(kind==="pdf"){fetch(base()+"/analyses/"+id+"/report.pdf",{headers:Object.assign({Accept:"application/pdf"},hdrs(false))})
+    .then(function(r){
+      if(r.status===503)return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}
+        var det=detailText(d,t);throw new Error("محرّك التحويل غير متاح — جرّب Word مؤقتاً"+(det?" ("+det.toString().slice(0,160)+")":""))});
+      if(!r.ok)return dlFail(r);return r.blob()})
+    .then(function(b){if(!b)return;var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="سِلك_تقرير_"+id+".pdf";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)})
+    .catch(function(e){toast("فشل التنزيل: "+e.message)});return}
+  if(kind==="docx"){dlBlob("/analyses/"+id+"/report.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document","سِلك_تقرير_"+id+".docx")
     .catch(function(e){toast("فشل التنزيل: "+e.message)});return}
   fetch(base()+"/analyses/"+id+"/report.md",{headers:hdrs(false)}).then(function(r){if(!r.ok)return dlFail(r);return r.text()}).then(function(t){
     var w=window.open("","_blank");if(!w)return;var pre=w.document.createElement("pre");pre.style.cssText="white-space:pre-wrap;font-family:monospace;padding:28px;max-width:900px;margin:0 auto";pre.textContent=t;w.document.body.appendChild(pre)}).catch(function(e){toast("فشل: "+e.message)})}
-$("#pdfBtn").addEventListener("click",function(){dlReport("docx")});
+$("#pdfBtn").addEventListener("click",function(){dlReport("pdf")});
+$("#wordBtn").addEventListener("click",function(){dlReport("docx")});
 $("#mdBtn").addEventListener("click",function(){dlReport("md")});
 
 /* ── الدردشة — نفس المحرّك ونفس الإعدادات ── */
@@ -859,8 +874,8 @@ function send(){var msg=$("#chatBox").value.trim();if(!msg)return;
       var mName=(LANG==="ar"&&CAR[mIso])?CAR[mIso]:((v.header||{}).target_market||"");
       chatAdd('<p>حلّلت <b>'+esc(v.product||"")+'</b>'+(mName?(' في <b>'+esc(mName)+'</b>'):'')+'.</p>'+agHtml
         +'<div class="rescard"><h4>'+esc(brief)+'</h4><p>'+esc((v.brief||[])[1]||"")+'</p>'
-        +'<div class="acts"><button class="abtn main" data-act="board">افتح اللوحة الكاملة</button><button class="abtn" data-act="docx">تصدير التقرير</button></div></div>');
-      $$("#cStream [data-act]").forEach(function(b){b.onclick=function(){this.dataset.act==="board"?nav("board"):dlReport("docx")}})})
+        +'<div class="acts"><button class="abtn main" data-act="board">افتح اللوحة الكاملة</button><button class="abtn" data-act="pdf">تصدير التقرير (PDF)</button></div></div>');
+      $$("#cStream [data-act]").forEach(function(b){b.onclick=function(){this.dataset.act==="board"?nav("board"):dlReport("pdf")}})})
   }).catch(function(e){wait.remove();chatAdd("<p>تعذّر التحليل: "+esc(e.message)+"</p>")})}
 
 /* ── الدردشة السياقية فوق اللوحة (10b) — من الذاكرة حصراً ── */
