@@ -168,10 +168,11 @@ def test_writer_escalation_is_bounded_and_traces_each_attempt():
                              trace_id="run-p5-bounded")
     assert out is None                           # فجوة معلنة، لا اختلاق
     # مقيَّد بـسقفين: _MAX_TOKENS_RETRIES (≤4 محاولات) والسقف الصلب. بالقيم
-    # الافتراضية (8000→16000) يبلغ التضعيفُ السقفَ الصلب بخطوة واحدة، فيتوقّف
-    # عند محاولتين (إعادة النداء بنفس السقف لا تفيد) — كلاهما حدّ صريح.
+    # الافتراضية (16000→32000، رُفعت لبلاغ عسل/المملكة المتحدة) يبلغ التضعيفُ
+    # السقفَ الصلب بخطوة واحدة، فيتوقّف عند محاولتين (إعادة النداء بنفس السقف
+    # لا تفيد) — كلاهما حدّ صريح.
     assert aj._MAX_TOKENS_RETRIES == 3            # الحدّ الأقصى المعلن للمحاولات
-    assert caps == [8000, 16000]                  # صعّد مرة للسقف الصلب ثم توقّف
+    assert caps == [16000, 32000]                 # صعّد مرة للسقف الصلب ثم توقّف
     events = [e for e in silk_trace.read_trace("run-p5-bounded")
               if e.get("kind") == "report_call"]
     assert len(events) == 2                       # حدث report_call مستقل لكل محاولة

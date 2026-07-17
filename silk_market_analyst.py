@@ -19,6 +19,8 @@ from __future__ import annotations
 import json
 import logging
 
+import os
+
 from silk_agents import AgentReport
 from silk_ai_judge import _LONG_TIMEOUT
 from silk_ai_judge import _MODEL as _SMART_MODEL  # E2: النموذج الذكي للمحلل
@@ -26,6 +28,14 @@ from silk_llm_runtime import _truncate_at_word, run_llm_agent
 from silk_market_resolver import MarketRef
 
 log = logging.getLogger(__name__)
+
+# سقف رموز إخراج المحلل الشامل — بلاغ عسل/المملكة المتحدة (الدرس ١٦): المحلل
+# ينتج D2 (خمس تقاطعات إلزامية + SWOT، كلٌّ بتثليث ومقارنة مرجعية و«إذن ماذا»
+# وأثر قرار) — إخراج ثقيل، لا يتّسع له افتراضُ بعثةِ أداةٍ واحدة (6000). اقتطاعُ
+# JSON للمحلل يُفشِل التقاطعات الخمس إلى «دليل غير كافٍ» بصمت. رُفع إلى 12000
+# (يتّسع للخمسة + SWOT بلا اقتطاع)، قابل للضبط env. نفس مبدأ سقف الكاتب:
+# ميزانية تُقاس مقابل مجموع محتوى الأوامر السابقة لا مقابل بعثة مفردة.
+_ANALYST_MAX_TOKENS = int(os.environ.get("SILK_ANALYST_MAX_TOKENS", "12000"))
 
 # التقاطعات الخمسة الإلزامية — the 5 required intersections (+ SWOT).
 REQUIRED_CATEGORIES: tuple[str, ...] = (
@@ -215,9 +225,14 @@ def analyze_market(market: MarketRef, product: str,
 
     # E2 (SPEC-v2): التحليل الشامل استدلال ثقيل — يبقى على النموذج الذكي
     # (Opus) صراحةً بينما بعثات الاستخلاص تُوجَّه للنموذج السريع (Haiku).
+    # ميزانية إخراج المحلل (الدرس ١٦): حين لا يُمرَّر أحد صراحةً، لا تسقط إلى
+    # افتراض البعثة الواحدة (6000) — امنح المحلل سقفاً يتّسع للتقاطعات الخمس
+    # + SWOT (الاقتطاع يُفشِلها إلى «دليل غير كافٍ»). المُمرَّر صراحةً يفوز.
+    eff_budget = dict(budget) if budget else {}
+    eff_budget.setdefault("max_output_tokens", _ANALYST_MAX_TOKENS)
     report = run_llm_agent(
         _ANALYST_MISSION, market, product=product, hs_code=hs_code,
-        budget=budget, extra_findings=tagged, extra_context=extra_context,
+        budget=eff_budget, extra_findings=tagged, extra_context=extra_context,
         timeout=_LONG_TIMEOUT, model=_SMART_MODEL)
 
     by_category: dict[str, list] = {c: [] for c in REQUIRED_CATEGORIES}

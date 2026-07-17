@@ -569,7 +569,26 @@ _TOOL_CALLS_SUFFIX_RE = re.compile(
 # "{\"الحكم\":...}" على الواجهة — نلتقط الصيغتين).
 _INTERNAL_JSON_MARKERS = ('"datapoint_ids"', '"findings"', '"claim"',
                           '"reasoning"', '"verdict"', '"confidence"',
+                          # تسريب حي مؤكَّد (المُشرِف): JSON مضمَّن بمفاتيح
+                          # score/summary (مخرَج بعثة/محلل) فات علامات البنية
+                          # القديمة فوصل مضمَّناً خلف بادئة نصية.
+                          '"score"', '"summary"',
                           '"الحكم"', '"درجة الثقة"')
+
+# ريبر DataPoint(...) مسرَّب في نصّ معروض (تسريب حي مؤكَّد، المُشرِف): الكاتب
+# يردّد أحياناً تمثيل نقطة بيانات خاماً كما رآه في مدخلاته. المُطهِّر القديم
+# كان **ينصف-يترجم** الريبر (يحوّل confidence→«درجة الثقة» ويُبقي الغلاف
+# DataPoint(value=…, source=…, …)) فيخرج فرانكنشتاين. الحلّ: يُحيَّد الريبر
+# **كاملاً** قبل أي ترجمة حقول — تُستخرَج القيمة المقروءة (value) أو تُعلَن
+# فجوة، ولا يبقى اسم الصنف ولا أيّ حقل خام. البنية المعروفة للريبر مُثبَّتة
+# (قيم مُقتبَسة تحتمل فواصل/أقواس داخلها فلا تكسر non-greedy).
+_DATAPOINT_REPR_RE = re.compile(
+    r"DataPoint\(\s*value=(?P<v>'[^']*'|\"[^\"]*\"|[^,]+?),\s*"
+    r"source=(?:'[^']*'|\"[^\"]*\"|[^,]+?),\s*"
+    r"confidence=[^,]+?,\s*"
+    r"note=(?:'[^']*'|\"[^\"]*\"|[^,]+?),\s*"
+    r"retrieved_at=(?:'[^']*'|\"[^\"]*\"|[^,]+?),\s*"
+    r"status=(?:'[^']*'|\"[^\"]*\"|[^)]*)\)")
 # تسريب حقول داخلية إنجليزية في نص معروض (بلاغ مالك: "verdict" و
 # "confidence 0.64" وصلا جدولاً في متن تقرير العميل) — الكاتب يردّد أحياناً
 # أسماء حقول رآها في مدخلاته. القيمة العشرية بعد confidence تُصاغ بشرياً
@@ -585,7 +604,10 @@ _EN_FIELD_AR = {"verdict": "الحكم", "confidence": "درجة الثقة"}
 # حقل مُهيكَل يلتقطه verdict_ar عند مصدره هنا، فالتقاط نصّي مباشر داخل
 # السرد. الأطول أولاً (CONDITIONAL-GO/NO-GO قبل GO المجرّدة) كي لا يتبقّى
 # "-GO" يتيماً بعد الاستبدال.
-_RAW_VERDICT_RE = re.compile(r"\b(CONDITIONAL-GO|NO-GO|GO|WATCH)\b")
+# تسريب حي مؤكَّد (المُشرِف): رمز الحكم كان يُطابَق بالحالة الكبيرة فقط، فأيّ
+# صيغة أخرى (go/Watch/no-go) تبقى خاماً في المُسلَّم. الآن حساسية-حالة مُلغاة
+# (re.I) + توحيد للكبيرة عند التمرير لـ verdict_ar (يوحّدها داخلياً أصلاً).
+_RAW_VERDICT_RE = re.compile(r"\b(CONDITIONAL-GO|NO-GO|GO|WATCH)\b", re.I)
 
 # §2.6 (أمر العمل الرئيس): عبارة تُلمِّح إلى «قائمة حقائق» داخلية معطاة
 # للنموذج («بين الحقائق المتاحة/المعطاة») تُعاد صياغتها بلغة موجَّهة للقارئ.
@@ -624,6 +646,18 @@ def _extract_or_gap(blob: str) -> str:
             if isinstance(val, str) and val.strip():
                 return val.strip()
     return _RAW_JSON_GAP
+
+
+def _neutralize_datapoint_repr(m: "re.Match") -> str:
+    """استبدل ريبر DataPoint(...) كاملاً بقيمته المقروءة، أو فجوة معلنة إن
+    كانت None/فارغة (عقد عدم الاختلاق — لا نخترع قيمة لنقطة بلا قيمة)."""
+    v = m.group("v").strip()
+    if (v[:1] == "'" and v[-1:] == "'") or (v[:1] == '"' and v[-1:] == '"'):
+        v = v[1:-1]
+    v = v.strip()
+    if not v or v == "None":
+        return _RAW_JSON_GAP
+    return v
 
 
 def _strip_raw_json_leak(text: str | None) -> str | None:
@@ -743,6 +777,9 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     if not text:
         return text
     text = _strip_raw_json_leak(text)
+    # حيِّد أيّ ريبر DataPoint(...) **كاملاً** قبل ترجمة الحقول (وإلا نصف-ترجمة):
+    # تُستخرَج القيمة المقروءة، أو تُعلَن فجوة إن كانت None/فارغة (لا اختلاق).
+    text = _DATAPOINT_REPR_RE.sub(_neutralize_datapoint_repr, text)
     text = _strip_mission_key_prefix(text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
     text = _DP_TAG_RE.sub("", text)
@@ -765,7 +802,7 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     text = _EN_CONF_VALUE_RE.sub(_conf_value, text)
     text = _EN_FIELD_RE.sub(lambda m: _EN_FIELD_AR[m.group(1)], text)
     from silk_narrative import humanize_technical_note, verdict_ar
-    text = _RAW_VERDICT_RE.sub(lambda m: verdict_ar(m.group(1)), text)
+    text = _RAW_VERDICT_RE.sub(lambda m: verdict_ar(m.group(1).upper()), text)
     text = humanize_technical_note(text)
     # §7 (أمر العمل الرئيس — تصحيح التلصيقات المشوَّهة): توسيع رمز الحكم قد
     # يُنتِج تكرار كلمة فوراً («التوصية GO» → «التوصية التوصية بالدخول»).

@@ -302,6 +302,67 @@ def mark_research_failed(analysis_id: int, error_message: str,
             "updated_at = ? WHERE id = ?", (blob, now, analysis_id))
 
 
+def reap_orphan_research_runs(stale_minutes: int | None = None,
+                              path: str | None = None) -> list[int]:
+    """احصد التشغيلات اليتيمة: صفوف 'running' عالقة (تعطّل عملية/إعادة نشر
+    منتصف الطريق) تُوسَم 'failed'، ويُصالَح حجز الدولار المتسرّب لكلٍّ إلى
+    الفعلي-حتى-الآن. يعيد قائمة المعرّفات المحصودة (فارغة إن لا شيء).
+
+    **لماذا.** تعطّل العملية (إعادة نشر Railway، SIGKILL) لا يُشغِّل
+    `mark_research_failed` ولا `reconcile_usd`، فيبقى الصفّ 'running' أبداً
+    وحجزُه الدولاري المسبق (`try_reserve_usd`) بلا مصالحة — يتراكم فيسدّ
+    السقف اليومي على تشغيلات لم تُكمَل («حجز بلا تسوية يُبقي التقدير محجوزاً»
+    — عقد `reconcile_usd`).
+
+    - **العتبة** `SILK_ORPHAN_STALE_MINUTES` (افتراضياً ٣٠ دقيقة — أطول من
+      أطول تشغيلة مشروعة ~١٠ دقائق، فلا تُحصَد تشغيلة حيّة). `updated_at`
+      يُبقى حديثاً بكل لقطة تقدّم/تفتيش بعثة، فصفّ لم يُلمَس منذ العتبة =
+      عمليته ماتت يقيناً.
+    - **المصالحة** إلى الفعلي-حتى-الآن (تكلفة آخر لقطة تقدّم؛ غائبة => ٠.٠،
+      لا اختلاق). تُطبَّق فقط لتشغيلة حُجِزت في **دلو اليوم** (`created_at`
+      اليوم)، إذ يعمل `reconcile_usd` على دلو اليوم؛ حجزُ يوم سابق زال أصلاً
+      بدوران الدلو اليومي فلا يُخصَم من اليوم خطأً.
+    - نقاط تفتيش البعثات المكتملة **تبقى** (mark_research_failed لا يمسّها)،
+      فاستئناف لاحق يقرأها — «الاستئناف بالقروش، إعادة التشغيل بالدولارات».
+    """
+    stale = (int(os.environ.get("SILK_ORPHAN_STALE_MINUTES", "30"))
+             if stale_minutes is None else int(stale_minutes))
+    path = path or _db_path()
+    if not os.path.exists(path):
+        return []
+    init_db(path)
+    now = datetime.datetime.now()
+    cutoff = (now - datetime.timedelta(minutes=stale)).isoformat(timespec="seconds")
+    today = now.date().isoformat()
+    with _connect(path) as conn:
+        rows = conn.execute(
+            "SELECT id, created_at, progress_json FROM analyses "
+            "WHERE status = 'running' AND updated_at IS NOT NULL "
+            "AND updated_at < ?", (cutoff,)).fetchall()
+    if not rows:
+        return []
+    import silk_usage  # lazy: keep silk_storage importable offline/keyless
+    expected = float(os.environ.get("SILK_RESEARCH_EXPECTED_USD", "3.0"))
+    reaped: list[int] = []
+    for row in rows:
+        aid = int(row["id"])
+        actual = 0.0                      # الفعلي-حتى-الآن (لا اختلاق: غائب => 0)
+        if row["progress_json"]:
+            try:
+                actual = float(json.loads(row["progress_json"]).get(
+                    "cost_usd_estimate") or 0.0)
+            except Exception:  # noqa: BLE001 — لقطة فاسدة => 0، لا تكسر الحصاد
+                actual = 0.0
+        mark_research_failed(
+            aid, "orphaned: صفّ 'running' عالق حصده المكنَس (تعطّل عملية/"
+            "إعادة نشر منتصف الطريق)", path=path)
+        if (row["created_at"] or "")[:10] == today:   # الحجز في دلو اليوم فقط
+            silk_usage.reconcile_usd(reserved=expected, actual=actual)
+        reaped.append(aid)
+    log.info("orphan reaper: حصد %d تشغيلة عالقة: %s", len(reaped), reaped)
+    return reaped
+
+
 def get_research_run(analysis_id: int, path: str | None = None) -> dict | None:
     """معلومات تشغيلة بحث عميق (بلا json_blob الكامل) — لاستعمالَي الاستئناف
     ونقطة نهاية الحالة (`GET /research/{id}/status`). None إن لم توجد."""

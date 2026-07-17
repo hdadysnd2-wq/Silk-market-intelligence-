@@ -38,6 +38,43 @@ not first contact.
 *Rationale: a single acceptance run at the end means every defect surfaces at once,
 with no way to attribute it.*
 
+### D-06 — Cost-cutting budgets are re-measured against the CURRENT combined output; a new model is priced in the SAME command
+Command #6/E2 shrank the writer/analyst `max_tokens` in the name of cost while four
+earlier commands (B1, C5, D2, D3) had each **added required output**. Nobody
+re-measured the combined load, so the first run that populated all four at once
+(honey/UK) overran the ceiling and fell back to the skeleton — the anti-fabrication
+guard held (every section «غير متاح», zero invented numbers), but there was no report.
+Two permanent rules (LESSONS #16, enforced):
+1. **A token budget in any cost-cutting change is re-measured against the summed
+   output requirement of ALL prior commands, not the requirement it was first sized
+   for.** This holds for every heavy stage: the writer (`_WRITER_MAX_TOKENS`, whose
+   continuation call takes the ceiling not the base) AND the analyst
+   (`_ANALYST_MAX_TOKENS` — it emits D2's five intersections + SWOT and must not fall
+   back to the single-mission default of 6000, or the intersections truncate to
+   «دليل غير كافٍ»).
+2. **A new model integration is added to the `silk_pricing` table in the same command
+   that introduces it** — a routed model with no price is silently excluded from the
+   displayed total (understating it) while still being billed.
+
+**Reconciliation method (documented, so "displayed ≈ billed" is checkable, not asserted):**
+displayed total `= Σ_model ( input_tokens×input_rate + output_tokens×output_rate +
+cache_read×input_rate×0.1 + cache_creation×input_rate×1.25 )` over
+`silk_context.record_llm_usage`'s per-model counter (`silk_pricing.estimate_cost_usd`).
+It reconciles with the Anthropic console when: (a) every routed model is priced
+(else it appears in `unpriced_models` + the ⚠ chip, and `complete=False`), and
+(b) every HTTP-200 response is metered **including `stop_reason=max_tokens`
+truncations** — a failed/truncated call still burns (and is billed for) its tokens,
+so it must still be counted. Both are locked by
+`tests/test_command6_regression_budget_and_pricing.py`. A residual gap after those
+two hold points at an env-set model id outside the pricing prefixes — add its real
+rate (never guess one: no-fabrication).
+
+*Consequence: the ≤$1.5 target from D-01 is REFUTED for a full report. A full
+narrative carrying all four blocks on the Opus writer legitimately costs more than
+$1.5; the ~$3 the owner was billed is the honest cost of a complete report, not an
+overcharge. The target must be re-baselined against a run that actually succeeds
+end-to-end — which is the #6 live re-run gate.*
+
 ---
 
 ## Execution order (gated — do not skip ahead)
@@ -50,8 +87,8 @@ with no way to attribute it.*
 | 4 | Merchant language | B1–B3 | Green lock-test on md AND docx + glossary pasted | ☑ 2026-07-16 — `test_merchant_language_b3.py` (5) md+docx green; glossary in PR + regenerated sample; suite 1073 pass |
 | 5a | Scraper: owner steps | C1 | Steps written + clean-disable wired + owner confirms service live | ⏳ 2026-07-16 — steps (`docs/DEPLOY_SCRAPER.md`) + clean-disable (`silk_gmaps.py`, `/health`) + lock-test done; **awaiting owner: deploy 2nd service + confirm live (D-03 gate)** |
 | 5b | Scraper: integration | C2–C5 | Importer table w/ real contacts + path printed + `/health` survives kill | ☑ 2026-07-16 — table renders md+docx (sample), path logged, kill→gap test green; **live real-contacts run is owner-side (scraper on private net, unreachable from CI)**; suite 1093 pass |
-| 6 | Cost & speed | E1–E3 | ≤ $1.5 + < 10 min printed + prior lock-tests still green | ☑ 2026-07-16 — E1 (blocking-gate) + E2 (Haiku missions) + E3 (per-stage timing) landed; `BASELINE-post-BC.md` frozen; suite 1098 pass; **≤$1.5/<10min printed on the owner's live run** |
-| — | Final run | confirmation | All 6 acceptance items with artifacts | ☐ |
+| 6 | Cost & speed | E1–E3 | ≤ $1.5 + < 10 min printed + prior lock-tests still green | ☒ **NOT DONE (regressed)** 2026-07-16 — E1/E3 stand; **E2's per-stage `max_tokens` budget was set below the combined output of B1+C5+D2+D3** (each a prior command that added required output) → first live run (honey/UK) failed the narrative («بلغ التوليد الحدّ الأقصى للطول», skeleton held, zero fabrication). The **≤$1.5 was never reconciled against real billing**: displayed $0.39 vs owner-billed ~$3 with a ⚠ «unpriced models» warning. Fix (Command #6-regression): writer first-attempt 8000→16000, ceiling 16000→32000, continuation call now takes the **ceiling** not the base; pricing/metering hardened + reconciliation method documented. **The ≤$1.5 target is REFUTED for a full report** — a full narrative with all four blocks on Opus legitimately costs more; re-baseline pending owner's live run. |
+| — | Final run | confirmation | All 6 acceptance items with artifacts + **live narrative success with reconciled cost** | ☐ — blocked on #6 live re-run (see D-06) |
 
 **Ordering notes:**
 - #3 precedes #4 deliberately — both touch the render path. Fixing fact-loss first
@@ -104,7 +141,7 @@ live proof (e.g. A1–A3 closed by Command #2).
 | D2 | DONE-with-artifact | #107 shipped the diagnostics instrument but left the root fix NOT DONE. Command #3 adds a conservative synonym map (`silk_market_analyst._CATEGORY_SYNONYMS`) that rescues findings tagged with a category outside the literal 5 (e.g. `[pricing]`→price_competitiveness) — one of the three diagnosed causes; untagged findings stay diagnosed (nmt #8, no content-guessing). `diagnostics.synonym_rescued` surfaces drift. Lock-test `tests/test_analyst_synonym_rescue_d2.py` (6) green. Live excerpt: 5 synonym-tagged findings → all 5 intersections populated, synonym_rescued=4, missing=[]. | 2026-07-16 |
 | D3 | DONE-with-artifact | Fetch was already fixed; the gap was writer-mapping (§9 relied on the `risk_news` LLM calling the tool for all 3 WGI). Command #3 adds deterministic augmentation `silk_missions._augment_risk_news_wgi` (all 3 incl. RL.EST which even RiskAgent omits) wired into `run_all_missions`; declared-gap on failure (no fabrication); §9 writer instruction updated to cite the attached `[risk]` facts `silk_ai_judge.py:918`. Lock-test `tests/test_wgi_governance_augment_d3.py` (5) green. Live: offline fetch → 3 declared gaps (None/0.0), no fabrication. | 2026-07-16 |
 | E1 | DONE-with-artifact | Closed by #107, verified: `SILK_MAX_REVIEW_CYCLES` default 1, cap 2 (`silk_ai_judge._max_review_cycles`); cycle-2 rewrite fires **only on blocking** (`:1217`); B2 jargon-blocking feeds it. Retries bounded. Lock-test `tests/test_wave6_report_writer.py` (default-1 / blocking-triggers-cycle-2 / non-blocking-doesn't). | 2026-07-16 |
-| E2 | DONE-with-artifact | Missions routed to the fast model (`silk_llm_runtime._MISSION_MODEL`=Haiku, `SILK_MISSION_MODEL` to override); `run_llm_agent(model=…)` threads it; analyst passes `_SMART_MODEL` (Opus); reviewer already Haiku. Per-stage `max_tokens` + prompt caching already present. Lock-test `tests/test_cost_speed_e.py` (mission→fast, analyst→smart, override). Cost split in `data_economics.cost_usd_by_model`. | 2026-07-16 |
+| E2 | ☒ **NOT DONE (regressed → refixed)** | The routing itself is right (missions→Haiku `silk_llm_runtime._MISSION_MODEL`, analyst/writer→`_SMART_MODEL` Opus, both **priced** in `silk_pricing`). **But the per-stage `max_tokens` budget was set below the combined required output** of the four prior commands (B1 glossary+glosses+SAR, C5 importer table, D2 five intersections, D3 WGI) — starving the narrative on the first run where all four populated together (honey/UK): writer hit the 16000 ceiling, the continuation call took the **base 8000** not the ceiling, the tail couldn't finish → `report=None` → skeleton. And the **≤$1.5/<10min «DONE-with-artifact» was never reconciled against real billing** (displayed $0.39 vs owner-billed ~$3 + ⚠ unpriced). Refix in Command #6-regression (`_WRITER_MAX_TOKENS` 8000→16000, `_MAX_TOKENS_CEILING` 16000→32000, `_continue_truncated_report` → ceiling; **analyst `_ANALYST_MAX_TOKENS` 6000→12000** so D2's five intersections don't truncate to «دليل غير كافٍ»; guard test that every routed model is priced; metering + reconciliation locked). Lock-tests `tests/test_command6_regression_budget_and_pricing.py`. **Cost target re-opened — see D-06.** | 2026-07-16 |
 | E3 | DONE-with-artifact | Per-stage wall-time `data_economics.stage_seconds` {missions/analyst/synthesis/writer} + `stage_total_seconds` + labeled `stage_top_sinks` (top-3) in `api._run_research_pipeline`. Missions already concurrent; scrape decoupled (D-02). Lock-test `tests/test_cost_speed_e.py::test_stage_seconds_and_top_sinks_in_data_economics`. ≤$1.5/<10min are owner-printed live (`docs/BASELINE-post-BC.md`). | 2026-07-16 |
 
 ---

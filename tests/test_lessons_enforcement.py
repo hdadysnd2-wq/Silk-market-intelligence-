@@ -108,6 +108,11 @@ _TEST_ANCHORS = [
       "def test_report_docx_downloads_a_real_openable_document_no_501"]),
     (15, "tests/test_rung3_playwright_e2e.py",
      ["def test_rung3_full_browser_flow_word_and_md_export_and_sidebar"]),
+    (16, "tests/test_command6_regression_budget_and_pricing.py",
+     ["def test_full_report_with_all_blocks_completes_end_to_end_not_skeleton",
+      "def test_writer_continuation_call_uses_the_ceiling_not_the_base_budget",
+      "def test_every_default_routed_model_is_priced",
+      "def test_maxtokens_truncated_call_still_meters_its_burned_tokens"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
@@ -127,6 +132,10 @@ _SYMBOL_ANCHORS_EXTRA = [
      ["class LiveShapeServer", "def seed_db", "netherlands_research_blob"]),
     (15, "tools/canonical_netherlands.py", ["def netherlands_research_blob"]),
     (15, ".github/workflows/e2e-live-shape.yml", ["e2e-live-shape"]),
+    # البند ١٥ — ميزانية الكاتب/المحلل أُعيد قياسها؛ نداء الإكمال يأخذ السقف.
+    (16, "silk_ai_judge.py", ["_WRITER_MAX_TOKENS", "_MAX_TOKENS_CEILING",
+                              "max_tokens=_MAX_TOKENS_CEILING"]),
+    (16, "silk_market_analyst.py", ["_ANALYST_MAX_TOKENS"]),
 ]
 
 
