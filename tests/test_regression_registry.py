@@ -175,6 +175,26 @@ def _guard_trap_parallel_cache_window():
 # كل مدخلة: Incident(key, source, match, check)
 #   source: "LESSONS" (key=رقم الصفّ int) أو "trap" (key=slug، match=جزء من
 #   اسم الفخّ العريض في §2). check: callable يُفشِل على عودة الانحدار.
+
+
+def _guard_datapoint_repr_flexible():
+    """LESSONS ١٧ — ريبر DataPoint المختصر/الشاذ كان يمرّ نصف مترجم (هجوم
+    المشرف الحي). الحارس: النمط المرن + شبكة الأمان يمسكان كل العائلة."""
+    import silk_render as _r
+    cases = [
+        "DataPoint(value=None, confidence=0.0)",
+        "DataPoint(value='12.5', source='comtrade', confidence=0.9, "
+        "note='ok (x)', retrieved_at='2026', status='ok')",
+        "DataPoint(confidence=0.5, value=None)",
+        "قبل DataPoint(value=None, confidence=0.0) بعد",
+    ]
+    for c in cases:
+        out = _r._strip_internal_plumbing(c)
+        assert "DataPoint" not in out and "confidence" not in out and \
+               "درجة الثقة=" not in out, f"leak: {c!r} -> {out!r}"
+    assert _r._strip_internal_plumbing(cases[1]).strip().startswith("12.5")
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -197,6 +217,7 @@ _LESSONS = {
                  "def seed_db"),
     16: _needles("silk_ai_judge.py", "_WRITER_MAX_TOKENS", "_MAX_TOKENS_CEILING",
                  "max_tokens=_MAX_TOKENS_CEILING"),
+    17: _guard_datapoint_repr_flexible,  # هجوم المشرف — ريبر DataPoint المرن
 }
 
 _TRAPS = [

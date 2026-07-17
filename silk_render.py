@@ -583,12 +583,14 @@ _INTERNAL_JSON_MARKERS = ('"datapoint_ids"', '"findings"', '"claim"',
 # فجوة، ولا يبقى اسم الصنف ولا أيّ حقل خام. البنية المعروفة للريبر مُثبَّتة
 # (قيم مُقتبَسة تحتمل فواصل/أقواس داخلها فلا تكسر non-greedy).
 _DATAPOINT_REPR_RE = re.compile(
-    r"DataPoint\(\s*value=(?P<v>'[^']*'|\"[^\"]*\"|[^,]+?),\s*"
-    r"source=(?:'[^']*'|\"[^\"]*\"|[^,]+?),\s*"
-    r"confidence=[^,]+?,\s*"
-    r"note=(?:'[^']*'|\"[^\"]*\"|[^,]+?),\s*"
-    r"retrieved_at=(?:'[^']*'|\"[^\"]*\"|[^,]+?),\s*"
-    r"status=(?:'[^']*'|\"[^\"]*\"|[^)]*)\)")
+    # مرن (بلاغ المشرف الحي): يمسك أي ريبر DataPoint يبدأ بـ value= مهما كان
+    # عدد الحقول بعده أو ترتيبها — الصيغة السداسية الكاملة والمختصرة معاً.
+    # علامات التنصيص داخل الحقول (بما فيها أقواس داخل note مقتبسة) مسموحة.
+    r"DataPoint\(\s*value=(?P<v>'[^']*'|\"[^\"]*\"|[^,)]+?)\s*"
+    r"(?:,(?:'[^']*'|\"[^\"]*\"|[^)])*)?\)")
+# شبكة أمان (بلاغ المشرف): أي DataPoint(...) لم يلتقطه النمط أعلاه (ترتيب
+# حقول شاذ، بلا value=) يُستبدَل كاملاً بفجوة معلنة — نصف الترجمة أسوأ من الخام.
+_DATAPOINT_ANY_RE = re.compile(r"DataPoint\((?:'[^']*'|\"[^\"]*\"|[^)])*\)")
 # تسريب حقول داخلية إنجليزية في نص معروض (بلاغ مالك: "verdict" و
 # "confidence 0.64" وصلا جدولاً في متن تقرير العميل) — الكاتب يردّد أحياناً
 # أسماء حقول رآها في مدخلاته. القيمة العشرية بعد confidence تُصاغ بشرياً
@@ -780,6 +782,8 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     # حيِّد أيّ ريبر DataPoint(...) **كاملاً** قبل ترجمة الحقول (وإلا نصف-ترجمة):
     # تُستخرَج القيمة المقروءة، أو تُعلَن فجوة إن كانت None/فارغة (لا اختلاق).
     text = _DATAPOINT_REPR_RE.sub(_neutralize_datapoint_repr, text)
+    # شبكة أمان: أي DataPoint(...) شاذ نجا من النمط المرن → فجوة معلنة كاملة.
+    text = _DATAPOINT_ANY_RE.sub(_RAW_JSON_GAP, text)
     text = _strip_mission_key_prefix(text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
     text = _DP_TAG_RE.sub("", text)

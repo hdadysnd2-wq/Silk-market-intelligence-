@@ -113,6 +113,10 @@ _TEST_ANCHORS = [
       "def test_writer_continuation_call_uses_the_ceiling_not_the_base_budget",
       "def test_every_default_routed_model_is_priced",
       "def test_maxtokens_truncated_call_still_meters_its_burned_tokens"]),
+    # البند ١٧ — ريبر DataPoint المختصر/الشاذ مرّ نصف مترجم (هجوم المشرف الحي)؛
+    # الحارس: النمط المرن + شبكة الأمان، وسلاسل المشرف الحرفية في السجل.
+    (17, "tests/test_regression_registry.py",
+     ["def _guard_datapoint_repr_flexible"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
@@ -136,6 +140,8 @@ _SYMBOL_ANCHORS_EXTRA = [
     (16, "silk_ai_judge.py", ["_WRITER_MAX_TOKENS", "_MAX_TOKENS_CEILING",
                               "max_tokens=_MAX_TOKENS_CEILING"]),
     (16, "silk_market_analyst.py", ["_ANALYST_MAX_TOKENS"]),
+    # البند ١٧ — النمط المرن + شبكة أمان DataPoint في المعقِّم نفسه.
+    (17, "silk_render.py", ["_DATAPOINT_REPR_RE", "_DATAPOINT_ANY_RE"]),
 ]
 
 
