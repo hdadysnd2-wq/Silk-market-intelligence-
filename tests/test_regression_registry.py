@@ -282,6 +282,39 @@ def _guard_export_format_contract():
         "تدفّق e2e لا يؤكّد توقيع %PDF لزرّ PDF"
 
 
+def _guard_world_tier2_no_fabrication():
+    """LESSONS ٢٠ — عائلة tier2-fabrication (تصميم الميزة أ، قفل استباقي): توسيع
+    الترتيب لكل دول العالم يجب ألّا يختلق قيمة فئة-٢ ولا يفجّر ميزانية كومتريد.
+    الحارس (قراءة مصدر + سلوك حيّ): (١) وحدة الترتيب لا تقرأ أيّ CSV محلّي؛
+    (٢) الفئة-٢ تحمل الوسم التعاقدي + فجوتَي موقع السعودية/المنافسة معلنتين؛
+    (٣) نداء العالم الواحد + التدهور عند نفاد الميزانية موجودان؛ (٤) ملف القفل
+    قائم."""
+    src = _read("silk_market_ranker.py")
+    # (١) لا CSV محلّي في وحدة الترتيب إطلاقاً.
+    for forbidden in ("agreements_l1", "demographics_l1", "market_locale",
+                      "muslim_share", "requirements_l1"):
+        assert forbidden not in src, f"الترتيب يقرأ CSV محلّياً: {forbidden}"
+    # (٢) الوسم التعاقدي + الفجوة المعلنة + المسجّل + الصمّام.
+    for needle in ('TIER2_LABEL = "تغطية أساسية — بيانات محلية محدودة"',
+                   'def _tier2_gather_row', 'status="tier2_gap"',
+                   'def _world_markets_enabled', 'def world_import_totals',
+                   'def _comtrade_budget_left'):
+        assert needle in src, f"علامة إنفاذ الفئة-٢ مفقودة: {needle}"
+    # (٣) نداء العالم الواحد (partner=0) مشترك للفئتين + تدهور الميزانية.
+    assert 'flow="M", partner=0' in src, "نداء العالم الواحد (partner=0) غائب"
+    assert '_comtrade_budget_left()' in src and '_WORLD_BUDGET_RESERVE' in src, \
+        "فرع التدهور عند نفاد الميزانية غائب"
+    # (٤) ملف القفل قائم بأقفاله السبعة.
+    assert _exists("tests/test_world_coverage_tierA.py"), "ملف قفل الميزة أ مفقود"
+    lock = _read("tests/test_world_coverage_tierA.py")
+    for fn in ("test_tier_separation_and_labels",
+               "test_tier2_never_carries_a_local_csv_value",
+               "test_tier2_gather_makes_zero_comtrade_calls",
+               "test_budget_exhausted_degrades_to_tier1_only",
+               "test_ranking_is_deterministic_on_fixture"):
+        assert f"def {fn}" in lock, f"قفل الميزة أ مفقود: {fn}"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -307,6 +340,7 @@ _LESSONS = {
     17: _guard_datapoint_repr_flexible,  # هجوم المشرف — ريبر DataPoint المرن
     18: _guard_vendor_name_leak,         # بلاغ UK — تسريب اسم مزوّد للعميل
     19: _guard_export_format_contract,   # بلاغ المُشرِف — زرّ PDF كان ينزّل docx
+    20: _guard_world_tier2_no_fabrication,  # الميزة أ — لا تلفيق فئة-٢/تفجّر ميزانية
 }
 
 _TRAPS = [

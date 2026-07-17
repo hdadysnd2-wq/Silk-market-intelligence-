@@ -418,16 +418,34 @@ def create_app():
         against — يُبنى مرة واحدة، لا نداء شبكة، ثابت لكل التشغيلات.
         """
         _rate_limit(request)
-        from silk_market_ranker import COUNTRIES
+        from silk_market_ranker import (
+            COUNTRIES, TIER2_LABEL, _world_markets_enabled)
         from silk_data_layer import partner_name
         from silk_narrative import COUNTRY_AR
         # P3 (بلاغ المالك): الاسم العربي إلى جانب الإنجليزي — الواجهة تعرض
         # العربية في وضعها العربي بدل أسماء إنجليزية خام.
-        return _json([{"iso3": c["iso3"], "m49": c["m49"],
-                      "name": partner_name(c["m49"]),
-                      "name_ar": COUNTRY_AR.get(c["iso3"],
-                                                partner_name(c["m49"]))}
-                      for c in COUNTRIES])
+        out = [{"iso3": c["iso3"], "m49": c["m49"],
+                "name": partner_name(c["m49"]),
+                "name_ar": COUNTRY_AR.get(c["iso3"], partner_name(c["m49"])),
+                "tier": 1}
+               for c in COUNTRIES]
+        # تغطية العالم (SILK_WORLD_MARKETS): أضِف بقية دول العالم كفئة-٢ موسومة
+        # «تغطية أساسية» ليجمعها منسدل الواجهة تحت «كل دول العالم». مُطفأ افتراضياً
+        # => الرد نفسه حرفياً كاليوم (تغطية-١ فقط، بلا حقل tier مؤثِّر على العرض).
+        if _world_markets_enabled():
+            from silk_market_resolver import _load as _load_countries
+            seen = {c["iso3"] for c in COUNTRIES}
+            for row in _load_countries():
+                iso3 = (row.get("iso3") or "").strip()
+                if len(iso3) != 3 or iso3 in seen:
+                    continue
+                seen.add(iso3)
+                out.append({
+                    "iso3": iso3, "m49": row.get("m49", ""),
+                    "name": row.get("name_en") or iso3,
+                    "name_ar": row.get("name_ar") or row.get("name_en") or iso3,
+                    "tier": 2, "coverage": TIER2_LABEL})
+        return _json(out)
 
     def _require_key(request: Request) -> None:
         """حارس المصادقة — 401 when the key mismatches, constant-time (L-1).

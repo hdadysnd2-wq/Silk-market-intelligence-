@@ -128,6 +128,15 @@ _TEST_ANCHORS = [
     # السجل + تدفّق المتصفّح الحقيقي يؤكّد توقيع %PDF.
     (19, "tests/test_regression_registry.py",
      ["def _guard_export_format_contract"]),
+    # البند ٢٠ — تغطية العالم (الميزة أ): لا تلفيق فئة-٢ ولا تفجّر ميزانية؛
+    # الأقفال السلوكية + الحارس السلوكي في السجل.
+    (20, "tests/test_world_coverage_tierA.py",
+     ["def test_tier_separation_and_labels",
+      "def test_tier2_never_carries_a_local_csv_value",
+      "def test_tier2_gather_makes_zero_comtrade_calls",
+      "def test_budget_exhausted_degrades_to_tier1_only"]),
+    (20, "tests/test_regression_registry.py",
+     ["def _guard_world_tier2_no_fabrication"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
