@@ -1224,8 +1224,11 @@ def _deep_research_view(result: dict) -> dict | None:
         # كل مُصدِّر كجدول في قسم الدخول (خرائط قوقل/Places + مرشّحو ويب).
         "importer_leads": dr.get("importer_leads") or {"leads": [], "path": "gap"},
         "limits": limits,
+        # عقد المالك (بلاغ UK الحي): لا يُسمّى مزوّد داخلي (Volza/Explee/…) على
+        # أيّ سطح عميل — لغة أعمال عامة فقط. السطح التشغيلي (?internal=1) قد
+        # يبقي التفصيل. الحارس النهائي: _CLIENT_VENDOR_NAMES في silk_reports.
         "next_step": ("فعّل خدمة التعميق المدفوعة للتحقق من المستوردين "
-                     "وجهات الاتصال (Volza/Explee)"
+                     "وجهات الاتصال قبل الالتزام"
                      if str(verdict.get("verdict") or
                            (verdict.get("ai") or {}).get("verdict") or "")
                         .upper().startswith(("GO", "PRELIMINARY GO")) else None),

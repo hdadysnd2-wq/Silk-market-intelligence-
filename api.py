@@ -1761,6 +1761,92 @@ def create_app():
         silk_storage.save_analysis(found, analysis_id=analysis_id)
         return _json(found)
 
+    @app.post("/analyses/{analysis_id}/enrich-leads")
+    def enrich_leads(analysis_id: int, request: Request):
+        """أعد رصد جهات اتصال المستوردين لبحث محفوظ — كشط الخرائط فقط، بلا
+        أيّ نداء كلود ولا إعادة تشغيل البعثات (المسار الرخيص).
+
+        السياق (بلاغ UK الحي، أمر العمل الرئيس ITEM 2): المكشطة (`silk_gmaps`)
+        نُشرت متأخّراً (SILK_GMAPS_SCRAPER_URL ضُبط بعد إنجاز تقارير سابقة)،
+        فتقرير المالك القائم يحمل «فجوة معلنة» في جدول المستوردين رغم أن
+        المكشطة صارت حيّة الآن. إعادة تشغيل /research كاملة تكلّف ~3$ (١٢ بعثة
+        + محلل + كاتب) لمجرّد تعبئة هاتف/إيميل — هذه النقطة تُنجزها بقروش:
+        تكشط الخرائط للسوق/المنتج المخزَّنَين، تدمج مرشّحي الويب من نقاط
+        تفتيش البعثات المحفوظة، وتحدّث `importer_leads` في مكانه ثم تعيد بناء
+        القالب الموحّد قبل الحفظ. لا نداء كلود، ولا حجز من السقف اليومي
+        المدفوع — المكشطة خدمة منفصلة رخيصة. عقد عدم الاختلاق مقدَّس: فشل/غياب
+        المكشطة = فجوة معلنة، لا صفّ مخترَع.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        found = silk_storage.get_analysis(analysis_id)
+        if found is None:
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        dr = found.get("deep_research")
+        if not dr:
+            raise HTTPException(
+                status_code=400,
+                detail=f"analysis {analysis_id} is not a /research run "
+                       "(no deep_research section) — no importer leads to enrich")
+        import silk_gmaps
+        if not silk_gmaps.enabled():
+            # تعطيل نظيف: المكشطة غير مُهيَّأة — لا نلمس التحليل المخزَّن، نُبلّغ.
+            return _json({
+                "enriched": False, "path": (dr.get("importer_leads") or {})
+                .get("path", "gap"),
+                "leads_count": len((dr.get("importer_leads") or {})
+                                   .get("leads") or []),
+                "note": "مكشطة الخرائط غير مُهيَّأة (SILK_GMAPS_SCRAPER_URL "
+                        "غائب) — لم تُحدَّث الروابط."})
+
+        product = found.get("product") or ""
+        market_blob = found.get("market") or {}
+        from silk_market_resolver import resolve_market
+        market_ref, _sugg = resolve_market(
+            market_blob.get("name_en") or market_blob.get("iso3") or "")
+        if market_ref is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"stored market {market_blob!r} could not be resolved "
+                       "— cannot target the scraper")
+
+        # مرشّحو الويب من نقاط تفتيش البعثات المحفوظة (اسم فقط، للمضاهاة/الدمج)
+        # — تُقرأ من نفس آلية استئناف /research، لا إعادة تشغيل بعثة.
+        mission_reports = silk_storage.load_mission_checkpoints(analysis_id) or {}
+        web_cands = silk_gmaps.extract_web_candidates(mission_reports)
+
+        # كشط متزامن بمهلة سخيّة (نداء المالك اليدوي، لا مسار البوّابة الحسّاس
+        # للزمن) — قابلة للضبط. الخيط يخزّن النتائج فور اكتمالها فنداء لاحق
+        # يستعملها من التخزين المؤقت بلا كشط جديد.
+        grace = float(os.environ.get("SILK_GMAPS_ENRICH_GRACE_S", "300"))
+        fut = silk_gmaps.submit_scrape_async(product, market_ref)
+        new_leads = silk_gmaps.finalize_leads(
+            fut, product, market_ref, web_cands, timeout_s=grace)
+
+        # لا تطمس روابط قائمة بفجوة: نُحدّث فقط إن أتى الكشط بروابط فعلية.
+        prev = dr.get("importer_leads") or {"leads": [], "path": "gap"}
+        if new_leads.get("leads"):
+            found["deep_research"]["importer_leads"] = new_leads
+            found["analysis_id"] = analysis_id
+            found["view"] = _view(found)
+            silk_storage.save_analysis(found, analysis_id=analysis_id)
+            enriched = True
+            note = new_leads.get("note") or "حُدِّثت الروابط عبر كشط الخرائط."
+        else:
+            # لا روابط جديدة — نُبقي المخزَّن كما هو (لا اختلاق، لا طمس).
+            enriched = False
+            note = ("لم تُرصَد جهات اتصال قابلة للتواصل في هذا الكشط — "
+                    "الروابط السابقة محفوظة كما هي دون تغيير.")
+
+        current = found["deep_research"].get("importer_leads") or prev
+        return _json({
+            "enriched": enriched,
+            "path": current.get("path", "gap"),
+            "leads_count": len(current.get("leads") or []),
+            "importer_leads": current,
+            "note": note})
+
     class AskRequest(BaseModel):
         """سؤال فوق تحليل قائم (10b) — question over a stored analysis."""
         question: str
