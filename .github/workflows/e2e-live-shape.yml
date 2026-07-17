@@ -29,6 +29,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      # محرّك تحويل PDF (LibreOffice/soffice) + خطّ عربي الشكل — رُتبة ٣ تنقر
+      # زرّ «تصدير التقرير (PDF)» وتؤكّد توقيع %PDF؛ بلا هذين يقع الخادم في
+      # فرع 503 فيفشل الفحص. نفس التبعية المطلوبة على النشر (Dockerfile).
+      - name: Install LibreOffice + Arabic font (PDF converter)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-hosny-amiri fontconfig
+          fc-cache -f
+
       - name: Install Python dependencies
         run: pip install -r requirements.txt pytest httpx
 

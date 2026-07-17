@@ -101,9 +101,29 @@ async function main() {
       fail("enrich_leads_backfill", "status stayed empty after click");
     ok("enrich_leads_backfill", enrichStatus.slice(0, 80));
 
-    // ٤) تصدير Word — نقر #pdfBtn ينزّل .docx غير فارغ (توقيع ZIP).
-    const dlPromise = page.waitForEvent("download", { timeout: 20000 });
+    // ٤) تصدير PDF — المُسلَّم النهائي للعميل (§3): نقر #pdfBtn ينزّل ملفاً
+    // بتوقيع %PDF غير فارغ. هذا المسار الأساسي (اتفاق المالك: PDF أوّلاً).
+    const pdfPromise = page.waitForEvent("download", { timeout: 30000 });
     await page.locator("#pdfBtn").click();
+    const pdfDl = await pdfPromise;
+    const pdfPath = await pdfDl.path();
+    const pdfBuf = fs.readFileSync(pdfPath);
+    if (pdfBuf.length < 1000)
+      fail("pdf_export", `downloaded pdf too small: ${pdfBuf.length} bytes`);
+    // "%PDF" = 0x25 0x50 0x44 0x46
+    if (!(pdfBuf[0] === 0x25 && pdfBuf[1] === 0x50 &&
+          pdfBuf[2] === 0x44 && pdfBuf[3] === 0x46))
+      fail("pdf_export",
+        "downloaded file is not a PDF (no %PDF header) — converter likely absent (503)");
+    const pdfName = pdfDl.suggestedFilename();
+    if (!/\.pdf$/.test(pdfName))
+      fail("pdf_export", `unexpected pdf filename: ${pdfName}`);
+    ok("pdf_export", `${pdfBuf.length} bytes, ${pdfName}`);
+
+    // ٤ب) تصدير Word — المسار الثانوي/التشغيلي (نسخة قابلة للتحرير): نقر
+    // #wordBtn ينزّل .docx غير فارغ (توقيع ZIP «PK»).
+    const dlPromise = page.waitForEvent("download", { timeout: 20000 });
+    await page.locator("#wordBtn").click();
     const download = await dlPromise;
     const dlPath = await download.path();
     const buf = fs.readFileSync(dlPath);
