@@ -122,52 +122,99 @@ def measure_lines(pdf_path: str):
 
 
 def classify(pw: float, lines, tol: float = 10.0) -> dict:
-    """صنِّف الأسطرَ القصيرةَ المتعرّجةَ غير الموسَّطة وفق عقد «صفرُ يسارٍ عربيّ».
+    """صنِّف الأسطرَ العربية وفق عقد «صفرُ **تثبيتٍ يساريّ**» — الإمضاءُ الدقيق
+    للانقلاب المنطقيّ لـjc، مُعايَرٌ على fixture-B (المقلوب المعروف).
 
-    - `block_right`: المئينُ الـ90 لحافة اليمين (x1) عبر كلّ الأسطر — مرجعُ حدّ
-      الكتلة اليمين، متينٌ ضدّ الشواذّ.
-    - سطرٌ عربيُّ الأغلبية «منحازٌ يمينًا» إن كان `block_right - x1 <= tol`.
-    - العربيُّ المنحازُ يسارًا = عيب. اللاتينيُّ يُستثنى من النسبة."""
-    ragged = [(x0, x1, t) for x0, x1, t in lines
-              if (x1 - x0) < 0.40 * pw
-              and abs(((x0 + x1) / 2) - pw / 2) > 0.05 * pw]
+    **الدرسُ من المصفوفة (لِمَ لا نكتفي بـ«لم يبلغ حدّ اليمين»):** تقريرٌ حقيقيّ
+    يحوي أسطرًا عربيةً قصيرةً **مشروعةً** لا تبلغ حدّ اليمين دون أيّ انقلاب —
+    عناوينُ انفصل رقمُها في الاستخراج، فقراتٌ بنمطٍ مُزاحٍ (Intense Quote:
+    `silk_reports.py:1427`)، أسطرٌ موسَّطة، خلايا أضيقُ من الصفحة. «لم يبلغ
+    اليمين» يخلطها بالانقلاب. الإمضاءُ الحقيقيّ للانقلاب (كما في fixture-B:
+    `x0≈90` = هامشُ اليسار) هو **بدءُ السطر من هامش اليسار وهو قصير**.
+
+    مراجعُ هندسية (متينةٌ ضدّ الشواذّ):
+    - `left_margin`: أدنى `x0` — حدُّ اليسار للنصّ في الصفحة.
+    - `block_right`: المئينُ الـ90 لـ`x1` — حدُّ اليمين للكتلة.
+
+    دِلاءُ الأسطر العربية:
+    - **`arabic_right`**: تبلغ حدّ اليمين (`block_right - x1 <= tol`) — سليمة.
+    - **`arabic_centered`**: مركزُها ≈ مركزُ الصفحة — عنوان/تذييل موسَّط مشروع.
+    - **`arabic_left`** (عيبٌ حقيقيّ): تبدأ من هامش اليسار (`x0 - left_margin
+      <= 0.10*pw`) ولا تبلغ اليمين — إمضاءُ انقلاب jc.
+    - **`arabic_short`**: قصيرةٌ لكنّها ليست يساريّةً ولا موسَّطة (مُزاحة/خليّة)
+      — ليست عيبًا.
+    اللاتينيُّ (أسماءُ مصادر، تواريخ، رموزُ HS، أرقام) يُستثنى كليًّا."""
     if not lines:
-        return {"block_right": 0.0, "arabic_right": 0, "arabic_left": 0,
+        return {"block_right": 0.0, "left_margin": 0.0, "arabic_right": 0,
+                "arabic_left": 0, "arabic_centered": 0, "arabic_short": 0,
                 "latin_excluded": 0, "arabic_left_texts": [],
-                "latin_texts": [], "ragged": 0}
+                "arabic_short_texts": [], "arabic_centered_texts": [],
+                "right_short_texts": [], "latin_texts": []}
+    left_margin = min(x0 for x0, _, _ in lines)
     xs = sorted(x1 for _, x1, _ in lines)
     block_right = xs[min(int(len(xs) * 0.90), len(xs) - 1)]
-    ar_right = ar_left = 0
-    ar_left_texts, latin_texts = [], []
-    for x0, x1, t in ragged:
-        if is_arabic_majority(t):
-            if block_right - x1 <= tol:
-                ar_right += 1
-            else:
-                ar_left += 1
-                ar_left_texts.append((round(x0), round(x1), t))
-        else:
+    # مراجعُ **مطلقةٌ** بكسور الصفحة (لا مشتقّةٌ من البيانات كي لا تنهار على
+    # مستندٍ مقلوبٍ بالكامل بأطوالٍ متماثلة): يمينُ الصفحة = آخِرُ 40%، وهامشُ
+    # اليسار = أوّلُ 22%. إمضاءُ الانقلاب = بدءٌ من هامش اليسار دون بلوغِ يمين.
+    RIGHT_SIDE = 0.60 * pw
+    LEFT_ZONE = 0.22 * pw
+    CENTER_TOL = 0.06 * pw
+    ar_right = 0
+    ar_left_texts, ar_short_texts = [], []
+    ar_centered_texts, right_short_texts, latin_texts = [], [], []
+    for x0, x1, t in lines:
+        if not is_arabic_majority(t):
             latin_texts.append((round(x0), round(x1), t))
-    return {"block_right": round(block_right, 1), "arabic_right": ar_right,
-            "arabic_left": ar_left, "latin_excluded": len(latin_texts),
-            "arabic_left_texts": ar_left_texts, "latin_texts": latin_texts,
-            "ragged": len(ragged)}
+            continue
+        reaches_right = x1 >= RIGHT_SIDE
+        at_left = x0 <= LEFT_ZONE
+        centered = abs(((x0 + x1) / 2) - pw / 2) <= CENTER_TOL
+        if at_left and not reaches_right and not centered:
+            ar_left_texts.append((round(x0), round(x1), t))   # عيبٌ: انقلاب
+        elif reaches_right:
+            ar_right += 1
+            if block_right - x1 > tol:      # على الجانب الأيمن لكن دون الحافّة
+                right_short_texts.append((round(x0), round(x1), t))
+        elif centered:
+            ar_centered_texts.append((round(x0), round(x1), t))
+        else:
+            ar_short_texts.append((round(x0), round(x1), t))
+    return {"block_right": round(block_right, 1),
+            "left_margin": round(left_margin, 1), "arabic_right": ar_right,
+            "arabic_left": len(ar_left_texts),
+            "arabic_centered": len(ar_centered_texts),
+            "arabic_short": len(ar_short_texts),
+            "latin_excluded": len(latin_texts),
+            "arabic_left_texts": ar_left_texts,
+            "arabic_short_texts": ar_short_texts,
+            "arabic_centered_texts": ar_centered_texts,
+            "right_short_texts": right_short_texts,
+            "latin_texts": latin_texts}
 
 
 def format_digest(title: str, d: dict) -> str:
-    """خُلاصةٌ قابلةٌ للفحص تُطبَع **دائمًا** (لا فقط عند الفشل) — التعديل ٢."""
+    """خُلاصةٌ قابلةٌ للفحص تُطبَع **دائمًا** (لا فقط عند الفشل) — التعديل ٢.
+    تُظهِر كلَّ دلوٍ بنصوصه كي يبقى الأخضرُ مفحوصًا: يرى المُشرِفُ **لماذا** لم
+    يُوسَم كلُّ سطرٍ قصيرٍ عيبًا (هامشُ يساره/مركزه بعيد عن إمضاء الانقلاب)."""
     out = [f"----- {title} -----",
-           f"block_right(90pct x1)={d['block_right']}  ragged={d['ragged']}  "
-           f"arabic_right={d['arabic_right']}  arabic_left={d['arabic_left']}  "
-           f"latin_excluded={d['latin_excluded']}"]
-    if d["latin_texts"]:
-        out.append("  latin (excluded from ratio):")
-        for x0, x1, t in d["latin_texts"]:
-            out.append(f"    [x0={x0} x1={x1}] {t!r}")
-    if d["arabic_left_texts"]:
-        out.append("  ARABIC-LEFT offenders (real defects):")
-        for x0, x1, t in d["arabic_left_texts"]:
-            out.append(f"    [x0={x0} x1={x1}] {t!r}")
+           f"left_margin(min x0)={d['left_margin']}  block_right(90pct x1)="
+           f"{d['block_right']}  arabic_right={d['arabic_right']}  "
+           f"arabic_left={d['arabic_left']}  arabic_centered={d['arabic_centered']}"
+           f"  arabic_short={d['arabic_short']}  latin_excluded={d['latin_excluded']}"]
+
+    def _dump(label, key):
+        if d[key]:
+            out.append(f"  {label}:")
+            for x0, x1, t in d[key]:
+                out.append(f"    [x0={x0} x1={x1}] {t!r}")
+    _dump("ARABIC-LEFT offenders (real defects — left-margin anchored)",
+          "arabic_left_texts")
+    _dump("right-side but short of exact margin (indent/heading-split — ok)",
+          "right_short_texts")
+    _dump("arabic short, mid-page not left-anchored (indent/cell — ok)",
+          "arabic_short_texts")
+    _dump("arabic centered (legit heading/footer — ok)", "arabic_centered_texts")
+    _dump("latin (excluded from ratio)", "latin_texts")
     return "\n".join(out)
 
 
