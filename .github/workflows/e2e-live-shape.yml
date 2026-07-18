@@ -35,7 +35,7 @@ jobs:
       - name: Install LibreOffice + Arabic font (PDF converter)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-hosny-amiri fontconfig
+          sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-hosny-amiri fontconfig poppler-utils
           fc-cache -f
 
       - name: Install Python dependencies
@@ -57,3 +57,9 @@ jobs:
         env:
           SILK_RUN_E2E: "1"
         run: python -m pytest tests/test_rung2_real_server.py tests/test_rung3_playwright_e2e.py -q
+
+      # الطيّة E (Wave 2): القفلُ البصريّ docx→PDF→pdftotext يحتاج soffice+pdftotext
+      # (متوفّران هنا لا في وظيفة `test`) — يُشغَّل صراحةً كي **يعمل فعلًا** لا يُخطَّى:
+      # لا كلمةَ عربيةٍ يشقّها مِحرفٌ مُركَّب في استخراج الـPDF، «سلك» متّصلة.
+      - name: Run Wave 2 visual PDF lock (fold E)
+        run: python -m pytest tests/test_wave2_first_pdf_cluster.py -q

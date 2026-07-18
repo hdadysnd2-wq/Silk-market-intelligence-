@@ -351,10 +351,12 @@ def _finalize_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
         _set_rtl_paragraph(p._p.get_or_add_pPr())
         for run in p.runs:
             _set_rtl_run_fonts(run._r.get_or_add_rPr(), font)
-            # Wave 2 (البند ٨ + الطيّة E): تشكيلٌ آمنٌ **موجَّهٌ للعلامة فقط** —
-            # نُصلِح «سِلك» (الكسرة المُركَّبة تنفصل «ِس لك») ولا نمسّ الحركات
-            # الشرعية في كلماتٍ أخرى (مثل «المرشّحة» بالشدّة). العلامةُ وحدها هي
-            # التي كُسِرت ٥٠× في البلاغ؛ تعميمُ التجريد يُغيّر عناوين مشكّلة صحيحة.
+            # Wave 2 (البند ٨): العلامة «سِلك» => «سلك» متّصلة في **الوورد**
+            # (وثيقة المشغّل القابلة للتحرير). أمّا التجريد الكامل لكلّ الحركات
+            # فيقع عند حدّ **الـPDF** (المُسلَّم النهائي للعميل) في `docx_to_pdf`،
+            # كي تبقى وثيقةُ الوورد مشكّلةً كمصدرٍ، ويخرج الـPDF مجرّدًا (لا كلمةَ
+            # يشقّها مِحرفٌ مُركَّب في الاستخراج — تعريفُ عائلة E). الطيّة E تُثبَّت
+            # على استخراج الـPDF لا على الوورد.
             if run.text and "سِلك" in run.text:
                 run.text = run.text.replace("سِلك", "سلك")
 
@@ -399,18 +401,19 @@ def _add_page_number_field(paragraph) -> None:
 
 
 # Wave 2 (البند ٨ + الطيّة E): «سِلك» كانت تُكسَر «ِس لك» في PDF (٥٠×، الغلاف +
-# كل تذييل) — الكسرة (U+0650) المُركَّبة تنفصل/تُعاد ترتيبًا عند تشكيل الخط في
-# LibreOffice. الإصلاح الحتمي: تجريدُ العلامات المُركَّبة (حركات/تطويل) من النصّ
-# المُصدَّر فيخرج «سلك» متّصلاً في الاستخراج (تقاريرنا عربيةٌ غير مشكّلة أصلًا،
-# فالتجريد بلا أثرٍ إلا على العلامة). القفل البصري: docx→PDF→pdftotext يحوي «سلك»
-# متّصلة، ولا كلمةَ عربيةٍ يشقّها مِحرفٌ مُركَّب.
-_AR_COMBINING = "".join(chr(c) for c in list(range(0x064B, 0x0653))
-                        + [0x0670, 0x0640])
+# كل تذييل)، وكذلك **أشقّاؤها** — أيّ كلمةٍ عربيةٍ مشكّلةٍ في النصّ (مثل «مُوصًى»
+# => « ُموًصى»، «يُتَّخذ» => « ُيَّتخذ») — تنفصل حركاتُها عند تشكيل الخط في
+# LibreOffice فتُشقّ الكلمة في الاستخراج. الإصلاح **قاعدةُ حدٍّ لا حالة**: تجريدُ
+# الحركات (U+064B–U+0652، U+0670) من **مخرَج** runs العميل عند حدّ العرض — القوالب
+# المصدرية تبقى مشكّلةً، والمخرَج مجرّد. القفل البصري (E) هو تعريفُ العائلة: لا
+# كلمةَ عربيةٍ يشقّها مِحرفٌ مُركَّب في استخراج PDF.
+_AR_COMBINING = "".join(chr(c) for c in list(range(0x064B, 0x0653)) + [0x0670])
 _AR_COMBINING_RE = re.compile("[" + re.escape(_AR_COMBINING) + "]")
 
 
 def _shape_safe_ar(text: str) -> str:
-    """جرّد الحركات/التطويل المُركَّبة فيخرج النصُّ العربيّ متّصلًا في الاستخراج."""
+    """جرّد الحركات المُركَّبة (U+064B–U+0652، U+0670) فيخرج النصّ العربيّ متّصلًا
+    في الاستخراج — قاعدةُ حدِّ العرض للمخرَج (المصادر تبقى مشكّلة)."""
     return _AR_COMBINING_RE.sub("", text or "")
 
 
@@ -2215,13 +2218,55 @@ def has_arabic_font() -> bool:
     return any(hint in blob for hint in _ARABIC_FONT_HINTS)
 
 
+def _pdf_diacritic_free_copy(docx_path: str) -> str:
+    """Wave 2 (البند ٨ + الطيّة E): نسخةٌ مجرّدةٌ من الحركات للتحويل لـPDF.
+
+    العلامةُ «سِلك» وأشقّاؤها المشكّلون («مُوصًى»/«يُتَّخذ»…) تنفصل حركاتُهم عند
+    تشكيل خطّ LibreOffice فتُشقّ الكلمةُ في استخراج الـPDF. **الأصل (وثيقة الوورد
+    القابلة للتحرير — المشغّل) يبقى مشكّلًا كمصدر**؛ نُحوّل نسخةً مؤقّتةً مجرّدةً من
+    الحركات (U+064B–U+0652، U+0670) فقط، فيخرج الـPDF (المُسلَّم للعميل) نظيفَ
+    الاستخراج — لا كلمةَ عربيةٍ يشقّها مِحرفٌ مُركَّب (تعريفُ عائلة E). لا يُمَسّ
+    أيّ رقمٍ أو حرفٍ أو معنى — الحركاتُ علاماتُ نطقٍ لا محتوى."""
+    from docx import Document
+    doc = Document(docx_path)
+
+    def _strip(p):
+        for r in p.runs:
+            if r.text and _AR_COMBINING_RE.search(r.text):
+                r.text = _shape_safe_ar(r.text)
+
+    def _walk(tables):
+        for t in tables:
+            for row in t.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        _strip(p)
+                    _walk(cell.tables)
+
+    for p in doc.paragraphs:
+        _strip(p)
+    _walk(doc.tables)
+    for s in doc.sections:
+        for hf in (s.header, s.footer):
+            for p in hf.paragraphs:
+                _strip(p)
+    import os
+    import tempfile
+    tmp = os.path.join(tempfile.mkdtemp(prefix="silk_pdfsrc_"),
+                       os.path.basename(docx_path))
+    doc.save(tmp)
+    return tmp
+
+
 def docx_to_pdf(docx_path: str, pdf_path: "str | None" = None,
                 timeout: int = 180) -> str:
     """§3: حوّل مستند Word إلى PDF عبر LibreOffice headless — يعيد مسار الـPDF.
 
     تدهور رشيق: RuntimeError برسالة نظيفة إن غاب المحرّك أو فشل التحويل — لا
-    يُسلَّم docx بديلاً صامتاً ولا PDF جزئي (§3/§5). التحويل بلا تعديل على أي
-    رقم أو نصّ — المستند مبنيّ بالكامل في طبقة docx (RTL/تطهير/بوابة الجودة)."""
+    يُسلَّم docx بديلاً صامتاً ولا PDF جزئي (§3/§5). لا يُعدَّل أيّ رقم أو محتوى:
+    التحويلُ يقع على نسخةٍ مجرّدةٍ من **الحركات** فقط (الطيّة E) كي لا تُشقّ كلمةٌ
+    عربيةٌ في استخراج الـPDF؛ الأصل (وثيقة الوورد) يبقى مشكّلًا (`_pdf_diacritic_
+    free_copy`). المستند مبنيّ بالكامل في طبقة docx (RTL/تطهير/بوابة الجودة)."""
     import os
     import subprocess
     import tempfile
@@ -2232,11 +2277,16 @@ def docx_to_pdf(docx_path: str, pdf_path: "str | None" = None,
         raise RuntimeError(_PDF_FAILED)
     out_dir = os.path.dirname(os.path.abspath(pdf_path or docx_path)) or "."
     profile = tempfile.mkdtemp(prefix="silk_lo_")
+    # حوّل النسخةَ المجرّدةَ من الحركات (لا الأصل) — الطيّة E على مخرَج الـPDF.
+    try:
+        convert_src = _pdf_diacritic_free_copy(docx_path)
+    except Exception:  # noqa: BLE001 — تعذّر التجريد => حوّل الأصل (لا نكسر التسليم)
+        convert_src = docx_path
     try:
         proc = subprocess.run(
             [soffice, "--headless", "--norestore",
              f"-env:UserInstallation=file://{profile}",
-             "--convert-to", "pdf", "--outdir", out_dir, docx_path],
+             "--convert-to", "pdf", "--outdir", out_dir, convert_src],
             capture_output=True, timeout=timeout,
             env={**os.environ, "HOME": profile})
     except Exception as e:  # noqa: BLE001 — أي فشل تحويل = خطأ معلَن نظيف
