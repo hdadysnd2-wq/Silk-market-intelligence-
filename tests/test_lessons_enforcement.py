@@ -166,6 +166,31 @@ _TEST_ANCHORS = [
       "def test_producer_advisory_generalizes_from_data_not_names"]),
     (24, "tests/test_regression_registry.py",
      ["def _guard_hardcoded_product_rule"]),
+    # البند ٢٥ — عائلة A (الدراسة بالاتجاه الخاطئ): أشقّاء config-driven +
+    # القفل بلا ISO/HS صلب + الحارس السلوكي في السجل.
+    (25, "tests/test_wave1p5_prerun_advisories.py",
+     ["def test_self_origin_advisory_fires_for_origin_market_config_driven",
+      "def test_prerun_logic_has_no_hardcoded_market_or_hs_literal"]),
+    (25, "tests/test_regression_registry.py",
+     ["def _guard_wrong_direction_study"]),
+    # البند ٢٦ — عائلة C (الفشل الصامت لخدمةٍ خارجية): إعلانُ الفشل للمشغّل +
+    # جدول التدقيق + الحارس السلوكي في السجل.
+    (26, "tests/test_wave1p5_service_failure_ops.py",
+     ["def test_scraper_submit_failure_emits_service_ops_entry",
+      "def test_keyless_agent_failure_emits_service_ops_entry"]),
+    (26, "tests/test_regression_registry.py",
+     ["def _guard_silent_external_failure"]),
+    (26, "docs/EXTERNAL_SERVICES_FAILURE_AUDIT.md",
+     ["service → failure path"]),
+    # البند ٢٧ — عائلة D (الإنفاق قبل المعرفة): لوحة الجاهزية قبل الحجز +
+    # الرُتبة ٣ للوحة + الحارس السلوكي في السجل.
+    (27, "tests/test_wave1p5_prerun_advisories.py",
+     ["def test_readiness_panel_lists_blocking_and_advisory_before_run",
+      "def test_readiness_is_read_only_no_reservation"]),
+    (27, "tests/test_rung3_playwright_e2e.py",
+     ["def test_rung3_readiness_panel_flow_checklist_before_confirm"]),
+    (27, "tests/test_regression_registry.py",
+     ["def _guard_readiness_before_spend"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

@@ -439,7 +439,9 @@ def create_app():
                       "world_markets": _world_markets_enabled(),
                       "hs_classifier": hsc.enabled(),
                       "producer_advisory": _producer_advisory_enabled(),
-                      "require_hs6": _require_hs6()})
+                      "require_hs6": _require_hs6(),
+                      "prerun_advisories": __import__(
+                          "silk_prerun").advisories_enabled()})
 
     def _intake_vision_allowed() -> tuple[bool, str]:
         """هل يُسمح نداء الرؤية الواحد؟ — (allowed, reason). يعكس منطق
@@ -1023,6 +1025,10 @@ def create_app():
         # أكبر مصدّري هذا الرمز عالميًا. غيابها + سوقٌ منتِجة + الصمّام مُفعَّل
         # => 422 استشاري قبل أيّ حجز؛ إرسالها بعد موافقة المستخدم يُكمِل التشغيلة.
         producer_ack: bool = False
+        # موافقةٌ صريحة موحّدة على أشقّاء استشارات ما قبل التشغيل (Wave 1.5،
+        # عائلة A): تصدير إلى بلد المنشأ / سوق تحت عقوبات / فصل مقيَّد قانونيًا.
+        # لوحةُ «جاهزية الدراسة» تجمعها؛ زرّ التأكيد الواحد يرسلها true.
+        advisories_ack: bool = False
 
     def _research_budget_status(economics: dict) -> dict:
         """حالة الميزانية على مستوى التشغيلة كاملة — P1، حادثة نفاد
@@ -1335,6 +1341,116 @@ def create_app():
             from silk_storage import mark_research_failed
             mark_research_failed(analysis_id, f"{type(e).__name__}: {e}")
 
+    def _readiness_checks(product: str, market_ref, hs_code) -> list[dict]:
+        """لوحةُ «جاهزية الدراسة» (Wave 1.5، عائلة D) — كلُّ تدهورٍ معروفٍ **قبل
+        الحجز** كسطرٍ ✓/⚠/✗، فلا يعرف المالكُ تدهورًا **بعد** الدفع أبدًا.
+
+        كلُّ سطر `{key, label_ar, status, detail_ar, blocking}`:
+        status ∈ {ok, advisory, blocked, info}؛ blocking=True => يمنع التشغيل
+        (رمز HS/خارج التغطية)؛ advisory => يتطلّب موافقة؛ info => إخباري فقط.
+        قراءةٌ فقط — لا حجز ولا إنفاق. يشارك api البوّابةَ نفسها (مصدر واحد).
+        """
+        import datetime as _dt
+        checks: list[dict] = []
+        iso3 = getattr(market_ref, "iso3", "") or ""
+        year = _dt.date.today().year - 1
+        # (١) رمز HS محسوم — حجرُ الأساس (بوّابة صلبة).
+        checks.append({
+            "key": "hs_resolved", "label_ar": "رمز HS محسوم",
+            "status": "ok" if hs_code else "blocked",
+            "detail_ar": (f"HS {hs_code}" if hs_code
+                          else "لم يُحسَم رمز HS — صنِّف المنتج أو اختر يدويًا"),
+            "blocking": not bool(hs_code)})
+        # (٢) السوق ضمن التغطية.
+        from silk_market_ranker import _world_markets_enabled
+        if _world_markets_enabled() and hs_code and iso3:
+            _cov, _det = _market_in_coverage(hs_code, iso3)
+            checks.append({
+                "key": "coverage", "label_ar": "السوق ضمن التغطية",
+                "status": "ok" if (not _det or _cov) else "blocked",
+                "detail_ar": ("ضمن التغطية" if (not _det or _cov)
+                              else "خارج التغطية الحالية — تواصل معنا لإضافتها"),
+                "blocking": bool(_det and not _cov)})
+        # (٣) استشارةُ بلد المنشأ (Wave 1) — سوقٌ من أكبر المصدّرين.
+        if _producer_advisory_enabled() and hs_code and len(iso3) == 3:
+            from silk_market_ranker import is_top_world_exporter
+            _is_top, _top = is_top_world_exporter(hs_code, iso3, year)
+            checks.append({
+                "key": "producer_country", "label_ar": "بلد المنشأ",
+                "status": "advisory" if _is_top else "ok",
+                "detail_ar": ("من أكبر مصدّري هذا الرمز عالميًا — دخول تنافسي جدًّا"
+                              if _is_top else "ليست من كبار المصدّرين"),
+                "blocking": False})
+        # (٤) أشقّاء عائلة A (Wave 1.5) — بلد المنشأ نفسه/عقوبات/فصل مقيَّد.
+        import silk_prerun
+        if silk_prerun.advisories_enabled() and len(iso3) == 3:
+            for a in silk_prerun.sibling_advisories(hs_code, iso3):
+                checks.append({
+                    "key": a["kind"],
+                    "label_ar": {"self_origin": "بلد المنشأ نفسه",
+                                 "sanction": "عقوبات/حظر",
+                                 "restricted_chapter": "فئة مقيَّدة قانونيًا"
+                                 }.get(a["kind"], a["kind"]),
+                    "status": "advisory",
+                    "detail_ar": a.get("detail") or a.get("message") or "",
+                    "blocking": False})
+        # (٥) ميزانية كومتريد (إخباري — لا يمنع، لكن يُعلَن قبل الدفع).
+        try:
+            from silk_collectors import comtrade_budget_left
+            _left = comtrade_budget_left()
+            checks.append({
+                "key": "comtrade_budget", "label_ar": "ميزانية كومتريد اليومية",
+                "status": "ok" if _left > 0 else "advisory",
+                "detail_ar": f"المتبقّي ~{_left} نداء",
+                "blocking": False})
+        except Exception:  # noqa: BLE001 — قياس اختياري
+            pass
+        # (٦) حالة مكشطة الخرائط (إخباري).
+        _scraper = bool(os.environ.get("SILK_GMAPS_SCRAPER_URL", "").strip())
+        checks.append({
+            "key": "scraper_state", "label_ar": "مكشطة جهات الاتصال",
+            "status": "ok" if _scraper else "info",
+            "detail_ar": ("مُهيَّأة" if _scraper
+                          else "غير مُهيَّأة — هواتف/عناوين قد تغيب"),
+            "blocking": False})
+        # (٧) حماية المفاتيح المدفوعة (إخباري/تحذيري).
+        _unprot = _unprotected_paid_keys()
+        checks.append({
+            "key": "key_protection", "label_ar": "حماية المفاتيح",
+            "status": "advisory" if _unprot else "ok",
+            "detail_ar": ("مفاتيح مدفوعة بلا SILK_API_KEY — نداءات محجوبة"
+                          if _unprot else "محميّة"),
+            "blocking": False})
+        return checks
+
+    @app.get("/research/readiness")
+    def research_readiness(request: Request, product: str = "",
+                           market: str = "", hs_code: str = ""):
+        """جاهزيةُ الدراسة قبل الحجز — the pre-reservation readiness panel (D).
+
+        قراءةٌ فقط (لا حجز/إنفاق): تُعيد كلَّ تدهورٍ معروفٍ كسطرٍ ✓/⚠/✗ +
+        `can_run`/`needs_ack` كي تعرضها الواجهة **قبل زرّ التأكيد**. رمزُ HS
+        يُحلّ حتميًا إن غاب (بلا نداء كلود)."""
+        _rate_limit(request)
+        from silk_market_resolver import resolve_market
+        market_ref, suggestions = resolve_market(market) if market else (None, [])
+        hs = (hs_code or "").strip()
+        if not hs and product:
+            from silk_hs_resolver import resolve as _rhs
+            hs = _rhs(product).value or ""
+        if market_ref is None:
+            return _json({"checks": [{
+                "key": "market", "label_ar": "السوق المستهدفة",
+                "status": "blocked",
+                "detail_ar": "سوق غير معروفة/غامضة — اختر من القائمة",
+                "blocking": True}], "can_run": False, "needs_ack": False,
+                "suggestions": suggestions})
+        checks = _readiness_checks(product, market_ref, hs)
+        return _json({
+            "checks": checks,
+            "can_run": not any(c["blocking"] for c in checks),
+            "needs_ack": any(c["status"] == "advisory" for c in checks)})
+
     @app.post("/research")
     def research(req: ResearchRequest, request: Request):
         """بحث عميق — ١٢ بعثة كلود بالأدوات + محلل شامل + حكم + تقرير مراجَع.
@@ -1504,6 +1620,38 @@ def create_app():
                     f"مصدّري HS {hs_code} عالميًا)",
                     context={"product": product,
                              "market_iso3": market_ref.iso3, "hs_code": hs_code})
+
+        # أشقّاء عائلة «الدراسة بالاتجاه الخاطئ» (Wave 1.5، عائلة A): تصدير إلى
+        # بلد المنشأ / سوق تحت عقوبات / فصل مقيَّد قانونيًا — config-driven، صفر
+        # نداء مدفوع. تحذيرٌ (422) حتى موافقةٍ موحّدة (`advisories_ack`). مُطفأ
+        # افتراضيًا (SILK_PRERUN_ADVISORIES) => السلوك كاليوم. يُتخطّى عند الاستئناف.
+        if req.resume is None:
+            import silk_prerun
+            if silk_prerun.advisories_enabled():
+                _sib = silk_prerun.sibling_advisories(hs_code, market_ref.iso3)
+                if _sib and not req.advisories_ack:
+                    import silk_ops_log
+                    silk_ops_log.record_error(
+                        "prerun_advisory_shown",
+                        f"استشارةُ ما قبل التشغيل ({market_ref.iso3}): "
+                        + "؛ ".join(a["kind"] for a in _sib),
+                        context={"product": product,
+                                 "market_iso3": market_ref.iso3,
+                                 "hs_code": hs_code,
+                                 "kinds": [a["kind"] for a in _sib]})
+                    raise HTTPException(status_code=422, detail={
+                        "error": "prerun_advisory",
+                        "message": _sib[0]["message"],
+                        "advisories": _sib, "needs_ack": True})
+                if _sib and req.advisories_ack:
+                    import silk_ops_log
+                    silk_ops_log.record_error(
+                        "prerun_advisory_consent",
+                        f"موافقةٌ صريحة على أشقّاء استشارة {market_ref.iso3}",
+                        context={"product": product,
+                                 "market_iso3": market_ref.iso3,
+                                 "hs_code": hs_code,
+                                 "kinds": [a["kind"] for a in _sib]})
 
         # بوابة ما قبل التشغيل بعد التحقق من صحة الإدخال (422 على خطأ
         # الطالب يسبق 409 على جهوزية الخادم — خطأ العميل يستحق أن يُشرَح

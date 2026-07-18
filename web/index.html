@@ -644,11 +644,48 @@ function showProducerAdvisory(adv,onOk){
     +'</div>');
   $("#advOk",m).addEventListener("click",function(){m.close();onOk()});
   $("#advNo",m).addEventListener("click",function(){m.close()})}
+/* لوحة «جاهزية الدراسة» (Wave 1.5، عائلة D) — كلُّ تدهورٍ معروفٍ قبل الحجز
+   كسطر ✓/⚠/✗، فلا يعرف المالك تدهورًا بعد الدفع. مُفعَّلة حين
+   S.cfg.prerun_advisories (الصمّام الجديد)؛ غيرها => المسار كاليوم (نوافذ
+   الاستشارة التفاعلية من Wave 1). */
+function _rdIcon(s){return s==="ok"?"✓":(s==="blocked"?"✗":(s==="advisory"?"⚠":"•"))}
+function _rdColor(s){return s==="ok"?"#2e7d32":(s==="blocked"?"#c62828":(s==="advisory"?"#b26a00":"var(--muted,#8a8175)"))}
+function showReadiness(run){
+  if(!(S.cfg&&S.cfg.prerun_advisories)){return run({})}   // الصمّام مُطفأ => كاليوم
+  getJSON("/research/readiness?product="+encodeURIComponent(S.product||"")
+    +"&market="+encodeURIComponent(S.market.iso3)+"&hs_code="+encodeURIComponent(S.hs||""))
+    .then(function(rd){
+      if(!rd||!rd.checks){return run({})}
+      if(rd.can_run&&!rd.needs_ack){return run({})}         // كله ✓ => شغّل مباشرة
+      showReadinessPanel(rd,run)})
+    .catch(function(){run({})})}                            // عطل قياس => لا حجب
+function showReadinessPanel(rd,run){
+  var rows=(rd.checks||[]).map(function(c){
+    return '<div style="display:flex;gap:8px;align-items:flex-start;margin-top:6px">'
+      +'<span style="color:'+_rdColor(c.status)+';font-weight:700;min-width:14px">'+_rdIcon(c.status)+'</span>'
+      +'<div><div style="font-size:12.5px;font-weight:600">'+esc(c.label_ar||c.key)+'</div>'
+      +'<div style="font-size:11px;color:var(--muted,#8a8175)">'+esc(c.detail_ar||"")+'</div></div></div>'}).join("");
+  var blocked=!rd.can_run;
+  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:8px">جاهزية الدراسة</div>'
+    +'<div style="font-size:11.5px;color:var(--muted,#8a8175);margin-bottom:4px">راجِع الحالة قبل بدء الدراسة (وقبل أيّ حجز):</div>'
+    +rows
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button type="button" id="rdGo"'+(blocked?' disabled':'')
+      +' style="flex:1;padding:8px 12px;border:0;border-radius:9px;background:'
+      +(blocked?'#ccc':'var(--accent,#6b4e2e)')+';color:#fff;cursor:'
+      +(blocked?'not-allowed':'pointer')+';font-size:13px">'
+      +(blocked?'لا يمكن البدء — عالِج الحاجب أعلاه':'أكمل الدراسة')+'</button>'
+    +'<button type="button" id="rdNo" style="padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">إلغاء</button>'
+    +'</div>');
+  $("#rdNo",m).addEventListener("click",function(){m.close()});
+  if(!blocked)$("#rdGo",m).addEventListener("click",function(){m.close();
+    // زرّ التأكيد الواحد يرسل الموافقات الموحّدة (بلد المنشأ + الأشقّاء).
+    run({producer_ack:true,advisories_ack:true})})}
 function runDeepResearch(){if(S.busy)return;
   var resuming=!!S.lastFailedResearchId;
   if(!resuming&&(!S.product||!S.market))return;
   if(resuming){return startResearch({})}
-  ensureHs(function(){startResearch({})})}
+  ensureHs(function(){showReadiness(function(acks){startResearch(acks)})})}
 function startResearch(extra){if(S.busy)return;
   S.busy=true;sync();stopResearchPoll();
   var lbl=$("#researchBtn").textContent;$("#researchBtn").textContent="…جارٍ البحث";

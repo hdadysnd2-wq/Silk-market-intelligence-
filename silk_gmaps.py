@@ -147,6 +147,16 @@ def submit_scrape(queries: list, depth: int = 1, extract_email: bool = True):
         return jid or None
     except Exception as e:  # noqa: BLE001 — فشل التقديم = تعطيل نظيف
         _log.warning("gmaps submit failed: %s", e)
+        # عائلة C (Wave 1.5): لا فشلٌ صامت — أعلِنه للمشغّل في ops_errors مع
+        # أنّ المكشطة كانت **مُهيَّأة** (URL مضبوط) لكنّ النداء فشل، فيُميَّز
+        # «معطّلة عمدًا» (لا URL) من «مُهيَّأة لكن فشلت» (البلاغ الأصلي).
+        try:
+            import silk_ops_log
+            silk_ops_log.record_service_failure(
+                "scraper", f"تقديم مهمة الكشط فشل رغم تهيئة المكشطة: {e}",
+                context={"stage": "submit", "queries": len(queries or [])})
+        except Exception:  # noqa: BLE001 — السجل قناة جانبية، لا يكسر التعطيل
+            pass
         return None
 
 
@@ -170,6 +180,13 @@ def _fetch_job(job_id: str):
         return status, results
     except Exception as e:  # noqa: BLE001
         _log.warning("gmaps fetch job %s failed: %s", job_id, e)
+        try:
+            import silk_ops_log
+            silk_ops_log.record_service_failure(
+                "scraper", f"جلب نتائج مهمة الكشط فشل: {e}",
+                context={"stage": "fetch", "job_id": job_id})
+        except Exception:  # noqa: BLE001
+            pass
         return None, None
 
 

@@ -34,6 +34,7 @@ pytestmark = pytest.mark.e2e
 
 _FLOW = os.path.join(_ROOT, "tests", "e2e", "live_shape_flow.cjs")
 _PRERUN_FLOW = os.path.join(_ROOT, "tests", "e2e", "prerun_flow.cjs")
+_READINESS_FLOW = os.path.join(_ROOT, "tests", "e2e", "readiness_flow.cjs")
 
 
 def _node() -> str | None:
@@ -131,3 +132,34 @@ def test_rung3_prerun_modals_flow_classify_confirm_advisory_consent():
             f"Prerun Playwright flow failed (rc={r.returncode}).\n"
             f"STDOUT:\n{out}\nSTDERR:\n{err}")
         assert "PRERUN PASS" in out, f"missing PASS marker.\nSTDOUT:\n{out}"
+
+
+def test_rung3_readiness_panel_flow_checklist_before_confirm():
+    """عائلة D (Wave 1.5): متصفّح حقيقي يرى لوحة «جاهزية الدراسة» — كلُّ تدهورٍ
+    كسطر ✓/⚠/✗ قبل زرّ التأكيد — ثم «أكمل الدراسة» يرسل الموافقات الموحّدة.
+    الخادم في وضع readiness_panel (SILK_PRERUN_ADVISORIES + مخبأ مبذور)."""
+    node = _node()
+    if not node:
+        pytest.skip("node غير متاح (أفضل جهد؛ وظيفة CI تثبّته)")
+    node_path = _node_path()
+    if not _playwright_available(node_path):
+        pytest.skip("حزمة playwright غير محلولة عبر NODE_PATH (أفضل جهد)")
+
+    from live_shape_server import LiveShapeServer
+    with LiveShapeServer(readiness_panel=True) as srv:
+        env = dict(
+            os.environ,
+            NODE_PATH=node_path or "",
+            BASE_URL=srv.base_url,
+            PRERUN_PRODUCT=srv.PRERUN_PRODUCT,
+            PRERUN_HS=srv.PRERUN_HS,
+            PRERUN_MARKET_ISO3=srv.PRERUN_MARKET_ISO3,
+        )
+        r = subprocess.run([node, _READINESS_FLOW], capture_output=True,
+                           env=env, timeout=180)
+        out = r.stdout.decode("utf-8", "replace")
+        err = r.stderr.decode("utf-8", "replace")
+        assert r.returncode == 0, (
+            f"Readiness Playwright flow failed (rc={r.returncode}).\n"
+            f"STDOUT:\n{out}\nSTDERR:\n{err}")
+        assert "READINESS PASS" in out, f"missing PASS marker.\nSTDOUT:\n{out}"
