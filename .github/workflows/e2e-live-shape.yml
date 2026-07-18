@@ -38,8 +38,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-hosny-amiri fontconfig poppler-utils
           fc-cache -f
 
+      # pymupdf تبعيةٌ صلبةٌ لوظيفة e2e (أمر المُشرِف، الخيار ٣): مقياسُ الهندسة
+      # (§4) يُجمِّع الأسطر على y عبر fitz — لا احتياطيَّ `pdftotext` صامتًا بعد.
       - name: Install Python dependencies
-        run: pip install -r requirements.txt pytest httpx
+        run: pip install -r requirements.txt pytest httpx pymupdf
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
@@ -64,6 +66,12 @@ jobs:
         run: |
           fc-list | grep -iE "naskh|amiri|arab" \
             || { echo "::error::no Arabic-shaping font installed"; exit 1; }
+
+      # معايرةُ المقياس (أمر المُشرِف، الخيار ٣): قبل الوثوق بأيّ رقمٍ هندسيّ،
+      # اطبع مصفوفة 2×2 (A=jc=start صحيح، B=jc=right مقلوب) بطريقتَي قياس +
+      # نسخة LibreOffice. تشخيصيّ (لا يُفشِل الوظيفة) — القراءةُ من سجلّ CI.
+      - name: RTL measurer calibration (diagnostic 2x2 matrix)
+        run: python3 tools/rtl_calibration.py
 
       # الطيّة E + الشروط ٢/٤ (Wave 2): القفلُ البصريّ عبر مسار الإنتاج
       # (`render_client_pdf`) + كنسُ التسريب (§2) على النصّ العاري + اختبارُ

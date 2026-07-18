@@ -309,8 +309,15 @@ def test_pdf_produced_when_engine_available(tmp_path):
 
 
 def _measure_pdf_lines(pdf_path):
-    """أرجِع (عرض_الصفحة، [(x0,x1) لكل سطر]) عبر pdfplumber أو
-    `pdftotext -bbox`، أو None إن لم تتوفّر أداة قياس. النقاط بوحدة النقطة."""
+    """أرجِع (عرض_الصفحة، [(x0,x1) لكل **سطر مُجمَّع**]) عبر pdfplumber أو
+    pymupdf/fitz، أو None إن لم تتوفّر أداة قياس. النقاط بوحدة النقطة.
+
+    **معايرةٌ (أمر المُشرِف، الخيار ٣):** الاحتياطيّ القديم `pdftotext -bbox`
+    كان يعدّ **كلّ كلمةٍ سطرًا** بلا تجميعٍ على y، فينهار قياسُ حافة اليمين
+    (كلماتُ سطرٍ واحدٍ تتوزّع عبر كامل العرض فتبدو «غير منحازة»). أثبتت مصفوفةُ
+    `tools/rtl_calibration.py` أنّه لا يميّز A(jc=start) من B(jc=right) => قياسٌ
+    مصنوع. حُذِف نهائيًّا؛ القياسُ الآن يُجمِّع الأسطر على y حصرًا (pdfplumber
+    أو fitz). غيابُ كليهما => None، فتفشل البوّابةُ بصوتٍ عالٍ تحت الاعتماد."""
     try:
         import pdfplumber  # type: ignore
         from collections import defaultdict
@@ -326,26 +333,32 @@ def _measure_pdf_lines(pdf_path):
                     lines.append((min(w["x0"] for w in ws),
                                   max(w["x1"] for w in ws)))
         return pw, lines
-    except Exception:  # noqa: BLE001 — جرّب pdftotext -bbox
+    except Exception:  # noqa: BLE001 — جرّب fitz/pymupdf (تجميعٌ صحيحٌ للأسطر)
         pass
-    import shutil
-    import subprocess
-    import re as _re
-    if not shutil.which("pdftotext"):
+    try:
+        import collections
+        import fitz  # pymupdf
+    except Exception:  # noqa: BLE001 — لا مقياسَ مجمِّعًا للأسطر متاح
         return None
     try:
-        xhtml = subprocess.run(
-            ["pdftotext", "-bbox", pdf_path, "-"],
-            capture_output=True, text=True, timeout=60).stdout
+        doc = fitz.open(pdf_path)
     except Exception:  # noqa: BLE001
         return None
-    pw_m = _re.search(r'<page width="([\d.]+)"', xhtml)
-    pw = float(pw_m.group(1)) if pw_m else None
-    words = [(float(a), float(b)) for a, b in _re.findall(
-        r'<word xMin="([\d.]+)" yMin="[\d.]+" xMax="([\d.]+)"', xhtml)]
-    # التجميع على أساس y غير متاح هنا مباشرة؛ نكتفي بحدود الكلمات كأسطر مفردة
-    # (كافٍ لقياس حافة اليمين مقابل حدّ الكتلة). كل كلمة = مقطع (x0,x1).
-    return (pw, [(x0, x1) for x0, x1 in words]) if pw else None
+    pw = doc[0].rect.width if doc.page_count else None
+    if not pw:
+        return None
+    lines = []
+    for page in doc:
+        rows = collections.defaultdict(list)
+        for b in page.get_text("dict")["blocks"]:
+            for line in b.get("lines", []):
+                for s in line["spans"]:
+                    if s["text"].strip():
+                        rows[round(s["bbox"][3] / 2)].append(s)
+        for sp in rows.values():
+            lines.append((min(s["bbox"][0] for s in sp),
+                          max(s["bbox"][2] for s in sp)))
+    return pw, lines
 
 
 def test_pdf_rtl_geometry_and_arabic_font(tmp_path):
