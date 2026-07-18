@@ -385,6 +385,59 @@ def _guard_intake_no_silent_guess():
         assert f"def {fn}" in lock, f"قفل الميزة ب مفقود: {fn}"
 
 
+def _guard_coverage_gate_year_fallback():
+    """LESSON ٢٣ — بوّابة «خارج التغطية» كانت تفشل مفتوحةً دوماً (استطلاع سنة
+    اليوم-١ بلا سُلَّم fallback، وكومتريد متأخّر). الحارس (قراءة مصدر + سلوك):
+    السُّلَّم + المُحلِّل + السنة المشتركة موجودة، والبوّابة تستعملها، والأقفال قائمة."""
+    src = _read("silk_market_ranker.py")
+    for n in ("DEFAULT_STUDY_YEAR", "def coverage_year_ladder",
+              "def world_import_totals_resolved"):
+        assert n in src, f"علامة إنفاذ سُلَّم التغطية مفقودة: {n}"
+    api = _read("api.py")
+    assert "world_import_totals_resolved" in api, "البوّابة لا تستعمل السُّلَّم"
+    # سلوك: السُّلَّم يبدأ من سنة اليوم-١ ويضمن سنة الدراسة في الذيل.
+    import datetime as _dt
+    import silk_market_ranker as _R
+    ladder = _R.coverage_year_ladder()
+    assert ladder[0] == _dt.date.today().year - 1, ladder
+    assert _R.DEFAULT_STUDY_YEAR in ladder, ladder
+    lock = _read("tests/test_out_of_coverage_guard.py")
+    for fn in ("test_coverage_gate_closes_when_current_year_empty_but_study_year_full",
+               "test_world_import_totals_resolved_ladders_to_first_nonempty_year"):
+        assert f"def {fn}" in lock, f"قفل سُلَّم التغطية مفقود: {fn}"
+
+
+def _guard_sanitizer_obfuscation_variants():
+    """LESSON ٢٤ — سبع صيغ تشويش أكّد المشرف نفاذها بالتنفيذ المباشر. الحارس
+    السلوكي يبني السلاسل السبع الحرفية ويؤكّد تحييد كلٍّ (المسار العام أو
+    مسار العميل) — القفل بالسلسلة الحرفية (silk-operations §4)."""
+    import silk_render as _SR
+    from silk_reports import (_client_forbidden_hits, _client_redact_text,
+                              _client_sanitize)
+
+    def _gen(s):
+        return _SR._strip_internal_plumbing(s)
+
+    def _client_clean(s):
+        return not _client_forbidden_hits(_client_redact_text(_client_sanitize(s)))
+
+    # (١) stop_reason مباعَد/عارٍ بلا قيمة — المسار العام.
+    assert "stop_reason" not in _gen("التوليد stop_reason =  انتهى")
+    # (٢) اسم مزوّد لاتيني مباعَد «S e r p A p i» — مسار العميل.
+    assert _client_clean("مبنيّ على S e r p A p i التجارية")
+    # (٣) درجة ثقة بأرقام عربية-هندية «ثقة=٠٫٦٤» — المسار العام.
+    o3 = _gen("التقييم ثقة=٠٫٦٤ للمصدر")
+    assert "٠٫٦٤" not in o3 and "ثقة=" not in o3, o3
+    # (٤) اسم مزوّد عربي مُشكَّل «إكْسبِلي» — مسار العميل.
+    assert _client_clean("المصدر إكْسبِلي غير متاح")
+    # (٥) «سجلات الخادم» بلا شدّة — المسار العام.
+    assert "سجلات الخادم" not in _gen("خطأ داخلي راجع سجلات الخادم الآن")
+    # (٦) بادئة مفتاح بعثة مرقّمة «m3_» — المسار العام.
+    assert "m3_" not in _gen("أنتجت m3_pricing_scout النتيجة")
+    # (٧) عدّ نداءات أدوات بأرقام عربية «نداءات أدوات: ٢» — المسار العام.
+    assert "نداءات أدوات" not in _gen("الملخّص | نداءات أدوات: ٢")
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -413,6 +466,8 @@ _LESSONS = {
     20: _guard_world_tier2_no_fabrication,  # الميزة أ — لا تلفيق فئة-٢/تفجّر ميزانية
     21: _guard_intake_no_silent_guess,      # الميزة ب — لا اختلاق منتج من صورة
     22: _guard_out_of_coverage_thin_study,  # الميزة أ — سوق خارج التغطية لا دراسة هزيلة
+    23: _guard_coverage_gate_year_fallback,  # الموجة ١ — بوّابة التغطية كانت تفشل مفتوحة
+    24: _guard_sanitizer_obfuscation_variants,  # الموجة ١ — سبع صيغ تشويش المشرف
 }
 
 _TRAPS = [

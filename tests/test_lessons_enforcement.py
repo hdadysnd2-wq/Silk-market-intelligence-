@@ -152,6 +152,17 @@ _TEST_ANCHORS = [
       "def test_flag_off_no_coverage_guard_any_country_works_todays_way"]),
     (22, "tests/test_regression_registry.py",
      ["def _guard_out_of_coverage_thin_study"]),
+    # البند ٢٣ — بوّابة التغطية كانت تفشل مفتوحةً (تدقيق v2، الموجة ١): سُلَّم
+    # fallback + السنة المشتركة؛ الأقفال السلوكية + الحارس في السجل.
+    (23, "tests/test_out_of_coverage_guard.py",
+     ["def test_coverage_gate_closes_when_current_year_empty_but_study_year_full",
+      "def test_world_import_totals_resolved_ladders_to_first_nonempty_year"]),
+    (23, "tests/test_regression_registry.py",
+     ["def _guard_coverage_gate_year_fallback"]),
+    # البند ٢٤ — سبع صيغ تشويش نفذت من المعقِّم (تسريبات المشرف): تطبيعٌ قبل
+    # المطابقة؛ الحارس السلوكي بالسلاسل السبع الحرفية في السجل.
+    (24, "tests/test_regression_registry.py",
+     ["def _guard_sanitizer_obfuscation_variants"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

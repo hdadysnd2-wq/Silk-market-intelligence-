@@ -131,6 +131,13 @@ def top_import_markets(hs_code: str, year: int, n: int = 38) -> list[dict]:
 # **حصراً** على بياناتٍ متاحةٍ عالمياً (إجمالي وارداتها من نداء العالم الواحد +
 # دخل/سكان البنك الدولي المجمّع) — بلا أيّ قيمة محلية مختلَقة (اتفاقيات/لوجستيات/
 # ثقافة): الفجوات تُعلَن حرفياً. Tier-2 = universally-available data only.
+# سنة الدراسة الافتراضية — the shared study-year basis. وحدةٌ واحدة يشترك فيها
+# ترتيبُ الأسواق (rank_markets) وبوّابةُ التغطية (api._market_in_coverage) فيقيسان
+# على **نفس** أساس المستوردين (تدقيق v2، الموجة ١): كان الترتيب يفترض ٢٠٢٢ بينما
+# البوّابة تستطلع سنة اليوم-١ (غير منشورة غالباً) فتفشل مفتوحةً دوماً. الآن كلاهما
+# يبدأ من هذه السنة ويتدرّج للخلف عبر سُلَّم fallback واحد.
+DEFAULT_STUDY_YEAR = int(os.environ.get("SILK_STUDY_YEAR", "2022") or "2022")
+
 _TIER1_N = 38                        # الفئة-١: أعلى n مستورداً (تسجيل كامل)
 # سقف الفئة-٢ (اتفاق المالك): ٦٢ فتصير التغطية الكلّية ≈ ١٠٠ سوقاً (٣٨+٦٢).
 # الاختيار **ديناميكيّ لكل رمز HS** من نداء العالم الواحد (أكبر مستوردي هذا
@@ -427,8 +434,40 @@ def _normalize(raw: dict[str, float], value: float) -> float:
     return (value - lo) / (hi - lo)
 
 
+def coverage_year_ladder() -> list[int]:
+    """سُلَّم سنوات fallback لاستطلاع التغطية — the year-fallback ladder.
+
+    تدقيق v2 (الموجة ١): كومتريد يتأخّر ~سنة-سنتين، فاستطلاع سنة اليوم-١ وحدها
+    (٢٠٢٥ في ٢٠٢٦) يعيد فارغاً غالباً فتفشل البوّابة مفتوحةً. نجرّب سنة-١ ثم سنة-٢
+    ثم سنة-٣، ونضمن **سنة الدراسة الافتراضية** في الذيل كي تشترك البوّابة والدراسة
+    في أساسٍ واحد (والاختبار «٢٠٢٥ فارغة/٢٠٢٢ ممتلئة => تُحجَب» يعبر لهذا الضمان).
+    مرتَّب تنازلياً، بلا تكرار."""
+    import datetime as _dt
+    y = _dt.date.today().year
+    ladder = [y - 1, y - 2, y - 3]
+    if DEFAULT_STUDY_YEAR not in ladder:
+        ladder.append(DEFAULT_STUDY_YEAR)
+    seen: set[int] = set()
+    return [yr for yr in ladder if not (yr in seen or seen.add(yr))]
+
+
+def world_import_totals_resolved(hs_code: str,
+                                 years: list[int] | None = None
+                                 ) -> tuple[list[dict], int | None]:
+    """أوّل سنةٍ تُعيد إجماليات عالم غير فارغة عبر السُّلَّم — (totals, year_used).
+
+    نداءٌ واحدٌ لكلّ سنةٍ حتى أوّل نتيجةٍ غير فارغة (كومتريد أولاً بالمخزن، فالكلفة
+    نداءٌ واحدٌ نموذجياً)؛ كلّها فارغة => ([], None) والمستدعي يفشل آمناً مفتوحاً
+    كاليوم (عطلٌ عابر لا يحجب سوقاً مشروعاً)."""
+    for yr in (years or coverage_year_ladder()):
+        totals = world_import_totals(hs_code, yr)
+        if totals:
+            return totals, yr
+    return [], None
+
+
 def rank_markets(hs_code: str, countries: list[dict] | None = None,
-                 year: int = 2022, max_workers: int = 16,
+                 year: int = DEFAULT_STUDY_YEAR, max_workers: int = 16,
                  world: bool | None = None) -> list[dict]:
     """رتّب الأسواق لرمز HS — rank markets best-first by a weighted, audited score.
 

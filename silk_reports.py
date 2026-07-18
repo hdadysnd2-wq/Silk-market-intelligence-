@@ -1470,9 +1470,28 @@ _CLIENT_VENDOR_NAMES_LATIN = (
 _CLIENT_VENDOR_NAMES_AR = ("إكسبلي", "فولزا")
 # اللغة التجارية العامة التي تحلّ محلّ أيّ اسم مزوّد على سطح العميل.
 _CLIENT_VENDOR_GENERIC = "خدمة التحقق المدفوعة من المشترين وجهات الاتصال"
+
+# تدقيق v2 (الموجة ١، تسريبات المشرف المؤكَّدة): بدل تعداد كل صيغة تشويش، **نطبّع
+# قبل المطابقة** ببناء نمطٍ متسامح — يسمح بمحارف تشويش بين كل حرفين (فراغ/
+# محارف عرض-صفري/تطويل/حركات). اللاتينية تتسامح مع الفراغ أيضاً («S e r p A p i»)،
+# والعربية تتسامح مع الحركات/التطويل فقط («إكْسبِلي») لا الفراغ — كي لا يطابق
+# النمطُ العربيُّ تسلسلَ حروفٍ عبر كلماتٍ مشروعةٍ مفصولةٍ بفراغ (إيجابية كاذبة).
+_ZW = "\u200b-\u200f\ufeff"                # zero-width + bidi marks
+_HARAKAT = "\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed"
+_OBF_LATIN = "[\\s\u0640" + _ZW + "]*"          # space + tatweel + zero-width
+_OBF_AR = "[\u0640" + _HARAKAT + _ZW + "]*"    # tatweel + harakat + zero-width (no space)
+
+
+def _tolerant(word: str, sep: str) -> str:
+    """نمطٌ يتسامح مع محارف التشويش (sep) بين كل حرفين من الكلمة."""
+    return sep.join(re.escape(ch) for ch in word)
+
+
 _CLIENT_VENDOR_RE = re.compile(
-    r"\b(?:" + "|".join(_CLIENT_VENDOR_NAMES_LATIN) + r")\b|"
-    + "|".join(_CLIENT_VENDOR_NAMES_AR), re.I)
+    r"(?<![A-Za-z])(?:"
+    + "|".join(_tolerant(w, _OBF_LATIN) for w in _CLIENT_VENDOR_NAMES_LATIN)
+    + r")(?![A-Za-z])|"
+    + "|".join(_tolerant(w, _OBF_AR) for w in _CLIENT_VENDOR_NAMES_AR), re.I)
 
 # أنماط الرفض — كلٌّ يُطابَق ضد نص التصدير المُجمَّع كاملاً (فقرات + خلايا
 # جداول). عربية تشغيلية + أسماء أدوات snake_case + كلمات إنجليزية تشغيلية

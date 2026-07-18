@@ -563,6 +563,11 @@ _JSON_FENCE_RE = re.compile(r"`{3,}|(?<![A-Za-z؀-ۿ])json(?=\s*[{\[])",
 # لعدّ نداءات الأدوات، فلا يُجرَّد هنا (بلاغ حي: تجريده صفّر العدّ في اللوحة).
 _TOOL_CALLS_SUFFIX_RE = re.compile(
     r"\s*\|\s*tool calls\s*:?\s*\d+\s*$", re.I)
+# تدقيق v2 (تسريب المشرف #7): الشكل العربي «نداءات أدوات: N» (أرقام لاتينية أو
+# عربية-هندية) كان يُبقى لأن `_mission_trace_summary` يقرأ الملخّص المُطهَّر؛ صار
+# يقرأ الخام (build_view) فيُجرَّد هنا لسطح العرض بلا تصفير عدّ اللوحة.
+_AR_TOOL_CALLS_RE = re.compile(
+    r"\s*[|]?\s*نداء(?:ات)?\s+أدوات?\s*[:：]\s*[0-9٠-٩۰-۹]+")
 # علامات بنية JSON داخلية للنموذج — وجود أيّها يعني تسريب سباكة لا نثر عميل.
 # تشمل مفاتيح الحكم بصيغتها الإنجليزية الخام وصيغتها المُعرَّبة (كان
 # _EN_FIELD_RE يحوّل verdict/confidence داخل JSON مسرَّب قبل التقاطه، فيظهر
@@ -599,6 +604,17 @@ _DATAPOINT_ANY_RE = re.compile(r"DataPoint\((?:'[^']*'|\"[^\"]*\"|[^)])*\)")
 # | 0.64 |") لكن ليس نثراً حرّاً بفاصلة فراغ ("confidence 0.64") — الشكل
 # الذي ظهر فعلياً في جواب الدردشة السياقية الحرّ (سطح جديد لهذا المُطهِّر).
 _EN_CONF_VALUE_RE = re.compile(r"\bconfidence\b(\s*[|:：]?\s*)(\d?\.\d{1,4})")
+# تدقيق v2 (الموجة ١، تسريب المشرف #3): الصيغة العربية الخام «ثقة=٠٫٦٤» (كلمة
+# «ثقة» + أرقام عربية-هندية + فاصلة عربية ٫) كانت تنجو من `_EN_CONF_VALUE_RE`
+# (إنجليزي فقط). تُلتقَط بأرقامٍ عربية أو لاتينية وتُصاغ بشرياً كنظيرتها.
+_AR_DIGIT_FOLD = {ord(c): str(i) for i, c in enumerate("٠١٢٣٤٥٦٧٨٩")}
+_AR_DIGIT_FOLD.update({ord(c): str(i) for i, c in enumerate("۰۱۲۳۴۵۶۷۸۹")})
+_AR_CONF_RE = re.compile(
+    r"ثقة\s*[=:：]\s*([0-9٠-٩۰-۹]+[.,٫][0-9٠-٩۰-۹]+)")
+# تدقيق v2 (تسريب المشرف #6): بادئة مفتاح بعثة مرقّمة «m3_pricing_scout» —
+# البادئة الرقمية «mN_» أمام مفتاحٍ لاتيني تُزال، فيبقى المفتاح ليُترجَم لاسمه
+# العربي عبر `_map_mission_keys` (لا مفتاح داخلي مرقّم في المُسلَّم).
+_MISSION_NUM_PREFIX_RE = re.compile(r"\bm\d+_(?=[a-z])")
 _EN_FIELD_RE = re.compile(r"\b(verdict|confidence)\b")
 _EN_FIELD_AR = {"verdict": "الحكم", "confidence": "درجة الثقة"}
 # رمز حكم آلة خام (GO/WATCH/NO-GO/CONDITIONAL-GO) داخل نثر حرّ كتبه الكاتب
@@ -779,12 +795,18 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     if not text:
         return text
     text = _strip_raw_json_leak(text)
+    # لاحقة عدّ نداءات الأدوات العربية (تِلِمتري) — تُجرَّد لسطح العرض؛ التتبّع
+    # يقرأ الخام قبل هنا (build_view) فلا يتأثّر عدّ اللوحة (تسريب المشرف #7).
+    text = _AR_TOOL_CALLS_RE.sub("", text)
     # حيِّد أيّ ريبر DataPoint(...) **كاملاً** قبل ترجمة الحقول (وإلا نصف-ترجمة):
     # تُستخرَج القيمة المقروءة، أو تُعلَن فجوة إن كانت None/فارغة (لا اختلاق).
     text = _DATAPOINT_REPR_RE.sub(_neutralize_datapoint_repr, text)
     # شبكة أمان: أي DataPoint(...) شاذ نجا من النمط المرن → فجوة معلنة كاملة.
     text = _DATAPOINT_ANY_RE.sub(_RAW_JSON_GAP, text)
     text = _strip_mission_key_prefix(text)
+    # تدقيق v2 (تسريب المشرف #6): بادئة «mN_» المرقّمة أمام مفتاح بعثة تُزال
+    # قبل تعيين المفاتيح، فيُترجَم المفتاح الباقي لاسمه العربي أدناه.
+    text = _MISSION_NUM_PREFIX_RE.sub("", text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
     text = _DP_TAG_RE.sub("", text)
     # §2.3 (أمر العمل الرئيس): مفتاح بعثة داخلي (snake_case) تسرَّب في المتن
@@ -804,6 +826,15 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
         from silk_narrative import confidence_phrase
         return f"درجة الثقة{m.group(1)}{confidence_phrase(float(m.group(2)))}"
     text = _EN_CONF_VALUE_RE.sub(_conf_value, text)
+
+    def _ar_conf_value(m: "re.Match") -> str:
+        from silk_narrative import confidence_phrase
+        raw = m.group(1).translate(_AR_DIGIT_FOLD).replace("٫", ".").replace(",", ".")
+        try:
+            return f"درجة الثقة {confidence_phrase(float(raw))}"
+        except ValueError:
+            return "درجة الثقة"
+    text = _AR_CONF_RE.sub(_ar_conf_value, text)
     text = _EN_FIELD_RE.sub(lambda m: _EN_FIELD_AR[m.group(1)], text)
     from silk_narrative import humanize_technical_note, verdict_ar
     text = _RAW_VERDICT_RE.sub(lambda m: verdict_ar(m.group(1).upper()), text)
@@ -1093,7 +1124,9 @@ def _deep_research_view(result: dict) -> dict | None:
             "label": _mission_label(key),
             "summary": clean_summary,
             "findings": [_dp(x) for x in f["findings"]],
-            "trace": _mission_trace_summary(f["failed"], clean_summary),
+            # التتبّع يُستخرَج من الملخّص **الخام** (تِلِمتري عدّ نداءات الأدوات
+            # يُجرَّد الآن من سطح العرض، تسريب المشرف #7) — لا من المُطهَّر.
+            "trace": _mission_trace_summary(f["failed"], f["summary"]),
         }
     analyst = dr.get("analyst") or {}
     analyst_report = _report_fields(analyst.get("report"))
