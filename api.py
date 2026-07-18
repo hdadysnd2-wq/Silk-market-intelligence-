@@ -265,6 +265,17 @@ def create_app():
         kind: str = "product"                 # "product" | "ingredients_label"
         media_type: str = "image/jpeg"        # jpeg/png/webp
 
+    class ClassifyRequest(BaseModel):
+        """طلب تصنيف HS (Wave 1) — {product, ingredients?, category?}.
+
+        خطوةٌ ما قبل التشغيل: تُعيد **اقتراح** HS6 (حتمي واثق، أو نداءُ كلود
+        مقيسٌ مُرسًى على المرجع، أو منتقٍ يدوي) — لا تبدأ تحليلًا ولا تحجز شيئًا
+        هنا؛ المستخدم يؤكّد الرمز ثم يدخل `/research`.
+        """
+        product: str | None = None
+        ingredients: list[str] | None = None      # من استخلاص الصورة إن وُجد
+        category: str | None = None
+
     class DeepenRequest(BaseModel):
         """طلب تعميق (المسار المدفوع) — the /deepen request body (wave 2).
 
@@ -421,9 +432,14 @@ def create_app():
         القيَم أعلامٌ بيئية علنية لا مفاتيح، فآمنٌ كشفها بلا مصادقة."""
         _rate_limit(request)
         import silk_product_intake as intake
+        import silk_hs_classifier as hsc
         from silk_market_ranker import _world_markets_enabled
+        # أعلام Wave 1 العلنية — الواجهة تُفعّل خطوة التصنيف/الاستشارة بحسبها.
         return _json({"image_intake": intake.enabled(),
-                      "world_markets": _world_markets_enabled()})
+                      "world_markets": _world_markets_enabled(),
+                      "hs_classifier": hsc.enabled(),
+                      "producer_advisory": _producer_advisory_enabled(),
+                      "require_hs6": _require_hs6()})
 
     def _intake_vision_allowed() -> tuple[bool, str]:
         """هل يُسمح نداء الرؤية الواحد؟ — (allowed, reason). يعكس منطق
@@ -478,6 +494,68 @@ def create_app():
         return _json(intake.intake_image(
             req.image_base64, req.media_type, req.kind,
             allow_vision=allow, blocked_reason=reason))
+
+    def _classify_ai_allowed() -> tuple[bool, str]:
+        """هل يُسمح نداءُ تصنيف HS الواحد؟ — (allowed, reason). نظيرُ
+        `_intake_vision_allowed`: نداءُ التصنيف مقيسٌ كأيّ نداء مدفوع (حجز
+        تفعيلة واحدة ذرّيًا من SILK_PAID_DAILY_CAP). الرفض يتدهور بصدق إلى
+        منتقٍ يدوي — لا اختلاق رمز. الدفتر الدولاري يُحجَز/يُصالَح في نقطة
+        النهاية (count + dollar، يُغلق نمط تدقيق #6 لهذا المسار أيضًا)."""
+        if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
+            return False, ("تصنيف كلود يتطلّب ANTHROPIC_API_KEY — "
+                           "اختر الرمز يدوياً.")
+        if _unprotected_paid_keys():
+            return False, ("ANTHROPIC_API_KEY مضبوط بلا SILK_API_KEY — "
+                           "تصنيف كلود محجوب (حارس 503) حتى تُضبط المصادقة.")
+        if not silk_usage.try_reserve_paid_calls(1):
+            return False, ("سقف الاستهلاك اليومي (SILK_PAID_DAILY_CAP) "
+                           "مستنفد — اختر الرمز يدوياً.")
+        return True, ""
+
+    @app.post("/classify_hs")
+    def classify_hs(req: ClassifyRequest, request: Request):
+        """صنّف منتجًا إلى HS6 كاقتراحٍ يؤكّده المستخدم — the HS-classifier step.
+
+        مسارٌ رخيصٌ أولًا: مُحلِّلٌ حتمي واثق => اقتراح فوري بلا كلود. ثقةٌ
+        منخفضة/فشل + الصمّام مُفعَّل + مسموح => نداءُ كلود **واحدٌ مقيس** (count
+        + dollar) مُرسًى على المرجع. غير ذلك => منتقٍ يدوي بلا اختلاق. لا يبدأ
+        أيّ تحليل ولا يحجز ميزانيةَ بحث — الاقتراح فقط.
+        """
+        _require_key(request)
+        _rate_limit(request)
+        import silk_hs_classifier as hsc
+        product = (req.product or "").strip()
+        if not product:
+            raise HTTPException(status_code=422, detail={
+                "error": "product_required", "reason": "مرّر اسم منتج."})
+        # المسار الحتمي الرخيص (لا نداء كلود إن كفى المُحلِّل).
+        if not hsc.needs_classifier(product):
+            return _json(hsc.classify(product, allow_claude=False))
+        # ثقةٌ منخفضة/فشل — نداءُ كلود إن كان الصمّام مفعّلًا ومسموحًا.
+        if not hsc.enabled():
+            return _json(hsc.manual(product))
+        allow, reason = _classify_ai_allowed()      # يحجز تفعيلةً واحدة (count)
+        if not allow:
+            return _json(hsc.manual(product, note=reason))
+        _expected = float(
+            os.environ.get("SILK_HS_CLASSIFY_EXPECTED_USD", "0.02") or "0.02")
+        if not silk_usage.try_reserve_usd(_expected):   # حجز دولاري ذرّي
+            return _json(hsc.manual(
+                product, note="سقف الميزانية الدولارية اليومي مستنفد — "
+                              "اختر الرمز يدوياً."))
+        import silk_context
+        silk_context.begin_data_counter()
+        try:
+            out = hsc.classify(product, ingredients=req.ingredients,
+                               category=req.category, allow_claude=True)
+        finally:
+            # صالِح الحجز الدولاري بالتكلفة الفعلية من الرموز (لا تقدير معلّق).
+            econ = silk_context.data_counter() or {}
+            from silk_pricing import estimate_cost_usd
+            actual = float(estimate_cost_usd(
+                econ.get("llm_usage") or {}).get("total_usd") or 0.0)
+            silk_usage.reconcile_usd(reserved=_expected, actual=actual)
+        return _json(out)
 
     @app.get("/index")
     def index(request: Request, q: str = "", limit: int = 20):
@@ -697,6 +775,16 @@ def create_app():
             return False, ("سقف الاستهلاك اليومي (SILK_PAID_DAILY_CAP) "
                            "مستنفد — أعد المحاولة غداً أو ارفع السقف.")
         return True, ""
+
+    def _require_hs6() -> bool:
+        """صمّام البوّابة الصلبة (Wave 1) — SILK_REQUIRE_HS6=1 يرفض بدءَ /research
+        برمز HS فارغ (422). افتراضيًا مُطفأ => السلوك كاليوم (تُقبَل فجوة معلنة)."""
+        return os.environ.get("SILK_REQUIRE_HS6", "0").strip() == "1"
+
+    def _producer_advisory_enabled() -> bool:
+        """صمّام استشارة بلد المنشأ (Wave 1) — SILK_PRODUCER_ADVISORY=1 يفعّل
+        تحذيرَ «سوق منتِجة» (422 حتى موافقة). افتراضيًا مُطفأ => السلوك كاليوم."""
+        return os.environ.get("SILK_PRODUCER_ADVISORY", "0").strip() == "1"
 
     def _market_in_coverage(hs_code, iso3: str) -> tuple[bool, bool]:
         """هل السوق ضمن التغطية لهذا الرمز؟ — (covered, determinable).
@@ -931,6 +1019,10 @@ def create_app():
         allow_degraded: bool = False
         resume: int | None = None
         async_run: bool = False
+        # استشارة بلد المنشأ (Wave 1): موافقةٌ صريحة على إكمال دراسةِ سوقٍ من
+        # أكبر مصدّري هذا الرمز عالميًا. غيابها + سوقٌ منتِجة + الصمّام مُفعَّل
+        # => 422 استشاري قبل أيّ حجز؛ إرسالها بعد موافقة المستخدم يُكمِل التشغيلة.
+        producer_ack: bool = False
 
     def _research_budget_status(economics: dict) -> dict:
         """حالة الميزانية على مستوى التشغيلة كاملة — P1، حادثة نفاد
@@ -1323,6 +1415,39 @@ def create_app():
                 "error": f"unknown or ambiguous market {market_name!r}",
                 "suggestions": suggestions})
 
+        # ── تحديد رمز HS مرّةً واحدة قبل أيّ بوّابة/حجز (Wave 1) ──────────────
+        # نظامٌ عام: كلُّ البوّابات (التغطية، بلد المنشأ، الحجز الدولاري) تعمل
+        # على رمزٍ محسوم — لا دراسةَ على HS مجهول. صريحٌ/مخزَّن أولًا، وإلا
+        # المُحلِّل الحتمي (لا اختلاق رمز عند فشله — فجوة معلنة في hs_note).
+        hs_code = req.hs_code or stored_request.get("hs_code")
+        hs_note = None
+        if not hs_code and product:
+            from silk_hs_resolver import resolve as resolve_hs
+            dp = resolve_hs(product)
+            hs_code = dp.value
+            if hs_code is None:
+                hs_note = dp.note  # فجوة معلنة — لا اختلاق رمز HS
+
+        # بوّابة HS الصلبة (Wave 1، عائلة unresolved-hs-silent-spend): رفضُ
+        # الحجز/الإنفاق ما دام hs6 فارغًا — 422 **قبل** أيّ تفعيلة أو دولار.
+        # تُغلق حادثةَ الفيتوتشيني (أُنفِق $ والغلاف «—» والركيزة التجارية فجوة
+        # حرجة): لا تعود ممكنة حين يُفعَّل الصمّام. المُصنِّف (`/classify_hs`)
+        # يمنع الوصولَ لهنا فارغًا في التدفّق. مُطفأ افتراضيًا (SILK_REQUIRE_HS6)
+        # => السلوك كاليوم. يُتخطّى عند الاستئناف (رمزُه محسومٌ وقت الإنشاء).
+        if req.resume is None and not hs_code and _require_hs6():
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "unresolved_hs_blocked",
+                f"رُفض بدءُ بحثٍ برمز HS غير محسوم لمنتج {product!r} "
+                f"(السوق {market_ref.iso3})",
+                context={"product": product, "market_iso3": market_ref.iso3,
+                         "hs_note": hs_note})
+            raise HTTPException(status_code=422, detail={
+                "error": "unresolved_hs",
+                "message": "تعذّر تحديد رمز HS لهذا المنتج — صنِّفه أولًا "
+                           "(/classify_hs) أو اختر الرمز يدويًا قبل بدء البحث.",
+                "hs_note": hs_note})
+
         # بوابة «خارج التغطية» (اتفاق المالك) — تسبق الجهوزية/الحجز: مع تفعيل
         # تغطية العالم، سوقٌ ليس Tier-1 ولا ضمن مجموعة أكبر مستوردي هذا الرمز
         # (Tier-2 الديناميكية) يُعاد برسالةٍ صادقة «تواصل معنا لإضافتها» بدل
@@ -1330,26 +1455,55 @@ def create_app():
         # الصمّام مُطفأ => السلوك كاليوم (أيّ دولة تعمل، فجوات معلنة) بلا انحدار.
         from silk_market_ranker import _world_markets_enabled
         if _world_markets_enabled():
-            _cov_hs = req.hs_code or stored_request.get("hs_code")
-            if not _cov_hs and product:
-                from silk_hs_resolver import resolve as _resolve_hs_cov
-                _cov_hs = _resolve_hs_cov(product).value
             _covered, _determinable = _market_in_coverage(
-                _cov_hs, market_ref.iso3)
+                hs_code, market_ref.iso3)
             if _determinable and not _covered:
                 import silk_ops_log
                 silk_ops_log.record_error(
                     "out_of_coverage_demand",
                     f"طلب بحث لسوقٍ خارج التغطية الحالية: "
                     f"{market_ref.name_en} ({market_ref.iso3}) "
-                    f"لرمز HS {_cov_hs}",
+                    f"لرمز HS {hs_code}",
                     context={"product": product,
                              "market_iso3": market_ref.iso3,
-                             "hs_code": _cov_hs})
+                             "hs_code": hs_code})
                 raise HTTPException(status_code=422, detail={
                     "error": "out_of_coverage",
                     "message": "هذه السوق خارج التغطية الحالية — "
                                "تواصل معنا لإضافتها"})
+
+        # استشارة بلد المنشأ (Wave 1، قاعدة عامّة مبنيّة على البيانات): سوقٌ من
+        # أكبر مصدّري هذا الرمز عالميًا => تحذيرٌ استشاري (422) حتى موافقةٍ صريحة
+        # (`producer_ack`). زيرو نداء مدفوع (كلود/سقف) — كومتريد فقط بميزانيته.
+        # الاستشارة تُسجَّل (shown/consent). الصمّام مُطفأ (SILK_PRODUCER_ADVISORY)
+        # => السلوك كاليوم. يُتخطّى عند الاستئناف (وافق المستخدم وقت الإنشاء).
+        if req.resume is None and hs_code and _producer_advisory_enabled():
+            import silk_ops_log
+            import datetime as _dt
+            from silk_market_ranker import is_top_world_exporter
+            _is_top, _top = is_top_world_exporter(
+                hs_code, market_ref.iso3, _dt.date.today().year - 1)
+            if _is_top and not req.producer_ack:
+                silk_ops_log.record_error(
+                    "producer_advisory_shown",
+                    f"استشارةُ بلد المنشأ: {market_ref.iso3} من أكبر مصدّري "
+                    f"HS {hs_code} عالميًا — دراسةُ دخولها تنافسية جدًّا",
+                    context={"product": product,
+                             "market_iso3": market_ref.iso3, "hs_code": hs_code,
+                             "top_exporters": [t["iso3"] for t in _top]})
+                raise HTTPException(status_code=422, detail={
+                    "error": "producer_country_advisory",
+                    "message": "⚠ هذه الدولة من أكبر مصدّري هذا المنتج عالميًا "
+                               "— دراسة دخولها تنافسية جدًّا. أكمل؟",
+                    "top_exporters": [t["iso3"] for t in _top],
+                    "needs_ack": True})
+            if _is_top and req.producer_ack:
+                silk_ops_log.record_error(
+                    "producer_advisory_consent",
+                    f"موافقةٌ صريحة على دراسة {market_ref.iso3} (من أكبر "
+                    f"مصدّري HS {hs_code} عالميًا)",
+                    context={"product": product,
+                             "market_iso3": market_ref.iso3, "hs_code": hs_code})
 
         # بوابة ما قبل التشغيل بعد التحقق من صحة الإدخال (422 على خطأ
         # الطالب يسبق 409 على جهوزية الخادم — خطأ العميل يستحق أن يُشرَح
@@ -1386,15 +1540,7 @@ def create_app():
                           f"أُنفِق {round(silk_usage.usd_spent_today(), 2)}$ اليوم؛ "
                           f"تشغيلة /research متوقَّعة بنحو {_expected_usd}$."})
 
-        hs_code = req.hs_code or stored_request.get("hs_code")
-        hs_note = None
-        if not hs_code:
-            from silk_hs_resolver import resolve as resolve_hs
-            dp = resolve_hs(product)
-            hs_code = dp.value
-            if hs_code is None:
-                hs_note = dp.note  # فجوة معلنة — لا اختلاق رمز HS
-
+        # (رمز HS + hs_note حُسِما أعلاه قبل البوّابات والحجز — Wave 1.)
         ai_ok, ai_note = _free_ai_extras_allowed()
         prefs = _clean_agent_prefs(req.agent_prefs)
         if prefs is None:

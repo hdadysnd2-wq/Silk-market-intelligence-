@@ -152,6 +152,20 @@ _TEST_ANCHORS = [
       "def test_flag_off_no_coverage_guard_any_country_works_todays_way"]),
     (22, "tests/test_regression_registry.py",
      ["def _guard_out_of_coverage_thin_study"]),
+    # البند ٢٣ — الفيتوتشيني: لا حجز/إنفاق برمز HS غير محسوم؛ البوّابة الصلبة
+    # + المُصنِّف المقيس + الحارس السلوكي في السجل.
+    (23, "tests/test_wave1_hs_classifier.py",
+     ["def test_research_hard_gate_422_on_empty_hs6_no_reservation",
+      "def test_endpoint_low_confidence_is_metered_count_from_the_cap"]),
+    (23, "tests/test_regression_registry.py",
+     ["def _guard_unresolved_hs_silent_spend"]),
+    # البند ٢٤ — الحارسان قاعدتان مبنيّتان على البيانات لا حالتا منتج؛ قفل
+    # التعميم (≥٤ عيّنات) + غياب الترميز الصلب + الحارس السلوكي في السجل.
+    (24, "tests/test_wave1_hs_classifier.py",
+     ["def test_classifier_and_advisory_paths_have_no_hardcoded_product_or_iso_or_hs",
+      "def test_producer_advisory_generalizes_from_data_not_names"]),
+    (24, "tests/test_regression_registry.py",
+     ["def _guard_hardcoded_product_rule"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

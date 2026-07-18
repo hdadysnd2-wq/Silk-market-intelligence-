@@ -385,6 +385,61 @@ def _guard_intake_no_silent_guess():
         assert f"def {fn}" in lock, f"قفل الميزة ب مفقود: {fn}"
 
 
+def _guard_unresolved_hs_silent_spend():
+    """LESSONS ٢٣ — حادثة الفيتوتشيني: دراسةٌ مدفوعةٌ بدأت برمز HS غير محسوم.
+    الحارس السلوكي: (١) المُصنِّف لا يختلق (منتجٌ مجهول => منتقٍ يدوي، hs6=None،
+    ثقة 0.0)؛ (٢) `_validate` يرفض فصلًا مستبعَدًا وما ليس رمزًا (عقد عدم اختلاق)؛
+    (٣) بوّابة `unresolved_hs` موجودةٌ وتسبق حجز الدولار في `/research`."""
+    import silk_hs_classifier as hsc
+    out = hsc.classify("qwxzptvbmzzz منتج لا وجود له", allow_claude=False)
+    assert out["hs6"] is None and out["status"] == "manual" and \
+        out["confidence"] == 0.0, out
+    assert hsc._validate({"hs6": "270900", "confidence": 0.9}) is None  # فصل ٢٧
+    assert hsc._validate({"hs6": "زائف", "confidence": 0.9}) is None    # ليس رمزًا
+    api = _read("api.py")
+    assert "def _require_hs6" in api and '"error": "unresolved_hs"' in api, \
+        "بوّابة hs6 الصلبة غائبة"
+    assert "def classify_hs" in api and "def _classify_ai_allowed" in api, \
+        "نقطة/حارس التصنيف غائبة"
+    gate = api.index('"error": "unresolved_hs"')
+    reserve = api.index("try_reserve_usd(_expected_usd)")
+    assert gate < reserve, "بوّابة hs6 يجب أن تسبق حجز الدولار (لا إنفاق على رمز مجهول)"
+
+
+def _guard_hardcoded_product_rule():
+    """LESSONS ٢٤ — الحارسان (مُصنِّف HS + استشارة بلد المنشأ) قاعدتان مبنيّتان
+    على البيانات لا حالتا منتج (نفس عائلة «التمور السعودية»). الحارس: (١) منطقهما
+    يخلو من أيّ منتج/ISO/HS من العيّنات، والعتبة config-driven؛ (٢) سلوكيًا القاعدة
+    تُعمَّم من ترتيب البيانات — عيّنةٌ مُرقَّعةٌ صناعيّةٌ تُطلق/تصمت بالعتبة."""
+    import inspect
+    import unittest.mock as _mock
+    import silk_hs_classifier as hsc
+    import silk_market_ranker as ranker
+    blob = inspect.getsource(hsc)
+    for fn in (ranker.world_export_totals, ranker.top_world_exporters,
+               ranker.is_top_world_exporter, ranker._producer_advisory_topn):
+        blob += "\n" + inspect.getsource(fn)
+    for tok in ("معكرونة", "pasta", "fettuccine", "تمور", "dates", "olive",
+                "عسل", "honey", "ITA", "ESP", "GBR", "ARE",
+                "190219", "150910", "080410", "040900"):
+        if tok.isascii():
+            assert not re.search(r"(?<![A-Za-z0-9])" + re.escape(tok)
+                                 + r"(?![A-Za-z0-9])", blob), \
+                f"ترميزٌ صلبٌ في منطق الحارس: {tok}"
+        else:
+            assert tok not in blob, f"ترميزٌ صلبٌ في منطق الحارس: {tok}"
+    assert "SILK_PRODUCER_ADVISORY_TOPN" in blob, "العتبة ليست config-driven"
+
+    # سلوكي: القاعدة من البيانات — رموزٌ صناعيّةٌ بحتة (لا اسم حقيقي).
+    def _fake(hs_code, year):
+        return [{"iso3": c, "m49": "0", "total_usd": 9 - i}
+                for i, c in enumerate(["XXA", "XXB", "XXC"])]
+    with _mock.patch.object(ranker, "world_export_totals", side_effect=_fake):
+        top, _l = ranker.is_top_world_exporter("AAAAAA", "XXA", 2023, 2)
+        bot, _l2 = ranker.is_top_world_exporter("AAAAAA", "XXC", 2023, 2)
+    assert top is True and bot is False, "القاعدة لا تتبع ترتيب البيانات"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -413,6 +468,8 @@ _LESSONS = {
     20: _guard_world_tier2_no_fabrication,  # الميزة أ — لا تلفيق فئة-٢/تفجّر ميزانية
     21: _guard_intake_no_silent_guess,      # الميزة ب — لا اختلاق منتج من صورة
     22: _guard_out_of_coverage_thin_study,  # الميزة أ — سوق خارج التغطية لا دراسة هزيلة
+    23: _guard_unresolved_hs_silent_spend,  # Wave 1 — الفيتوتشيني: لا إنفاق برمز HS مجهول
+    24: _guard_hardcoded_product_rule,      # Wave 1 — الحارسان قاعدتان مبنيّتان على البيانات
 }
 
 _TRAPS = [
