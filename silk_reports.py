@@ -120,6 +120,21 @@ def _first_url(*texts: object) -> str:
     return "—"
 
 
+def _evidence_url(note: object, source: object, value: object) -> str:
+    """رابط عمود «الرابط» في سجل الأدلة (§6، أمر العمل الرئيس):
+    ١) الأولوية لرابطٍ **محدّد** مرصودٍ في نصّ الحقيقة/الملاحظة (نتيجة بحثٍ مثلاً)؛
+    ٢) وإلا الرابطُ العموميُّ الرسميُّ للمصدر المسمّى من سجلّ `silk_data_layer`
+       (UN Comtrade → comtradeplus.un.org …) — رابطٌ حقيقيٌّ للتحقق من المجموعة؛
+    ٣) وإلا «—».
+    لا اختلاق: «—» صادقةٌ حين لا رابطَ محدّدٌ ولا مصدرٌ عموميٌّ معروف. لا نبحث
+    في اسم المصدر عن رابط (لن يحمله)، فالبحثُ عن الرابط المحدّد في النصّ فقط."""
+    scraped = _first_url(note, value)
+    if scraped != "—":
+        return scraped
+    from silk_data_layer import public_source_url
+    return public_source_url(source) or "—"
+
+
 def _clean_source_label(s: object) -> str:
     """اسم مصدر نظيف لسجل الأدلة (§2/§6) — يُزال وسم «(Claude tool-use)»
     وأي بادئة وكيل داخلية، فيبقى اسم المصدر العمومي (UN Comtrade …) وحده.
@@ -1381,7 +1396,7 @@ def _docx_technical_appendix(doc, dr: dict) -> None:
             rows.append([
                 _trim_sentence(f.get("value"), 240),
                 _clean_source_label(f.get("source")),
-                _first_url(f.get("note"), f.get("source"), f.get("value")),
+                _evidence_url(f.get("note"), f.get("source"), f.get("value")),
                 f.get("retrieved_at") or "—",
                 _evidence_badge(f.get("confidence"))])
     if not rows:
@@ -2008,18 +2023,25 @@ def _client_evidence_appendix(doc, dr: dict) -> None:
             if fact is None:  # بند عديم المعنى/غير قابل للعرض — يُسقَط
                 continue
             src = str(f.get("source") or "—")
+            # §6: في تقرير العميل نعرض **فقط** الرابط العمومي الرسمي للمصدر من
+            # السجلّ (لا رابطًا مكشوطًا من نصٍّ قد يشير لأيّ نطاق — بحث/مدفوع).
+            # يُحسَب قبل تحييد الاسم؛ مصدرٌ مدفوع/أداة => لا رابط عموميّ => «—»
+            # (فلا تسريبَ نطاقٍ ولا رابطٍ مختلَق).
+            from silk_data_layer import public_source_url
+            url = public_source_url(src) or "—"
             if _client_forbidden_hits(src):  # لا اسم أداة في عمود المصدر
                 src = "سجلّات رسمية"
-            rows.append([fact, src, f.get("retrieved_at") or "—",
+            rows.append([fact, src, url, f.get("retrieved_at") or "—",
                         _evidence_badge(f.get("confidence"))])
     if not rows:
         doc.add_paragraph("لا بنود أدلة مفصّلة في هذا التقرير.")
         return
     doc.add_paragraph(
-        "كل بند أدناه هو حقيقة موثّقة بمصدرها وتاريخها، أساس السرد أعلاه — "
-        "للتحقّق المباشر. رمز الأدلة: ✓ موثّق مباشرةً · ◐ تقديري مسنَد · "
-        "○ يحتاج تحققاً.", style="Intense Quote")
-    _add_table(doc, ["الحقيقة", "المصدر", "تاريخ الجمع", "قوة الدليل"],
+        "كل بند أدناه هو حقيقة موثّقة بمصدرها ورابطها العمومي وتاريخها، أساس "
+        "السرد أعلاه — للتحقّق المباشر. رمز الأدلة: ✓ موثّق مباشرةً · ◐ تقديري "
+        "مسنَد · ○ يحتاج تحققاً.", style="Intense Quote")
+    _add_table(doc,
+               ["الحقيقة", "المصدر", "الرابط", "تاريخ الجمع", "قوة الدليل"],
                rows[:80])
 
 
