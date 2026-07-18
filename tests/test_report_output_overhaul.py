@@ -309,8 +309,16 @@ def test_pdf_produced_when_engine_available(tmp_path):
 
 
 def _measure_pdf_lines(pdf_path):
-    """أرجِع (عرض_الصفحة، [(x0,x1) لكل سطر]) عبر pdfplumber أو
-    `pdftotext -bbox`، أو None إن لم تتوفّر أداة قياس. النقاط بوحدة النقطة."""
+    """أرجِع (عرض_الصفحة، [(x0,x1,text) لكل **سطر مُجمَّع** على y]) عبر
+    pdfplumber أو pymupdf/fitz، أو None إن لم تتوفّر أداة قياس مجمِّعة.
+
+    **معايرةٌ (أمر المُشرِف، الخيار ٣):** الاحتياطيّ القديم `pdftotext -bbox`
+    كان يعدّ **كلّ كلمةٍ سطرًا** بلا تجميعٍ على y، فينهار قياسُ حافة اليمين
+    (كلماتُ سطرٍ واحدٍ تتوزّع عبر كامل العرض فتبدو «غير منحازة»). أثبتت معايرةُ
+    `tools/rtl_calibration.py` أنّه لا يميّز A(jc=start) من B(jc=right) => قياسٌ
+    مصنوع. حُذِف نهائيًّا؛ القياسُ الآن يُجمِّع الأسطر على y حصرًا (pdfplumber
+    أو fitz) ويحمل نصَّ كلّ سطر (لعقد «صفرُ يسارٍ عربيّ»). غيابُ كليهما =>
+    None، فتفشل البوّابةُ بصوتٍ عالٍ تحت الاعتماد."""
     try:
         import pdfplumber  # type: ignore
         from collections import defaultdict
@@ -323,35 +331,26 @@ def _measure_pdf_lines(pdf_path):
                 for w in page.extract_words():
                     rows[round(w["top"])].append(w)
                 for ws in rows.values():
+                    ws.sort(key=lambda w: w["x0"])
                     lines.append((min(w["x0"] for w in ws),
-                                  max(w["x1"] for w in ws)))
+                                  max(w["x1"] for w in ws),
+                                  " ".join(w["text"] for w in ws)))
         return pw, lines
-    except Exception:  # noqa: BLE001 — جرّب pdftotext -bbox
+    except Exception:  # noqa: BLE001 — جرّب fitz/pymupdf (تجميعٌ صحيحٌ للأسطر)
         pass
-    import shutil
-    import subprocess
-    import re as _re
-    if not shutil.which("pdftotext"):
-        return None
-    try:
-        xhtml = subprocess.run(
-            ["pdftotext", "-bbox", pdf_path, "-"],
-            capture_output=True, text=True, timeout=60).stdout
-    except Exception:  # noqa: BLE001
-        return None
-    pw_m = _re.search(r'<page width="([\d.]+)"', xhtml)
-    pw = float(pw_m.group(1)) if pw_m else None
-    words = [(float(a), float(b)) for a, b in _re.findall(
-        r'<word xMin="([\d.]+)" yMin="[\d.]+" xMax="([\d.]+)"', xhtml)]
-    # التجميع على أساس y غير متاح هنا مباشرة؛ نكتفي بحدود الكلمات كأسطر مفردة
-    # (كافٍ لقياس حافة اليمين مقابل حدّ الكتلة). كل كلمة = مقطع (x0,x1).
-    return (pw, [(x0, x1) for x0, x1 in words]) if pw else None
+    import tools.rtl_calibration as _rtlcal  # نفس منطق القياس (fitz) — مصدرٌ واحد
+    return _rtlcal.measure_lines(pdf_path)
 
 
-def test_pdf_rtl_geometry_and_arabic_font(tmp_path):
+def test_pdf_rtl_geometry_and_arabic_font(tmp_path, capsys):
     """§4 (الفحص الحاسم لانقلاب jc المنطقي على مستوى الـPDF المُصيَّر) + §3
-    (تشكيل عربي): الأسطر القصيرة المتعرّجة غير الموسَّطة يجب أن تنحاز يميناً
-    (حافتها اليمنى ضمن 10 نقاط من حدّ الكتلة اليمين ≥95٪)، وخطّ عربي متوفّر.
+    (تشكيل عربي) — **عقد المُشرِف: صفرُ محاذاةٍ يسارًا للأسطر العربية.**
+
+    fixture-A أثبت أنّ الوصفة تُصيَّر 100% يمينًا، فأيّ سطرٍ **عربيّ الأغلبية**
+    مُحاذًى يسارًا (حافتُه اليمنى أبعدُ من 10 نقاط عن حدّ الكتلة) = عيبٌ حقيقيّ.
+    الأسطرُ لاتينيّةُ الأغلبية (أسماءُ مصادر، تواريخ، رموزُ HS، أرقام) تُستثنى.
+
+    **الخُلاصةُ تُطبَع دائمًا** (التعديل ٢) — الأخضرُ مفحوصٌ لا مُستنتَج.
 
     **مُلزَم في خطّ النشر/التجهيز** (SILK_PDF_ACCEPTANCE=1): يفشل بصوتٍ عالٍ
     إن غاب الخطّ العربي أو محرّك التحويل أو أداة القياس — لا يبقى مُتخطّى
@@ -359,6 +358,7 @@ def test_pdf_rtl_geometry_and_arabic_font(tmp_path):
     import os
     import pytest
     import silk_reports
+    import tools.rtl_calibration as rtlcal
     require = os.environ.get("SILK_PDF_ACCEPTANCE") == "1"
 
     def _gate(reason):
@@ -377,18 +377,58 @@ def test_pdf_rtl_geometry_and_arabic_font(tmp_path):
         _gate(f"تعذّر تحويل PDF: {e}")
     measured = _measure_pdf_lines(pdf)
     if measured is None:
-        _gate("لا أداة قياس PDF (pdfplumber/pdftotext) متاحة")
-    pw, segs = measured
-    ragged = [(x0, x1) for x0, x1 in segs
-              if (x1 - x0) < 0.40 * pw                      # قصير
-              and abs(((x0 + x1) / 2) - pw / 2) > 0.05 * pw]  # غير موسَّط
-    assert len(ragged) >= 3, "أسطر قصيرة متعرّجة قليلة — العيّنة غير ممثِّلة"
-    block_right = sorted(x1 for _, x1 in segs)[int(len(segs) * 0.90)]
-    flush_right = sum(1 for _, x1 in ragged if block_right - x1 <= 10)
-    frac = flush_right / len(ragged)
-    assert frac >= 0.95, (
-        f"انحياز يميني للأسطر القصيرة {frac:.0%} < 95٪ — محاذاة jc منقلبة "
-        "(تُصيَّر يساراً) أو RTL غير فاعل في الـPDF")
+        _gate("لا أداة قياس PDF مجمِّعة للأسطر (pdfplumber/pymupdf) متاحة")
+    pw, lines = measured
+    d = rtlcal.classify(pw, lines)
+    digest = rtlcal.format_digest("§4 real-report RTL classification", d)
+    with capsys.disabled():           # اطبع الخُلاصة دائمًا — حتى عند الأخضر
+        print("\n" + digest)
+    assert d["arabic_right"] >= 3, (
+        "أسطر عربية قصيرة متعرّجة قليلة — العيّنة غير ممثِّلة\n" + digest)
+    assert d["arabic_left"] == 0, (
+        f"{d['arabic_left']} سطرًا عربيّ الأغلبية مُحاذًى يسارًا — محاذاة jc "
+        "منقلبة (تُصيَّر يساراً) أو RTL غير فاعل في الـPDF\n" + digest)
+
+
+def test_rtl_measurer_calibration_ab(tmp_path):
+    """الحارسُ الدائم للمقياس (التعديل ٣): من نفس المحتوى العربي، fixture-A
+    (`jc=start`) يجب أن يمرّ عقدَ «صفرُ يسارٍ عربيّ»، وfixture-B (`jc=right`)
+    يجب أن **يُلتقَط** (يسارٌ عربيّ > 0). يحرس ضدّ ترقيةٍ صامتةٍ لـLibreOffice
+    تقلب معالجة jc — بها اكتُشِف هذا الأثر أصلاً."""
+    import os
+    import pytest
+    import silk_reports
+    import tools.rtl_calibration as rtlcal
+    require = os.environ.get("SILK_PDF_ACCEPTANCE") == "1"
+
+    def _gate(reason):
+        if require:
+            pytest.fail(f"بوابة معايرة المقياس مُلزَمة وفشل شرطها: {reason}")
+        pytest.skip(reason)
+
+    if silk_reports._find_soffice() is None:  # noqa: SLF001
+        _gate("محرّك تحويل PDF غائب")
+    try:
+        import fitz  # noqa: F401
+    except Exception:  # noqa: BLE001
+        _gate("pymupdf غائب — لا مقياسَ مجمِّعًا للأسطر")
+
+    digests = {}
+    for label, jc in (("A(jc=start)", "start"), ("B(jc=right)", "right")):
+        try:
+            measured = rtlcal.measure_lines(rtlcal.to_pdf(rtlcal.build_fixture(jc)))
+        except RuntimeError as e:
+            _gate(f"تعذّر تحويل fixture-{jc}: {e}")
+        if measured is None:
+            _gate("fitz لم يُنتِج قياسًا")
+        digests[label] = rtlcal.classify(*measured)
+        print("\n" + rtlcal.format_digest(f"calibration {label}", digests[label]))
+
+    a, b = digests["A(jc=start)"], digests["B(jc=right)"]
+    assert a["arabic_left"] == 0 and a["arabic_right"] >= 3, (
+        f"fixture-A (الوصفة الصحيحة) لم تمرّ عقدَ صفرِ اليسار: {a}")
+    assert b["arabic_left"] > 0, (
+        f"fixture-B (jc=right المقلوب) لم يُلتقَط — المقياس أعمى عن الانقلاب: {b}")
 
 
 # ── §8 بوابة الأسلوب الحتمية ────────────────────────────────────────────────

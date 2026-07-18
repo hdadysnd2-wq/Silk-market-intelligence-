@@ -85,7 +85,7 @@ def test_cover_wordmark_is_real_not_bracketed_placeholder(monkeypatch):
     render_docx(view, path)
     text = docx_all_text(path)
     assert "[شعار سِلك]" not in text and "شعار سِلك" not in text
-    assert "سِلك" in text
+    assert "سلك" in text  # Wave 2: تشكيل آمن (بلا كسرة مُركَّبة)
 
 
 def test_page_header_and_footer_present(monkeypatch):
@@ -101,7 +101,7 @@ def test_page_header_and_footer_present(monkeypatch):
     header_text = "\n".join(p.text for p in section.header.paragraphs)
     footer_text = "\n".join(p.text for p in section.footer.paragraphs)
     assert "تمور" in header_text
-    assert "سِلك لذكاء الأسواق" in footer_text
+    assert "سلك لذكاء الأسواق" in footer_text  # Wave 2
 
 
 def test_table_header_row_shaded_with_primary_color(monkeypatch):
@@ -146,7 +146,7 @@ def test_sample_docx_regenerated_reflects_new_branding_and_structure():
     assert "[شعار سِلك]" not in text  # §7: لا نصّ نائب مُقوَّس
     assert "منهجية البحث ونطاقه" in text
     assert "التوصيات الاستراتيجية" in text
-    assert "سِلك لذكاء الأسواق" in text
+    assert "سلك لذكاء الأسواق" in text  # Wave 2: تشكيل آمن
 
 
 # ── ١١.٢أ: تصليب وكيل المنافسين — تحقّق ضد إسبانيا ────────────────────

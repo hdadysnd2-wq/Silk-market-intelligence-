@@ -1193,6 +1193,9 @@ def _deep_research_view(result: dict) -> dict | None:
         _strip_internal_plumbing(report_out.get("report")))
     return {
         "market": result.get("market"),
+        # Wave 2: اسم المنتج المدروس يصل عرض البحث كي يشتقّ منه المُصدِّرُ سطرَ
+        # إخلاء المسؤولية بارامتريًّا (لا «التمور السعودية» مثبَّتة) وفلترةَ الجغرافيا.
+        "product": result.get("product"),
         "trace_id": dr.get("trace_id"),
         # لافتة التدهور (بلاغ حي، بوابة ما قبل التشغيل api.py) — تصل هنا كي
         # يحملها كل مشتق (docx/مختصر/طرفية/لوحة) لا سطر ملاحظة وحيد مدفون.

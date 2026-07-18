@@ -505,6 +505,58 @@ def _guard_readiness_before_spend():
     assert hasattr(silk_prerun, "advisories_enabled")
 
 
+def _guard_leads_table_hygiene():
+    """LESSONS ٢٨ — عنقود أوّل PDF: جدولُ روابط العميل نُقِّي عند الحدّ. الحارس
+    السلوكي على المدوّنة القانونية (فيتوتشيني): جغرافيا خاطئة/نثر/حشو تُسقَط،
+    الصالح يبقى، وسطر الإخلاء بارامتري بالمنتج (لا «التمور السعودية»)."""
+    import silk_render
+    import silk_reports
+    from canonical_fettuccine import fettuccine_research_blob
+    md = silk_reports.render_markdown(
+        silk_render.build_view(fettuccine_research_blob()))
+    seg = md[md.find("قائمة مستوردين"):]
+    assert "Pastificio Milano" in seg          # صالح — يبقى
+    assert "NutsWorld" not in seg              # جغرافيا أمريكية — يُسقَط
+    assert "Italy imports a significant" not in seg   # نثر — يُسقَط
+    assert "Anonimo Distribuzione" not in seg  # حشو — يُسقَط
+    assert "فيتوتشيني" in seg and "التمور السعودية" not in md
+
+
+def _guard_report_arabic_shape_a4():
+    """LESSONS ٢٩ — العلامة «سِلك» كُسِرت «ِس لك» + الصفحة Letter لا A4. الحارس
+    السلوكي: docx يحوي «سلك» متّصلة بلا كسرة، بمقاس A4 (210×297مم)."""
+    import silk_render
+    import silk_reports
+    from canonical_fettuccine import fettuccine_research_blob
+    import tempfile
+    from docx import Document
+    view = silk_render.build_view(fettuccine_research_blob())
+    path = silk_reports.render_client_docx(
+        view, os.path.join(tempfile.mkdtemp(), "r.docx"))
+    doc = Document(path)
+    txt = "\n".join(p.text for p in doc.paragraphs)
+    for s in doc.sections:
+        for hf in (s.header, s.footer):
+            txt += "\n" + "\n".join(p.text for p in hf.paragraphs)
+    assert "سلك" in txt and "سِلك" not in txt, "العلامة غير آمنة التشكيل"
+    sec = doc.sections[0]
+    assert abs(sec.page_width.mm - 210) < 1 and abs(sec.page_height.mm - 297) < 1, \
+        "الصفحة ليست A4"
+
+
+def _guard_client_template_no_hardcoded_product():
+    """LESSONS ٣٠ — «التمور السعودية» كانت مثبَّتةً في تقرير أيّ منتج (عائلة
+    hardcoded-product-rule موسَّعة للقوالب). الحارس: سطر الإخلاء بارامتري بالمنتج
+    ولا يحمل اسم منتجٍ مثبَّت."""
+    import inspect
+    from silk_gmaps import maps_disclaimer, MAPS_DISCLAIMER
+    src = inspect.getsource(maps_disclaimer)
+    for tok in ("التمور", "dates", "معكرونة", "pasta"):
+        assert tok not in src, f"اسم منتجٍ مثبَّت في سطر الإخلاء: {tok}"
+    assert "التمور" not in MAPS_DISCLAIMER
+    assert "عسل" in maps_disclaimer("عسل")   # يُشتَقّ من المنتج فعلًا
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -538,6 +590,9 @@ _LESSONS = {
     25: _guard_wrong_direction_study,       # Wave 1.5 A — أشقّاء «الدراسة بالاتجاه الخاطئ»
     26: _guard_silent_external_failure,     # Wave 1.5 C — لا فشلٌ صامت لخدمةٍ خارجية
     27: _guard_readiness_before_spend,      # Wave 1.5 D — كلُّ تدهورٍ قبل الحجز
+    28: _guard_leads_table_hygiene,         # Wave 2 — نقاء جدول الروابط (جغرافيا/نثر/حشو)
+    29: _guard_report_arabic_shape_a4,      # Wave 2 — «سلك» متّصلة + A4
+    30: _guard_client_template_no_hardcoded_product,  # Wave 2 — لا منتج مثبَّت في القوالب
 }
 
 _TRAPS = [
