@@ -66,6 +66,7 @@ one item below is explicitly pending:
 | 7 | **MED** | D | **Export buttons have no in-flight disable → double-submit; PDF double-click spawns two LibreOffice conversions.** `dlReport("pdf"/"docx"/"md")` never disables its button during the fetch (`web/index.html:868-885`). A double-click on the new PDF button issues two `/report.pdf` requests, each spawning a `soffice` subprocess conversion server-side. (Prior audit flagged this for md/docx; the new PDF button inherits it and is the costliest instance.) | `web/index.html:868-885` | static |
 | 8 | **LOW** | A/F | **Export temp dirs leak.** `report.docx`/`report.pdf` each `tempfile.mkdtemp()` a per-request dir that is never removed (`FileResponse` streams but does not clean the parent). Slow disk growth on the ephemeral volume until redeploy. | `api.py:1808-1835` (pdf), `1750-1785` (docx) | static |
 | 9 | **LOW** | E | **The two headline feature flags are undocumented in `.env.example`.** `SILK_WORLD_MARKETS`, `SILK_IMAGE_INTAKE`, `SILK_WORLD_TIER2_MAX`, `SILK_INTAKE_MIN_CONFIDENCE` are read by the code but absent from `.env.example` — an operator cannot discover the toggles they are being asked to flip. | grep `.env.example` (absent); readers `silk_market_ranker.py:139,148`, `silk_product_intake.py:26,47` | static |
+| 11 | **MED** | A/F | **Progress-stage name inconsistency (`enrich_leads` vs `enrich`) — surfaced by a flaky CI failure on this very PR.** The pipeline snapshots the stage as `"enrich_leads"` but the ordered-stage list + label map call it `"enrich"`, so the live `/research/{id}/status` display drops/unlabels the enrich step; and `tests/test_research_live_progress.py:30` `_STAGE_ORDER` is stale (missing both `synthesis` and the enrich stage), so `_STAGE_ORDER.index("enrich_leads")` raises `ValueError` whenever the status poll samples that stage — a race-flaky test **latently broken on `main` since #118**, unrelated to this docs-only PR. | emit `api.py:1093`; order/label `api.py:1111,1115`; stale test `tests/test_research_live_progress.py:30` | direct-repro (CI) |
 | 10 | **LOW** | B | **`/products/intake` burns a cap unit on every vision failure with no refund.** `try_reserve_paid_calls(1)` reserves before the call; a provider outage (returns `None`, zero real spend) still consumes the unit and returns a 200 `read_failed`. Fail-closed-consistent (never under-charge) but a provider outage can exhaust the daily count cap with zero successful reads. | `api.py:443,477-480`; `silk_product_intake.py:186-191` | static |
 
 **Reassuring headlines (verified this pass):**
@@ -299,6 +300,14 @@ reduced-confidence tier truthfully.
   (default 200) — verified the cap is enforced on insert (`silk_ops_log.py`).
 - **Finding #3** (failed-run reservation lingers, excluded from reaper) is the
   one persistence-adjacent money gap.
+- **Finding #11** (progress-stage taxonomy: `enrich_leads` emitted vs `enrich`
+  in the order/label map; stale test `_STAGE_ORDER`) — a real convergence
+  finding surfaced when the `test` CI job on this docs-only PR flaked on the
+  pre-existing race in `test_research_live_progress.py`. Fixing needs an owner
+  decision on the canonical stage name, so it is **reported, not patched** here
+  (this PR is read-only/no-fix). Lock-test: extend `_STAGE_ORDER` to the full
+  emitted set (`missions, analyst, synthesis, enrich_leads, writer, reviewer,
+  done`) after the name is unified.
 
 ---
 
