@@ -404,7 +404,7 @@ $$("#langSeg .mode").forEach(function(m){m.addEventListener("click",function(){L
 function hdrs(json){var h=json?{"Content-Type":"application/json"}:{};if(S.adminKey)h["X-API-Key"]=S.adminKey;return h}
 function toast(m){var el=document.createElement("div");el.className="toast";el.textContent=m;document.body.appendChild(el);setTimeout(function(){el.remove()},3200)}
 function detailText(d,raw){var x=d&&d.detail;if(x==null)return raw;if(typeof x==="string")return x;return x.message||x.reason||x.error||JSON.stringify(x)}
-function post(path,body){return fetch(base()+path,{method:"POST",headers:hdrs(true),body:JSON.stringify(body)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));return d})})}
+function post(path,body){return fetch(base()+path,{method:"POST",headers:hdrs(true),body:JSON.stringify(body)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok){var er=new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));er.__status=r.status;er.__detail=(d&&d.detail!=null)?d.detail:d;throw er}return d})})}
 /* حادثة نفاد الاعتمادات — الطلب لا يساوي التشغيلة (P0): GET بسيط لاستطلاع
    الحالة، تُستعمل مع /research/{id}/status و/analyses/{id}. */
 function getJSON(path){return fetch(base()+path,{headers:hdrs(false)}).then(function(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(t)}catch(e){}if(!r.ok)throw new Error("HTTP "+r.status+" — "+detailText(d,t).toString().slice(0,200));return d})})}
@@ -414,7 +414,7 @@ var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim()
   // MED (تدقيق الواجهة، M12): أي تعديل يُبطل الحلّ السابق فوراً — وإلا يبقى
   // S.product/S.hs قديمَين (من اختيار سابق) فيُحلَّل منتج غير الظاهر في
   // الصندوق صامتاً حين يُنقَر «مسح الأسواق» بلا اختيار صفٍّ جديد من القائمة.
-  if(S.product&&q!==S.product){S.product=null;S.hs=null;$("#pResolved").classList.remove("on");sync()}
+  if(S.product&&q!==S.product){S.product=null;S.hs=null;S.intakeIngredients=null;S.intakeCategory=null;$("#pResolved").classList.remove("on");sync()}
   if(!q){$("#pDrop").classList.remove("open");return}
   pT=setTimeout(function(){fetch(base()+"/index?q="+encodeURIComponent(q)+"&limit=10").then(function(r){return r.json()}).then(function(list){
     if(!Array.isArray(list)||!list.length){$("#pDrop").classList.remove("open");return}
@@ -430,6 +430,7 @@ $("#pDrop").addEventListener("click",function(e){var r=e.target.closest(".drow")
    يُعرَض في بطاقةٍ قابلة للتعديل تُؤكَّد قبل أن يبدأ أيّ تحليل — لا اختلاق. */
 var INTAKE_KIND="name";
 fetch(base()+"/config").then(function(r){return r.json()}).then(function(c){
+  S.cfg=c||{};
   if(c&&c.image_intake){$("#intakeTabs").hidden=false}}).catch(function(){});
 $("#intakeTabs").addEventListener("click",function(e){var b=e.target.closest(".itab");if(!b)return;
   $$(".itab").forEach(function(x){x.classList.remove("sel");x.style.background="transparent"});
@@ -461,6 +462,9 @@ function renderIntake(res){
     +cat+ing
     +'<div style="font-size:11px;color:var(--muted);margin-top:5px">'+esc(t("intakeConf"))+": "+Math.round((x.confidence||0)*100)+'%</div>'
     +'<button type="button" id="intakeGo" style="margin-top:8px;padding:7px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;font-size:12.5px;cursor:pointer">'+esc(t("intakeConfirmBtn"))+'</button>';
+  // خزّن تلميحات الاستخلاص (مكوّنات/فئة) كي يُرسي عليها مُصنِّف HS لاحقًا (Wave 1).
+  S.intakeIngredients=(x.ingredients&&x.ingredients.length)?x.ingredients.slice(0,20):null;
+  S.intakeCategory=x.category_hint||null;
   $("#intakeGo").addEventListener("click",function(){
     var nm=($("#intakeName").value||"").trim();if(!nm)return;
     // الاسم المؤكَّد يدخل المسار القائم: يملأ الصندوق ويُحلّ عبر /resolve كالمعتاد.
@@ -566,12 +570,87 @@ function pollResearchStatus(analysisId,lbl){
     // إنفاق مضاعف — نفس ضمانة async/resume، راجع تعليق L486-491).
     S.lastFailedResearchId=analysisId;$("#researchBtn").textContent=lbl;sync();
     toast("تعذّر استطلاع الحالة (رقم "+analysisId+") — التشغيلة مستمرة على الخادم، انقر «بحث عميق» للاستئناف")})}
+/* ── تدفّق ما قبل التشغيل الموحّد (Wave 1، مندوبات المالك) ──
+   اسم/صورة → استخلاص (إن صورة) → تصنيف HS (اقتراحٌ يؤكّده المستخدم) → استشارات
+   (بلد المنشأ/خارج التغطية) → موافقة → حجز → تشغيل. كل الخطوات أعلامٌ افتراضها
+   مُطفأ (السلوك كاليوم): بلا مُصنِّف مفعّل يمرّ برمز /resolve كما اليوم؛ استشارة
+   بلد المنشأ تظهر فقط على 422 من الخادم. */
+function modal(inner){
+  var ov=document.createElement("div");ov.className="prov";
+  ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;z-index:9999";
+  var card=document.createElement("div");
+  card.style.cssText="background:var(--card,#fff);color:var(--text,#1a1a1a);max-width:440px;width:calc(100% - 40px);border:1px solid var(--line,#e3ddd2);border-radius:14px;padding:18px;box-shadow:0 12px 40px rgba(0,0,0,.25);font-size:13px;line-height:1.7";
+  card.innerHTML=inner;ov.appendChild(card);document.body.appendChild(ov);
+  ov.close=function(){ov.remove()};
+  ov.addEventListener("click",function(e){if(e.target===ov)ov.close()});
+  return ov}
+/* اضمن رمز HS مؤكَّدًا قبل التشغيل — إن كان محسومًا (قائمة/تصنيف سابق) تابِع؛
+   وإلا والمُصنِّف مفعّل: استدعِ /classify_hs واعرض الاقتراح للتأكيد. مُطفأ =>
+   السلوك كاليوم (يمرّ برمز فارغ؛ الخادم يقرّر عبر بوّابته). */
+function ensureHs(cb){
+  if(S.hs){return cb()}
+  if(!(S.cfg&&S.cfg.hs_classifier)){return cb()}
+  toast("…جارٍ تصنيف المنتج");
+  post("/classify_hs",{product:S.product,ingredients:S.intakeIngredients||null,category:S.intakeCategory||null})
+    .then(function(res){showHsProposal(res,cb)})
+    .catch(function(){showHsManual(cb)})}
+function _pct(c){return Math.round((c||0)*100)}
+function showHsProposal(res,cb){
+  if(!res||res.status!=="ok"||!res.hs6){return showHsManual(cb,res&&res.alternates)}
+  var alts=(res.alternates||[]).filter(function(a){return a&&a.hs6});
+  var altHtml=alts.length?('<div style="font-size:11.5px;color:var(--muted,#8a8175);margin-top:8px">بدائل:</div>'
+    +alts.map(function(a){return '<button type="button" class="hsAlt" data-hs="'+esc(a.hs6)+'" style="display:block;width:100%;text-align:right;margin-top:5px;padding:7px 9px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">HS '+esc(a.hs6)+(a.label?(' — '+esc(a.label)):'')+'</button>'}).join('')):'';
+  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:8px">تأكيد تصنيف المنتج</div>'
+    +'<div>صُنِّف: <b>HS '+esc(res.hs6)+'</b>'+(res.rationale_ar?(' — '+esc(res.rationale_ar)):'')+' <span style="color:var(--muted,#8a8175)">(ثقة '+_pct(res.confidence)+'%)</span></div>'
+    +altHtml
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button type="button" id="hsOk" style="flex:1;padding:8px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;cursor:pointer;font-size:13px">تأكيد ومتابعة</button>'
+    +'<button type="button" id="hsManual" style="padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">اختر يدويًا</button>'
+    +'</div>');
+  var chosen=res.hs6;
+  m.querySelectorAll(".hsAlt").forEach(function(b){b.addEventListener("click",function(){chosen=this.dataset.hs;
+    m.querySelectorAll(".hsAlt").forEach(function(x){x.style.background="transparent"});this.style.background="var(--bg,#f3efe6)"})});
+  $("#hsOk",m).addEventListener("click",function(){S.hs=chosen;$("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+chosen;sync();m.close();cb()});
+  $("#hsManual",m).addEventListener("click",function(){m.close();showHsManual(cb,alts)})}
+function showHsManual(cb,alts){
+  alts=(alts||[]).filter(function(a){return a&&a.hs6});
+  var altHtml=alts.length?('<div style="font-size:11.5px;color:var(--muted,#8a8175);margin-top:8px">اقتراحات قريبة:</div>'
+    +alts.map(function(a){return '<button type="button" class="hsAlt" data-hs="'+esc(a.hs6)+'" style="display:block;width:100%;text-align:right;margin-top:5px;padding:7px 9px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">HS '+esc(a.hs6)+(a.label?(' — '+esc(a.label)):'')+'</button>'}).join('')):'';
+  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:6px">تعذّر التصنيف — اختر الرمز يدويًا</div>'
+    +'<div style="color:var(--muted,#8a8175);font-size:12px">ابحث عن المنتج أو اكتب رمز HS (٦ أرقام):</div>'
+    +'<input id="hsPick" placeholder="ابحث… أو 190219" style="width:100%;margin-top:8px;padding:8px 9px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:var(--card,#fff);font-size:13px">'
+    +'<div id="hsPickDrop"></div>'+altHtml
+    +'<button type="button" id="hsPickGo" style="margin-top:12px;width:100%;padding:8px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;cursor:pointer;font-size:13px">تأكيد الرمز</button>');
+  function commit(code){code=(code||"").replace(/\D/g,"");if(code.length<4)return;S.hs=code;$("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+code;sync();m.close();cb()}
+  m.querySelectorAll(".hsAlt").forEach(function(b){b.addEventListener("click",function(){commit(this.dataset.hs)})});
+  var pk=$("#hsPick",m),dp=$("#hsPickDrop",m),tmr;
+  pk.addEventListener("input",function(){var q=this.value.trim();clearTimeout(tmr);if(!q||/^\d+$/.test(q)){dp.innerHTML="";return}
+    tmr=setTimeout(function(){fetch(base()+"/index?q="+encodeURIComponent(q)+"&limit=8").then(function(r){return r.json()}).then(function(list){
+      if(!Array.isArray(list)||!list.length){dp.innerHTML="";return}
+      dp.innerHTML=list.map(function(it){return '<button type="button" class="hsIdx" data-hs="'+esc(it.hs)+'" style="display:block;width:100%;text-align:right;margin-top:5px;padding:6px 9px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">'+esc(it.name)+' <span style="color:var(--muted,#8a8175)">'+esc(it.hs)+'</span></button>'}).join("");
+      dp.querySelectorAll(".hsIdx").forEach(function(b){b.addEventListener("click",function(){commit(this.dataset.hs)})})}).catch(function(){})},220)});
+  $("#hsPickGo",m).addEventListener("click",function(){commit(pk.value)})}
+/* استشارة بلد المنشأ — تأكيدٌ صريح ثم إعادة الإرسال بموافقة (لا حجب نهائي). */
+function showProducerAdvisory(adv,onOk){
+  var exp=(adv.top_exporters||[]).slice(0,5).join("، ");
+  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:8px">⚠ تنبيه: سوقٌ منتِجة</div>'
+    +'<div>'+esc(adv.message||"هذه الدولة من أكبر مصدّري هذا المنتج عالميًا — دراسة دخولها تنافسية جدًّا. أكمل؟")+'</div>'
+    +(exp?('<div style="font-size:11.5px;color:var(--muted,#8a8175);margin-top:8px">أكبر المصدّرين: '+esc(exp)+'</div>'):'')
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button type="button" id="advOk" style="flex:1;padding:8px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;cursor:pointer;font-size:13px">أكمل رغم ذلك</button>'
+    +'<button type="button" id="advNo" style="padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">إلغاء</button>'
+    +'</div>');
+  $("#advOk",m).addEventListener("click",function(){m.close();onOk()});
+  $("#advNo",m).addEventListener("click",function(){m.close()})}
 function runDeepResearch(){if(S.busy)return;
   var resuming=!!S.lastFailedResearchId;
   if(!resuming&&(!S.product||!S.market))return;
+  if(resuming){return startResearch({})}
+  ensureHs(function(){startResearch({})})}
+function startResearch(extra){if(S.busy)return;
   S.busy=true;sync();stopResearchPoll();
   var lbl=$("#researchBtn").textContent;$("#researchBtn").textContent="…جارٍ البحث";
-  var b;
+  var resuming=!!S.lastFailedResearchId,b;
   if(resuming){b={resume:S.lastFailedResearchId,async_run:true}}
   else{
     b={product:S.product,market:S.market.iso3,hs_code:S.hs||null,persist:true,agent_prefs:S.prefs,async_run:true};
@@ -579,12 +658,19 @@ function runDeepResearch(){if(S.busy)return;
     if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
     else toast("بدون بطاقة المنتج سيغيب عمود الربحية — أكملها الآن؟ دقيقتان");  // تنبيه لا حجب (الموجة ١٠)
     if(!isNaN(price))b.own_price=price}  // بلاغ حي (الموجة ٩): كان يُقرَأ ولا يُرسَل إطلاقاً
+  for(var k in extra){b[k]=extra[k]}
   post("/research",b).then(function(res){
     if(res&&res.analysis_id&&res.status==="running"){pollResearchStatus(res.analysis_id,lbl);return}
     // توافق رجعي: رد متزامن كامل (لو عُطِّل async_run مستقبلاً من الخادم).
     S.raw=res;S.view=res.view||null;S.busy=false;S.lastFailedResearchId=null;$("#researchBtn").textContent=lbl;sync();
     pushHist(res&&res.analysis_id||null);renderBoard();nav("board")})
-  .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();toast("فشل البحث العميق: "+e.message)})}
+  .catch(function(e){S.busy=false;$("#researchBtn").textContent=lbl;sync();
+    var d=e&&e.__detail;
+    // استشارة بلد المنشأ (422): أظهر تأكيدًا وأعد الإرسال بموافقة صريحة.
+    if(d&&d.error==="producer_country_advisory"){return showProducerAdvisory(d,function(){startResearch({producer_ack:true})})}
+    // رمز HS غير محسوم (بوّابة صلبة 422): وجّه المستخدم للتصنيف/الاختيار اليدوي.
+    if(d&&d.error==="unresolved_hs"){S.hs=null;return ensureHs(function(){startResearch({})})}
+    toast("فشل البحث العميق: "+e.message)})}
 $("#researchBtn").addEventListener("click",function(){runDeepResearch()});
 /* بحوثي السابقة (ITEM ١، بلاغ حي التكلفة): كانت localStorage محضة — لكل
    متصفّح لا خادم، فتُفقد عبر الأجهزة ولا تعكس الحقيقة الخادمية. الآن مصدرها
