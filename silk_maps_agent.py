@@ -55,6 +55,12 @@ def find_places(query: str, region: str | None = None) -> list[DataPoint]:
         payload = r.json()
     except Exception as e:  # noqa: BLE001 — never raise to caller
         log.warning("Google Maps fetch failed (q=%r, region=%s): %s", q, region, e)
+        try:  # عائلة C (Wave 1.5): إعلان الفشل للمشغّل.
+            import silk_ops_log
+            silk_ops_log.record_service_failure(
+                "maps", f"Google Maps fetch failed (q={q!r}): {e}")
+        except Exception:  # noqa: BLE001
+            pass
         return [DataPoint(None, "Google Maps", 0.0,
                           f"Google Maps fetch failed: {e}", _today())]
     status = payload.get("status")

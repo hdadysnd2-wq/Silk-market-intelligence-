@@ -440,6 +440,71 @@ def _guard_hardcoded_product_rule():
     assert top is True and bot is False, "القاعدة لا تتبع ترتيب البيانات"
 
 
+def _guard_wrong_direction_study():
+    """LESSONS ٢٥ — عائلة wrong-direction-study (Wave 1.5، A): استشارةُ بلد
+    المنشأ تُعمَّم لأشقّائها. الحارس السلوكي: (١) تصدير إلى بلد المنشأ نفسه =>
+    self_origin (config-driven عبر env)؛ (٢) فصلٌ مقيَّد من مرجع المالك؛
+    (٣) البوّابة في api؛ (٤) صفر ISO/HS مكتوب صلبًا في منطق المطابقة."""
+    import silk_prerun as sp
+    import os as _os
+    old = _os.environ.get("SILK_ORIGIN_ISO3")
+    _os.environ["SILK_ORIGIN_ISO3"] = "SAU"
+    try:
+        assert any(a["kind"] == "self_origin"
+                   for a in sp.sibling_advisories("080410", "SAU"))
+        assert not any(a["kind"] == "self_origin"
+                       for a in sp.sibling_advisories("080410", "ITA"))
+    finally:
+        if old is None:
+            _os.environ.pop("SILK_ORIGIN_ISO3", None)
+        else:
+            _os.environ["SILK_ORIGIN_ISO3"] = old
+    # فصلٌ مقيَّد من المرجع (خنزير في سوقٍ خليجية) — عضوٌ من العائلة.
+    assert any(a["kind"] == "restricted_chapter"
+               for a in sp.sibling_advisories("020329", "SAU"))
+    api = _read("api.py")
+    assert '"error": "prerun_advisory"' in api and "advisories_ack" in api, \
+        "بوّابة أشقّاء الاستشارة غائبة"
+    # صفر رمز HS/دولة مكتوب صلبًا في منطق المطابقة.
+    import inspect
+    blob = "\n".join(inspect.getsource(fn) for fn in (
+        sp.sibling_advisories, sp._restricted_hits))
+    assert not re.search(r"(?<!\d)\d{4,6}(?!\d)", blob), "رمز HS صلب في المطابقة"
+    assert not re.search(r'"[A-Z]{3}"', blob), "رمز دولة صلب في المطابقة"
+
+
+def _guard_silent_external_failure():
+    """LESSONS ٢٦ — عائلة silent-external-failure (Wave 1.5، C): فشلُ خدمةٍ
+    خارجية مُهيَّأة يُعلَن للمشغّل. الحارس السلوكي: (١) record_service_failure
+    يكتب صفَّ service_failure؛ (٢) المكشطة تُعلِن فشلها؛ (٣) جدول التدقيق قائم."""
+    import silk_ops_log
+    import tempfile as _tf
+    import unittest.mock as _mock
+    with _tf.TemporaryDirectory() as td:
+        path = os.path.join(td, "ops.db")
+        with _mock.patch.object(silk_ops_log, "_db_path", lambda: path):
+            silk_ops_log.record_service_failure("comtrade", "429 rate limited")
+            rows = silk_ops_log.last_errors(5, path)
+    assert rows and rows[0]["kind"] == "service_failure" and \
+        rows[0]["context"]["service"] == "comtrade"
+    assert "record_service_failure" in _read("silk_gmaps.py"), \
+        "المكشطة لا تُعلِن فشلها للمشغّل"
+    assert _exists("docs/EXTERNAL_SERVICES_FAILURE_AUDIT.md"), "جدول التدقيق مفقود"
+
+
+def _guard_readiness_before_spend():
+    """LESSONS ٢٧ — عائلة spend-before-knowing (Wave 1.5، D): لوحةُ الجاهزية
+    تعرض كلَّ تدهورٍ قبل الحجز. الحارس: نقطة `/research/readiness` + المُركِّب
+    `_readiness_checks` (مع can_run/blocking) قائمان، والصمّام config-driven."""
+    api = _read("api.py")
+    assert "def _readiness_checks" in api and "def research_readiness" in api, \
+        "لوحة الجاهزية (نقطة/مُركِّب) غائبة"
+    assert '"/research/readiness"' in api and '"can_run"' in api and \
+        '"blocking"' in api, "عقد لوحة الجاهزية غير مكتمل"
+    import silk_prerun
+    assert hasattr(silk_prerun, "advisories_enabled")
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -470,6 +535,9 @@ _LESSONS = {
     22: _guard_out_of_coverage_thin_study,  # الميزة أ — سوق خارج التغطية لا دراسة هزيلة
     23: _guard_unresolved_hs_silent_spend,  # Wave 1 — الفيتوتشيني: لا إنفاق برمز HS مجهول
     24: _guard_hardcoded_product_rule,      # Wave 1 — الحارسان قاعدتان مبنيّتان على البيانات
+    25: _guard_wrong_direction_study,       # Wave 1.5 A — أشقّاء «الدراسة بالاتجاه الخاطئ»
+    26: _guard_silent_external_failure,     # Wave 1.5 C — لا فشلٌ صامت لخدمةٍ خارجية
+    27: _guard_readiness_before_spend,      # Wave 1.5 D — كلُّ تدهورٍ قبل الحجز
 }
 
 _TRAPS = [

@@ -53,6 +53,12 @@ def trends_interest(
                          f"tf='{timeframe}' n={len(series)}", _today())
     except Exception as e:  # noqa: BLE001 — never raise to caller
         log.warning("Google Trends fetch failed ('%s', geo=%s): %s", keyword, geo, e)
+        try:  # عائلة C (Wave 1.5): إعلان الفشل للمشغّل.
+            import silk_ops_log
+            silk_ops_log.record_service_failure(
+                "trends", f"pytrends fetch failed ('{keyword}', geo={geo}): {e}")
+        except Exception:  # noqa: BLE001
+            pass
         return DataPoint(None, "Google Trends", 0.0,
                          f"pytrends unavailable / no network: {e}", _today())
 

@@ -120,10 +120,12 @@ class LiveShapeServer:
     PRERUN_MARKET_ISO3 = "ARE"
 
     def __init__(self, port: int | None = None, boot_timeout: float = 45.0,
-                 prerun_flags: bool = False):
+                 prerun_flags: bool = False, readiness_panel: bool = False):
         self.port = port or _free_port()
         self.boot_timeout = boot_timeout
-        self.prerun_flags = prerun_flags
+        # لوحة الجاهزية (D) تستلزم صمّامات ما قبل التشغيل + المخبأ المبذور.
+        self.prerun_flags = prerun_flags or readiness_panel
+        self.readiness_panel = readiness_panel
         self.base_url = f"http://127.0.0.1:{self.port}"
         self._tmp = tempfile.mkdtemp(prefix="silk_rung2_")
         self.db_path = os.path.join(self._tmp, "silk.db")
@@ -156,6 +158,10 @@ class LiveShapeServer:
             env["SILK_HS_CLASSIFIER"] = "1"
             env["SILK_PRODUCER_ADVISORY"] = "1"
             env["SILK_PRODUCER_ADVISORY_TOPN"] = "5"
+        # لوحة «جاهزية الدراسة» (D): تفعّل أشقّاء العائلة فتظهر اللوحة الموحّدة
+        # في المتصفّح بدل نوافذ الاستشارة التفاعلية المنفردة.
+        if self.readiness_panel:
+            env["SILK_PRERUN_ADVISORIES"] = "1"
         return env
 
     def __enter__(self) -> "LiveShapeServer":
