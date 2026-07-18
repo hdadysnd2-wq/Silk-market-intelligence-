@@ -173,22 +173,64 @@ def _pdf_tools():
     return bool(silk_reports._find_soffice()) and bool(shutil.which("pdftotext"))
 
 
+# ── الشرط ١: نسخةُ الـPDF المجرّدةُ تشمل كلَّ جزءٍ نصّيّ، والمجموعةُ حركاتٌ فقط ──
+
+def test_pdf_diacritic_free_copy_strips_every_xml_part():
+    """الشرط ١: بعد `_pdf_diacritic_free_copy`، صفرُ نقاطٍ في U+064B–U+0652/U+0670
+    عبر **كلّ** جزء نصّيّ في الحزمة (document.xml + header*/footer* + الحواشي)."""
+    import zipfile
+    p = os.path.join(tempfile.mkdtemp(), "r.docx")
+    silk_reports.render_client_docx(_view(), p)
+    tmp = silk_reports._pdf_diacritic_free_copy(p)
+    z = zipfile.ZipFile(tmp)
+    parts = [n for n in z.namelist()
+             if n.startswith("word/") and n.endswith(".xml")]
+    assert any(n.startswith("word/header") for n in parts), "لا جزء ترويسة"
+    assert any(n.startswith("word/footer") for n in parts), "لا جزء تذييل"
+    marks = set(_COMBINING)
+    for n in parts:
+        text = z.read(n).decode("utf-8")
+        leaked = [hex(ord(c)) for c in text if c in marks]
+        assert not leaked, f"حركاتٌ باقيةٌ في {n}: {leaked}"
+
+
+def test_strip_set_is_only_combining_marks_never_base_letters():
+    """الشرط ١: مجموعةُ التجريد حركاتٌ مُركَّبةٌ (Mn) حصرًا — لا حرفَ أساسٍ ولا
+    همزةَ ولا صيغةَ ألفٍ تُمَسّ أبدًا."""
+    import unicodedata
+    for c in silk_reports._AR_COMBINING:
+        assert unicodedata.category(c) == "Mn", \
+            f"{hex(ord(c))} ليس حركةً مُركَّبة (قد يكون حرفًا أساسيًا)"
+    # صيغُ الهمزة والألف (حروفُ أساسٍ) خارج المجموعة صراحةً.
+    for base in "اأإآىءؤئ":
+        assert base not in silk_reports._AR_COMBINING, f"حرفُ أساسٍ في المجموعة: {base}"
+
+
 @pytest.mark.skipif(not _pdf_tools(),
                     reason="soffice/pdftotext غير متاح (يعمل في e2e-live-shape)")
-def test_visual_pdf_brand_contiguous_and_no_word_split():
-    """قفل بصري (البند ٨ + الطيّة E): docx→PDF→pdftotext يحوي «سلك» متّصلة،
-    ولا كلمةَ عربيةٍ يشقّها مِحرفٌ مُركَّب، ولا «التمور السعودية»، وثلاث صفحات."""
-    p = os.path.join(tempfile.mkdtemp(), "v.docx")
-    silk_reports.render_client_docx(_view(), p)
-    pdf = silk_reports.docx_to_pdf(p)
-    assert pdf and os.path.exists(pdf)
+def test_visual_pdf_lock_production_entrypoint_bare_no_split_no_leaks():
+    """قفلٌ بصريّ عبر **مسار الإنتاج** (البنود ٨/٩ + الطيّة E + الشروط ٢/٣/٤):
+    `render_client_pdf` (المُنتِج الحقيقي: docx مُنهًى + تجريد نسخة التحويل) →
+    pdftotext على PDF العميل: (٢) المسار إنتاجيّ لا اختباريّ؛ (٣) خطٌّ عربيّ حاضر
+    (فشلٌ عالٍ)؛ (E) صفرُ مِحرفٍ مُركَّبٍ يشقّ كلمة و«سلك» متّصلة؛ (٢-تسريب) لا
+    رموز تشغيل داخلية على النصّ العاري."""
+    assert silk_reports.has_arabic_font(), \
+        "لا خطّ عربيّ الشكل — الـPDF سيُصيَّر tofu (fc-list بلا Naskh/Arabic)"
+    pdf = os.path.join(tempfile.mkdtemp(), "client.pdf")
+    silk_reports.render_client_pdf(_view(), pdf)     # مسار الإنتاج نفسه
+    assert os.path.exists(pdf)
     txt = subprocess.run(["pdftotext", "-enc", "UTF-8", pdf, "-"],
                          capture_output=True, timeout=60).stdout.decode(
                              "utf-8", "replace")
-    assert "سلك" in txt.replace("\n", ""), "«سلك» غير متّصلة في استخراج PDF"
-    assert "س لك" not in txt, "«سلك» مشقوقةٌ بمسافة في الاستخراج"
-    assert not _DETACHED_MARK.search(txt), "كلمةٌ عربيةٌ يشقّها مِحرفٌ مُركَّبٌ منفصل"
+    # الطيّة E: نصٌّ عارٍ تمامًا — لا مِحرفَ مُركَّبٍ إطلاقًا => لا شقَّ كلمة.
+    combining = re.compile("[" + re.escape(_COMBINING) + "]")
+    assert not combining.search(txt), "مِحرفٌ مُركَّبٌ باقٍ في استخراج PDF"
+    assert "سلك" in txt.replace("\n", "") and "س لك" not in txt
     assert "التمور السعودية" not in txt
+    # الشرط ٤ (§2): كنسُ التسريب على النصّ العاري (أوثقُ بلا حركات).
+    for leak in ("tool-use", "tool_use", "Claude", "anthropic", "⚠",
+                 "importer_leads", "deep_research", "MagicMock"):
+        assert leak not in txt, f"تسريبٌ تشغيليٌّ في PDF العميل: {leak}"
 
 
 def test_shape_safe_helper_strips_only_combining_marks():

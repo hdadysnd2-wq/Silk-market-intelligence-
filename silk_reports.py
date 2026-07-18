@@ -2226,35 +2226,28 @@ def _pdf_diacritic_free_copy(docx_path: str) -> str:
     القابلة للتحرير — المشغّل) يبقى مشكّلًا كمصدر**؛ نُحوّل نسخةً مؤقّتةً مجرّدةً من
     الحركات (U+064B–U+0652، U+0670) فقط، فيخرج الـPDF (المُسلَّم للعميل) نظيفَ
     الاستخراج — لا كلمةَ عربيةٍ يشقّها مِحرفٌ مُركَّب (تعريفُ عائلة E). لا يُمَسّ
-    أيّ رقمٍ أو حرفٍ أو معنى — الحركاتُ علاماتُ نطقٍ لا محتوى."""
-    from docx import Document
-    doc = Document(docx_path)
+    أيّ رقمٍ أو حرفٍ أو معنى — الحركاتُ علاماتُ نطقٍ لا محتوى.
 
-    def _strip(p):
-        for r in p.runs:
-            if r.text and _AR_COMBINING_RE.search(r.text):
-                r.text = _shape_safe_ar(r.text)
-
-    def _walk(tables):
-        for t in tables:
-            for row in t.rows:
-                for cell in row.cells:
-                    for p in cell.paragraphs:
-                        _strip(p)
-                    _walk(cell.tables)
-
-    for p in doc.paragraphs:
-        _strip(p)
-    _walk(doc.tables)
-    for s in doc.sections:
-        for hf in (s.header, s.footer):
-            for p in hf.paragraphs:
-                _strip(p)
+    يعمل على **مستوى حزمة الـzip** لا نموذج python-docx كي يشمل **كلَّ جزءٍ نصّيّ**:
+    `word/document.xml` **و** `word/header*.xml`/`footer*.xml` والحواشي
+    (`footnotes.xml`/`endnotes.xml`) وأيّ جزءٍ آخر تحت `word/` — نموذجُ python-docx
+    وحده يُغفِل الحواشي وترويسات الصفحة الأولى ومربّعات النصّ. المِحارفُ المُركَّبةُ
+    تظهر حصرًا داخل نصّ `<w:t>` (لا في وسمٍ/سِمة)، فحذفُ نقاطها من XML آمنٌ بنيويًا.
+    """
     import os
     import tempfile
+    import zipfile
     tmp = os.path.join(tempfile.mkdtemp(prefix="silk_pdfsrc_"),
                        os.path.basename(docx_path))
-    doc.save(tmp)
+    with zipfile.ZipFile(docx_path) as zin, \
+            zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename.startswith("word/") and \
+                    item.filename.endswith(".xml"):
+                data = _AR_COMBINING_RE.sub(
+                    "", data.decode("utf-8")).encode("utf-8")
+            zout.writestr(item, data)
     return tmp
 
 
