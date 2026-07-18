@@ -27,7 +27,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # التسلسل المعياري لمراحل /research (يطابق api.py:_STAGE_LABEL_AR) — يُستعمَل
 # لفحص عدم-التنازل بدل اشتراط رؤية "missions" أوّلاً (راجع التعليق عند نقطة
 # الاستعمال لسبب السباق المشروع).
-_STAGE_ORDER = ["missions", "analyst", "writer", "reviewer", "done"]
+# الترتيب الزمني الحقيقي لمراحل التقدّم كما تبثّها المصادر (مصدر الحقيقة:
+# silk_missions.py:387 «missions» ← api.py:1149 «analyst» ← api.py:1191
+# «enrich_leads» ← on_stage «writer»/«reviewer» ← api.py:1254 «done»).
+# البند ١٥ (أمر العمل): «enrich_leads» كانت مبثوثةً فعليًا لكنها غائبة من هذه
+# القائمة، فأيّ استطلاعٍ يرصدها كان يرفع ValueError (فشلٌ متقطّع حسب التوقيت).
+# الإصلاح الصحيح: إكمال القائمة لتطابق المصدر — لا إضعاف حارس الترتيب.
+_STAGE_ORDER = ["missions", "analyst", "enrich_leads", "writer",
+                "reviewer", "done"]
 
 
 def _client():
