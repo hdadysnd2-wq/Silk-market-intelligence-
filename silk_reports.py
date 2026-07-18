@@ -351,6 +351,12 @@ def _finalize_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
         _set_rtl_paragraph(p._p.get_or_add_pPr())
         for run in p.runs:
             _set_rtl_run_fonts(run._r.get_or_add_rPr(), font)
+            # Wave 2 (البند ٨ + الطيّة E): تشكيلٌ آمنٌ **موجَّهٌ للعلامة فقط** —
+            # نُصلِح «سِلك» (الكسرة المُركَّبة تنفصل «ِس لك») ولا نمسّ الحركات
+            # الشرعية في كلماتٍ أخرى (مثل «المرشّحة» بالشدّة). العلامةُ وحدها هي
+            # التي كُسِرت ٥٠× في البلاغ؛ تعميمُ التجريد يُغيّر عناوين مشكّلة صحيحة.
+            if run.text and "سِلك" in run.text:
+                run.text = run.text.replace("سِلك", "سلك")
 
     def _walk_tables(tables):
         for t in tables:
@@ -363,7 +369,12 @@ def _finalize_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
     for p in doc.paragraphs:
         _do_paragraph(p)
     _walk_tables(doc.tables)
+    from docx.shared import Mm
     for section in doc.sections:
+        # Wave 2 (البند ٩): مقاس A4 صراحةً (كان الافتراضي Letter الأمريكي، بينما
+        # حساب عرض الأعمدة يفترض A4 ~9360 twips — تصحيح عدم التطابق). 210×297مم.
+        section.page_width = Mm(210)
+        section.page_height = Mm(297)
         for hf in (section.header, section.footer):
             for p in hf.paragraphs:
                 _do_paragraph(p)
@@ -387,6 +398,22 @@ def _add_page_number_field(paragraph) -> None:
     run._r.append(end)
 
 
+# Wave 2 (البند ٨ + الطيّة E): «سِلك» كانت تُكسَر «ِس لك» في PDF (٥٠×، الغلاف +
+# كل تذييل) — الكسرة (U+0650) المُركَّبة تنفصل/تُعاد ترتيبًا عند تشكيل الخط في
+# LibreOffice. الإصلاح الحتمي: تجريدُ العلامات المُركَّبة (حركات/تطويل) من النصّ
+# المُصدَّر فيخرج «سلك» متّصلاً في الاستخراج (تقاريرنا عربيةٌ غير مشكّلة أصلًا،
+# فالتجريد بلا أثرٍ إلا على العلامة). القفل البصري: docx→PDF→pdftotext يحوي «سلك»
+# متّصلة، ولا كلمةَ عربيةٍ يشقّها مِحرفٌ مُركَّب.
+_AR_COMBINING = "".join(chr(c) for c in list(range(0x064B, 0x0653))
+                        + [0x0670, 0x0640])
+_AR_COMBINING_RE = re.compile("[" + re.escape(_AR_COMBINING) + "]")
+
+
+def _shape_safe_ar(text: str) -> str:
+    """جرّد الحركات/التطويل المُركَّبة فيخرج النصُّ العربيّ متّصلًا في الاستخراج."""
+    return _AR_COMBINING_RE.sub("", text or "")
+
+
 def _add_cover_wordmark(doc, branding: dict) -> None:
     """شعار سِلك على الغلاف — صورة فعلية إن وُجد `logo_path` صالح، وإلا
     علامة اسمية نصّية حقيقية «سِلك» بلون العلامة الأساس (§7، أمر العمل
@@ -403,7 +430,7 @@ def _add_cover_wordmark(doc, branding: dict) -> None:
             log.warning("cover logo unavailable (%s): %s", logo_path, e)
     from docx.shared import Pt
     p = doc.add_paragraph()
-    run = p.add_run("سِلك")   # علامة اسمية حقيقية لا نصّ نائب مُقوَّس
+    run = p.add_run(_shape_safe_ar("سِلك"))   # «سلك» متّصلة (لا «ِس لك»)، لا نائب
     run.bold = True
     run.font.size = Pt(28)
     run.font.color.rgb = _hex_to_rgbcolor(branding["primary_color"])
@@ -422,10 +449,10 @@ def _add_page_header_footer(doc, title: str) -> None:
     section = doc.sections[0]
     hp = section.header.paragraphs[0] if section.header.paragraphs \
         else section.header.add_paragraph()
-    hp.text = title
+    hp.text = _shape_safe_ar(title)
     fp = section.footer.paragraphs[0] if section.footer.paragraphs \
         else section.footer.add_paragraph()
-    fp.add_run(branding["contact_footer"] + " — صفحة ")
+    fp.add_run(_shape_safe_ar(branding["contact_footer"]) + " — صفحة ")
     _add_page_number_field(fp)
 
 
@@ -2635,9 +2662,81 @@ _LEADS_HEADER = ["الاسم", "العنوان", "الهاتف", "الإيميل
                  "مستوى التوثيق"]
 
 
+import functools as _functools
+
+
+@_functools.lru_cache(maxsize=1)
+def _country_names() -> list:
+    """[(iso3, {أسماء بحروف صغيرة})] لكل دول المرجع — لفلترة جغرافيا الروابط."""
+    try:
+        from silk_market_resolver import _load
+        out = []
+        for row in _load():
+            iso3 = (row.get("iso3") or "").strip().upper()
+            names = {(row.get("name_en") or "").strip().lower(),
+                     (row.get("name_ar") or "").strip().lower()}
+            names.discard("")
+            if len(iso3) == 3 and names:
+                out.append((iso3, names))
+        return out
+    except Exception:  # noqa: BLE001 — تعذّر التحميل => لا فلترة جغرافيا (لا كسر)
+        return []
+
+
+def _address_wrong_geo(address, target_iso3: str, target_names: set) -> bool:
+    """هل عنوانُ الرائد يُسمّي دولةً **غير** السوق المستهدفة صراحةً؟ — Wave 2
+    (البند ٤). لا حقلَ دولةٍ على الرائد، فنقرأ العنوان الحرّ: إن ورد اسمُ دولةٍ
+    معروفةٍ ≠ السوق => يُسقَط (فجوة معلنة). غموضٌ/لا دولة => يُبقى (متحفّظ)."""
+    addr = (address or "").strip().lower()
+    if not addr:
+        return False
+    tgt = {t for t in (target_names or set()) if t}
+    for iso3, names in _country_names():
+        if iso3 == (target_iso3 or "").upper():
+            continue
+        for nm in names:
+            if nm and nm in tgt:
+                continue
+            if nm and re.search(r"(?<![\w])" + re.escape(nm) + r"(?![\w])", addr):
+                return True
+    return False
+
+
+def _is_filler_lead(lead: dict) -> bool:
+    """صفٌّ حشوٌ: اسمٌ (أو بلا اسم) وكلُّ حقولِ الاتصال فارغة/«—» — Wave 2 (البند ٦)."""
+    for k in ("phone", "email", "website", "maps_link", "address"):
+        v = lead.get(k)
+        if v not in (None, "", "—"):
+            return False
+    return True
+
+
+def _clean_leads(leads: list, dr: dict) -> list:
+    """نقِّ روابط العميل عند حدّ الجدول (Wave 2، البنود ٤/٥/٦): يُسقِط جملَ
+    النثر (كِيانُ اسمٍ مطلوب)، والجغرافيا الخاطئة (دولة ≠ السوق)، وصفوف الحشو
+    (اسمٌ بلا أيّ اتصال). يعمل على المدوّنة المخزَّنة أيضًا (لا مسار الكشط وحده)."""
+    from silk_gmaps import looks_like_name
+    market = dr.get("market") or {}
+    iso3 = (market.get("iso3") or "").upper()
+    tnames = {(market.get("name_en") or "").strip().lower(),
+              (market.get("name_ar") or "").strip().lower()}
+    out = []
+    for lead in leads or []:
+        nm = (lead.get("name") or "").strip()
+        if not nm or not looks_like_name(nm):          # البند ٥: نثر/بلا اسم
+            continue
+        if _is_filler_lead(lead):                        # البند ٦: حشو
+            continue
+        if _address_wrong_geo(lead.get("address"), iso3, tnames):  # البند ٤
+            continue
+        out.append(lead)
+    return out
+
+
 def _leads_data(dr: dict):
     il = dr.get("importer_leads") or {}
-    return (il.get("leads") or []), (il.get("note") or "")
+    leads = _clean_leads(il.get("leads") or [], dr)
+    return leads, (il.get("note") or "")
 
 
 def _lead_cells(lead: dict) -> list:
@@ -2656,7 +2755,8 @@ def _lead_cells(lead: dict) -> list:
 
 def _md_leads(dr: dict, L: list) -> None:
     """C5: جدول «قائمة مستوردين وموزعين قابلين للتواصل» في Markdown."""
-    from silk_gmaps import MAPS_DISCLAIMER
+    from silk_gmaps import maps_disclaimer
+    MAPS_DISCLAIMER = maps_disclaimer(dr.get("product"))   # Wave 2: بارامتري بالمنتج
     leads, note = _leads_data(dr)
     L += [f"## {_LEADS_TITLE}", ""]
     if not leads:
@@ -2673,7 +2773,8 @@ def _md_leads(dr: dict, L: list) -> None:
 
 def _docx_leads(doc, dr: dict, sanitize=None) -> None:
     """C5: جدول الروابط في Word (المدقّق والعميل) من بنية النموذج."""
-    from silk_gmaps import MAPS_DISCLAIMER
+    from silk_gmaps import maps_disclaimer
+    MAPS_DISCLAIMER = maps_disclaimer(dr.get("product"))   # Wave 2: بارامتري بالمنتج
     leads, note = _leads_data(dr)
     doc.add_heading(_LEADS_TITLE, level=2)
     if not leads:

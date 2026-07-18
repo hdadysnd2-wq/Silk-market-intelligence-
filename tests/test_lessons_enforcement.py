@@ -191,6 +191,26 @@ _TEST_ANCHORS = [
      ["def test_rung3_readiness_panel_flow_checklist_before_confirm"]),
     (27, "tests/test_regression_registry.py",
      ["def _guard_readiness_before_spend"]),
+    # البند ٢٨ — نقاء جدول الروابط (جغرافيا/نثر/حشو) على المدوّنة القانونية.
+    (28, "tests/test_wave2_first_pdf_cluster.py",
+     ["def test_wrong_geo_lead_dropped_valid_kept",
+      "def test_prose_leak_sentence_never_becomes_a_lead_row",
+      "def test_filler_all_dash_lead_dropped"]),
+    (28, "tools/canonical_fettuccine.py", ["def fettuccine_research_blob"]),
+    (28, "tests/test_regression_registry.py",
+     ["def _guard_leads_table_hygiene"]),
+    # البند ٢٩ — «سلك» متّصلة + A4 + القفل البصري.
+    (29, "tests/test_wave2_first_pdf_cluster.py",
+     ["def test_docx_brand_is_shape_safe_no_combining_marks",
+      "def test_docx_page_size_is_a4_not_letter"]),
+    (29, "tests/test_regression_registry.py",
+     ["def _guard_report_arabic_shape_a4"]),
+    # البند ٣٠ — لا اسم منتجٍ مثبَّت في القوالب (توسيع hardcoded-product-rule).
+    (30, "tests/test_wave2_first_pdf_cluster.py",
+     ["def test_disclaimer_parametrized_by_study_product_not_dates",
+      "def test_no_hardcoded_product_word_in_client_facing_templates"]),
+    (30, "tests/test_regression_registry.py",
+     ["def _guard_client_template_no_hardcoded_product"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

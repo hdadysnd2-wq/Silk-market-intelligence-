@@ -63,7 +63,7 @@ def test_md_renders_leads_table_with_columns_and_disclaimer():
         assert col in md, f"عمود مفقود: {col}"
     assert "Ajwa XL" in md and "sales@ajwa.nl" in md and "+3110123" in md
     assert "◐ مرصود عبر خرائط قوقل" in md          # مستوى توثيق الخرائط
-    assert "لا أنه يستورد التمور السعودية" in md    # سطر الإفصاح C5
+    assert "لا أنه يستورد «تمور»" in md    # Wave 2: بارامتري بالمنتج (لا «التمور السعودية»)
 
 
 def test_client_docx_renders_leads_table_and_survives_guard():
@@ -82,7 +82,7 @@ def test_client_docx_renders_leads_table_and_survives_guard():
     assert "قائمة مستوردين وموزعين قابلين للتواصل" in blob
     assert "Ajwa XL" in blob and "sales@ajwa.nl" in blob
     assert "مرصود عبر خرائط قوقل" in blob
-    assert "لا أنه يستورد التمور السعودية" in blob
+    assert "لا أنه يستورد «تمور»" in blob    # Wave 2: بارامتري بالمنتج
 
 
 def test_no_leads_declares_gap_never_fabricates_rows():

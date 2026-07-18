@@ -1,0 +1,197 @@
+"""Wave 2 — عنقود أوّل PDF حيّ (فيتوتشيني/إيطاليا): قفلٌ سلوكيّ هرمتيّ.
+
+كل الإصلاحات تُتحقَّق على **المدوّنة القانونية الحقيقية الشكل**
+(`tools/canonical_fettuccine.py`) لا نموذجٍ مثالي:
+- البند ٤: رائدٌ بجغرافيا خاطئة (عنوان أمريكي، سوق إيطاليا) يُسقَط.
+- البند ٥: رائدٌ من جملة نثرٍ إنجليزية يُسقَط (لا نثرٌ في خلية عميل).
+- البند ٦: رائدٌ حشو (اسمٌ وكلُّ الاتصال «—») يُسقَط؛ صفرٌ => سطر فجوة صادق.
+- البند ٨ + الطيّة E: «سِلك» متّصلة «سلك» بلا مِحرفٍ مُركَّب (docx + PDF).
+- البند ٩: مقاس A4 لا Letter.
+- البند ١٠ + الطيّة B: سطر الإخلاء بارامتري بالمنتج (لا «التمور السعودية»).
+
+الرُتبة ٣ البصرية (docx→PDF→pdftotext) تُخطَّى محليًا إن غاب soffice/pdftotext
+(تعمل في وظيفة e2e-live-shape على CI).
+"""
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+import pytest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "tools"))
+
+import silk_render  # noqa: E402
+import silk_reports  # noqa: E402
+from canonical_fettuccine import fettuccine_research_blob  # noqa: E402
+
+pytest.importorskip("docx")
+
+_COMBINING = "".join(chr(c) for c in list(range(0x064B, 0x0653)) + [0x0670])
+# مِحرفٌ مُركَّبٌ **منفصل** يشقّ كلمة: يظهر في بداية رمزٍ أو بعد فراغ (نمط «ِس لك»)
+# لا ملتصقًا بحرفٍ (الشدّة الشرعية في «المرشّحة» ملتصقةٌ فلا تُعَدّ شقًّا).
+_DETACHED_MARK = re.compile(r"(?:^|[\s])[" + re.escape(_COMBINING) + r"]")
+
+
+def _view():
+    return silk_render.build_view(fettuccine_research_blob())
+
+
+def _md():
+    return silk_reports.render_markdown(_view())
+
+
+def _docx_all_text(path):
+    from docx import Document
+    d = Document(path)
+    out = [p.text for p in d.paragraphs]
+    for t in d.tables:
+        for row in t.rows:
+            out += [c.text for c in row.cells]
+    for s in d.sections:
+        for hf in (s.header, s.footer):
+            out += [p.text for p in hf.paragraphs]
+    return "\n".join(out)
+
+
+# ═══ البنود ٤/٥/٦ — جدول الروابط ═══════════════════════════════════════════
+
+def test_wrong_geo_lead_dropped_valid_kept():
+    """عنوانٌ أمريكيٌّ في دراسةِ إيطاليا => الرائد يُسقَط؛ الرائد الإيطالي يبقى."""
+    md = _md()
+    seg = md[md.find("قائمة مستوردين"):]
+    assert "Pastificio Milano" in seg          # صالح (إيطاليا) — يبقى
+    assert "NutsWorld" not in seg              # عنوان أمريكي — يُسقَط
+    assert "United States" not in seg
+
+
+def test_prose_leak_sentence_never_becomes_a_lead_row():
+    """جملةُ نثرٍ إنجليزية لا تصير صفَّ رائد (تُوجَّه للسرد) — لا نثرٌ في الجدول."""
+    seg = _md()
+    seg = seg[seg.find("قائمة مستوردين"):]
+    assert "Italy imports a significant" not in seg
+    # unit: المميِّز يرفض الجملة ويقبل الاسم.
+    from silk_gmaps import looks_like_name
+    assert looks_like_name("Pastificio Milano Srl") is True
+    assert looks_like_name(
+        "Italy imports a significant volume of pasta from several "
+        "European suppliers according to recent trade data.") is False
+
+
+def test_filler_all_dash_lead_dropped():
+    """رائدٌ اسمُه فقط وكلُّ الاتصال «—»/فارغ => يُسقَط (لا صفّ حشو)."""
+    seg = _md()
+    assert "Anonimo Distribuzione" not in seg[seg.find("قائمة مستوردين"):]
+
+
+def test_all_leads_filtered_out_shows_one_honest_gap_line():
+    """لو صُفّيت كلُّ الروابط => سطرُ فجوةٍ صادقٌ واحد، لا جدولٌ فارغ/حشو."""
+    blob = fettuccine_research_blob()
+    # اجعل كلَّ الروابط غير صالحة (كلها حشو/نثر/جغرافيا خاطئة).
+    for lead in blob["deep_research"]["importer_leads"]["leads"]:
+        lead["name"] = "x"          # حشو (بلا اتصال)
+        for k in ("phone", "email", "website", "maps_link", "address"):
+            lead[k] = ""
+    md = silk_reports.render_markdown(silk_render.build_view(blob))
+    seg = md[md.find("قائمة مستوردين"):]
+    assert "فجوة معلنة" in seg
+    assert "| الاسم |" not in seg   # لا جدول
+
+
+def test_no_untranslated_english_sentence_in_client_docx_table():
+    """تقرير العميل (docx): لا جملةٌ إنجليزية خام في خلايا جدول الروابط."""
+    p = os.path.join(tempfile.mkdtemp(), "c.docx")
+    silk_reports.render_client_docx(_view(), p)
+    txt = _docx_all_text(p)
+    assert "Italy imports a significant" not in txt
+    assert "Pastificio Milano" in txt          # الصالح يبقى
+
+
+# ═══ البند ١٠ + الطيّة B — لا ترميز منتج/دولة في القوالب ═══════════════════
+
+def test_disclaimer_parametrized_by_study_product_not_dates():
+    """سطر الإخلاء يُشتَقّ من المنتج المدروس («فيتوتشيني») — لا «التمور السعودية»."""
+    md = _md()
+    assert "فيتوتشيني" in md[md.find("قائمة مستوردين"):]
+    assert "التمور السعودية" not in md
+    from silk_gmaps import maps_disclaimer, MAPS_DISCLAIMER
+    assert "عسل" in maps_disclaimer("عسل")     # منتجٌ آخر => يظهر هو
+    assert "التمور" not in MAPS_DISCLAIMER      # الثابت العام بلا منتج مثبَّت
+
+
+def test_no_hardcoded_product_word_in_client_facing_templates():
+    """الطيّة B: القوالب/السلاسل القابلة لإعادة الاستعمال في مسار الروابط تخلو
+    من أيّ اسم منتجٍ مثبَّت (تمور/dates/معكرونة). المنشأ «السعودية» يبقى (صحيح)."""
+    import inspect
+    from silk_gmaps import maps_disclaimer
+    blob = inspect.getsource(maps_disclaimer)
+    # الدالّة تشتقّ من الوسيط، لا تحمل اسم منتجٍ مثبَّت.
+    for tok in ("التمور", "dates", "معكرونة", "pasta", "فيتوتشيني"):
+        assert tok not in blob, f"اسم منتجٍ مثبَّت في سطر الإخلاء: {tok}"
+    # الثابت العام كذلك.
+    src = _read("silk_gmaps.py")
+    m = re.search(r'MAPS_DISCLAIMER = .+', src)
+    assert m and "التمور" not in m.group(0)
+
+
+def _read(rel):
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, rel), encoding="utf-8") as f:
+        return f.read()
+
+
+# ═══ البند ٨ + الطيّة E — تشكيل العلامة/العربية (مصدر + بصري) ══════════════
+
+def test_docx_brand_is_shape_safe_no_combining_marks():
+    """docx: «سلك» متّصلة، ولا «سِلك» بالكسرة، ولا أيّ مِحرفٍ مُركَّب يشقّ كلمة."""
+    p = os.path.join(tempfile.mkdtemp(), "c.docx")
+    silk_reports.render_client_docx(_view(), p)
+    txt = _docx_all_text(p)
+    assert "سلك" in txt                         # متّصلة
+    assert "سِلك" not in txt                     # لا الكسرة المُركَّبة في العلامة
+    assert not _DETACHED_MARK.search(txt), "مِحرفٌ مُركَّبٌ منفصلٌ يشقّ كلمة"
+
+
+def test_docx_page_size_is_a4_not_letter():
+    """كل مسارات docx بمقاس A4 (210×297مم) لا Letter الأمريكي."""
+    from docx import Document
+    for fn in ("render_client_docx", "render_docx"):
+        p = os.path.join(tempfile.mkdtemp(), "d.docx")
+        getattr(silk_reports, fn)(_view(), p)
+        s = Document(p).sections[0]
+        assert abs(s.page_width.mm - 210) < 1 and abs(s.page_height.mm - 297) < 1, \
+            f"{fn}: ليس A4 ({s.page_width.mm:.1f}×{s.page_height.mm:.1f})"
+
+
+# ── الرُتبة ٣ البصرية: docx→PDF→pdftotext (مُخطَّاة إن غاب المحرّك) ──────────
+
+def _pdf_tools():
+    return bool(silk_reports._find_soffice()) and bool(shutil.which("pdftotext"))
+
+
+@pytest.mark.skipif(not _pdf_tools(),
+                    reason="soffice/pdftotext غير متاح (يعمل في e2e-live-shape)")
+def test_visual_pdf_brand_contiguous_and_no_word_split():
+    """قفل بصري (البند ٨ + الطيّة E): docx→PDF→pdftotext يحوي «سلك» متّصلة،
+    ولا كلمةَ عربيةٍ يشقّها مِحرفٌ مُركَّب، ولا «التمور السعودية»، وثلاث صفحات."""
+    p = os.path.join(tempfile.mkdtemp(), "v.docx")
+    silk_reports.render_client_docx(_view(), p)
+    pdf = silk_reports.docx_to_pdf(p)
+    assert pdf and os.path.exists(pdf)
+    txt = subprocess.run(["pdftotext", "-enc", "UTF-8", pdf, "-"],
+                         capture_output=True, timeout=60).stdout.decode(
+                             "utf-8", "replace")
+    assert "سلك" in txt.replace("\n", ""), "«سلك» غير متّصلة في استخراج PDF"
+    assert "س لك" not in txt, "«سلك» مشقوقةٌ بمسافة في الاستخراج"
+    assert not _DETACHED_MARK.search(txt), "كلمةٌ عربيةٌ يشقّها مِحرفٌ مُركَّبٌ منفصل"
+    assert "التمور السعودية" not in txt
+
+
+def test_shape_safe_helper_strips_only_combining_marks():
+    """`_shape_safe_ar`: يجرّد الحركات/التطويل فقط، ويُبقي الحروف/اللاتيني."""
+    assert silk_reports._shape_safe_ar("سِلك") == "سلك"
+    assert silk_reports._shape_safe_ar("Italy 2024 — سلك") == "Italy 2024 — سلك"
