@@ -82,18 +82,52 @@ def seed_db(db_path: str) -> tuple[int, int]:
     return completed_id, running_id
 
 
+def seed_producer_export_cache(cache_dir: str, hs_code: str, year: int,
+                               top_isos: list[tuple[str, str]]) -> None:
+    """ابذر مخبأ كومتريد لتصدير العالم (flow=X) عبر المسار الحقيقي — no test-hook.
+
+    يكتب ملف المخبأ بنفس مفتاح (url+params) الذي يبنيه `comtrade_trade(hs, None,
+    year, flow="X", partner=0)` بلا مفتاح اشتراك (البيئة الحقيقية هنا تنزع
+    COMTRADE_API_KEY)، فيقرؤه الخادم الحيّ **من المخبأ** بلا شبكة — فتُطلق
+    استشارةُ بلد المنشأ من بياناتٍ حقيقية الشكل، لا من حقنة إنتاج. top_isos =
+    قائمة (m49, iso3) بترتيب تنازلي للقيمة. Seeds the world-export cache so the
+    live server serves it offline via the genuine cache path."""
+    import silk_data_layer as dl
+    from silk_cache import _key
+    url = dl.ENDPOINTS["comtrade"]                 # سطح المعاينة (بلا مفتاح)
+    params = {"period": str(year), "cmdCode": str(hs_code),
+              "flowCode": "X", "partnerCode": "0"}
+    data = [{"reporterCode": m49, "reporterISO": iso3,
+             "primaryValue": float(10_000_000_000 - i * 1_000_000_000)}
+            for i, (m49, iso3) in enumerate(top_isos)]
+    os.makedirs(cache_dir, exist_ok=True)
+    path = os.path.join(cache_dir, _key(url, params) + ".json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump({"data": data}, fh)
+
+
 class LiveShapeServer:
     """مدير سياق يُقلِع uvicorn على DB مبذور ويُغلقه — real uvicorn subprocess.
 
     `base_url` جاهز بعد `__enter__` (بعد أن يرد /health بـ200). المفاتيح
     المدفوعة غائبة، والتخزين كلّه في مجلّد مؤقّت يُنظَّف عند الخروج."""
 
-    def __init__(self, port: int | None = None, boot_timeout: float = 45.0):
+    # عيّنة تدفّق ما قبل التشغيل (Wave 1): منتج/سوق/رمز HS يُطلقان استشارةَ بلد
+    # المنشأ من مخبأٍ مبذور. الإمارات مُصدِّرٌ حقيقيّ (إعادة تصدير) للتمور —
+    # عيّنةٌ مدافَعٌ عنها لا مضلّلة. Deterministic prerun-flow fixture.
+    PRERUN_PRODUCT = "تمور"
+    PRERUN_HS = "080410"
+    PRERUN_MARKET_ISO3 = "ARE"
+
+    def __init__(self, port: int | None = None, boot_timeout: float = 45.0,
+                 prerun_flags: bool = False):
         self.port = port or _free_port()
         self.boot_timeout = boot_timeout
+        self.prerun_flags = prerun_flags
         self.base_url = f"http://127.0.0.1:{self.port}"
         self._tmp = tempfile.mkdtemp(prefix="silk_rung2_")
         self.db_path = os.path.join(self._tmp, "silk.db")
+        self.cache_dir = os.path.join(self._tmp, "cache")
         self.completed_id = 0
         self.running_id = 0
         self._proc: subprocess.Popen | None = None
@@ -104,7 +138,7 @@ class LiveShapeServer:
         env["SILK_DB"] = self.db_path
         env["SILK_STORE_DB"] = os.path.join(self._tmp, "store.db")
         env["SILK_USAGE_DB"] = os.path.join(self._tmp, "usage.db")
-        env["SILK_CACHE_DIR"] = os.path.join(self._tmp, "cache")
+        env["SILK_CACHE_DIR"] = self.cache_dir
         env["SILK_TRACE_DIR"] = os.path.join(self._tmp, "traces")
         # وضع تطوير مفتوح مشروع (لا مفاتيح مدفوعة) — الشريط الجانبي يُقرَأ
         # بلا X-API-Key فلا يحتاج المتصفّح لحقن مفتاح. المفاتيح المدفوعة
@@ -115,10 +149,26 @@ class LiveShapeServer:
                   "SILK_REQUIRE_PERSISTENT_DATA_DIR"):
             env.pop(k, None)
         env.setdefault("SILK_HTTP_MIN_GAP_MS", "0")
+        # تدفّق ما قبل التشغيل (Wave 1): فعّل صمّامات التصنيف/الاستشارة كي تظهر
+        # نوافذ التأكيد في المتصفّح. مسار التصنيف الحتمي يعمل بلا مفتاح كلود
+        # (CSV)، واستشارةُ بلد المنشأ تقرأ المخبأ المبذور (بلا شبكة).
+        if self.prerun_flags:
+            env["SILK_HS_CLASSIFIER"] = "1"
+            env["SILK_PRODUCER_ADVISORY"] = "1"
+            env["SILK_PRODUCER_ADVISORY_TOPN"] = "5"
         return env
 
     def __enter__(self) -> "LiveShapeServer":
         self.completed_id, self.running_id = seed_db(self.db_path)
+        if self.prerun_flags:
+            # سنةُ الفحص = سنةُ الدراسة − ١ (نفس ما يحسبه حارس الاستشارة حيًّا).
+            import datetime as _dt
+            year = _dt.date.today().year - 1
+            # الإمارات #١ مصدّرًا (عيّنة)، مع مصدّري تمور حقيقيين آخرين.
+            seed_producer_export_cache(
+                self.cache_dir, self.PRERUN_HS, year,
+                [("784", "ARE"), ("788", "TUN"), ("364", "IRN"),
+                 ("682", "SAU"), ("368", "IRQ")])
         self._proc = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "api:app",
              "--host", "127.0.0.1", "--port", str(self.port), "--log-level",

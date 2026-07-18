@@ -588,8 +588,10 @@ function modal(inner){
    وإلا والمُصنِّف مفعّل: استدعِ /classify_hs واعرض الاقتراح للتأكيد. مُطفأ =>
    السلوك كاليوم (يمرّ برمز فارغ؛ الخادم يقرّر عبر بوّابته). */
 function ensureHs(cb){
-  if(S.hs){return cb()}
+  // المُصنِّف مُطفأ => السلوك كاليوم (يمرّ برمز /resolve؛ الخادم يقرّر ببوّابته).
   if(!(S.cfg&&S.cfg.hs_classifier)){return cb()}
+  // مُفعَّل => اعرض الاقتراح للتأكيد بنقرة **قبل أيّ حجز** (مندوب المالك) — حتى
+  // لو حُسِم الرمز من القائمة (المسار الحتمي يعيده فورًا بلا نداء كلود).
   toast("…جارٍ تصنيف المنتج");
   post("/classify_hs",{product:S.product,ingredients:S.intakeIngredients||null,category:S.intakeCategory||null})
     .then(function(res){showHsProposal(res,cb)})

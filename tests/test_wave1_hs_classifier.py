@@ -379,6 +379,10 @@ def test_web_prerun_flow_is_wired():
     # التدفّق يمرّ عبر ensureHs قبل التشغيل (لا استدعاء startResearch مباشرةً من الزرّ).
     assert "ensureHs(function(){startResearch({})})" in html, \
         "runDeepResearch لا يمرّ عبر ensureHs قبل التشغيل"
+    # التأكيد بنقرة قبل **كل** تشغيل حين الصمّام مفعّل (مندوب المالك): لا خروج
+    # مبكر يتخطّى نافذة التأكيد لمجرّد أن الرمز محسوم من القائمة.
+    assert "if(S.hs){return cb()}" not in html, \
+        "ensureHs يتخطّى نافذة التأكيد حين S.hs محسوم — يخالف «تأكيد قبل الحجز»"
 
 
 def test_classifier_module_has_no_hardcoded_hs_literal():

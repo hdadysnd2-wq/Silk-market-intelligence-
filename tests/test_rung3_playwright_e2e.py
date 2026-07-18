@@ -33,6 +33,7 @@ sys.path.insert(0, os.path.join(_ROOT, "tools"))
 pytestmark = pytest.mark.e2e
 
 _FLOW = os.path.join(_ROOT, "tests", "e2e", "live_shape_flow.cjs")
+_PRERUN_FLOW = os.path.join(_ROOT, "tests", "e2e", "prerun_flow.cjs")
 
 
 def _node() -> str | None:
@@ -96,3 +97,37 @@ def test_rung3_full_browser_flow_word_and_md_export_and_sidebar():
             f"Playwright flow failed (rc={r.returncode}).\n"
             f"STDOUT:\n{out}\nSTDERR:\n{err}")
         assert "RUNG3 PASS" in out, f"missing PASS marker.\nSTDOUT:\n{out}"
+
+
+def test_rung3_prerun_modals_flow_classify_confirm_advisory_consent():
+    """الشرط المُلزِم (Wave 1): متصفّح حقيقي ينقر نوافذ ما قبل التشغيل الجديدة —
+    اختيار منتج/سوق ← «بحث عميق» ← نافذة تصنيف HS ← تأكيد ← نافذة استشارة بلد
+    المنشأ ← موافقة صريحة ← إعادة إرسال بالموافقة. الأعلام مُفعَّلة في الخادم
+    فقط (prerun_flags)، والاستشارة تُطلق من مخبأ تصدير مبذور (بلا شبكة/مفتاح/
+    soffice). يخرج السكربت بـ0 ويطبع PRERUN PASS بعد كل خطوة."""
+    node = _node()
+    if not node:
+        pytest.skip("node غير متاح في هذه البيئة (أفضل جهد؛ وظيفة CI تثبّته)")
+    node_path = _node_path()
+    if not _playwright_available(node_path):
+        pytest.skip("حزمة playwright غير محلولة عبر NODE_PATH "
+                    "(أفضل جهد؛ وظيفة e2e-live-shape تثبّتها)")
+
+    from live_shape_server import LiveShapeServer
+    with LiveShapeServer(prerun_flags=True) as srv:
+        env = dict(
+            os.environ,
+            NODE_PATH=node_path or "",
+            BASE_URL=srv.base_url,
+            PRERUN_PRODUCT=srv.PRERUN_PRODUCT,
+            PRERUN_HS=srv.PRERUN_HS,
+            PRERUN_MARKET_ISO3=srv.PRERUN_MARKET_ISO3,
+        )
+        r = subprocess.run([node, _PRERUN_FLOW], capture_output=True, env=env,
+                           timeout=180)
+        out = r.stdout.decode("utf-8", "replace")
+        err = r.stderr.decode("utf-8", "replace")
+        assert r.returncode == 0, (
+            f"Prerun Playwright flow failed (rc={r.returncode}).\n"
+            f"STDOUT:\n{out}\nSTDERR:\n{err}")
+        assert "PRERUN PASS" in out, f"missing PASS marker.\nSTDOUT:\n{out}"
