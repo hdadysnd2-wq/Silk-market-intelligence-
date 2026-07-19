@@ -8,9 +8,17 @@ WORKDIR /app
 # راجع docs/DEPLOY_RAILWAY.md §6 (بوابة قبول PDF/RTL) و silk_reports.docx_to_pdf.
 # The final client deliverable is a non-editable PDF; LibreOffice + an Arabic
 # font must ship on the image or the PDF endpoint 503s live.
+# §7 (قرار المالك): العائلة الرسمية IBM Plex Sans Arabic (OFL) — تُنزَّل من
+# مستودع google/fonts الرسمي (Regular+Bold+SemiBold). بلا هذا الخطّ يبدّل
+# LibreOffice صامتًا فيسقط قبول §7؛ curl -f يُفشِل البناء إن تعذّر التنزيل.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       libreoffice-writer fonts-hosny-amiri fontconfig \
+       libreoffice-writer fonts-hosny-amiri fontconfig curl ca-certificates \
+    && mkdir -p /usr/share/fonts/truetype/ibmplex \
+    && for w in Regular Bold SemiBold; do \
+         curl -fsSL -o "/usr/share/fonts/truetype/ibmplex/IBMPlexSansArabic-$w.ttf" \
+           "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-$w.ttf"; \
+       done \
     && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 

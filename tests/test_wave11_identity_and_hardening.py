@@ -106,7 +106,7 @@ def test_page_header_and_footer_present(monkeypatch):
 
 def test_table_header_row_shaded_with_primary_color(monkeypatch):
     from silk_render import build_view
-    from silk_reports import render_docx, _load_branding
+    from silk_reports import render_docx, _TABLE_HEADER_FILL
     from docx import Document
     from docx.oxml.ns import qn
     monkeypatch.setenv("SILK_HERMETIC", "1")
@@ -114,12 +114,13 @@ def test_table_header_row_shaded_with_primary_color(monkeypatch):
     path = os.path.join(tempfile.mkdtemp(), "shaded.docx")
     render_docx(view, path)
     doc = Document(path)
-    primary = _load_branding()["primary_color"].upper()
+    # §7 (ترقية الطباعة): رأس الجدول أخضرُ سِلك #166534 (كان لون العلامة الأساس).
+    header_fill = _TABLE_HEADER_FILL.upper()
     found = False
     for table in doc.tables:
         hdr_cell = table.rows[0].cells[0]
         shd = hdr_cell._tc.get_or_add_tcPr().find(qn("w:shd"))
-        if shd is not None and shd.get(qn("w:fill")).upper() == primary:
+        if shd is not None and shd.get(qn("w:fill")).upper() == header_fill:
             found = True
             break
     assert found

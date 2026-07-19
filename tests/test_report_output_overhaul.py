@@ -187,7 +187,7 @@ def test_docx_is_rtl_document_wide(tmp_path):
     assert doc_xml.count("<w:rtl") > 5           # runs rtl
     assert doc_xml.count("<w:jc") > 5            # محاذاة يمين
     assert "<w:bidiVisual" in doc_xml            # جدول متدفّق يميناً
-    assert "Arial" in doc_xml                    # خطّ عربي على الـrFonts
+    assert "IBM Plex Sans Arabic" in doc_xml     # §7: خطّ سِلك على الـrFonts
     # المقطع نفسه bidi (اتجاه أساس المستند).
     assert "<w:bidi/>" in doc_xml or "<w:bidi " in doc_xml
     # نمط Normal يحمل rtl كذلك (وراثة + صريح معاً).

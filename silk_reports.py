@@ -260,10 +260,101 @@ def _set_cell_shading(cell, hex_color: str) -> None:
     cell._tc.get_or_add_tcPr().append(shd)
 
 
-# §4 (أمر العمل الرئيس — RTL): عائلة خطّ عربية الشكل. Word يعرضها مباشرة؛
-# LibreOffice (مسار PDF) يبدّلها بأقرب عائلة عربية متاحة. تُضبط على ascii+cs
-# فتُشكَّل الحروف موصولةً بلا مربّعات tofu.
-_RTL_BODY_FONT = "Arial"
+def _set_cell_margins(cell, top=100, bottom=100, left=120, right=120) -> None:
+    """§7: هوامشُ خليّةٍ داخلية (twips) — تنفّسٌ حول النصّ كالمنصّات المرجعية."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    tcpr = cell._tc.get_or_add_tcPr()
+    mar = tcpr.find(qn("w:tcMar"))          # عناصرُ lxml الفارغةُ falsy — نستعمل
+    if mar is None:                          # is None صراحةً لا `or` (فخّ معروف)
+        mar = OxmlElement("w:tcMar")
+        tcpr.append(mar)
+    for side, val in (("top", top), ("bottom", bottom),
+                      ("left", left), ("right", right)):
+        el = mar.find(qn(f"w:{side}"))
+        if el is None:
+            el = OxmlElement(f"w:{side}")
+            mar.append(el)
+        el.set(qn("w:w"), str(val))
+        el.set(qn("w:type"), "dxa")
+
+
+def _set_table_borders(table, hex_color: "str | None" = None) -> None:
+    """§7: حدودٌ شعريّةٌ ناعمة (single, size 4 = ½pt) بلونٍ خافت بدل أسود
+    Table-Grid الافتراضي — مظهرٌ احترافيّ هادئ."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    hex_color = hex_color or _TABLE_BORDER
+    tblpr = table._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        el = OxmlElement(f"w:{edge}")
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), "4")
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), (hex_color or "").lstrip("#"))
+        borders.append(el)
+    existing = tblpr.find(qn("w:tblBorders"))
+    if existing is not None:
+        tblpr.remove(existing)
+    tblpr.append(borders)
+
+
+def _apply_typography(doc) -> None:
+    """§7 (قرار المالك): نظامُ الطباعة على مستوى الأنماط — متنٌ IBM Plex،
+    تباعدُ أسطرٍ ١٫٤٤، عناوينُ خضراءُ مُدرَّجة، ترويسة/تذييلٌ رماديّ. يُطبَّق
+    مرّةً على المستند (الأنماطُ تُشار إليها بالاسم، فيسري على كل المحتوى)."""
+    from docx.shared import Pt, RGBColor
+    styles = doc.styles
+
+    def _style(name):
+        try:
+            return styles[name]
+        except KeyError:
+            return None
+
+    normal = _style("Normal")
+    if normal is not None:
+        normal.font.name = _RTL_BODY_FONT
+        normal.font.size = Pt(_TYPO["body_pt"])
+        pf = normal.paragraph_format
+        pf.line_spacing = _TYPO["line_spacing"]
+        pf.space_after = Pt(_TYPO["space_after_pt"])
+    for name, key in (("Title", "title"), ("Heading 1", "h1"),
+                      ("Heading 2", "h2"), ("Heading 3", "h3"),
+                      ("Header", "header_footer"), ("Footer", "header_footer")):
+        st = _style(name)
+        if st is None:
+            continue
+        pt, hexc = _TYPO[key]
+        st.font.name = _RTL_BODY_FONT
+        st.font.size = Pt(pt)
+        st.font.color.rgb = RGBColor.from_string(hexc)
+        if key in ("title", "h1", "h2", "h3"):
+            st.font.bold = True
+
+
+# §7 (قرار المالك — ترقيةُ الطباعة، مُثبَّتٌ على تقريرٍ حقيقيّ): العائلةُ
+# الرسميةُ IBM Plex Sans Arabic (OFL) — Regular للمتن، Bold للعناوين/رؤوس
+# الجداول. تُضبط على ascii+cs فتُشكَّل الحروفُ موصولةً بلا مربّعات tofu. يجب
+# أن تكون مثبَّتةً في بيئة التصيير (فحصُ الحضور يفشل بصوتٍ عالٍ إن غابت — لا
+# نترك LibreOffice يبدّلها صامتًا).
+_RTL_BODY_FONT = "IBM Plex Sans Arabic"
+
+# §7 نظامُ الطباعة (وحدات docx). أنصافُ نقاطٍ للحجم؛ الألوانُ HEX بلا #.
+_TYPO = {
+    "body_pt": 11.0,          # 22 نصفَ نقطة
+    "line_spacing": 345 / 240,  # 1.4375 (سطرٌ ≈١٫٤٤)
+    "space_after_pt": 9.0,    # 180 twip
+    "title": (18.0, "166534"),          # 36 نصفَ نقطة، عريض، موسَّط
+    "h1": (14.0, "166534"), "h2": (13.0, "166534"), "h3": (12.0, "333333"),
+    "header_footer": (9.0, "555555"),   # 18 نصفَ نقطة، رماديّ
+}
+_TABLE_HEADER_FILL = "166534"
+_TABLE_ZEBRA_FILL = "F2F7F3"
+_TABLE_BORDER = "BBBBBB"
+_TABLE_DENSE_ROWS = 20        # جداولٌ >٢٠ صفًّا تنزل لـ٩ نقاط (18 نصفَ نقطة)
+_TABLE_DENSE_PT = 9.0
 
 
 def _set_rtl_paragraph(ppr) -> None:
@@ -383,6 +474,7 @@ def _finalize_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
                         _do_paragraph(p)
                     _walk_tables(cell.tables)   # جداول متداخلة (SWOT وغيرها)
 
+    _apply_typography(doc)   # §7: نظامُ الطباعة (خطّ/حجم/لون/تباعد) مرّةً
     for p in doc.paragraphs:
         _do_paragraph(p)
     _walk_tables(doc.tables)
@@ -867,25 +959,32 @@ def _add_table(doc, headers: list[str], rows: list[list],
         run = cap.add_run(caption)
         run.italic = True
         run.bold = True
-    branding = _load_branding()
-    primary = branding["primary_color"]
+    from docx.shared import Pt
+    dense = len(rows) > _TABLE_DENSE_ROWS   # §7: جدولٌ كثيفٌ => خطٌّ أصغر
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
     hdr = table.rows[0].cells
     for i, h in enumerate(headers):
         hdr[i].text = str(h)
-        _set_cell_shading(hdr[i], primary)
+        _set_cell_shading(hdr[i], _TABLE_HEADER_FILL)   # §7: أخضر سِلك
+        _set_cell_margins(hdr[i])
         if hdr[i].paragraphs[0].runs:
             r = hdr[i].paragraphs[0].runs[0]
             r.bold = True
             r.font.color.rgb = _hex_to_rgbcolor("FFFFFF")
+            if dense:
+                r.font.size = Pt(_TABLE_DENSE_PT)
     for row_idx, vals in enumerate(rows):
         cells = table.add_row().cells
         for i, v in enumerate(vals):
             cells[i].text = str(v) if v is not None else "—"
-        if row_idx % 2 == 1:  # شريط متناوب خفيف كل صف زوجي (١-مرتكز)
+            _set_cell_margins(cells[i])
+            if dense and cells[i].paragraphs[0].runs:
+                cells[i].paragraphs[0].runs[0].font.size = Pt(_TABLE_DENSE_PT)
+        if row_idx % 2 == 1:  # §7: شريطٌ متناوبٌ أخضرُ خفيف كل صفٍّ زوجيّ
             for c in cells:
-                _set_cell_shading(c, "F2F2F2")
+                _set_cell_shading(c, _TABLE_ZEBRA_FILL)
+    _set_table_borders(table)   # §7: حدودٌ شعريّةٌ خافتة بدل أسود Grid
     _set_table_rtl(table)   # §4: تدفّق أعمدة يميناً + محاذاة خلايا + عرض DXA
 
 
@@ -2238,6 +2337,20 @@ def has_arabic_font() -> bool:
         return False
     blob = (out.stdout or "").lower()
     return any(hint in blob for hint in _ARABIC_FONT_HINTS)
+
+
+def has_plex_arabic_font() -> bool:
+    """§7 (قرار المالك): هل «IBM Plex Sans Arabic» مثبَّتٌ تحديدًا؟ العائلةُ
+    الرسميةُ للتقرير — يجب ألّا يبدّلها LibreOffice صامتًا. يفشل بصوتٍ عالٍ في
+    مسار القبول إن غابت (لا خطٌّ بديلٌ يمرّ زائفًا)."""
+    import subprocess
+    try:
+        out = subprocess.run(["fc-list", ":", "family"], capture_output=True,
+                             text=True, timeout=20)
+    except Exception:  # noqa: BLE001
+        return False
+    blob = (out.stdout or "").lower()
+    return "plex sans arabic" in blob or "ibmplexsansarabic" in blob
 
 
 def _pdf_diacritic_free_copy(docx_path: str) -> str:
