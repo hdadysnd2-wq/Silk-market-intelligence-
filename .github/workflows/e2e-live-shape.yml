@@ -32,10 +32,17 @@ jobs:
       # محرّك تحويل PDF (LibreOffice/soffice) + خطّ عربي الشكل — رُتبة ٣ تنقر
       # زرّ «تصدير التقرير (PDF)» وتؤكّد توقيع %PDF؛ بلا هذين يقع الخادم في
       # فرع 503 فيفشل الفحص. نفس التبعية المطلوبة على النشر (Dockerfile).
-      - name: Install LibreOffice + Arabic font (PDF converter)
+      - name: Install LibreOffice + Arabic fonts (PDF converter)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-hosny-amiri fontconfig poppler-utils
+          # §7: العائلة الرسمية IBM Plex Sans Arabic (OFL) من google/fonts —
+          # Regular+Bold+SemiBold. بلا Plex يبدّل LibreOffice صامتًا فيسقط قبول §7.
+          sudo mkdir -p /usr/share/fonts/truetype/ibmplex
+          for w in Regular Bold SemiBold; do
+            sudo curl -fsSL -o "/usr/share/fonts/truetype/ibmplex/IBMPlexSansArabic-$w.ttf" \
+              "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-$w.ttf"
+          done
           fc-cache -f
 
       # pymupdf تبعيةٌ صلبةٌ لوظيفة e2e (أمر المُشرِف، الخيار ٣): مقياسُ الهندسة
@@ -62,10 +69,12 @@ jobs:
 
       # الشرط ٣ (مراجعة المُشرِف): خطٌّ عربيّ الشكل حاضرٌ — فشلٌ عالٍ إن غاب،
       # وإلا يُصيَّر الـPDF tofu فيمرّ القفلُ البصريّ زائفًا.
-      - name: Assert an Arabic-shaping font is present (loud)
+      - name: Assert IBM Plex Sans Arabic is present (loud — no silent substitution)
         run: |
-          fc-list | grep -iE "naskh|amiri|arab" \
-            || { echo "::error::no Arabic-shaping font installed"; exit 1; }
+          # §7 (قرار المالك): العائلة الرسمية يجب أن تكون حاضرةً — فشلٌ عالٍ إن
+          # غابت، وإلا يبدّلها LibreOffice صامتًا فيمرّ القبول زائفًا.
+          fc-list | grep -iE "plex sans arabic|ibmplexsansarabic" \
+            || { echo "::error::IBM Plex Sans Arabic not installed"; exit 1; }
 
       # معايرةُ المقياس (أمر المُشرِف، الخيار ٣): قبل الوثوق بأيّ رقمٍ هندسيّ،
       # اطبع مصفوفة 2×2 (A=jc=start صحيح، B=jc=right مقلوب) بطريقتَي قياس +
@@ -83,4 +92,5 @@ jobs:
           SILK_PDF_ACCEPTANCE: "1"
         run: |
           python -m pytest tests/test_wave2_first_pdf_cluster.py \
-            tests/test_report_output_overhaul.py -q
+            tests/test_report_output_overhaul.py \
+            tests/test_wave3_typography.py -q

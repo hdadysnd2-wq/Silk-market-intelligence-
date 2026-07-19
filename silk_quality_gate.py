@@ -30,7 +30,9 @@ _MARKDOWN_RE = re.compile(r"(^#{1,6}\s)|(```)|(\*\*)", re.M)
 # مفتاح JSON بأي حروف (لا اللاتينية فقط) — بلاغ حي: حكم مسرَّب عُرِّبت
 # مفاتيحه ("{\"الحكم\":...}") فأفلت من [a-zA-Z_]+؛ [^"\s]+ يلتقط الصيغتين.
 _RAW_JSON_RE = re.compile(r'[{]\s*"[^"\s]+"\s*:', re.M)
-_RAW_CONFIDENCE_RE = re.compile(r"\(?ثقة\s*0")
+# §8 (قرار المُشرِف): نمطُ ثقةٍ **سياقيّ** — كلمةٌ مفتاحية (ثقة/confidence) +
+# كسرٌ عشريّ. لا صيدَ كسورٍ مجرّدة: «0.6 مليون» ومقاديرُ البيانات مشروعة.
+_RAW_CONFIDENCE_RE = re.compile(r"(?:ثقة|confidence)\s*[:=]?\s*0\.\d", re.I)
 _TERMINAL_PUNCT = ".!?:؛،؟…\"'”)"
 # بلاغ منتج من المالك: التقرير المعروض للعميل كشف السباكة الداخلية
 # ("LLMAgent:tariffs_agreements"، وسوم استشهاد خام "dp7") — كلود يستشهد
@@ -169,7 +171,10 @@ _CONFIDENTIALITY_LEAK_PATTERNS = [
 #   WARN: «من ناحية» > مرّتين (سقف رابط)، رقم مفتاحي مميَّز مكرَّر > مرّتين.
 _MSHORT_STYLE_RE = re.compile(r"\d\s*م\$")
 _INLINE_ENUM_RE = re.compile(r"(?<![\n(])\s\(\d\)")   # «(1)» وسط سطر لا بدايته
-_CONNECTOR_RE = re.compile(r"من ناحية")
+# §8 (قرار المُشرِف): قائمةُ أدوات الربط الموسَّعة — عباراتٌ متعدّدةُ الكلمات
+# (خطرُ إيجابٍ كاذبٍ ضئيل). تدرّجٌ لكلّ أداة: ≤٢ تمرّ، ٣–٤ WARN، ≥٥ FAIL.
+_CONNECTORS = ("من ناحية", "علاوة على ذلك", "بالإضافة إلى",
+               "من جهة أخرى", "إضافة إلى ذلك")
 # رقم مفتاحي مميَّز: نسبة بكسر عشري («55.28%») أو رقم بفواصل آلاف («61,000,000»)
 # أو قيمة HHI مجاورة للفظها — عادةً لا يتكرّر طبيعياً، فتكراره >مرّتين حشو.
 _KEYFIG_RES = [
@@ -179,9 +184,43 @@ _KEYFIG_RES = [
 ]
 
 
+def style_digest(text: str) -> dict:
+    """عدّادُ أدوات الربط والأرقام المفتاحية (§8) — عدٌّ فقط، لا حكم. يُطبَع
+    **دائمًا** في CI (كمبدأ §4: الأخضر/التحذير مفحوصٌ لا مُستنتَج)."""
+    text = text or ""
+    connectors = {c: len(re.findall(re.escape(c), text)) for c in _CONNECTORS}
+    connectors = {c: n for c, n in connectors.items() if n}
+    figures: dict = {}
+    for rex in _KEYFIG_RES:
+        for m in rex.finditer(text):
+            tok = re.sub(r"\s+", "", m.group(0))
+            figures[tok] = figures.get(tok, 0) + 1
+    figures = {t: n for t, n in figures.items() if n}
+    return {"connectors": connectors, "key_figures": figures}
+
+
+def _style_tier(n: int) -> str:
+    """تدرّجُ الأسلوب: ≥٥ FAIL، ٣–٤ WARN، وإلا ok."""
+    return "FAIL" if n >= 5 else "WARN" if n >= 3 else "ok"
+
+
+def format_style_digest(text: str) -> str:
+    """خُلاصةُ الأسلوب القابلة للفحص — تُطبَع دائمًا في CI (قرار المُشرِف §8)."""
+    d = style_digest(text)
+    out = ["----- §8 style digest (connectors / key-figures) -----"]
+    if not d["connectors"] and not d["key_figures"]:
+        out.append("  (none over threshold-tracked patterns)")
+    for c, n in sorted(d["connectors"].items(), key=lambda kv: -kv[1]):
+        out.append(f"  connector «{c}» ×{n}  [{_style_tier(n)}]")
+    for t, n in sorted(d["key_figures"].items(), key=lambda kv: -kv[1]):
+        out.append(f"  key-figure «{t}» ×{n}  [{_style_tier(n)}]")
+    return "\n".join(out)
+
+
 def _check_style(text: str) -> list[dict]:
     """§8 — جودة الأسلوب الحتمية (بلا كلود). FAIL على اختزال العملة/الترقيم
-    الإنجليزي داخل الفقرة؛ WARN على تجاوز سقف الروابط أو تكرار رقم مفتاحي."""
+    الإنجليزي داخل الفقرة؛ وتدرّجٌ لأدوات الربط والأرقام المفتاحية (٣–٤ WARN،
+    ≥٥ FAIL) — قرار المُشرِف §8: أسلوبٌ لا تسريب، فالتصعيد عند الإفراط فقط."""
     findings = []
     if not text:
         return findings
@@ -192,22 +231,27 @@ def _check_style(text: str) -> list[dict]:
         findings.append({"check": "style_inline_enumeration", "repairable": False,
                          "note": "ترقيم إنجليزي «(1)…(2)» داخل فقرة — استعمل "
                                  "أولاً/ثانياً أو قائمة مرقّمة"})
-    conn = len(_CONNECTOR_RE.findall(text))
-    if conn > 2:
-        findings.append({"check": "style_connector_overuse", "repairable": False,
-                         "note": f"عبارة «من ناحية» تكرّرت {conn} مرّات "
-                                 "(الحدّ مرّتان) — نوّع أدوات الربط"})
-    for rex in _KEYFIG_RES:
-        counts: dict = {}
-        for m in rex.finditer(text):
-            tok = re.sub(r"\s+", "", m.group(0))
-            counts[tok] = counts.get(tok, 0) + 1
-        for tok, n in counts.items():
-            if n > 2:
-                findings.append({
-                    "check": "style_repeated_key_figure", "repairable": False,
-                    "note": f"رقم مفتاحي «{tok}» تكرّر {n} مرّات في المتن "
-                            "(الحدّ مرّتان) — اذكره كاملاً مرّة ثم أحِل إليه"})
+    dg = style_digest(text)
+    for c, n in dg["connectors"].items():
+        if n >= 5:
+            findings.append({"check": "style_connector_excess", "repairable": False,
+                             "note": f"أداة الربط «{c}» تكرّرت {n} مرّات "
+                                     "(≥٥ = حشوٌ أسلوبيّ يُفشِل) — نوّع أدوات الربط"})
+        elif n >= 3:
+            findings.append({"check": "style_connector_overuse", "repairable": False,
+                             "note": f"أداة الربط «{c}» تكرّرت {n} مرّات "
+                                     "(الحدّ المريح مرّتان) — نوّع أدوات الربط"})
+    for tok, n in dg["key_figures"].items():
+        if n >= 5:
+            findings.append({
+                "check": "style_repeated_key_figure_excess", "repairable": False,
+                "note": f"رقم مفتاحي «{tok}» تكرّر {n} مرّات في المتن "
+                        "(≥٥ = حشوٌ يُفشِل) — اذكره كاملاً مرّة ثم أحِل إليه"})
+        elif n >= 3:
+            findings.append({
+                "check": "style_repeated_key_figure", "repairable": False,
+                "note": f"رقم مفتاحي «{tok}» تكرّر {n} مرّات في المتن "
+                        "(الحدّ مرّتان) — اذكره كاملاً مرّة ثم أحِل إليه"})
     return findings
 
 
@@ -441,6 +485,30 @@ def _check_currency_label_mismatch(dr: dict) -> list[dict]:
     return []
 
 
+# سدّ تسريب (الطبقة ٧ — مفارقة البوابة): هذه الفحوصات مُعلَّمة repairable=True
+# لأن *صنف* النتيجة يُصلَح عادة في طبقة العرض قبل أن يصل النص هنا (راجع تعليق
+# الوحدة) — لكن حين تُطلِق أحدها فعلياً، فهذا يعني أن الإصلاح **فشل تحديداً في
+# هذه التشغيلة**، والنص الخام وصل بالفعل إلى DOCX المُسلَّم قبل تشغيل البوابة
+# (api.py._attach_quality_gate تُشغَّل بعد بناء العرض لا قبله). تخفيضها بصمت
+# إلى WARN يعني أن البوابة تكتشف تسريباً فعلياً ثم تكتمه — لا يجوز أن يمرّ بحكم
+# أهدأ من فشل بنيوي حقيقي (section_structure/agent_failed). ثابتٌ على مستوى
+# الوحدة كي تُثبِّته الاختبارات (عقد تصعيد §8: …_excess داخله، WARN خارجه).
+_REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
+                           "mission_key_leak", "raw_confidence",
+                           "trailing_ellipsis", "tool_use_leak",
+                           "claude_mention", "env_var_leak",
+                           "research_track_leak", "facts_list_leak",
+                           "ops_warning_leak",
+                           # §8: اختزال العملة والترقيم الإنجليزي داخل الفقرة
+                           # يُفشِلان (FAIL). أدوات الربط/الأرقام المفتاحية
+                           # مُدرَّجة (قرار المُشرِف): ٣–٤ WARN (خارج المجموعة)،
+                           # ≥٥ FAIL (…_excess داخلها).
+                           "style_currency_shorthand",
+                           "style_inline_enumeration",
+                           "style_connector_excess",
+                           "style_repeated_key_figure_excess"}
+
+
 def run_quality_gate(view: dict) -> dict:
     """شغّل بوابة الجودة على `view["deep_research"]` — يعيد
     {"verdict": PASS|WARN|FAIL, "findings": [...], "methodology_notes": [...]}.
@@ -480,26 +548,6 @@ def run_quality_gate(view: dict) -> dict:
     findings += _check_analyst_layer_failure(dr)
 
     non_repairable = [f for f in findings if not f["repairable"]]
-    # سدّ تسريب (الطبقة ٧ — مفارقة البوابة): هذه الفحوصات مُعلَّمة
-    # repairable=True لأن *صنف* النتيجة يُصلَح عادة في طبقة العرض قبل أن
-    # يصل النص هنا (راجع تعليق الوحدة) — لكن حين تُطلِق أحدها فعلياً، فهذا
-    # يعني أن الإصلاح **فشل تحديداً في هذه التشغيلة**، والنص الخام وصل
-    # بالفعل إلى DOCX المُسلَّم قبل أن تُشغَّل هذه البوابة (راجع
-    # api.py._attach_quality_gate — تُشغَّل بعد بناء العرض لا قبله).
-    # تخفيضها بصمت إلى WARN كان يعني أن البوابة تكتشف تسريباً فعلياً
-    # ثم تكتمه هي نفسها بدل أن تُصعِّده — لا يجوز أن يمرّ هذا بحكم أهدأ من
-    # فشل بنيوي حقيقي (section_structure/agent_failed).
-    _REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
-                               "mission_key_leak", "raw_confidence",
-                               "trailing_ellipsis", "tool_use_leak",
-                               "claude_mention", "env_var_leak",
-                               "research_track_leak", "facts_list_leak",
-                               "ops_warning_leak",
-                               # §8: اختزال العملة والترقيم الإنجليزي داخل
-                               # الفقرة يُفشِلان (FAIL)؛ سقف الروابط وتكرار
-                               # الرقم المفتاحي يبقيان WARN (تحذير أسلوبي).
-                               "style_currency_shorthand",
-                               "style_inline_enumeration"}
     guard_fired = [f for f in findings if f["check"] in _REGRESSION_GUARD_FIRED]
     severe = non_repairable + guard_fired
     if not findings:
