@@ -557,6 +557,42 @@ def _guard_client_template_no_hardcoded_product():
     assert "عسل" in maps_disclaimer("عسل")   # يُشتَقّ من المنتج فعلًا
 
 
+def _guard_analyze_persist_canonical_db():
+    """LESSONS ٣١ — نتائج /analyze لم تكن محفوظةً في القاعدة القانونية: المحرّك
+    ثبّت `db_path="data/silk.db"` النسبيّ فكتب لقرصٍ لا يقرأ منه أحد (المعرّف «1»
+    ثم 404). الحارس السلوكي: مع SILK_DATA_DIR مضبوطًا، `analyze(persist=True)`
+    يكتب لقاعدة `_db_path()` نفسها التي يقرأ منها `get_analysis` (بمسار افتراضي)."""
+    import importlib
+    tmp = tempfile.mkdtemp()
+    saved = {k: os.environ.get(k) for k in ("SILK_DATA_DIR", "SILK_DB")}
+    try:
+        os.environ["SILK_DATA_DIR"] = tmp
+        os.environ.pop("SILK_DB", None)
+        import silk_engine
+        import silk_storage
+        importlib.reload(silk_storage)
+        importlib.reload(silk_engine)
+        # لا شبكة: المحرّك يتدهور لفجوات معلنة لكن الصفّ يُحفَظ ويُقرَأ.
+        import unittest.mock as M
+        with M.patch("requests.get", side_effect=OSError("blocked")), \
+             M.patch("requests.post", side_effect=OSError("blocked")):
+            result = silk_engine.analyze("شاي أخضر", persist=True)
+        aid = result.get("analysis_id")
+        assert aid is not None, "لم يُرفَق analysis_id رغم persist=True"
+        assert silk_storage._db_path() == os.path.join(tmp, "silk.db")
+        found = silk_storage.get_analysis(aid)   # path=None → _db_path()
+        assert found is not None and found.get("product") == "شاي أخضر", (
+            "الصفّ غير موجود في القاعدة القانونية — الجذر: كُتب لقرصٍ نسبيّ آخر")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        import silk_storage
+        importlib.reload(silk_storage)
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -593,6 +629,7 @@ _LESSONS = {
     28: _guard_leads_table_hygiene,         # Wave 2 — نقاء جدول الروابط (جغرافيا/نثر/حشو)
     29: _guard_report_arabic_shape_a4,      # Wave 2 — «سلك» متّصلة + A4
     30: _guard_client_template_no_hardcoded_product,  # Wave 2 — لا منتج مثبَّت في القوالب
+    31: _guard_analyze_persist_canonical_db,   # /analyze — التخزين للقاعدة القانونية لا قرصٍ نسبيّ فانٍ
 }
 
 _TRAPS = [

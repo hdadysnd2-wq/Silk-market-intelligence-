@@ -211,6 +211,16 @@ _TEST_ANCHORS = [
       "def test_no_hardcoded_product_word_in_client_facing_templates"]),
     (30, "tests/test_regression_registry.py",
      ["def _guard_client_template_no_hardcoded_product"]),
+    # البند ٣١ — تخزين /analyze للقاعدة القانونية لا قرصٍ نسبيّ فانٍ (المعرّف
+    # «1» ثم 404): التدفّق الحيّ الكامل + الحارس السلوكي + خطوة الدخان.
+    (31, "tests/test_analyze_persistence_and_glyph.py",
+     ["def test_engine_persist_writes_to_canonical_db_path_not_relative_literal",
+      "def test_quick_scan_analyze_full_persisted_flow_no_404",
+      "def test_compare_all_markets_analyze_shares_the_same_fixed_flow",
+      "def test_no_section_glyph_in_client_facing_strings"]),
+    (31, "tests/test_regression_registry.py",
+     ["def _guard_analyze_persist_canonical_db"]),
+    (31, "tools/post_deploy_smoke.py", ["def _check_exports"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
