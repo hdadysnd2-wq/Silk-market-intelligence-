@@ -125,65 +125,111 @@ def test_w1_2_writer_prompt_reframes_flagged_hs_once():
 
 # ════════════════════ الموجة ٢ — جودة البيانات ════════════════════
 
-def test_w2_1_stale_year_gets_inline_tag_fresh_year_does_not():
-    """2.1 — سنة بيانات ≤ اليوم−٥ تُوسَم «الأحدث المتاح»؛ السنة الراهنة لا."""
-    import datetime
+# ── القاعدة العامة: التقادُم من المصدر لا النثر (قرار المالك) ──
+
+def test_w2_1_fact_year_reads_structured_provenance_not_prose():
+    """المصدر البنيوي: حقل صريح / وسم year=YYYY (البنك الدولي) / سنة retrieved_at."""
+    import silk_staleness as S
+    assert S.fact_year({"value": 1, "data_year": 2013}) == 2013
+    assert S.fact_year({"value": 1, "note": "NY.GDP.PCAP.CD year=2013",
+                        "retrieved_at": "2026-07-15"}) == 2013  # الوسم يسبق الجلب
+    assert S.fact_year({"value": 1, "note": "دخل الفرد",
+                        "retrieved_at": "2018-12-31"}) == 2018
+    assert S.fact_year({"value": 1, "note": "x", "retrieved_at": ""}) is None
+
+
+def test_w2_1_stale_fact_years_from_yemen_provenance():
+    """قائمة الحقائق المتقادِمة تُشتَقّ من الحقائق (2013/2018)، لا من النثر."""
+    from silk_staleness import stale_fact_years
+    missions = yemen_research_blob()["deep_research"]["missions"]
+    allf = [f for v in missions.values() for f in v["findings"]]
+    assert stale_fact_years(allf) == {2013, 2018}
+
+
+def test_w2_1_stale_fact_tagged_regardless_of_phrasing():
+    """حقيقة متقادِمة (2013) تُوسَم بأيّ صياغة: «في 2013»، «2013م»، بلا قوسين."""
     import silk_render as R
-    cur = datetime.date.today().year
-    text = (f"دخل الفرد 1106 دولار (2013) ونسبة الفقر 31.5% (2018). "
-            f"واردات {cur} نحو 12 مليون دولار. لائحة EU 2017/625.")
-    out = R._tag_stale_years(text)
-    # السنوات القديمة موسومة.
-    for yr in ("2013", "2018"):
-        idx = out.find(yr)
-        assert R._STALE_TAG in out[idx:idx + 40], (yr, out)
-    # السنة الراهنة غير موسومة.
-    idx = out.find(str(cur))
-    assert R._STALE_TAG not in out[idx:idx + 40]
-    # رقم اللائحة ذو الشرطة (2017/625) لا يُوسَم كسنة بيانات.
-    assert "2017 — بيانات" not in out
+    S = {2013, 2018}
+    for s in ["في 2013 بلغ الدخل.", "عام 2013م نُشر المسح.",
+              "الدخل 2013 كان منخفضاً.", "بيانات البنك الدولي 2018 تشير."]:
+        out = R._tag_stale_years(s, S)
+        assert R._STALE_TAG in out, s
+    # «2013م» تبقى لاحقتها ملاصقة (لا تتدلّى «م»).
+    assert "2013م — بيانات 2013" in R._tag_stale_years("عام 2013م.", S)
 
 
-def test_w2_1_yemen_report_carries_stale_tags_on_2013_2018():
-    """2.1 — تقرير اليمن المعروض يحمل وسم «الأحدث المتاح» على 2013 و2018."""
+def test_w2_1_fresh_year_never_tagged():
+    """رقم سنة حديث (2023+) لا يُوسَم أبداً (ليس في قائمة المتقادِمة)."""
+    import silk_render as R
+    out = R._tag_stale_years("واردات 2023 نحو 12 مليون دولار.", {2013, 2018})
+    assert R._STALE_TAG not in out
+
+
+def test_w2_1_hs_heading_2008_never_tagged_no_stale_fact_behind_it():
+    """رمز/بند HS 2008 (للمحضرات) لا يُوسَم — رمزٌ لا سنةَ حقيقة، وليس في القائمة."""
+    import silk_render as R
+    out = R._tag_stale_years("العائلة الصحيحة البند 2008 للمحضرات.", {2013, 2018})
+    assert R._STALE_TAG not in out
+
+
+def test_w2_1_food_word_year_untagged_when_no_stale_fact():
+    """«الطعام 2013» بلا حقيقة متقادِمة خلفه => بلا وسم (لا false-positive على
+    كلمة تنتهي بـ«عام»؛ ولا حقيقة في القائمة)."""
+    import silk_render as R
+    out = R._tag_stale_years("استهلاك الطعام 2013 مرتفع.", set())
+    assert R._STALE_TAG not in out
+
+
+def test_w2_1_yemen_report_tags_2013_2018_but_not_2008_2023():
+    """التقرير المعروض لليمن: 2013/2018 موسومتان، 2008 (بند) و2023 (حديث) لا."""
     import silk_render as R
     txt = R.build_view(yemen_research_blob())["deep_research"]["report"]["text"]
-    assert R._STALE_TAG in txt
     for yr in ("2013", "2018"):
         idx = txt.find(yr)
         assert R._STALE_TAG in txt[idx:idx + 45], yr
+    # 2008 (بند HS) و2023 (حديث) بلا وسم ملاصق.
+    for yr in ("2008", "2023"):
+        idx = txt.find(yr)
+        assert R._STALE_TAG not in txt[idx:idx + 45], yr
 
 
 def test_w2_1_stale_tag_is_disclosure_only_no_number_change():
     """2.1 — الوسم إفصاح فقط: لا يغيّر أي رقم (عقد عدم الاختلاق)."""
     import silk_render as R
-    out = R._tag_stale_years("دخل الفرد 1106 دولار (2013).")
+    out = R._tag_stale_years("دخل الفرد 1106 دولار في 2013.", {2013})
     assert "1106" in out  # الرقم كما هو
 
 
-def test_w2_1_hs_heading_year_number_is_not_stale_tagged():
-    """مراجعة الشيفرة #1 — رقم بند/رمز HS في المدى (2008 للمحضرات) لا يُوسَم
-    كسنة بيانات؛ السنة في سياق زمني صريح تُوسَم، والرقم العاري لا."""
-    import silk_render as R
-    out = R._tag_stale_years("العائلة الصحيحة البند 2008 و2009 للمحضرات، "
-                             "بينما دخل الفرد (2013).")
-    # رقما البند 2008/2009 عاريان (لا قوس/كلمة زمنية) => بلا وسم.
-    assert "2008 (الأحدث المتاح)" not in out and "2008 — بيانات" not in out
-    assert "2009 — بيانات" not in out
-    # 2013 بين قوسين (سياق بيانات) => موسوم.
-    idx = out.find("2013")
-    assert R._STALE_TAG in out[idx:idx + 45]
-    # صيغة الكلمة الزمنية «عام YYYY» تُوسَم أيضاً.
-    out2 = R._tag_stale_years("نُشِر عام 2014 آخر مسح.")
-    assert R._STALE_TAG in out2
+def test_w2_1_writer_choke_point_tags_stale_fact_for_writer():
+    """نقطة الاختناق (silk_ai_judge._facts): الحقيقة المتقادِمة تُذيَّل بوسم
+    الإفصاح في مدخلات الكاتب مهما كانت صياغته لاحقاً."""
+    import silk_ai_judge as J
+
+    class _DP:
+        def __init__(s, value, note, ra):
+            s.value, s.note, s.retrieved_at = value, note, ra
+            s.source, s.confidence = "World Bank", 0.9
+
+    class _Rep:
+        agent_name = "economic"
+        failed = False
+        findings = [_DP(1106, "دخل الفرد", "2013-12-31"),
+                    _DP(12_000_000, "واردات", "2026-07-15")]
+    facts = J._facts([_Rep()])
+    # الحقيقة المتقادِمة (2013) موسومة؛ الحديثة (2026) لا.
+    assert "الأحدث المتاح" in facts and "بيانات 2013" in facts
+    assert facts.count("الأحدث المتاح") == 1
 
 
-def test_w2_1_no_double_tag_when_writer_already_tagged():
-    """مراجعة الشيفرة #5 — سنة وسمها الكاتب أصلاً لا تُوسَم ثانيةً."""
+def test_w2_1_render_verification_flags_untagged_stale_fact():
+    """التحقّق: سنة حقيقة متقادِمة ظهرت بلا وسم تُبلَّغ (لا تُصحَّح صامتةً)."""
     import silk_render as R
-    pre = "الدخل (2013) — بيانات 2013 الأحدث المتاح حسب البنك."
-    out = R._tag_stale_years(pre)
-    assert out.count(R._STALE_TAG) == 1
+    # نصّ يذكر 2013 لكن التاجر مُرِّر فيه القائمة الفارغة للوسم ثم نتحقّق يدوياً.
+    misses = R._stale_tag_misses("الدخل في 2013 منخفض.", {2013})
+    assert misses == [2013]
+    # بعد الوسم لا فوات.
+    tagged = R._tag_stale_years("الدخل في 2013 منخفض.", {2013})
+    assert R._stale_tag_misses(tagged, {2013}) == []
 
 
 def test_w2_2_seasonality_gap_surfaces_closure_step_once():
@@ -463,10 +509,15 @@ def test_w6_1_filler_contact_does_not_satisfy_distributor_condition():
     assert R._real_contact("—") is False
     assert R._real_contact("") is False
     assert R._real_contact("غير متاح") is False
+    # مراجعة الشيفرة #4 — عبارات الحشو المطوّلة تُرفَض أيضاً (رفض بنيوي).
+    assert R._real_contact("غير متاح حالياً") is False
+    assert R._real_contact("لا يوجد رقم") is False
     assert R._real_contact("+967-1-000000") is True
+    assert R._real_contact("info@dist.ye") is True  # بريد
     blob = yemen_research_blob()
     blob["deep_research"]["importer_leads"] = {
-        "leads": [{"title": "موزّع عدن", "phone": "—", "email": ""}],
+        "leads": [{"title": "موزّع عدن", "phone": "غير متاح حالياً",
+                   "email": "لا يوجد"}],
         "path": "scraper"}
     dr = R.build_view(blob)["deep_research"]
     dist = [c for c in dr["flip_conditions"] if "موزّع" in c["condition"]][0]

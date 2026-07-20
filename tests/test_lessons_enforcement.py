@@ -271,6 +271,16 @@ _SYMBOL_ANCHORS_EXTRA = [
     (32, "tests/test_report_quality_upgrade.py",
      ["def test_w1_2_hs_confirm_flags_peanut_butter_but_not_valid_matches",
       "def test_w6_1_watch_verdict_has_structured_flip_conditions"]),
+    # البند ٣٣ — حلِّل المصدر لا النثر (parse provenance, not prose): قاعدةُ
+    # الإفصاح تُرسى إلى بياناتٍ بنيوية، والمطابقة النصّية شبكةُ أمانٍ أخيرة.
+    (33, "silk_staleness.py", ["def fact_year", "def is_stale_fact",
+                              "def stale_fact_years", "def stale_tag"]),
+    (33, "silk_ai_judge.py", ["from silk_staleness import"]),
+    (33, "silk_render.py", ["def _stale_tag_misses", "stale_fact_years"]),
+    (33, "tests/test_report_quality_upgrade.py",
+     ["def test_w2_1_fact_year_reads_structured_provenance_not_prose",
+      "def test_w2_1_stale_fact_tagged_regardless_of_phrasing",
+      "def test_w2_1_hs_heading_2008_never_tagged_no_stale_fact_behind_it"]),
 ]
 
 

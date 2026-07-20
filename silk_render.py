@@ -1100,28 +1100,23 @@ def _apply_merchant_language(text: "str | None") -> "tuple[str, list]":
     return s, glossary
 
 
-# Wave 2.1 (تدقيق زبدة الفول السوداني/اليمن — أرقام دخل 2013/2018): أيّ سنة
-# بيانات مرجعية أقدم من نافذة (SILK_STALE_DATA_YEARS، افتراضياً ٥ سنوات) تُوسَم
-# آلياً «الأحدث المتاح» كي لا يُقرأ رقم قديم كأنه راهن. تُوسَم السنة في **سياق
-# بيانات صريح فقط**: بين قوسين مباشرةً «(YYYY)» أو مسبوقةً بكلمة زمنية
-# (عام/سنة/لعام/منذ). هذا يستبعد أرقام اللوائح ذات الشرطة (EU 2017/625)
-# **وأرقام بنود/رموز HS في المدى 2005–2099** (مثل البند 2008 للمحضرات — كان
-# يُوسَم خطأً كسنة بيانات، مراجعة الشيفرة #1). أول ورود لكل سنة.
+# القاعدة العامة (قرار المالك — التقادُم من المصدر لا النثر، مراجعة الشيفرة
+# #1/#2/#3/#5): الآلية **الأساسية** توسيمُ سنوات الحقائق المتقادِمة المعروفة من
+# البيانات (`silk_staleness.stale_fact_years`) أينما وردت، فلا تفلت أيّ صياغة
+# («في 2013»/«2013م»/…) ولا يُوسَم رمزُ HS (2008) لأنه ليس سنة حقيقة. التعبير
+# النمطي أدناه **شبكة أمان أخيرة** فقط: سياق بيانات صريح (بين قوسين، أو كلمة
+# زمنية مسبوقة بفاصل حتى لا تُطابَق داخل كلمة مثل «الطعام» — مراجعة الشيفرة #1).
 _DATA_YEAR_CTX_RE = re.compile(
-    r"\((19\d\d|20\d\d)\)"                          # بين قوسين: (2013)
-    r"|(?:عام|سنة|لعام|منذ)\s+(19\d\d|20\d\d)\b")   # مسبوقة بكلمة زمنية
+    r"\((19\d\d|20\d\d)\)"                                # بين قوسين: (2013)
+    r"|(?:^|[\s(،؛:])(?:عام|سنة|لعام|منذ)\s+(19\d\d|20\d\d)")  # كلمة زمنية بفاصل
 _STALE_TAG = "الأحدث المتاح"
 
 
 def _stale_years_threshold() -> int:
-    """سنة العتبة — أقدم من (السنة الحالية − SILK_STALE_DATA_YEARS)."""
-    import datetime
-    try:
-        n = int(os.environ.get("SILK_STALE_DATA_YEARS", "5"))
-    except (TypeError, ValueError):
-        n = 5
-    n = n if n > 0 else 5
-    return datetime.date.today().year - n
+    """سنة العتبة — أقدم من (السنة الحالية − SILK_STALE_DATA_YEARS). مصدر واحد
+    عبر silk_staleness كي لا تتشعّب النافذة."""
+    from silk_staleness import stale_threshold_year
+    return stale_threshold_year()
 
 
 # Wave 6.1 (تدقيق زبدة الفول السوداني/اليمن): حين يكون الحكم «مراقبة»/«مشروط»،
@@ -1138,10 +1133,17 @@ _FILLER_CONTACTS = frozenset({"", "-", "—", "–", "n/a", "na", "غير متا
 
 
 def _real_contact(v: object) -> bool:
-    """هل قيمة جهة الاتصال حقيقية (لا حشو/شرطة/«غير متاح»)؟ — عقد عدم الاختلاق:
-    شرط «موزّع مؤكَّد» لا يتحقّق بعلامة حشو."""
+    """هل قيمة جهة الاتصال حقيقية (لا حشو/شرطة/«غير متاح حالياً»)؟ — عقد عدم
+    الاختلاق: شرط «موزّع مؤكَّد» لا يتحقّق بعلامة حشو. جهةٌ حقيقية = بريدٌ
+    (يحوي @ ونقطة) أو هاتفٌ (٥ أرقام فأكثر)؛ فالعبارات النصّية المطوّلة مثل
+    «غير متاح حالياً»/«لا يوجد رقم» تُرفَض لأنها بلا @ ولا أرقام كافية
+    (مراجعة الشيفرة #4 — الرفض بالبنية لا بمطابقة نصّية حرفية)."""
     s = str(v or "").strip()
-    return bool(s) and s.lower() not in _FILLER_CONTACTS
+    if not s or s.lower() in _FILLER_CONTACTS:
+        return False
+    if "@" in s and "." in s:                          # بريد إلكتروني
+        return True
+    return sum(ch.isdigit() for ch in s) >= 5          # هاتف (أرقام كافية)
 
 
 def _flip_conditions(verdict_tone: str, hs_flagged: bool,
@@ -1189,39 +1191,74 @@ def _has_seasonality_gap(missions: dict) -> bool:
     return False
 
 
-def _tag_stale_years(text: "str | None") -> str:
-    """وسم أول ورودٍ لكل سنة بيانات قديمة «الأحدث المتاح» — حتمي على md/docx.
+def _tag_stale_years(text: "str | None",
+                     stale_fact_years: "set[int] | frozenset[int]" = frozenset()) -> str:
+    """وسم سنوات البيانات المتقادِمة «الأحدث المتاح» — **أساسه قائمة الحقائق
+    المتقادِمة** (provenance) لا تحليل النثر (قرار المالك).
 
-    عقد عدم الاختلاق: لا يغيّر رقماً — يضيف وسم إفصاح فقط. سنة أحدث من العتبة
-    لا تُوسَم؛ سنة موسومة أصلاً لا تُكرَّر."""
+    - **أساسي:** كل سنة في `stale_fact_years` (معروفة متقادِمةً من الحقائق)
+      تُوسَم أينما وردت (بحدود آمنة: ليست ملاصقة لرقم/شرطة، فلا يُوسَم رمز HS
+      مثل 200811 ولا لائحة 2017/625) — مستقلّةً عن الصياغة («في 2013»/«2013م»).
+    - **شبكة أمان:** سنةٌ متقادِمة (≤ العتبة) في سياق بيانات صريح (قوسين/كلمة
+      زمنية) حتى لو لم تُمرَّر قائمةٌ — احتياطٌ أخير محافظ.
+
+    عقد عدم الاختلاق: إفصاح فقط، لا يغيّر رقماً؛ أول ورودٍ لكل سنة، ولا تكرار
+    إن وسَمها الكاتب أصلاً (نافذة ٤٠ محرفاً)."""
     s = str(text or "")
     if not s.strip():
         return s
     threshold = _stale_years_threshold()
-    tagged: set[str] = set()
+    # جمع كل المرشّحين (موضع، نهاية، سنة): الأساسي من القائمة + الاحتياطي النمطي.
+    cands: list[tuple[int, int, int]] = []
+    for yr in (stale_fact_years or set()):
+        for m in re.finditer(rf"(?<![\d/]){int(yr)}(?![\d/])", s):
+            cands.append((m.start(), m.end(), int(yr)))
+    for m in _DATA_YEAR_CTX_RE.finditer(s):
+        g = m.group(1) or m.group(2)
+        try:
+            y = int(g)
+        except (TypeError, ValueError):
+            continue
+        if y <= threshold:
+            cands.append((m.start(), m.end(), y))
+    if not cands:
+        return s
+    cands.sort()
+    tagged: set[int] = set()
     out: list[str] = []
     last = 0
-    for m in _DATA_YEAR_CTX_RE.finditer(s):
-        yr = m.group(1) or m.group(2)  # صيغة القوسين أو الكلمة الزمنية
-        if not yr or yr in tagged:
+    for start, end, yr in cands:
+        if yr in tagged or end < last:
             continue
-        try:
-            stale = int(yr) <= threshold
-        except ValueError:
-            stale = False
-        if not stale:
-            continue
-        # لا تُكرِّر إن كان الوسم مكتوباً أصلاً بعد السنة (الكاتب وسمه) — نافذة
-        # ٤٠ محرفاً تكفي لعبارة «الأحدث المتاح» كاملةً (مراجعة الشيفرة #5).
-        if _STALE_TAG in s[m.end():m.end() + 40]:
+        # ضمّ لاحقة السنة الميلادية/الهجرية (م/هـ) كي لا تتدلّى بعد الوسم
+        # («2013م» → «2013م — بيانات …» لا «2013 — بيانات …م»).
+        while end < len(s) and s[end] in "مهـ":
+            end += 1
+        # لا تُكرِّر إن كان الوسم مكتوباً أصلاً بعد السنة (نافذة ٤٠ محرفاً).
+        if _STALE_TAG in s[end:end + 40]:
             tagged.add(yr)
             continue
         tagged.add(yr)
-        out.append(s[last:m.end()])
+        out.append(s[last:end])
         out.append(f" — بيانات {yr} ({_STALE_TAG})")
-        last = m.end()
+        last = end
     out.append(s[last:])
     return "".join(out)
+
+
+def _stale_tag_misses(text: str, stale_fact_years: "set[int] | frozenset[int]") -> list[int]:
+    """تحقّقٌ من بقاء الوسم — أيّ سنة حقيقة متقادِمة ظهرت في السرد بلا إفصاح
+    «الأحدث المتاح» قريبٍ منها (تُبلَّغ مشكلةَ جودة، لا تُصحَّح صامتةً)."""
+    misses: list[int] = []
+    for yr in sorted(stale_fact_years or set()):
+        for m in re.finditer(rf"(?<![\d/]){int(yr)}(?![\d/])", text):
+            if _STALE_TAG in text[m.end():m.end() + 40] \
+                    or _STALE_TAG in text[max(0, m.start() - 40):m.start()]:
+                break  # مُفصَحٌ عنها مرة على الأقل — يكفي
+        else:
+            if re.search(rf"(?<![\d/]){int(yr)}(?![\d/])", text):
+                misses.append(int(yr))
+    return misses
 
 
 def _deep_research_view(result: dict) -> dict | None:
@@ -1392,8 +1429,18 @@ def _deep_research_view(result: dict) -> dict | None:
                       "حتى تأكيد الرمز الصحيح.")
     _report_text_glossed, _glossary = _apply_merchant_language(
         _strip_internal_plumbing(report_out.get("report")))
-    # Wave 2.1: وسم سنوات البيانات القديمة «الأحدث المتاح» على النص المعروض.
-    _report_text_glossed = _tag_stale_years(_report_text_glossed)
+    # القاعدة العامة (قرار المالك): سنوات الحقائق المتقادِمة تُحسَب من **مصدرها
+    # البنيوي** (silk_staleness) لا من النثر، فتُوسَم أينما وردت بأيّ صياغة، ولا
+    # يُوسَم رمزُ HS. ثم تحقّقٌ: أيّ سنة حقيقة متقادِمة بلا وسمٍ في السرد
+    # تُبلَّغ حدًّا (لا تُصحَّح صامتةً — عقد عدم الاختلاق).
+    from silk_staleness import stale_fact_years as _stale_fact_years
+    _all_findings = [f for v in missions.values()
+                     for f in (v.get("findings") or [])]
+    _stale_set = _stale_fact_years(_all_findings)
+    _report_text_glossed = _tag_stale_years(_report_text_glossed, _stale_set)
+    for _yr in _stale_tag_misses(_report_text_glossed, _stale_set):
+        limits.append(f"إفصاح تقادُم مفقود: حقيقة سنة {_yr} ظهرت في التقرير "
+                      f"دون وسم «{_STALE_TAG}» — تتطلّب مراجعة الكاتب.")
     return {
         "market": result.get("market"),
         # Wave 2: اسم المنتج المدروس يصل عرض البحث كي يشتقّ منه المُصدِّرُ سطرَ

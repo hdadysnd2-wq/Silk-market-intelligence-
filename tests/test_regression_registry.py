@@ -615,6 +615,32 @@ def _guard_report_quality_upgrade():
     assert all(c.get("closes_via") for c in dr["flip_conditions"])
 
 
+def _guard_parse_provenance_not_prose():
+    """LESSONS ٣٣ — حلِّل المصدر لا النثر: قاعدةُ إفصاح التقادُم تُرسى إلى
+    بياناتٍ بنيوية. الحارس السلوكي: (١) `fact_year` يقرأ الوسم البنيويّ
+    `year=YYYY`/`retrieved_at`؛ (٢) حقيقةٌ متقادِمة تُوسَم بأيّ صياغة؛
+    (٣) رمز HS 2008 بلا حقيقة خلفه لا يُوسَم؛ (٤) «الطعام 2013» بلا حقيقة لا
+    يُوسَم (لا false-positive نثريّ)."""
+    import silk_render as R
+    from silk_staleness import fact_year, stale_fact_years, is_stale_fact
+    # (١) المصدر البنيويّ.
+    assert fact_year({"value": 1, "note": "x year=2013", "retrieved_at": "2026"}) == 2013
+    assert fact_year({"value": 1, "retrieved_at": "2018-12-31"}) == 2018
+    assert not is_stale_fact({"value": 1, "retrieved_at": "2026-01-01"})
+    # (٢) الوسم مستقلّ عن الصياغة.
+    for s in ["في 2013 بلغ الدخل.", "عام 2013م.", "الدخل 2013 منخفض."]:
+        assert R._STALE_TAG in R._tag_stale_years(s, {2013}), s
+    # (٣) رمز HS 2008 لا يُوسَم (ليس سنة حقيقة، وليس في القائمة).
+    assert R._STALE_TAG not in R._tag_stale_years("البند 2008 للمحضرات.", {2013})
+    # (٤) «الطعام 2013» بلا حقيقة متقادِمة => بلا وسم (لا مطابقة داخل كلمة).
+    assert R._STALE_TAG not in R._tag_stale_years("استهلاك الطعام 2013.", set())
+    # (٥) القائمة تُشتَقّ من حقائق اليمن (2013/2018).
+    from tools.canonical_yemen import yemen_research_blob
+    ms = yemen_research_blob()["deep_research"]["missions"]
+    allf = [f for v in ms.values() for f in v["findings"]]
+    assert stale_fact_years(allf) == {2013, 2018}
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -653,6 +679,7 @@ _LESSONS = {
     30: _guard_client_template_no_hardcoded_product,  # Wave 2 — لا منتج مثبَّت في القوالب
     31: _guard_analyze_persist_canonical_db,   # /analyze — التخزين للقاعدة القانونية لا قرصٍ نسبيّ فانٍ
     32: _guard_report_quality_upgrade,         # ترقية جودة التقرير — إصلاحُ المحرّك لا تحرير التقرير
+    33: _guard_parse_provenance_not_prose,     # التقادُم من المصدر لا النثر (قرار المالك)
 }
 
 _TRAPS = [
