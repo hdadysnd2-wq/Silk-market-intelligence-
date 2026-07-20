@@ -254,6 +254,84 @@ def test_w3_2_unflagged_code_concentration_is_not_context_only():
     assert dr["concentration_context_only"] is False
 
 
+# ════════════════════ الموجة ٤ — العرض والبنية ════════════════════
+
+def test_w4_1_hs_methodology_note_appears_at_most_once():
+    """4.1 — تحذير رمز HS المنهجي يظهر مرة واحدة كحدّ أقصى في الحدود (لا تكرار)."""
+    import silk_render as R
+    from silk_hs_confirm import CONTEXTUAL_TAG
+    limits = R.build_view(yemen_research_blob())["deep_research"]["limits"]
+    assert sum(1 for l in limits if CONTEXTUAL_TAG in l) <= 1
+
+
+def test_w4_1_writer_prompt_uses_short_backreference_for_hs_note():
+    """4.1 — عقد الكاتب يوجّه لإحالة موجزة «انظر الملاحظة المنهجية» لا تكرار."""
+    import silk_ai_judge as J
+    captured = {}
+    with mock.patch.object(J, "available", return_value=True), \
+         mock.patch.object(J, "_call",
+                           side_effect=lambda s, u, **k: captured.setdefault("u", u) or "## 1. خلاصة\nx"):
+        J.deep_report({}, "م", {"verdict": "WATCH"}, "زبدة الفول السوداني",
+                      "اليمن", hs_code="040510",
+                      hs_confirmation={"confirmed": False, "code_desc": "زبدة",
+                                       "missing_terms": ["فول"]})
+    assert "انظر الملاحظة المنهجية" in captured["u"]
+
+
+def test_w4_2_canonical_section_order_matches_target_sequence():
+    """4.2 — الترتيب القانوني للأقسام يطابق التسلسل المطلوب في أمر العمل."""
+    from silk_ai_judge import _REPORT_SECTIONS
+    target = ["الخلاصة التنفيذية", "منهجية البحث ونطاقه",
+              "نظرة عامة على السوق وحجمه", "ديناميكيات السوق",
+              "تحليل المستهلك والطلب", "المشهد التنافسي",
+              "التنظيم والوصول للسوق", "اللوجستيات وسلسلة الإمداد",
+              "تقييم المخاطر", "التوصيات الاستراتيجية"]
+    assert list(_REPORT_SECTIONS)[:len(target)] == target
+
+
+def test_w4_3_style_contract_carries_length_budget():
+    """4.3 — عقد الأسلوب يحمل ميزانية طول (~٣٠٪ أوجز) بقصّ التكرار لا الدليل."""
+    import silk_style_contract as SC
+    assert SC.TARGET_TIGHTEN_PCT == 30
+    assert "٣٠" in SC.PROFESSIONAL_TONE_RULE or "30" in SC.PROFESSIONAL_TONE_RULE
+    assert "الدليل" in SC.PROFESSIONAL_TONE_RULE  # لا يقصّ الدليل
+    assert SC.PROFESSIONAL_TONE_RULE in SC.WRITER_STYLE_CONTRACT
+
+
+# ════════════════════ الموجة ٥ — اللغة والنبرة ════════════════════
+
+def test_w5_1_reviewer_flags_alarmist_tone_as_nonblocking_issue():
+    """5.1 — المراجع يعلِّم النبرة التنبيهية مشكلةَ أسلوب (issues لا blocking)،
+    بلا نداء مدفوع (فحص حتمي)."""
+    import silk_ai_judge as J
+    draft = ("## 1. الخلاصة التنفيذية\nيجب التوقف هنا فوراً فهذا يبطل كل "
+             "الأرقام في سوق مضطربة وشحيحة البيانات.")
+    # المراجع الـLLM يُحاكى None (لا مفتاح) => الفحص الحتمي وحده يعمل.
+    with mock.patch.object(J, "available", return_value=True), \
+         mock.patch.object(J, "_traced_call", return_value=None):
+        rev = J.review_report(draft, {})
+    assert rev is not None
+    joined = " ".join(rev["issues"])
+    assert "تنبيهية" in joined
+    # ليست حاجبة (لا دورة تنقيح مدفوعة إضافية).
+    assert not any("تنبيهية" in b for b in rev["blocking"])
+
+
+def test_w5_1_measured_tone_draft_has_no_alarmist_issue():
+    """5.1 — نص بنبرة مقيسة لا يُعلَّم (لا إيجابية كاذبة)."""
+    import silk_ai_judge as J
+    draft = ("## 1. الخلاصة التنفيذية\nينبغي التعامل مع هذه الأرقام كمؤشر "
+             "سياقي لا كمقياس مباشر حتى تأكيد الرمز.")
+    assert J._alarmist_issues(draft) == []
+
+
+def test_w5_2_sentence_length_guidance_present():
+    """5.2 — إرشاد طول الجملة (تفضيل القِصار) في العقد، لا حدّ محارف صلب."""
+    import silk_style_contract as SC
+    assert SC.SENTENCE_MAX_WORDS == 25
+    assert "القصير" in SC.PROFESSIONAL_TONE_RULE or "تُقسَم" in SC.PROFESSIONAL_TONE_RULE
+
+
 # ════════════════════ بوّابة /research (1.2 — قبل الإنفاق) ════════════════════
 
 def _client(**env):

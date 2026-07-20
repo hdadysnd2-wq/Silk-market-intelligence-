@@ -1172,6 +1172,22 @@ def _section_order_issues(draft: str) -> list[str]:
     return issues
 
 
+def _alarmist_issues(draft: str) -> list[str]:
+    """Wave 5.1 — فحص نبرة حتمي (لا كلود، لا نداء مدفوع): أي عبارة تنبيهية/
+    مبالِغة من `silk_style_contract.ALARMIST_PHRASES` تُدرَج مشكلةَ أسلوب
+    (غير حاجبة) مع البديل المقيس. إنفاذ داخل الدورة القائمة لا دورة إضافية."""
+    try:
+        from silk_style_contract import ALARMIST_PHRASES, MEASURED_TONE_HINT
+    except Exception:  # pragma: no cover
+        return []
+    s = str(draft or "")
+    hits = [p for p in ALARMIST_PHRASES if p in s]
+    if not hits:
+        return []
+    return [f"نبرة تنبيهية «{p}» — استبدلها بصياغة مقيسة "
+            f"(مثل: {MEASURED_TONE_HINT})" for p in hits]
+
+
 def review_report(draft: str, mission_reports: dict,
                   trace_id: str | None = None) -> dict | None:
     """راجع مسوّدة التقرير — المراجع (نموذج سريع): هل كل رقم مسنود؟ تناقضات؟
@@ -1180,6 +1196,9 @@ def review_report(draft: str, mission_reports: dict,
     if not available() or not (draft or "").strip():
         return None
     structural_issues = _section_order_issues(draft)
+    # Wave 5.1: نبرة تنبيهية مشكلةُ أسلوب (غير حاجبة) — تُضاف للـissues لا
+    # للـblocking (لا دورة تنقيح مدفوعة إضافية، اتفاق D-01/E1).
+    tone_issues = _alarmist_issues(draft)
     facts = _isolate(_facts(list(mission_reports.values())))
     user = (
         f"الحقائق الخام المرجعية (لا غيرها):\n{facts}\n\n"
@@ -1215,6 +1234,10 @@ def review_report(draft: str, mission_reports: dict,
         "أكثر من مرّتين، وأي ترقيم إنجليزي '(1)…(2)' داخل فقرة، وأي اختزال "
         "عملة 'م$' أو تحويل ريالي — كلّها مشاكل سطرية صريحة تُدرَج في issues "
         "باقتراح الإصلاح المطابق.\n"
+        "دقّق النبرة والطول (Wave 5): هل توجد صياغة تنبيهية/مبالِغة ('يجب "
+        "التوقف فوراً'، 'يبطل كل الأرقام'، 'سوق مضطربة') بدل صياغة مقيسة؟ "
+        "هل توجد جُمَل مسترسِلة تتجاوز ~٢٥ كلمة كان يمكن قسمها؟ أدرِجها "
+        "issues أسلوبية (غير حاجبة) مع اقتراح الصياغة المقيسة/القِصار.\n"
         "دقّق قابلية القراءة للتاجر (B2، أمر العمل الرئيس — الجمهور صاحب "
         "قرار تجاري غير متخصص): هل يظهر أي مصطلح تقني أو اختصار (HHI، CAGR، "
         "LPI، MFN، TRACES، CHED، EORI، WGI، TAM/SAM/SOM أو غيرها) **بلا شرح "
@@ -1230,14 +1253,16 @@ def review_report(draft: str, mission_reports: dict,
         lambda: _call(_PRINCIPLE, user, max_tokens=900, model=_FAST_MODEL,
                      timeout=30))
     if not raw:
-        return {"issues": structural_issues, "blocking": structural_issues,
-               "approved": not structural_issues} if structural_issues else None
+        _fb = structural_issues + tone_issues
+        return {"issues": _fb, "blocking": structural_issues,
+               "approved": not _fb} if _fb else None
     obj = _extract_json(raw)  # noqa: BLE001 — رد غير-JSON = لا مراجعة، لا اختلاق
     if obj is None:
-        return {"issues": structural_issues, "blocking": structural_issues,
-               "approved": not structural_issues} if structural_issues else None
+        _fb = structural_issues + tone_issues
+        return {"issues": _fb, "blocking": structural_issues,
+               "approved": not _fb} if _fb else None
     llm_issues = [str(i) for i in (obj.get("issues") or []) if str(i).strip()]
-    issues = structural_issues + llm_issues
+    issues = structural_issues + tone_issues + llm_issues
     # PART C1 (أمر العمل الرئيس — انحدار التكلفة $1.6→$2.0): المشاكل «الحاجبة»
     # وحدها تبرّر دورة تنقيح ثانية (نداء كاتب Opus كامل إضافي). الحاجب =
     # مشاكل البنية الحتمية (أقسام ناقصة/بترتيب خاطئ) دوماً + ما صنّفه المراجع
