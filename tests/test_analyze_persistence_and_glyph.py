@@ -256,3 +256,9 @@ def test_client_sanitizer_strips_section_glyph_token():
     assert "§" not in _client_sanitize("قرار من حزمة §4b المتحقَّق منها")
     assert "§" not in _client_sanitize("بوابة خطر (قاعدة §8 المعلنة)")
     assert "§" not in _client_sanitize("المحرك §10.3 الموزون")
+    # مراجعة الشيفرة: لا يبتلع كلمةً عربية تالية حين لا يتبع «§» رقمٌ.
+    assert _client_sanitize("انظر § المنهجية للتفصيل") == "انظر المنهجية للتفصيل"
+    # «§» وحده (بلا رمز) يُزال أيضاً — لا يبقى على سطح العميل.
+    assert "§" not in _client_sanitize("رمز § وحده")
+    # لاحقة قسمٍ بشرطة (§11.5-2) تُزال كاملة.
+    assert "§" not in _client_sanitize("ارجع §11.5-2 هنا")
