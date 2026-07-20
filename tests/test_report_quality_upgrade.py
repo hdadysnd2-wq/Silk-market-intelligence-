@@ -161,6 +161,31 @@ def test_w2_1_stale_tag_is_disclosure_only_no_number_change():
     assert "1106" in out  # الرقم كما هو
 
 
+def test_w2_1_hs_heading_year_number_is_not_stale_tagged():
+    """مراجعة الشيفرة #1 — رقم بند/رمز HS في المدى (2008 للمحضرات) لا يُوسَم
+    كسنة بيانات؛ السنة في سياق زمني صريح تُوسَم، والرقم العاري لا."""
+    import silk_render as R
+    out = R._tag_stale_years("العائلة الصحيحة البند 2008 و2009 للمحضرات، "
+                             "بينما دخل الفرد (2013).")
+    # رقما البند 2008/2009 عاريان (لا قوس/كلمة زمنية) => بلا وسم.
+    assert "2008 (الأحدث المتاح)" not in out and "2008 — بيانات" not in out
+    assert "2009 — بيانات" not in out
+    # 2013 بين قوسين (سياق بيانات) => موسوم.
+    idx = out.find("2013")
+    assert R._STALE_TAG in out[idx:idx + 45]
+    # صيغة الكلمة الزمنية «عام YYYY» تُوسَم أيضاً.
+    out2 = R._tag_stale_years("نُشِر عام 2014 آخر مسح.")
+    assert R._STALE_TAG in out2
+
+
+def test_w2_1_no_double_tag_when_writer_already_tagged():
+    """مراجعة الشيفرة #5 — سنة وسمها الكاتب أصلاً لا تُوسَم ثانيةً."""
+    import silk_render as R
+    pre = "الدخل (2013) — بيانات 2013 الأحدث المتاح حسب البنك."
+    out = R._tag_stale_years(pre)
+    assert out.count(R._STALE_TAG) == 1
+
+
 def test_w2_2_seasonality_gap_surfaces_closure_step_once():
     """2.2 — فجوة الموسمية تظهر في «ما لم يكتمل» مع خطوة الإغلاق، مرة واحدة."""
     import silk_render as R
@@ -195,6 +220,30 @@ def test_w2_3_broaden_if_weak_reports_both_terms_framed():
                                       "today 12-m", weak)
     assert broadened is not None and broadened.value == 100.0
     assert "الفئة موجود" in broadened.note and "غير مبحوثة" in broadened.note
+
+
+def test_w2_3_broaden_loop_capped_at_two_candidates():
+    """مراجعة الشيفرة #2 — حلقة التوسيع محدودة (SILK_TRENDS_BROADEN_MAX=2):
+    لا تستعلم pytrends لكل المرشّحين. مرشّحون ضعاف => نداءان كحدّ أقصى."""
+    import silk_trends_agent as T
+    from silk_data_layer import DataPoint
+    calls = []
+
+    def _fake_interest(kw, geo=None, tf="today 12-m"):
+        calls.append(kw)
+        return DataPoint(0.4, "Google Trends", 0.7, kw, "2026")  # كلها ضعيفة
+
+    def _fake_ctx(kw, geo=None, tf="today 12-m"):
+        return {"related_top": [{"label": f"t{i}", "value": 1} for i in range(6)],
+                "related_rising": [], "topics_rising": [], "regions": [],
+                "confidence": 0.6, "note": ""}
+
+    with mock.patch.object(T, "trends_interest", side_effect=_fake_interest), \
+         mock.patch.object(T, "trends_context", side_effect=_fake_ctx):
+        weak = DataPoint(0.4, "Google Trends", 0.7, "دقيق", "2026")
+        res = T.broaden_if_weak("دقيق", None, "today 12-m", weak)
+    assert res is None                       # لا مرشّح أقوى
+    assert len(calls) <= 2, calls            # سقف الاستعلامات
 
 
 def test_w2_3_no_broaden_when_exact_term_is_strong():
@@ -385,6 +434,23 @@ def test_w6_1_distributor_condition_met_when_confirmed_lead_exists():
     dr = R.build_view(blob)["deep_research"]
     dist = [c for c in dr["flip_conditions"] if "موزّع" in c["condition"]][0]
     assert dist["met"] is True
+
+
+def test_w6_1_filler_contact_does_not_satisfy_distributor_condition():
+    """مراجعة الشيفرة #4 — رائد بهاتف/إيميل حشو («—»/«غير متاح») لا يُثبِت
+    موزّعاً مؤكَّداً (عقد عدم الاختلاق)."""
+    import silk_render as R
+    assert R._real_contact("—") is False
+    assert R._real_contact("") is False
+    assert R._real_contact("غير متاح") is False
+    assert R._real_contact("+967-1-000000") is True
+    blob = yemen_research_blob()
+    blob["deep_research"]["importer_leads"] = {
+        "leads": [{"title": "موزّع عدن", "phone": "—", "email": ""}],
+        "path": "scraper"}
+    dr = R.build_view(blob)["deep_research"]
+    dist = [c for c in dr["flip_conditions"] if "موزّع" in c["condition"]][0]
+    assert dist["met"] is False
 
 
 def test_w6_2_writer_prompt_caps_exec_summary_and_requires_flip_and_risks():

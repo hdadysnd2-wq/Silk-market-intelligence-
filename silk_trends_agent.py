@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+import os
 
 from silk_data_layer import DataPoint, _today
 from silk_agents import BaseAgent, AgentReport
@@ -231,9 +232,6 @@ def _seasonality(keyword: str, geo: str | None, timeframe: str) -> DataPoint:
                          f"pytrends unavailable / no network: {e}", _today())
 
 
-import os
-
-
 def _weak_threshold() -> float:
     """عتبة «الطلب شبه المعدوم» على الصفة الدقيقة — config-driven."""
     try:
@@ -241,6 +239,16 @@ def _weak_threshold() -> float:
         return v if v > 0 else 5.0
     except (TypeError, ValueError):
         return 5.0
+
+
+def _broaden_max_candidates() -> int:
+    """سقف عدد المصطلحات الأعمّ المُستعلَمة — يحرس ميزانية pytrends المحدودة
+    (429 مرصود حياً، مراجعة الشيفرة #2). config: SILK_TRENDS_BROADEN_MAX (٢)."""
+    try:
+        n = int(os.environ.get("SILK_TRENDS_BROADEN_MAX", "2"))
+        return n if n > 0 else 2
+    except (TypeError, ValueError):
+        return 2
 
 
 def broaden_if_weak(keyword: str, geo: str | None, timeframe: str,
@@ -256,7 +264,10 @@ def broaden_if_weak(keyword: str, geo: str | None, timeframe: str,
     if interest.value is None or float(interest.value) > _weak_threshold():
         return None
     ctx = trends_context(keyword, geo, timeframe)
-    cands = (ctx.get("related_top") or []) + (ctx.get("related_rising") or [])
+    # سقفٌ على عدد المرشّحين المُستعلَمين — لا حلقة غير محدودة تُغرِق pytrends
+    # المحدود (429 مرصود حياً، مراجعة الشيفرة #2).
+    cands = ((ctx.get("related_top") or [])
+             + (ctx.get("related_rising") or []))[:_broaden_max_candidates()]
     for cand in cands:
         broader = (cand.get("label") or "").strip()
         if not broader or broader == keyword:

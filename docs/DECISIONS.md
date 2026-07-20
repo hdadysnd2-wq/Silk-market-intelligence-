@@ -110,7 +110,7 @@ Out-of-scope findings are **logged here, not fixed**. Standing instruction to Cl
 
 | Date | Found during | Finding | Belongs to |
 |---|---|---|---|
-| | | | |
+| 2026-07-20 | Report-quality-upgrade self code-review (#3) | `TrendsAgent._execute` now always appends a `value=None` seasonality DataPoint when Trends returns no series — required so 2.2's gap+closure reaches the view, but it adds one extra `○ unverified` to `_client_confidence_section`'s tally on every trends-less report. **Kept as-is** (declaring the gap is the correct no-fabrication behavior vs. the old silent drop); follow-up: consider excluding pure closure-suggestion DataPoints from the evidence tally so the confidence % isn't diluted by a non-datum. | Confidence-tally refinement (future) |
 
 ---
 

@@ -1102,9 +1102,14 @@ def _apply_merchant_language(text: "str | None") -> "tuple[str, list]":
 
 # Wave 2.1 (تدقيق زبدة الفول السوداني/اليمن — أرقام دخل 2013/2018): أيّ سنة
 # بيانات مرجعية أقدم من نافذة (SILK_STALE_DATA_YEARS، افتراضياً ٥ سنوات) تُوسَم
-# آلياً «الأحدث المتاح» كي لا يُقرأ رقم قديم كأنه راهن. تُوسَم أرقام السنوات في
-# سياق بيانات فقط (لا أرقام لوائح ذات شرطة مثل EU 2017/625). أول ورود لكل سنة.
-_DATA_YEAR_RE = re.compile(r"(?<![\d/])(19\d\d|20\d\d)(?![\d/])")
+# آلياً «الأحدث المتاح» كي لا يُقرأ رقم قديم كأنه راهن. تُوسَم السنة في **سياق
+# بيانات صريح فقط**: بين قوسين مباشرةً «(YYYY)» أو مسبوقةً بكلمة زمنية
+# (عام/سنة/لعام/منذ). هذا يستبعد أرقام اللوائح ذات الشرطة (EU 2017/625)
+# **وأرقام بنود/رموز HS في المدى 2005–2099** (مثل البند 2008 للمحضرات — كان
+# يُوسَم خطأً كسنة بيانات، مراجعة الشيفرة #1). أول ورود لكل سنة.
+_DATA_YEAR_CTX_RE = re.compile(
+    r"\((19\d\d|20\d\d)\)"                          # بين قوسين: (2013)
+    r"|(?:عام|سنة|لعام|منذ)\s+(19\d\d|20\d\d)\b")   # مسبوقة بكلمة زمنية
 _STALE_TAG = "الأحدث المتاح"
 
 
@@ -1127,6 +1132,18 @@ def _stale_years_threshold() -> int:
 FLIP_CONDITIONS_HEADING = "شرطا قلب الحكم"
 
 
+# قيم حشو تُعامَل كغياب جهة اتصال (لا تُثبِت موزّعاً مؤكَّداً — مراجعة الشيفرة #4).
+_FILLER_CONTACTS = frozenset({"", "-", "—", "–", "n/a", "na", "غير متاح",
+                              "غير متوفر", "لا يوجد", "none", "null"})
+
+
+def _real_contact(v: object) -> bool:
+    """هل قيمة جهة الاتصال حقيقية (لا حشو/شرطة/«غير متاح»)؟ — عقد عدم الاختلاق:
+    شرط «موزّع مؤكَّد» لا يتحقّق بعلامة حشو."""
+    s = str(v or "").strip()
+    return bool(s) and s.lower() not in _FILLER_CONTACTS
+
+
 def _flip_conditions(verdict_tone: str, hs_flagged: bool,
                      importer_leads: dict, market_ar: str) -> list[dict]:
     """اشتقّ شرطَي قلب الحكم المهيكلين — يُفعَّل فقط للحكم watch/conditional.
@@ -1143,7 +1160,8 @@ def _flip_conditions(verdict_tone: str, hs_flagged: bool,
             "met": False})
     leads = (importer_leads or {}).get("leads") or []
     has_confirmed = any(
-        isinstance(l, dict) and (l.get("phone") or l.get("email"))
+        isinstance(l, dict)
+        and (_real_contact(l.get("phone")) or _real_contact(l.get("email")))
         and (l.get("title") or l.get("name")) for l in leads)
     conds.append({
         "condition": f"التعاقد مع موزّع محلي مؤكَّد بالاسم في {market_ar or 'السوق'}",
@@ -1183,9 +1201,9 @@ def _tag_stale_years(text: "str | None") -> str:
     tagged: set[str] = set()
     out: list[str] = []
     last = 0
-    for m in _DATA_YEAR_RE.finditer(s):
-        yr = m.group(1)
-        if yr in tagged:
+    for m in _DATA_YEAR_CTX_RE.finditer(s):
+        yr = m.group(1) or m.group(2)  # صيغة القوسين أو الكلمة الزمنية
+        if not yr or yr in tagged:
             continue
         try:
             stale = int(yr) <= threshold
@@ -1193,9 +1211,9 @@ def _tag_stale_years(text: "str | None") -> str:
             stale = False
         if not stale:
             continue
-        # لا تُكرِّر إن كان الوسم ملاصقاً فعلاً بعد السنة.
-        if s[m.end():m.end() + 20].lstrip(" )").startswith(_STALE_TAG) or \
-                _STALE_TAG in s[m.end():m.end() + 20]:
+        # لا تُكرِّر إن كان الوسم مكتوباً أصلاً بعد السنة (الكاتب وسمه) — نافذة
+        # ٤٠ محرفاً تكفي لعبارة «الأحدث المتاح» كاملةً (مراجعة الشيفرة #5).
+        if _STALE_TAG in s[m.end():m.end() + 40]:
             tagged.add(yr)
             continue
         tagged.add(yr)
