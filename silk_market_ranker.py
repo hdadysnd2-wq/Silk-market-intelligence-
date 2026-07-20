@@ -22,6 +22,15 @@ from silk_data_layer_v2 import market_imports_cached, ppp_per_capita, market_imp
 
 log = logging.getLogger(__name__)
 
+
+def _dyear(year: object) -> "int | None":
+    """سنة البيانات كعددٍ للحقل البنيويّ data_year (الدرس ٣٣) — None عند التعذّر."""
+    try:
+        return int(str(year)[:4])
+    except (TypeError, ValueError):
+        return None
+
+
 _SAUDI_M49 = "682"
 
 # أسواق سِلك المستهدفة — Silk target markets (iso3 + M49). Real codes; GCC,
@@ -261,7 +270,7 @@ def _tier2_gather_row(hs_code: str, entry: dict, year: int) -> dict:
     ms = (DataPoint(float(total), "UN Comtrade", _TIER2_CONF_CAP,
                     note=f"إجمالي واردات HS{hs_code} {year} (USD) — {TIER2_LABEL}"
                          " · من نداء استيراد العالم الواحد",
-                    retrieved_at=_today())
+                    retrieved_at=_today(), data_year=_dyear(year))
           if total is not None else
           DataPoint(None, "UN Comtrade", 0.0,
                     note=f"{TIER2_LABEL} — لا إجمالي واردات لهذا السوق",
@@ -317,7 +326,7 @@ def _market_size_component(total_usd: object, hs_code: str, m49: str,
     conf = 0.7 if xval else 0.9      # تباين مصادر >20% => ثقة أدنى (Stage 2A)
     return DataPoint(float(total_usd), "UN Comtrade", conf,
                      note=f"total imports HS{hs_code} {year} (USD){xval}",
-                     retrieved_at=_today())
+                     retrieved_at=_today(), data_year=_dyear(year))
 
 
 def _competitor_list(comps: list[DataPoint], top: int = 5) -> list[dict]:

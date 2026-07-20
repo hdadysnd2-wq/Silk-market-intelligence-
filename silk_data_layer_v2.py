@@ -109,7 +109,9 @@ def _competitor_dp(code: object, value_usd: float, grand: float, *,
         source=source, confidence=confidence,
         note=(f"HS{hs_code} imports to {market_label} {year}; "
               f"share {share}%{note_suffix}"),
-        retrieved_at=retrieved_at or _today())
+        retrieved_at=retrieved_at or _today(),
+        # سنة البيانات البنيوية (الدرس ٣٣) — لا وسم نصّيّ في الملاحظة.
+        data_year=int(year) if str(year).isdigit() else None)
 
 
 def market_imports(hs_code: str, market_m49: object, year: int) -> dict:
