@@ -1537,7 +1537,7 @@ def build_view(result: dict) -> dict:
             "score": ed_top.get("score"),
             "why": ed_top.get("why"),
             "market": (top or {}).get("country"),
-            "stage": "silk.decision/v1 — المحرك الموزون §8 (الحكم الوحيد)",
+            "stage": "silk.decision/v1 — المحرك الموزون (الحكم الوحيد)",
             "sufficiency": (f"بوابة كفاية البيانات: {jury.get('agents_with_data', 0)}/"
                             f"{jury.get('agents_total', 0)} وكلاء أساسيون لديهم "
                             f"بيانات؛ فجوات: {gaps_ar}"),

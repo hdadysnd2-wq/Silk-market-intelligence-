@@ -182,3 +182,77 @@ def test_no_section_glyph_in_client_facing_strings():
     visible_hits = [m.group(1).strip()[:80]
                     for m in re.finditer(r">([^<>]*§[^<>]*)<", markup)]
     assert not visible_hits, f"«§» في نصّ ظاهر للعميل: {visible_hits}"
+
+
+def test_no_section_glyph_in_rendered_analyze_report():
+    """بلاغ حي (2026-07-20، تمر سكري/NLD): «§4b» على تقرير العميل من ملاحظة
+    محرّك القرار (silk_decision) و«§8» من stage — ترقيمُ أقسامٍ داخليّ يصل
+    report.md + docx العميل. القفل: تشغيلة /analyze حتمية حقيقية => صفر «§»
+    في report.md (render_markdown) وdocx العميل ووثيقة المشغّل."""
+    import silk_store
+    import silk_engine  # يُستورَد قبل قطع الشبكة (requests-level) لتفادي كسر ssl
+    # بذر مخزن الحقائق كي يُنتِج المحرّك قراراً (لا شبكة) — نفس بذرة المولّد.
+    with _env(SILK_DATA_DIR=tempfile.mkdtemp(), SILK_STORE_DB=None, **_KEYLESS):
+        silk_store.migrate()
+        silk_store.upsert_trade_flows([
+            {"hs6": "080410", "reporter_iso3": "CHN", "partner_iso3": "WLD",
+             "year": 2023, "flow": "M", "value_usd": 6.0e7, "qty_kg": 2.0e7},
+            {"hs6": "080410", "reporter_iso3": "CHN", "partner_iso3": "SAU",
+             "year": 2023, "flow": "M", "value_usd": 1.8e7, "qty_kg": 8.0e6},
+        ])
+        with _no_network():
+            result = silk_engine.analyze(
+                "تمور", countries=[{"iso3": "CHN", "m49": "156"}],
+                year=2023, with_research=True, with_risk=True)
+        from silk_render import build_view
+        from silk_reports import render_markdown, render_docx
+        view = build_view(result)
+        md = render_markdown(view)
+        assert "§" not in md, ("«§» في report.md: "
+                               + "; ".join(l for l in md.splitlines() if "§" in l)[:200])
+        # تقرير /analyze الكلاسيكي يُصدَّر عبر render_docx (لا render_client_docx،
+        # الأخير للبحث العميق حصراً — مغطّى باختبار منفصل).
+        p = os.path.join(tempfile.mkdtemp(), "r.docx")
+        render_docx(view, p)
+        from docx import Document
+        doc = Document(p)
+        txt = " ".join(par.text for par in doc.paragraphs)
+        for tb in doc.tables:
+            for row in tb.rows:
+                for c in row.cells:
+                    txt += " " + c.text
+        assert "§" not in txt, "«§» في render_docx"
+
+
+def test_no_section_glyph_in_deep_research_client_surfaces():
+    """القفل يمتدّ لمسار البحث العميق: report.md + docx العميل للمدوّنة القانونية
+    خاليان من «§» (شبكة أمان منقّي العميل تُحيّد أي «§Nx» متبقٍّ)."""
+    import silk_render as R
+    import silk_reports as RP
+    sys.path.insert(0, os.path.join(_ROOT, "tools"))
+    from canonical_netherlands import netherlands_research_blob
+    # حقن ملاحظة قديمة الطراز بـ«§» في حقيقة معروضة — يجب أن ينقّيها العميل.
+    blob = netherlands_research_blob()
+    blob["deep_research"]["missions"]["trade_flow"]["findings"][0]["note"] = \
+        "واردات من حزمة §4b المتحقَّق منها"
+    view = R.build_view(blob)
+    md = RP._md_deep_research(view, [])
+    assert "§" not in md
+    p = os.path.join(tempfile.mkdtemp(), "c.docx")
+    RP.render_client_docx(view, p)
+    from docx import Document
+    doc = Document(p)
+    txt = " ".join(par.text for par in doc.paragraphs)
+    for tb in doc.tables:
+        for row in tb.rows:
+            for c in row.cells:
+                txt += " " + c.text
+    assert "§" not in txt
+
+
+def test_client_sanitizer_strips_section_glyph_token():
+    """منقّي العميل يزيل رمز القسم «§Nx» (belt-and-suspenders) بلا كسر الجملة."""
+    from silk_reports import _client_sanitize
+    assert "§" not in _client_sanitize("قرار من حزمة §4b المتحقَّق منها")
+    assert "§" not in _client_sanitize("بوابة خطر (قاعدة §8 المعلنة)")
+    assert "§" not in _client_sanitize("المحرك §10.3 الموزون")
