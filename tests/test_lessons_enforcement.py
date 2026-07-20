@@ -222,14 +222,14 @@ _TEST_ANCHORS = [
      ["def _guard_analyze_persist_canonical_db"]),
     (31, "tools/post_deploy_smoke.py", ["def _check_exports"]),
     # البند ٣٢ — مصدرٌ جديد = نفس العقود (فجوة معلنة/ops/مخزَّن/محكوم/نظيف الشروط).
-    (32, "tests/test_wave_datasources_integration.py",
+    (34, "tests/test_wave_datasources_integration.py",
      ["def test_imf_declared_gap_on_fetch_failure_and_ops_logged",
       "def test_wto_no_key_is_declared_gap_with_zero_network_calls",
       "def test_tariff_fallback_prefers_wto_when_available",
       "def test_preferred_domains_map_keys_all_have_web_search_tool",
       "def test_new_source_modules_do_no_html_scraping",
       "def test_world_bank_arabic_portal_only_for_client_citation"]),
-    (32, "docs/DECISIONS.md",
+    (34, "docs/DECISIONS.md",
      ["INTEGRATED-with-artifact", "SEARCH-BIASED",
       "REJECTED as a data source"]),
 ]
@@ -267,6 +267,33 @@ _SYMBOL_ANCHORS_EXTRA = [
                             'data-act="pdf"']),
     (19, "api.py", ["report.pdf", 'media_type="application/pdf"']),
     (19, "Dockerfile", ["libreoffice-writer"]),
+    # البند ٣٢ — إصلاحُ المحرّك لا تحرير التقرير (تدقيق زبدة الفول السوداني/
+    # اليمن): كل عائلة عيبٍ تحريريّ صارت قاعدةَ عقدٍ + إنفاذ عرضٍ حتميّ + قفلًا.
+    (32, "silk_hs_confirm.py", ["def confirm_hs", "def is_flagged",
+                                "CONTEXTUAL_TAG"]),
+    (32, "silk_render.py", ["_tag_stale_years", "_flip_conditions",
+                            "_price_row_reason", "_has_seasonality_gap"]),
+    (32, "silk_trends_agent.py", ["def broaden_if_weak",
+                                  "SEASONALITY_GAP_CLOSURE"]),
+    (32, "silk_style_contract.py", ["ALARMIST_PHRASES",
+                                    "PROFESSIONAL_TONE_RULE"]),
+    (32, "silk_ai_judge.py", ["def _alarmist_issues"]),
+    (32, "tools/canonical_yemen.py", ["def yemen_research_blob"]),
+    (32, "tests/test_report_quality_upgrade.py",
+     ["def test_w1_2_hs_confirm_flags_peanut_butter_but_not_valid_matches",
+      "def test_w6_1_watch_verdict_has_structured_flip_conditions"]),
+    # البند ٣٣ — حلِّل المصدر لا النثر (parse provenance, not prose): قاعدةُ
+    # الإفصاح تُرسى إلى بياناتٍ بنيوية، والمطابقة النصّية شبكةُ أمانٍ أخيرة.
+    (33, "silk_staleness.py", ["def fact_year", "def is_stale_fact",
+                              "def stale_fact_years", "def stale_tag"]),
+    (33, "silk_ai_judge.py", ["from silk_staleness import"]),
+    (33, "silk_render.py", ["stale_fact_years", "def _tag_stale_years"]),
+    # الحقل البنيويّ data_year هو مصدر الفِنتيج (لا وسم نصّيّ year=).
+    (33, "silk_data_layer.py", ["data_year"]),
+    (33, "tests/test_report_quality_upgrade.py",
+     ["def test_w2_1_fact_year_reads_structured_provenance_not_prose",
+      "def test_w2_1_stale_fact_tagged_regardless_of_phrasing",
+      "def test_w2_1_hs_heading_2008_never_tagged_no_stale_fact_behind_it"]),
 ]
 
 

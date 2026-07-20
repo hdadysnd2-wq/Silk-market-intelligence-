@@ -1029,6 +1029,10 @@ def create_app():
         # عائلة A): تصدير إلى بلد المنشأ / سوق تحت عقوبات / فصل مقيَّد قانونيًا.
         # لوحةُ «جاهزية الدراسة» تجمعها؛ زرّ التأكيد الواحد يرسلها true.
         advisories_ack: bool = False
+        # تأكيدٌ صريح على رمز HS رغم تحذير التطابق (Wave 1.2): بوّابةُ تأكيد
+        # الرمز تُرجِع 422 حين لا تشمل صفةُ الرمز صفةَ المنتج المميّزة؛ إرسالُ
+        # hs_confirmed=true بعد مراجعة المستخدم يُكمِل التشغيلة على مسؤوليته.
+        hs_confirmed: bool = False
 
     def _research_budget_status(economics: dict) -> dict:
         """حالة الميزانية على مستوى التشغيلة كاملة — P1، حادثة نفاد
@@ -1193,10 +1197,19 @@ def create_app():
                 _scrape_future, product, market_ref, mission_reports,
                 _scrape_t0, _mono)
             _stage_marks["writer"] = _mono.monotonic()  # E3: نهاية الإكمال
+            # Wave 1.2/1.3 (تدقيق زبدة الفول السوداني/اليمن): عقد تأكيد رمز HS
+            # — يُقاس تداخل صفات المنتج المميّزة مع وصف الرمز؛ رمز غير مؤكَّد
+            # يُمرَّر للكاتب فيؤطّر أرقام كومتريد «مؤشر سياقي»، ويُخزَّن في
+            # النتيجة فتعيد طبقة العرض تأطيرها + تسقف الثقة (silk_render).
+            try:
+                from silk_hs_confirm import confirm_hs
+                hs_conf = confirm_hs(product, hs_code) if hs_code else None
+            except Exception:
+                hs_conf = None
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
                 product, market_ref.name_en, max_cycles=tail_max_cycles,
-                trace_id=trace_id, hs_code=hs_code,
+                trace_id=trace_id, hs_code=hs_code, hs_confirmation=hs_conf,
                 on_stage=lambda s: silk_context.snapshot_research_progress(
                     analysis_id, s)) if ai_ok else
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
@@ -1288,6 +1301,10 @@ def create_app():
         }
         if hs_note:
             result["hs_resolution_note"] = hs_note
+        # Wave 1.3: عقد تأكيد الرمز يُخزَّن في النتيجة — تعيد طبقة العرض تأطير
+        # أرقام كومتريد وتسقف الثقة عند التعليم (silk_render._deep_research_view).
+        if isinstance(hs_conf, dict):
+            result["hs_confirmation"] = hs_conf
         if not ai_ok:
             result["ai_extras_note"] = ai_note
         # التدهور الفعلي = عدم الجهوزية (ready=False، بلاغ حي: _free_ai_
@@ -1563,6 +1580,34 @@ def create_app():
                 "message": "تعذّر تحديد رمز HS لهذا المنتج — صنِّفه أولًا "
                            "(/classify_hs) أو اختر الرمز يدويًا قبل بدء البحث.",
                 "hs_note": hs_note})
+
+        # بوّابة تأكيد رمز HS (Wave 1.2، عائلة unresolved-hs-silent-spend
+        # موسَّعةً — تدقيق زبدة الفول السوداني/اليمن): رمزٌ محسومٌ لكنه **خاطئ
+        # دلالياً** (صفة المنتج المميّزة «فول سوداني» غائبة عن وصف الرمز
+        # 040510 «زبدة») يُوقِف التشغيل **قبل** أيّ حجز/دولار ويطلب تأكيد
+        # المستخدم — لا تُنفَق دولارات على فئة مجاورة. مُطفأة افتراضياً
+        # (SILK_HS_CONFIRM_GATE) => السلوك كاليوم. تُتخطّى عند الاستئناف
+        # وعند تأكيد المستخدم الصريح (req.hs_confirmed=True).
+        from silk_hs_confirm import confirm_hs, is_flagged, gate_enabled
+        if (req.resume is None and gate_enabled() and hs_code
+                and not getattr(req, "hs_confirmed", False)):
+            _pre = confirm_hs(product or "", hs_code)
+            if is_flagged(_pre):
+                import silk_ops_log
+                silk_ops_log.record_error(
+                    "hs_confirmation_blocked",
+                    f"رُفض بدءُ بحثٍ برمز HS غير مؤكَّد لمنتج {product!r}: "
+                    f"{_pre.get('reason')}",
+                    context={"product": product, "hs_code": hs_code,
+                             "market_iso3": market_ref.iso3,
+                             "missing_terms": _pre.get("missing_terms")})
+                raise HTTPException(status_code=422, detail={
+                    "error": "hs_confirmation_needed",
+                    "message": (f"رمز HS {hs_code} («{_pre.get('code_desc')}») "
+                                "قد لا يطابق هذا المنتج — الصفة المميّزة "
+                                f"غير مشمولة: {'، '.join(_pre.get('missing_terms') or [])}. "
+                                "أكّد الرمز أو صنِّفه من جديد قبل بدء البحث."),
+                    "hs_confirmation": _pre})
 
         # بوابة «خارج التغطية» (اتفاق المالك) — تسبق الجهوزية/الحجز: مع تفعيل
         # تغطية العالم، سوقٌ ليس Tier-1 ولا ضمن مجموعة أكبر مستوردي هذا الرمز

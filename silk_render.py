@@ -31,7 +31,10 @@ def _dp(obj: object) -> dict:
             "confidence": getattr(obj, "confidence", 0.0),
             "note": getattr(obj, "note", ""),
             "retrieved_at": getattr(obj, "retrieved_at", ""),
-            "status": getattr(obj, "status", "")}
+            "status": getattr(obj, "status", ""),
+            # الحقل البنيويّ لسنة البيانات (الدرس ٣٣) يُحفَظ في التطبيع كي
+            # يقرأه silk_staleness.fact_year في طبقة العرض/التصدير.
+            "data_year": getattr(obj, "data_year", None)}
 
 
 def _decision(top: dict | None) -> dict:
@@ -186,6 +189,40 @@ def _real_list(x: object) -> list:
         if v is not None:
             out.append(v)
     return out
+
+
+# Wave 3.1 (تدقيق زبدة الفول السوداني/اليمن — صفوف أسعار بلا وزن): سبب غياب
+# السعر/كجم لكل صفّ يُصرَّح صراحةً (وزن غير مذكور / وحدة غامضة) بدل خانة فارغة،
+# وسطر الفتح الوحيد «بطاقة منتج: التكلفة/كجم» يُذكَر مرة واحدة في قسم التسعير.
+_PER_KG_RE = re.compile(
+    r"(?:/|\bلكل\b|\bper\b)?\s*(?:كجم|كيلو|كغ|للكيلو|kg|كيلوغرام)"
+    r"|(?:كجم|كيلو|كغ|kg)\s*/?\s*(?:€|\$|£|دولار|يورو)")
+_CURRENCY_RE = re.compile(r"€|\$|£|دولار|يورو|ريال|درهم|\d")
+_WEIGHT_RE = re.compile(
+    r"\d+\s*(?:غ|جم|جرام|غرام|كجم|كيلو|كغ|kg|g|مل|لتر|ml|l|أونصة|oz)")
+
+PRICE_UNLOCK_LINE = ("لحساب موقعك السعري الدقيق: بطاقة منتجك (التكلفة/كجم) هي "
+                     "المُدخَل الناقص الوحيد.")
+
+
+def _price_row_reason(text: object) -> str:
+    """سبب تعذّر حساب السعر/كجم لصفّ سعر — «» إن كان قابلاً للحساب.
+
+    - يحوي سعراً لكل كيلوغرام/وحدة => «» (قابل للحساب).
+    - سعرٌ بلا وزن مذكور => «وزن غير مذكور».
+    - بلا سعر واضح أصلاً => «وحدة غامضة». حتمي، لا اختلاق."""
+    s = str(text or "").strip()
+    if not s:
+        return "وحدة غامضة"
+    if _PER_KG_RE.search(s):
+        return ""  # سعر/كجم مرصود مباشرة
+    has_currency = bool(_CURRENCY_RE.search(s))
+    has_weight = bool(_WEIGHT_RE.search(s))
+    if has_currency and has_weight:
+        return ""  # سعر + وزن => قابل للاشتقاق
+    if has_currency and not has_weight:
+        return "وزن غير مذكور"
+    return "وحدة غامضة"
 
 
 def _prices(row: dict) -> list:
@@ -1078,6 +1115,156 @@ def _apply_merchant_language(text: "str | None") -> "tuple[str, list]":
     return s, glossary
 
 
+# القاعدة العامة (قرار المالك — التقادُم من المصدر لا النثر، مراجعة الشيفرة
+# #1/#2/#3/#5): الآلية **الأساسية** توسيمُ سنوات الحقائق المتقادِمة المعروفة من
+# البيانات (`silk_staleness.stale_fact_years`) أينما وردت، فلا تفلت أيّ صياغة
+# («في 2013»/«2013م»/…) ولا يُوسَم رمزُ HS (2008) لأنه ليس سنة حقيقة. التعبير
+# النمطي أدناه **شبكة أمان أخيرة** فقط: سياق بيانات صريح (بين قوسين، أو كلمة
+# زمنية مسبوقة بفاصل حتى لا تُطابَق داخل كلمة مثل «الطعام» — مراجعة الشيفرة #1).
+_DATA_YEAR_CTX_RE = re.compile(
+    r"\((19\d\d|20\d\d)\)"                                       # بين قوسين: (2013)
+    r"|(?:^|[\s(،؛:])(?:عام|سنة|لعام|منذ)\s+(19\d\d|20\d\d)(?![\d/])")  # كلمة زمنية بفاصل، بحدّ يمينيّ (لا بادئة رقمٍ أطول)
+_STALE_TAG = "الأحدث المتاح"
+
+
+def _stale_years_threshold() -> int:
+    """سنة العتبة — أقدم من (السنة الحالية − SILK_STALE_DATA_YEARS). مصدر واحد
+    عبر silk_staleness كي لا تتشعّب النافذة."""
+    from silk_staleness import stale_threshold_year
+    return stale_threshold_year()
+
+
+# Wave 6.1 (تدقيق زبدة الفول السوداني/اليمن): حين يكون الحكم «مراقبة»/«مشروط»،
+# يجب تسمية **شرطَي قلب الحكم** كحقلين مهيكلين (لا نثر حظّ): بيانات استيراد
+# موثوقة تحت الرمز الصحيح (إن كان الرمز مُعلَّماً)، وموزّع محلي مؤكَّد تعاقدياً
+# بالاسم. كل شرط يحمل خطوة الإغلاق التي تُقفله فتربطه خارطة الـ٩٠ يوماً. مبنيّ
+# على البيانات (لا قائمة منتج صلبة) — يُستهلَك في العرض/المُصدِّرات/المختصر.
+FLIP_CONDITIONS_HEADING = "شرطا قلب الحكم"
+
+
+# قيم حشو تُعامَل كغياب جهة اتصال (لا تُثبِت موزّعاً مؤكَّداً — مراجعة الشيفرة #4).
+_FILLER_CONTACTS = frozenset({"", "-", "—", "–", "n/a", "na", "غير متاح",
+                              "غير متوفر", "لا يوجد", "none", "null"})
+
+
+def _real_contact(v: object) -> bool:
+    """هل قيمة جهة الاتصال حقيقية (لا حشو/شرطة/«غير متاح حالياً»)؟ — عقد عدم
+    الاختلاق: شرط «موزّع مؤكَّد» لا يتحقّق بعلامة حشو. جهةٌ حقيقية = بريدٌ
+    (يحوي @ ونقطة) أو هاتفٌ (٥ أرقام فأكثر)؛ فالعبارات النصّية المطوّلة مثل
+    «غير متاح حالياً»/«لا يوجد رقم» تُرفَض لأنها بلا @ ولا أرقام كافية
+    (مراجعة الشيفرة #4 — الرفض بالبنية لا بمطابقة نصّية حرفية)."""
+    s = str(v or "").strip()
+    if not s or s.lower() in _FILLER_CONTACTS:
+        return False
+    if "@" in s and "." in s:                          # بريد إلكتروني
+        return True
+    return sum(ch.isdigit() for ch in s) >= 5          # هاتف (أرقام كافية)
+
+
+def _flip_conditions(verdict_tone: str, hs_flagged: bool,
+                     importer_leads: dict, market_ar: str) -> list[dict]:
+    """اشتقّ شرطَي قلب الحكم المهيكلين — يُفعَّل فقط للحكم watch/conditional.
+
+    كل شرط: {condition, closes_via, met}. `met=True` حين يوجد دليل مرصود
+    يُغلقه فعلاً (لا اختلاق) — موزّع بجهة اتصال مؤكَّدة => شرط الموزّع محقَّق."""
+    if verdict_tone not in ("watch", "conditional"):
+        return []
+    conds: list[dict] = []
+    if hs_flagged:
+        conds.append({
+            "condition": "توفّر بيانات استيراد موثوقة تحت رمز HS الصحيح",
+            "closes_via": "إعادة تصنيف الرمز ثم سحب واردات كومتريد تحته",
+            "met": False})
+    leads = (importer_leads or {}).get("leads") or []
+    has_confirmed = any(
+        isinstance(l, dict)
+        and (_real_contact(l.get("phone")) or _real_contact(l.get("email")))
+        and (l.get("title") or l.get("name")) for l in leads)
+    conds.append({
+        "condition": f"التعاقد مع موزّع محلي مؤكَّد بالاسم في {market_ar or 'السوق'}",
+        "closes_via": "خدمة تحقّق جهات الاتصال المدفوعة ثم عقد موزّع",
+        "met": bool(has_confirmed)})
+    return conds
+
+
+def _has_seasonality_gap(missions: dict) -> bool:
+    """هل رصدت بعثة فجوةَ موسمية (قيمة None + ملاحظة تخصّ الموسمية/رمضان)؟
+
+    يلتقط شكلَي الملاحظة: الجديد (silk_trends_agent.SEASONALITY_GAP_CLOSURE)
+    والقديم المخزَّن ('no series for seasonality of ...')."""
+    for m in (missions or {}).values():
+        if not isinstance(m, dict):
+            continue
+        for f in (m.get("findings") or []):
+            d = _dp(f)
+            if d.get("value") is not None:
+                continue
+            note = str(d.get("note") or "")
+            if ("موسمي" in note or "رمضان" in note
+                    or "seasonalit" in note.lower()):
+                return True
+    return False
+
+
+def _tag_stale_years(text: "str | None",
+                     stale_fact_years: "set[int] | frozenset[int]" = frozenset()) -> str:
+    """وسم سنوات البيانات المتقادِمة «الأحدث المتاح» — **أساسه قائمة الحقائق
+    المتقادِمة** (provenance) لا تحليل النثر (قرار المالك).
+
+    - **أساسي:** كل سنة في `stale_fact_years` (معروفة متقادِمةً من الحقائق)
+      تُوسَم أينما وردت (بحدود آمنة: ليست ملاصقة لرقم/شرطة، فلا يُوسَم رمز HS
+      مثل 200811 ولا لائحة 2017/625) — مستقلّةً عن الصياغة («في 2013»/«2013م»).
+    - **شبكة أمان:** سنةٌ متقادِمة (≤ العتبة) في سياق بيانات صريح (قوسين/كلمة
+      زمنية) حتى لو لم تُمرَّر قائمةٌ — احتياطٌ أخير محافظ.
+
+    عقد عدم الاختلاق: إفصاح فقط، لا يغيّر رقماً؛ أول ورودٍ لكل سنة، ولا تكرار
+    إن وسَمها الكاتب أصلاً (نافذة ٤٠ محرفاً)."""
+    s = str(text or "")
+    if not s.strip():
+        return s
+    threshold = _stale_years_threshold()
+    # جمع كل المرشّحين (موضع، نهاية، سنة): الأساسي من القائمة + الاحتياطي النمطي.
+    cands: list[tuple[int, int, int]] = []
+    for yr in (stale_fact_years or set()):
+        for m in re.finditer(rf"(?<![\d/]){int(yr)}(?![\d/])", s):
+            cands.append((m.start(), m.end(), int(yr)))
+    for m in _DATA_YEAR_CTX_RE.finditer(s):
+        g = m.group(1) or m.group(2)
+        try:
+            y = int(g)
+        except (TypeError, ValueError):
+            continue
+        if y <= threshold:
+            cands.append((m.start(), m.end(), y))
+    if not cands:
+        return s
+    cands.sort()
+    tagged: set[int] = set()
+    out: list[str] = []
+    last = 0
+    for start, end, yr in cands:
+        if yr in tagged or end < last:
+            continue
+        # ضمّ لاحقة سنةٍ ميلادية/هجرية **مفردة عند حدّ كلمة فقط** (م/هـ/ـ) كي
+        # لا تتدلّى بعد الوسم — دون ابتلاع أوّل حرفٍ من كلمةٍ ملاصقة مثل «مايو»
+        # (مراجعة الشيفرة #4: «2013مايو» تبقى «مايو» سليمة).
+        _era_end = end
+        while _era_end < len(s) and s[_era_end] in "مهـ":
+            _era_end += 1
+        if _era_end > end and (_era_end >= len(s) or not s[_era_end].isalpha()):
+            end = _era_end
+        # لا تُكرِّر إن كان الوسم مكتوباً أصلاً بعد السنة (نافذة ٤٠ محرفاً).
+        if _STALE_TAG in s[end:end + 40]:
+            tagged.add(yr)
+            continue
+        tagged.add(yr)
+        out.append(s[last:end])
+        out.append(f" — بيانات {yr} ({_STALE_TAG})")
+        last = end
+    out.append(s[last:])
+    return "".join(out)
+
+
 def _deep_research_view(result: dict) -> dict | None:
     """قسم البحث العميق (الموجة ٤، V5) — إضافي بحت، لا يمسّ أي مفتاح قائم.
 
@@ -1199,10 +1386,67 @@ def _deep_research_view(result: dict) -> dict | None:
     if verdict.get("ai_note"):
         limits.append(f"ملاحظة على التوصية: "
                       f"{_strip_internal_plumbing(verdict['ai_note'])}")
+    # Wave 2.2 (تدقيق زبدة الفول السوداني/اليمن — لا بيانات موسمية من Trends):
+    # فجوة الموسمية تُعلَن **مرة واحدة** في «ما لم يكتمل» مع خطوة الإغلاق
+    # العملية (بحث ميداني/مقابلات موزّعين) — النمط القائم للفجوات، مُوسَّعاً.
+    if _has_seasonality_gap(missions) and not any(
+            "الموسمية" in l for l in limits):
+        from silk_trends_agent import SEASONALITY_GAP_CLOSURE
+        limits.append(SEASONALITY_GAP_CLOSURE)
     v_raw = (verdict.get("ai") or {}).get("verdict") or verdict.get("verdict") or ""
     verdict_tone = _verdict_tone(v_raw)
+    # Wave 1.3/3.2/4.1 (تدقيق زبدة الفول السوداني/اليمن): حين يُعلَّم رمز HS
+    # غير مؤكَّد (صفة المنتج المميّزة غائبة عن وصف الرمز، silk_hs_confirm)،
+    # كل رقم مشتقّ من كومتريد (حجم السوق/HHI/حصص/CAGR) يُعاد تأطيره «مؤشر
+    # سياقي لا مقياس فعلي» بملاحظة **منهجية واحدة** (لا تكرار في كل قسم،
+    # 4.1)، وثقة الحكم تُسقَف (1.3)، وHHI يخرج من مدخلات تسجيل الحكم (3.2).
+    # العقد يُحسَب مرة إن غاب من المدوّنة (نتائج مخزّنة قديمة) — لا اختلاق:
+    # confirmed=None (غير قابل للتأكيد) لا يُعامَل تعليماً.
+    from silk_hs_confirm import confirm_hs, is_flagged, CONTEXTUAL_TAG
+    hs_conf = result.get("hs_confirmation")
+    if not isinstance(hs_conf, dict) and result.get("hs_code"):
+        try:
+            hs_conf = confirm_hs(str(result.get("product") or ""),
+                                 str(result.get("hs_code") or ""))
+        except Exception:
+            hs_conf = None
+    hs_flagged = is_flagged(hs_conf)
+    if hs_flagged:
+        # سقف ثقة الحكم عند تعليم الرمز — config-driven، لا يرفع ثقة قط.
+        try:
+            _cap = float(os.environ.get("SILK_HS_FLAGGED_CONF_CAP", "0.5"))
+        except (TypeError, ValueError):
+            _cap = 0.5
+        _c = verdict.get("confidence")
+        if isinstance(_c, (int, float)) and _c > _cap:
+            verdict = {**verdict, "confidence": _cap}
+        _ai = verdict.get("ai")
+        if isinstance(_ai, dict) and isinstance(_ai.get("confidence"), (int, float)) \
+                and _ai["confidence"] > _cap:
+            verdict = {**verdict, "ai": {**_ai, "confidence": _cap}}
+        # ملاحظة منهجية واحدة (4.1) — تُضاف مرة واحدة إلى الحدود، لا في كل قسم.
+        _missing = "، ".join((hs_conf or {}).get("missing_terms") or [])
+        limits.insert(0, f"{CONTEXTUAL_TAG}: رمز HS {hs_conf.get('hs_code')} "
+                      f"(«{hs_conf.get('code_desc')}») لا يشمل صفة المنتج المميّزة"
+                      + (f" ({_missing})" if _missing else "")
+                      + " — تُقرأ أرقام الاستيراد والتركّز والحصص كمؤشر سياقي "
+                      "حتى تأكيد الرمز الصحيح.")
     _report_text_glossed, _glossary = _apply_merchant_language(
         _strip_internal_plumbing(report_out.get("report")))
+    # القاعدة العامة (قرار المالك): سنوات الحقائق المتقادِمة تُحسَب من **مصدرها
+    # البنيوي** (silk_staleness) لا من النثر، فتُوسَم أينما وردت بأيّ صياغة، ولا
+    # يُوسَم رمزُ HS. ثم تحقّقٌ: أيّ سنة حقيقة متقادِمة بلا وسمٍ في السرد
+    # تُبلَّغ حدًّا (لا تُصحَّح صامتةً — عقد عدم الاختلاق).
+    # القاعدة العامة (قرار المالك): سنوات الحقائق المتقادِمة تُحسَب من الحقل
+    # البنيويّ `data_year` (silk_staleness) لا من النثر، فتُوسَم أينما وردت بأيّ
+    # صياغة، ولا يُوسَم رمزُ HS. التوسيمُ حتميٌّ شاملٌ لكلّ سنةٍ في القائمة —
+    # لا حاجة لمتحقّقٍ لاحق (كان `_stale_tag_misses` غيرَ قابلٍ للإطلاق عملياً،
+    # مراجعة الشيفرة #5 — حُذف).
+    from silk_staleness import stale_fact_years as _stale_fact_years
+    _all_findings = [f for v in missions.values()
+                     for f in (v.get("findings") or [])]
+    _stale_set = _stale_fact_years(_all_findings)
+    _report_text_glossed = _tag_stale_years(_report_text_glossed, _stale_set)
     return {
         "market": result.get("market"),
         # Wave 2: اسم المنتج المدروس يصل عرض البحث كي يشتقّ منه المُصدِّرُ سطرَ
@@ -1228,6 +1472,26 @@ def _deep_research_view(result: dict) -> dict | None:
         "verdict_tone": verdict_tone,
         "verdict_label": _VERDICT_LABELS_AR[verdict_tone],
         "verdict": verdict,
+        # Wave 1.3: عقد تأكيد رمز HS — يعرضه كل مُصدِّر/لوحة كي يعيد تأطير
+        # أرقام كومتريد «مؤشر سياقي» عند التعليم. None/غير مؤكَّد لا يُطأطئ شيئاً.
+        "hs_confirmation": hs_conf or {},
+        "hs_flagged": bool(hs_flagged),
+        # Wave 3.1: سبب غياب السعر/كجم لكل صفّ سعر مرصود + سطر الفتح الوحيد.
+        "price_rows": [
+            {"value": (_dp(x).get("value")),
+             "store": _strip_internal_plumbing(str(_dp(x).get("note") or "")),
+             "reason": _price_row_reason(_dp(x).get("value"))}
+            for x in ((missions.get("pricing_scout") or {}).get("findings") or [])],
+        "price_unlock": PRICE_UNLOCK_LINE,
+        # Wave 3.2: عند تعليم الرمز، التركّز (HHI) سياقٌ فقط لا إشارة تسجيل
+        # للحكم لهذا المنتج — الشارة تستهلكها المُصدِّرات.
+        "concentration_context_only": bool(hs_flagged),
+        # Wave 6.1: شرطا قلب الحكم المهيكلان (حكم مراقبة/مشروط) — يعرضهما كل
+        # مُصدِّر «شرطا قلب الحكم»، وتربط خارطة الـ٩٠ يوماً كل خطوة بأيّهما تُغلق.
+        "flip_conditions": _flip_conditions(
+            verdict_tone, hs_flagged,
+            dr.get("importer_leads") or {},
+            (result.get("market") or {}).get("name_ar") or ""),
         "report": {"text": _report_text_glossed,
                   "review_cycles": report_out.get("review_cycles", 0),
                   "unresolved_notes": clean_unresolved,

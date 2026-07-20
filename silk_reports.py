@@ -1468,6 +1468,17 @@ def _docx_deep_research(doc, view: dict) -> None:
         for n in dr["report"]["unresolved_notes"]:
             doc.add_paragraph(str(n), style="List Bullet")
 
+    # Wave 6.1: شرطا قلب الحكم (حكم مراقبة/مشروط) — حقل مهيكل من نموذج العرض.
+    _flips = dr.get("flip_conditions") or []
+    if _flips:
+        from silk_render import FLIP_CONDITIONS_HEADING
+        doc.add_heading(FLIP_CONDITIONS_HEADING, level=2)
+        for c in _flips:
+            _mark = "✓ محقَّق" if c.get("met") else "○ غير محقَّق"
+            doc.add_paragraph(
+                f"{c.get('condition')} — {_mark}؛ يُغلَق عبر: "
+                f"{c.get('closes_via')}", style="List Bullet")
+
     if dr.get("next_step"):
         doc.add_paragraph(dr["next_step"], style="Intense Quote")
 
@@ -1655,6 +1666,10 @@ _CLIENT_FORBIDDEN_PATTERNS = [
 # أيّ مصطلح تشغيلي تسرّب من الكاتب إلى مفردة تجارية. الحارس النهائي يلتقط ما
 # فات. الترتيب مهم (الأطول أولاً).
 _CLIENT_SANITIZE = [
+    # الدرس ٣٣ (belt-and-suspenders — التقادُم من الحقل البنيويّ لا النثر):
+    # وسمُ «year=YYYY» لم يعد يُكتَب (جامعو DataPoint يضبطون data_year)، لكن
+    # مدوّنةً مخزَّنةً قديمة قد تحمله في ملاحظة — يُزال من سطح العميل قبل أن يُرى.
+    (re.compile(r"\s*\byear\s*=\s*\d{4}\b"), ""),
     # تمرير النثر (R1): مصطلحات مترجَمة حرفياً عن الإنجليزية التقنية → لغة
     # الأعمال الخليجية. المصدر مُصلَح في الكاتب/البعثة، وهذه شبكة أمان تلتقط
     # أيّ مخرَج حيّ (أو تشغيلة مخزَّنة قديمة) لا يزال يحمل الصياغة الحرفية.
@@ -3016,6 +3031,18 @@ def _md_deep_research(view: dict, prefix: list[str]) -> str:
     if reasoning:
         L += ["", str(reasoning)]
     L.append("")
+
+    # Wave 6.1: شرطا قلب الحكم المهيكلان (حكم مراقبة/مشروط) — حقل مُصادَق من
+    # نموذج العرض، لا نثر حظّ. كل شرط بخطوة إغلاقه (تربطها خارطة الطريق).
+    _flips = dr.get("flip_conditions") or []
+    if _flips:
+        from silk_render import FLIP_CONDITIONS_HEADING
+        L += [f"## {FLIP_CONDITIONS_HEADING}", ""]
+        for i, c in enumerate(_flips, 1):
+            _mark = "✓ محقَّق" if c.get("met") else "○ غير محقَّق"
+            L.append(f"{i}. **{_md_cell(c.get('condition'))}** — {_mark}؛ "
+                     f"يُغلَق عبر: {_md_cell(c.get('closes_via'))}")
+        L.append("")
 
     # ── التقرير السردي الكامل (كاتب التقرير، مراجَع) — النصّ الغنيّ نفسه ──────
     report_text = (dr.get("report") or {}).get("text")
