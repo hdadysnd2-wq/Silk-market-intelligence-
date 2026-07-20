@@ -123,6 +123,89 @@ def test_w1_2_writer_prompt_reframes_flagged_hs_once():
     assert "مرة واحدة" in u  # تعليمة عدم التكرار
 
 
+# ════════════════════ الموجة ٢ — جودة البيانات ════════════════════
+
+def test_w2_1_stale_year_gets_inline_tag_fresh_year_does_not():
+    """2.1 — سنة بيانات ≤ اليوم−٥ تُوسَم «الأحدث المتاح»؛ السنة الراهنة لا."""
+    import datetime
+    import silk_render as R
+    cur = datetime.date.today().year
+    text = (f"دخل الفرد 1106 دولار (2013) ونسبة الفقر 31.5% (2018). "
+            f"واردات {cur} نحو 12 مليون دولار. لائحة EU 2017/625.")
+    out = R._tag_stale_years(text)
+    # السنوات القديمة موسومة.
+    for yr in ("2013", "2018"):
+        idx = out.find(yr)
+        assert R._STALE_TAG in out[idx:idx + 40], (yr, out)
+    # السنة الراهنة غير موسومة.
+    idx = out.find(str(cur))
+    assert R._STALE_TAG not in out[idx:idx + 40]
+    # رقم اللائحة ذو الشرطة (2017/625) لا يُوسَم كسنة بيانات.
+    assert "2017 — بيانات" not in out
+
+
+def test_w2_1_yemen_report_carries_stale_tags_on_2013_2018():
+    """2.1 — تقرير اليمن المعروض يحمل وسم «الأحدث المتاح» على 2013 و2018."""
+    import silk_render as R
+    txt = R.build_view(yemen_research_blob())["deep_research"]["report"]["text"]
+    assert R._STALE_TAG in txt
+    for yr in ("2013", "2018"):
+        idx = txt.find(yr)
+        assert R._STALE_TAG in txt[idx:idx + 45], yr
+
+
+def test_w2_1_stale_tag_is_disclosure_only_no_number_change():
+    """2.1 — الوسم إفصاح فقط: لا يغيّر أي رقم (عقد عدم الاختلاق)."""
+    import silk_render as R
+    out = R._tag_stale_years("دخل الفرد 1106 دولار (2013).")
+    assert "1106" in out  # الرقم كما هو
+
+
+def test_w2_2_seasonality_gap_surfaces_closure_step_once():
+    """2.2 — فجوة الموسمية تظهر في «ما لم يكتمل» مع خطوة الإغلاق، مرة واحدة."""
+    import silk_render as R
+    from silk_trends_agent import SEASONALITY_GAP_CLOSURE
+    limits = R.build_view(yemen_research_blob())["deep_research"]["limits"]
+    hits = [l for l in limits if l == SEASONALITY_GAP_CLOSURE]
+    assert len(hits) == 1, limits
+    assert "ميدان" in SEASONALITY_GAP_CLOSURE or "موزّع" in SEASONALITY_GAP_CLOSURE
+
+
+def test_w2_3_broaden_if_weak_reports_both_terms_framed():
+    """2.3 — صفة دقيقة شبه معدومة + فئة أعمّ قوية => توسيع آلي يعيد كليهما
+    مؤطَّراً «الطلب على الفئة موجود؛ الصفة الدقيقة غير مبحوثة»."""
+    import silk_trends_agent as T
+    from silk_data_layer import DataPoint
+
+    def _fake_interest(kw, geo=None, tf="today 12-m"):
+        if "فوائد" in kw:            # الفئة الأعمّ
+            return DataPoint(100.0, "Google Trends", 0.7, f"broad {kw}", "2026")
+        return DataPoint(0.4, "Google Trends", 0.7, f"exact {kw}", "2026")
+
+    def _fake_ctx(kw, geo=None, tf="today 12-m"):
+        return {"related_top": [{"label": "فوائد زبدة الفول السوداني",
+                                 "value": 100}],
+                "related_rising": [], "topics_rising": [], "regions": [],
+                "confidence": 0.6, "note": ""}
+
+    with mock.patch.object(T, "trends_interest", side_effect=_fake_interest), \
+         mock.patch.object(T, "trends_context", side_effect=_fake_ctx):
+        weak = _fake_interest("زبدة الفول السوداني")
+        broadened = T.broaden_if_weak("زبدة الفول السوداني", None,
+                                      "today 12-m", weak)
+    assert broadened is not None and broadened.value == 100.0
+    assert "الفئة موجود" in broadened.note and "غير مبحوثة" in broadened.note
+
+
+def test_w2_3_no_broaden_when_exact_term_is_strong():
+    """2.3 — الصفة الدقيقة القوية لا تُوسَّع (لا اختلاق طلب زائد)."""
+    import silk_trends_agent as T
+    from silk_data_layer import DataPoint
+    strong = DataPoint(60.0, "Google Trends", 0.7, "strong", "2026")
+    assert T.broaden_if_weak("زبدة الفول السوداني", None, "today 12-m",
+                             strong) is None
+
+
 # ════════════════════ بوّابة /research (1.2 — قبل الإنفاق) ════════════════════
 
 def _client(**env):

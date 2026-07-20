@@ -1066,6 +1066,79 @@ def _apply_merchant_language(text: "str | None") -> "tuple[str, list]":
     return s, glossary
 
 
+# Wave 2.1 (تدقيق زبدة الفول السوداني/اليمن — أرقام دخل 2013/2018): أيّ سنة
+# بيانات مرجعية أقدم من نافذة (SILK_STALE_DATA_YEARS، افتراضياً ٥ سنوات) تُوسَم
+# آلياً «الأحدث المتاح» كي لا يُقرأ رقم قديم كأنه راهن. تُوسَم أرقام السنوات في
+# سياق بيانات فقط (لا أرقام لوائح ذات شرطة مثل EU 2017/625). أول ورود لكل سنة.
+_DATA_YEAR_RE = re.compile(r"(?<![\d/])(19\d\d|20\d\d)(?![\d/])")
+_STALE_TAG = "الأحدث المتاح"
+
+
+def _stale_years_threshold() -> int:
+    """سنة العتبة — أقدم من (السنة الحالية − SILK_STALE_DATA_YEARS)."""
+    import datetime
+    try:
+        n = int(os.environ.get("SILK_STALE_DATA_YEARS", "5"))
+    except (TypeError, ValueError):
+        n = 5
+    n = n if n > 0 else 5
+    return datetime.date.today().year - n
+
+
+def _has_seasonality_gap(missions: dict) -> bool:
+    """هل رصدت بعثة فجوةَ موسمية (قيمة None + ملاحظة تخصّ الموسمية/رمضان)؟
+
+    يلتقط شكلَي الملاحظة: الجديد (silk_trends_agent.SEASONALITY_GAP_CLOSURE)
+    والقديم المخزَّن ('no series for seasonality of ...')."""
+    for m in (missions or {}).values():
+        if not isinstance(m, dict):
+            continue
+        for f in (m.get("findings") or []):
+            d = _dp(f)
+            if d.get("value") is not None:
+                continue
+            note = str(d.get("note") or "")
+            if ("موسمي" in note or "رمضان" in note
+                    or "seasonalit" in note.lower()):
+                return True
+    return False
+
+
+def _tag_stale_years(text: "str | None") -> str:
+    """وسم أول ورودٍ لكل سنة بيانات قديمة «الأحدث المتاح» — حتمي على md/docx.
+
+    عقد عدم الاختلاق: لا يغيّر رقماً — يضيف وسم إفصاح فقط. سنة أحدث من العتبة
+    لا تُوسَم؛ سنة موسومة أصلاً لا تُكرَّر."""
+    s = str(text or "")
+    if not s.strip():
+        return s
+    threshold = _stale_years_threshold()
+    tagged: set[str] = set()
+    out: list[str] = []
+    last = 0
+    for m in _DATA_YEAR_RE.finditer(s):
+        yr = m.group(1)
+        if yr in tagged:
+            continue
+        try:
+            stale = int(yr) <= threshold
+        except ValueError:
+            stale = False
+        if not stale:
+            continue
+        # لا تُكرِّر إن كان الوسم ملاصقاً فعلاً بعد السنة.
+        if s[m.end():m.end() + 20].lstrip(" )").startswith(_STALE_TAG) or \
+                _STALE_TAG in s[m.end():m.end() + 20]:
+            tagged.add(yr)
+            continue
+        tagged.add(yr)
+        out.append(s[last:m.end()])
+        out.append(f" — بيانات {yr} ({_STALE_TAG})")
+        last = m.end()
+    out.append(s[last:])
+    return "".join(out)
+
+
 def _deep_research_view(result: dict) -> dict | None:
     """قسم البحث العميق (الموجة ٤، V5) — إضافي بحت، لا يمسّ أي مفتاح قائم.
 
@@ -1187,6 +1260,13 @@ def _deep_research_view(result: dict) -> dict | None:
     if verdict.get("ai_note"):
         limits.append(f"ملاحظة على التوصية: "
                       f"{_strip_internal_plumbing(verdict['ai_note'])}")
+    # Wave 2.2 (تدقيق زبدة الفول السوداني/اليمن — لا بيانات موسمية من Trends):
+    # فجوة الموسمية تُعلَن **مرة واحدة** في «ما لم يكتمل» مع خطوة الإغلاق
+    # العملية (بحث ميداني/مقابلات موزّعين) — النمط القائم للفجوات، مُوسَّعاً.
+    if _has_seasonality_gap(missions) and not any(
+            "الموسمية" in l for l in limits):
+        from silk_trends_agent import SEASONALITY_GAP_CLOSURE
+        limits.append(SEASONALITY_GAP_CLOSURE)
     v_raw = (verdict.get("ai") or {}).get("verdict") or verdict.get("verdict") or ""
     verdict_tone = _verdict_tone(v_raw)
     # Wave 1.3/3.2/4.1 (تدقيق زبدة الفول السوداني/اليمن): حين يُعلَّم رمز HS
@@ -1227,6 +1307,8 @@ def _deep_research_view(result: dict) -> dict | None:
                       "حتى تأكيد الرمز الصحيح.")
     _report_text_glossed, _glossary = _apply_merchant_language(
         _strip_internal_plumbing(report_out.get("report")))
+    # Wave 2.1: وسم سنوات البيانات القديمة «الأحدث المتاح» على النص المعروض.
+    _report_text_glossed = _tag_stale_years(_report_text_glossed)
     return {
         "market": result.get("market"),
         # Wave 2: اسم المنتج المدروس يصل عرض البحث كي يشتقّ منه المُصدِّرُ سطرَ
