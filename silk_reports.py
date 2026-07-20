@@ -2127,7 +2127,11 @@ def _client_evidence_appendix(doc, dr: dict) -> None:
             # يُحسَب قبل تحييد الاسم؛ مصدرٌ مدفوع/أداة => لا رابط عموميّ => «—»
             # (فلا تسريبَ نطاقٍ ولا رابطٍ مختلَق).
             from silk_data_layer import public_source_url
-            url = public_source_url(src) or "—"
+            # Wave 3 (دمج مصادر جديدة): استشهادات البنك الدولي في تقرير العميل
+            # تُوجَّه للبوّابة العربية data.albankaldawli.org (نفس القاعدة،
+            # واجهة عربية أسهل قراءةً للمالك/العميل) — لا مصدر جديد، رابط
+            # تحقّق بلغته. باقي المصادر بلا تغيير.
+            url = public_source_url(src, arabic=True) or "—"
             if _client_forbidden_hits(src):  # لا اسم أداة في عمود المصدر
                 src = "سجلّات رسمية"
             rows.append([fact, src, url, f.get("retrieved_at") or "—",

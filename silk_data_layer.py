@@ -161,18 +161,38 @@ SOURCE_PUBLIC_URL = {
     "eurostat": "https://ec.europa.eu/eurostat/",
     "gdelt": "https://www.gdeltproject.org/",
     "wits": "https://wits.worldbank.org/",
+    # الموجة: دمج مصادر جديدة — مصدران جديدان بواجهة رسمية (لا كشط).
+    "imf weo": "https://www.imf.org/external/datamapper/",
+    "wto ttd": "https://ttd.wto.org/",
 }
 
+# البوّابة العربية للبنك الدولي (الموجة: دمج مصادر جديدة، Wave 3) — **ليست
+# مصدر بيانات جديداً**: هي واجهة عربية لنفس قاعدة البنك الدولي المدمَجة أصلاً
+# عبر api.worldbank.org. تُستعمل حصراً في سجلّ أدلة **العميل** لسهولة قراءة
+# المالك/العميل العربي — رابط تحقّق بلغته لا مصدر رقمٍ ثانٍ (القرار موثَّق في
+# docs/DECISIONS.md). المسار الافتراضي/التشغيلي يبقى على data.worldbank.org.
+WORLD_BANK_AR_PORTAL = "https://data.albankaldawli.org/"
 
-def public_source_url(source_label: object) -> str:
+
+def public_source_url(source_label: object, arabic: bool = False) -> str:
     """رابطٌ عموميٌّ رسميٌّ للمصدر المسمّى، أو «» إن لم يكن مصدرًا عموميًّا معروفًا.
 
     لا اختلاق: مصدرٌ مدفوع/بحثٌ/مجهول => «» (المتصل يعرض «—»). يُطابَق الاسمُ
     القاعديُّ (قبل أوّل قوس، بلا لواحق عربية) تطابقًا تامًّا ثمّ ببادئة — فـ
-    «UN Comtrade (مخزن الحقائق)» و«World Bank (لقطة مضمّنة)» يُصيبان السجلّ."""
+    «UN Comtrade (مخزن الحقائق)» و«World Bank (لقطة مضمّنة)» يُصيبان السجلّ.
+
+    `arabic=True` (Wave 3): استشهادات البنك الدولي في تقرير **العميل** تُوجَّه
+    للبوّابة العربية `data.albankaldawli.org` (نفس القاعدة، واجهة عربية أسهل
+    قراءةً) — لا يغيّر أي مصدر آخر ولا المسار الافتراضي/التشغيلي."""
     base = str(source_label or "").split("(")[0].strip().lower()
     if not base:
         return ""
+    # تطابق تامّ حصرًا: «World Bank» وحده (لواحق الأقواس مُنزَعة أصلًا فـ
+    # «World Bank (لقطة)» => «world bank»). **لا** يشمل «World Bank WITS» —
+    # WITS أداة تعريفة مستقلّة بوّابتها wits.worldbank.org، لا تُحوَّل للبوّابة
+    # العربية (التي لا تعرض جداول WITS بنفس المسار).
+    if arabic and base == "world bank":
+        return WORLD_BANK_AR_PORTAL
     if base in SOURCE_PUBLIC_URL:
         return SOURCE_PUBLIC_URL[base]
     for key, url in SOURCE_PUBLIC_URL.items():

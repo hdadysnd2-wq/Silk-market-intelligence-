@@ -593,6 +593,53 @@ def _guard_analyze_persist_canonical_db():
         importlib.reload(silk_storage)
 
 
+def _guard_new_source_contracts():
+    """LESSONS ٣٢ — مصدرٌ جديد = نفس العقود (فجوة معلنة/ops/مخزَّن/محكوم/نظيف
+    الشروط). الحارس السلوكي: (أ) IMF/WTO دون الشبكة => فجوة معلنة None/0.0 لا
+    اختلاق؛ (ب) WTO بلا مفتاح => فجوة معلنة بصفر نداء شبكة؛ (ج) سلسلة التراجع
+    كلا-الفشلين تُبقي مصدر WITS؛ (د) البوّابة العربية للبنك الدولي تطابق تامّ
+    (لا تُحوِّل WITS)؛ (هـ) كل نطاق مُفضَّل بعثته تملك web_search (لا إعداد ميت)."""
+    from unittest.mock import patch
+    import silk_imf_agent as imf
+    import silk_wto_tariff as wto
+    import silk_tariffs_agent as tar
+    import silk_missions as M
+    from silk_data_layer import DataPoint, public_source_url, WORLD_BANK_AR_PORTAL
+
+    # (أ) لا اختلاق دون الشبكة
+    with patch("silk_cache.cached_get", return_value=None):
+        assert imf.imf_indicator("NLD", "gdp_growth").value is None
+    # (ب) WTO بلا مفتاح => صفر نداء شبكة
+    saved = {k: os.environ.get(k) for k in ("WTO_TTD_API_KEY", "WTO_API_KEY")}
+    try:
+        os.environ.pop("WTO_TTD_API_KEY", None)
+        os.environ.pop("WTO_API_KEY", None)
+        with patch("silk_cache.cached_get") as cg:
+            dp = wto.wto_applied_tariff("080410", "NLD")
+        cg.assert_not_called()
+        assert dp.value is None
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    # (ج) سلسلة التراجع: كلا الفشلين => مصدر WITS يبقى
+    with patch("silk_wto_tariff.wto_applied_tariff",
+               return_value=DataPoint(None, "WTO TTD", 0.0, "x")), \
+         patch("silk_tariffs_agent.applied_tariff",
+               return_value=DataPoint(None, "World Bank WITS", 0.0, "y")):
+        dp = tar.tariff_with_fallback("080410", "NLD")
+    assert dp.value is None and dp.source == "World Bank WITS"
+    # (د) البوّابة العربية للعميل: تطابق تامّ، WITS لا يُحوَّل
+    assert public_source_url("World Bank", arabic=True) == WORLD_BANK_AR_PORTAL
+    assert public_source_url("World Bank WITS", arabic=True) != WORLD_BANK_AR_PORTAL
+    assert public_source_url("World Bank") == "https://data.worldbank.org/"
+    # (هـ) لا نطاق مُفضَّل بعثته بلا web_search
+    for key in M.PREFERRED_DOMAINS:
+        assert "web_search" in M.MISSIONS[key]["allowed_tools"]
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -630,6 +677,7 @@ _LESSONS = {
     29: _guard_report_arabic_shape_a4,      # Wave 2 — «سلك» متّصلة + A4
     30: _guard_client_template_no_hardcoded_product,  # Wave 2 — لا منتج مثبَّت في القوالب
     31: _guard_analyze_persist_canonical_db,   # /analyze — التخزين للقاعدة القانونية لا قرصٍ نسبيّ فانٍ
+    32: _guard_new_source_contracts,           # دمج مصادر جديدة — نفس العقود (فجوة/ops/مخزَّن/محكوم/نظيف)
 }
 
 _TRAPS = [

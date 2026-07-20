@@ -142,11 +142,16 @@ MISSIONS: dict[str, dict] = {
     "demographics_economy": {
         "key": "demographics_economy", "name": "الديموغرافيا والاقتصاد الكلي",
         "mission": "سكان واقتصاد السوق المستهدف وربطهما بحجم الشريحة المستهدَفة",
-        "allowed_tools": ["worldbank_indicator", "lookup_reference"],
+        "allowed_tools": ["worldbank_indicator", "imf_indicator",
+                          "lookup_reference"],
         "instructions": (
             "اجمع: السكان ونموهم، الدخل للفرد وPPP، نسبة الشباب إن أمكن، "
             "ونسبة المسلمين (lookup_reference جدول demographics). اربطها "
-            "بحجم الشريحة المستهدَفة للمنتج — احسب لا تُقدّر."),
+            "بحجم الشريحة المستهدَفة للمنتج — احسب لا تُقدّر. "
+            # الموجة: دمج مصادر جديدة — IMF WEO للاقتصاد الكلي بجانب البنك الدولي.
+            "أضِف صورة الاقتصاد الكلي من imf_indicator: نمو الناتج الحقيقي "
+            "(indicator='gdp_growth') والتضخم (indicator='inflation') — كل "
+            "قيمة موسومة بمصدرها (IMF WEO) وسنتها؛ الفشل فجوة معلنة لا تقدير."),
     },
     "competitors": {
         "key": "competitors", "name": "تحليل المنافسين",
@@ -245,8 +250,8 @@ MISSIONS: dict[str, dict] = {
     "risk_news": {
         "key": "risk_news", "name": "تقييم المخاطر والمستجدات",
         "mission": "الاستقرار السياسي ومخاطر العملة وآخر الأخبار القطاعية",
-        "allowed_tools": ["worldbank_indicator", "gdelt_news", "web_search",
-                          "openalex_search"],
+        "allowed_tools": ["worldbank_indicator", "imf_indicator", "gdelt_news",
+                          "web_search", "openalex_search"],
         "instructions": (
             "الاستقرار السياسي وسيادة القانون وجودة التنظيم "
             "(worldbank_indicator political_stability/rule_of_law/"
@@ -254,7 +259,13 @@ MISSIONS: dict[str, dict] = {
             "worldbank_indicator indicator='exchange_rate' لثلاث سنوات "
             "مختلفة على الأقل (year=آخر سنة، سنة-١، سنة-٢) واحسب نسبة "
             "التغيّر بينها صراحة — لا تخمين ولا 'تقلّب' بلا سلسلة سنوات "
-            "فعلية تدعمه. وأهم ١٠ عناوين قطاعية من GDELT آخر ١٢ شهراً "
+            "فعلية تدعمه. "
+            # الموجة: دمج مصادر جديدة — IMF WEO يثري صورة المخاطر الكلية.
+            "وأضِف مؤشرات صندوق النقد الدولي عبر imf_indicator: نمو الناتج "
+            "الحقيقي (indicator='gdp_growth')، التضخم (indicator='inflation')، "
+            "ورصيد الحساب الجاري (indicator='current_account') — إشارات هشاشة/"
+            "متانة كلية موسومة بمصدرها (IMF WEO) وسنتها؛ الفشل فجوة معلنة. "
+            "وأهم ١٠ عناوين قطاعية من GDELT آخر ١٢ شهراً "
             "(عنوان/تاريخ/رابط) — إن أعاد GDELT فجوة معلنة (فشل متكرر لا "
             "نتائج)، استخدم web_search كبديل موثَّق: نفّذ عدة استعلامات "
             "أخبار بلغة السوق (اسم السوق + المنتج/القطاع + 'أخبار'/"
@@ -287,6 +298,24 @@ MISSION_ORDER: tuple[str, ...] = (
     "competitors", "customs_requirements", "tariffs_agreements", "logistics",
     "channels_importers", "demand_trends", "risk_news", "opportunity_gaps",
 )
+
+# النطاقات المُفضَّلة لكل بعثة (الموجة: دمج مصادر جديدة، Wave 2) — مواقع
+# محتوائية بلا API تُدمَج عبر انحياز بحثٍ site: (لا كشط). نتائجها تُرتَّب أولاً
+# وتُوسَم دليلاً ثانوياً ◐ برابط. المصدر يبقى «بحث ويب» (Serper) — لا استخراج
+# محتوى جُملة (انضباط حقوق النشر). المفتاح = مفتاح البعثة، وكل مفتاح **يجب** أن
+# يملك أداة web_search في allowed_tools (وإلا كان الانحياز إعداداً ميتاً — درس
+# ٩؛ يُنفَّذ في tests/test_wave_datasources_integration.py). لذا الاقتصاد الكلي
+# النقيّ (demographics_economy، أرقام WB/IMF بلا بحث) لا يظهر هنا — انحياز
+# TradingEconomics الكلي/الخطري يركب بعثة risk_news التي تحمل web_search.
+#   • ثقافة المستهلك     → globalbusinessculture.com (ثقافة أعمال/استهلاك)
+#   • الاشتراطات الجمركية → ccacoalition.org (امتثال بيئي/مناخي — ثانوي)
+#   • المخاطر            → ccacoalition.org + tradingeconomics.com (استشهاد
+#     فقط — TradingEconomics واجهته مدفوعة والكشط مخالف لشروطه، فلا جلب جماعي)
+PREFERRED_DOMAINS: dict[str, list[str]] = {
+    "consumer_culture": ["globalbusinessculture.com"],
+    "customs_requirements": ["ccacoalition.org"],
+    "risk_news": ["ccacoalition.org", "tradingeconomics.com"],
+}
 
 # صفوف الكتالوج الإضافية — additive AGENT_CATALOG rows (لوحة «إعدادات
 # الوكلاء»)، مسجَّلة عند استيراد هذا الملف. مفاتيح مختلفة عن الـ١٤ القائمة
@@ -553,7 +582,37 @@ def run_all_missions(market: MarketRef, product: str = "",
     # فمسار الاستئناف من نقطة تفتيش بلا WGI يحصل عليها أيضاً.
     if "risk_news" in reports:
         _augment_risk_news_wgi(reports["risk_news"], getattr(market, "iso3", ""))
+        # الموجة: دمج مصادر جديدة — أرقام IMF WEO (نمو/تضخم/حساب جارٍ) تُلحَق
+        # حتماً ببعثة المخاطر (نفس نمط D3 للحوكمة): حاضرة حين ينجح الجلب، فجوة
+        # معلنة حين يفشل، بلا اعتماد على نداء كلود وحده.
+        _augment_risk_news_imf(reports["risk_news"], getattr(market, "iso3", ""))
     return reports
+
+
+# ── الموجة: دمج مصادر جديدة — إلحاق IMF WEO حتمي لبعثة risk_news ──────────
+def _augment_risk_news_imf(report: AgentReport, iso3: str) -> AgentReport:
+    """ألحِق مؤشرات IMF WEO (نمو/تضخم/حساب جارٍ) بحقائق بعثة المخاطر إن لم تكن
+    حاضرة (مطابقة على وسم [risk] + اسم المؤشر) — §المخاطر تحصل على صورة كلية
+    حتماً لا اعتماداً على نداء كلود وحده. الفشل فجوة معلنة (None، ثقة 0.0)."""
+    if not iso3:
+        return report
+    findings = getattr(report, "findings", None)
+    if findings is None:
+        return report
+    existing = " ".join(str(getattr(dp, "note", "")) for dp in findings)
+    try:
+        from silk_imf_agent import enrich_macro_risk
+        macro = enrich_macro_risk(iso3)
+    except Exception as e:  # noqa: BLE001 — فشل الجلب لا يكسر التشغيلة
+        log.warning("IMF risk augment failed for %s: %s", iso3, e)
+        return report
+    for dp in macro:
+        # لا تكرّر مؤشراً رصده كلود فعلاً (مطابقة على الوسم العربي المميّز).
+        label_key = str(getattr(dp, "note", "")).split("—")[0].strip()
+        if label_key and label_key in existing:
+            continue
+        findings.append(dp)
+    return report
 
 
 def deep_research(market: MarketRef, product: str = "",

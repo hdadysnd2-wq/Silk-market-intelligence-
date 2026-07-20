@@ -26,6 +26,8 @@
 | **Vision** (استقبال الصورة) | `silk_product_intake._vision_extract` (رد فارغ) (`silk_product_intake.py:145`) | صامت | ✅ `record_service_failure("vision", …)` |
 | **Comtrade** (تجارة) | `silk_data_layer.comtrade_trade` except (`silk_data_layer.py:~316`) | فجوة معلنة (`DataPoint` note) + عدّاد `live_fetches` (`silk_context`) | ⏳ **مقصود**: نداءٌ متعدّد التوزيع (~١٥٠/تحليل) — إعلانُ كلِّ فشلٍ في `ops_errors` (حلقةٌ مسقوفة) يُغرِقها؛ يبقى مُعلَنًا عبر ملاحظة DataPoint + عدّاد `live_fetches`. يُراجَع إن أراد المالك إعلانًا خشِنًا لكل تشغيلة. |
 | **World Bank** (مؤشرات) | `silk_data_layer.world_bank` / `_wb_*` (`silk_data_layer.py`) | فجوة معلنة (`DataPoint` note) + عدّاد | ⏳ **مقصود** (نفس منطق Comtrade — نداءٌ متكرّر) |
+| **IMF WEO** (اقتصاد كلي) | `silk_imf_agent.imf_indicator` fetch except / None (`silk_imf_agent.py`) | جديد (الموجة: دمج مصادر جديدة) | ✅ `record_service_failure("imf", …)` — نداءٌ منخفض التردّد (٣ مؤشرات/تحليل)، فإعلانُ فشله لا يُغرِق الحلقة |
+| **WTO TTD** (تعريفة) | `silk_wto_tariff.wto_applied_tariff` fetch except / None (`silk_wto_tariff.py`) | جديد (الموجة: دمج مصادر جديدة) | ✅ `record_service_failure("wto_ttd", …)` — بلا مفتاح => فجوة معلنة صفريّة النداء (لا فشلَ يُعلَن، الخدمة غير مُهيَّأة فقط) |
 | **LocalPrice / Volza / Explee** (مدفوع) | `silk_localprice_agent` / `silk_volza_agent` / `silk_explee_agent` | فجوة معلنة (`DataPoint`) داخل `/deepen` فقط | ⏳ **لاحقًا**: مسارٌ مدفوعٌ محصور بـ`/deepen` (نادر، محجوز مسبقًا)؛ إعلانُه للمشغّل بند تحسينٍ منفصل |
 
 ## القرار الهندسي (مُوثَّق، ليس فجوةً منسيّة)
