@@ -582,37 +582,15 @@ def run_all_missions(market: MarketRef, product: str = "",
     # فمسار الاستئناف من نقطة تفتيش بلا WGI يحصل عليها أيضاً.
     if "risk_news" in reports:
         _augment_risk_news_wgi(reports["risk_news"], getattr(market, "iso3", ""))
-        # الموجة: دمج مصادر جديدة — أرقام IMF WEO (نمو/تضخم/حساب جارٍ) تُلحَق
-        # حتماً ببعثة المخاطر (نفس نمط D3 للحوكمة): حاضرة حين ينجح الجلب، فجوة
-        # معلنة حين يفشل، بلا اعتماد على نداء كلود وحده.
-        _augment_risk_news_imf(reports["risk_news"], getattr(market, "iso3", ""))
+        # الموجة: دمج مصادر جديدة — IMF WEO (نمو/تضخم/حساب جارٍ) يصل بعثة المخاطر
+        # عبر أداة imf_indicator + تعليمات البعثة (لا إلحاق حتمي غير مشروط).
+        # قرار مقصود (منسجم مع حساسية التكلفة/السرعة، D-06): لا نضيف ٣ نداءات
+        # شبكة متزامنة غير مشروطة لكل تشغيلة كما يفعل D3 للحوكمة — WGI مخزَّن
+        # أولاً (رخيص) بينما IMF لا مخزن له، فالإلحاق الحتمي كان يضيف زمناً
+        # للمسار الحار في كل تشغيلة. الأداة مُحاكاة في الاختبارات (صفر زمن)
+        # وحيّة في الإنتاج (حين يستدعيها كلود، وهو مُوجَّه لذلك في تعليمات
+        # البعثة). demographics_economy (الكلي) يحصل على IMF بنفس النمط.
     return reports
-
-
-# ── الموجة: دمج مصادر جديدة — إلحاق IMF WEO حتمي لبعثة risk_news ──────────
-def _augment_risk_news_imf(report: AgentReport, iso3: str) -> AgentReport:
-    """ألحِق مؤشرات IMF WEO (نمو/تضخم/حساب جارٍ) بحقائق بعثة المخاطر إن لم تكن
-    حاضرة (مطابقة على وسم [risk] + اسم المؤشر) — §المخاطر تحصل على صورة كلية
-    حتماً لا اعتماداً على نداء كلود وحده. الفشل فجوة معلنة (None، ثقة 0.0)."""
-    if not iso3:
-        return report
-    findings = getattr(report, "findings", None)
-    if findings is None:
-        return report
-    existing = " ".join(str(getattr(dp, "note", "")) for dp in findings)
-    try:
-        from silk_imf_agent import enrich_macro_risk
-        macro = enrich_macro_risk(iso3)
-    except Exception as e:  # noqa: BLE001 — فشل الجلب لا يكسر التشغيلة
-        log.warning("IMF risk augment failed for %s: %s", iso3, e)
-        return report
-    for dp in macro:
-        # لا تكرّر مؤشراً رصده كلود فعلاً (مطابقة على الوسم العربي المميّز).
-        label_key = str(getattr(dp, "note", "")).split("—")[0].strip()
-        if label_key and label_key in existing:
-            continue
-        findings.append(dp)
-    return report
 
 
 def deep_research(market: MarketRef, product: str = "",

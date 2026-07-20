@@ -80,11 +80,15 @@ def test_imf_no_record_is_distinct_from_fetch_failure():
     assert dp.value is None and dp.status == "no_record"
 
 
-def test_imf_enrich_macro_risk_tags_risk_and_declares_gap_offline():
-    with patch("silk_cache.cached_get", return_value=None):
-        dps = imf.enrich_macro_risk("NLD")
-    assert len(dps) == 3
-    assert all(d.value is None and "[risk]" in d.note for d in dps)
+def test_imf_reaches_risk_and_macro_via_tool_not_forced_network():
+    """IMF يصل المخاطر/الكلي عبر أداة imf_indicator + تعليمات البعثة — لا إلحاق
+    شبكة حتمي في المسار الحار (انسجام مع حساسية التكلفة/السرعة D-06)."""
+    assert "imf_indicator" in M.MISSIONS["risk_news"]["allowed_tools"]
+    assert "imf_indicator" in M.MISSIONS["demographics_economy"]["allowed_tools"]
+    # لا إلحاق حتمي غير مشروط في run_all_missions (لا نداء شبكة إضافي/تشغيلة).
+    import inspect
+    assert "_augment_risk_news_imf" not in inspect.getsource(M.run_all_missions)
+    assert "imf_indicator" in M.MISSIONS["risk_news"]["instructions"]
 
 
 # ── WTO TTD ────────────────────────────────────────────────────────────────

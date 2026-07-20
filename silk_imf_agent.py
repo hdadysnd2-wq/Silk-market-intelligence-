@@ -133,24 +133,6 @@ def _record_failure(iso: str, code: str, detail: str) -> None:
         pass
 
 
-def enrich_macro_risk(iso3: str, year: int | None = None) -> list[DataPoint]:
-    """المؤشرات الثلاثة كـDataPoints موسومة [risk] لبعثة المخاطر — نمو/تضخم/
-    حساب جارٍ. كل بند موسوم بمصدره وسنته؛ الفشل فجوة معلنة (لا اختلاق).
-    نفس نمط `_wgi_governance_datapoints` (الدرس D3) — حضورٌ حتميّ في §المخاطر
-    لا اعتماداً على نداء كلود وحده."""
-    out: list[DataPoint] = []
-    for metric in ("gdp_growth", "inflation", "current_account"):
-        dp = imf_indicator(iso3, metric, year)
-        if dp.value is not None:
-            out.append(DataPoint(dp.value, dp.source, dp.confidence,
-                                 f"[risk] {dp.note}", dp.retrieved_at))
-        else:
-            out.append(DataPoint(None, dp.source, 0.0,
-                                 f"[risk] {dp.note}", dp.retrieved_at,
-                                 status=dp.status))
-    return out
-
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print("Silk IMF agent — best-effort IMF WEO (degrades gracefully offline)")
