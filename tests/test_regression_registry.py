@@ -630,6 +630,8 @@ _LESSONS = {
     29: _guard_report_arabic_shape_a4,      # Wave 2 — «سلك» متّصلة + A4
     30: _guard_client_template_no_hardcoded_product,  # Wave 2 — لا منتج مثبَّت في القوالب
     31: _guard_analyze_persist_canonical_db,   # /analyze — التخزين للقاعدة القانونية لا قرصٍ نسبيّ فانٍ
+    32: _needles("CLAUDE.md", "/code-review",   # المراجعة الذاتية قبل فتح/وسم أي PR جاهزًا (Yemen stale-tag)
+                 "self-review catches what hermetic tests structurally cannot"),
 }
 
 _TRAPS = [
