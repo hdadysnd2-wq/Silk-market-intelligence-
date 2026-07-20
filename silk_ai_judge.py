@@ -199,6 +199,12 @@ def _call_tools(system: str, messages: list, tools: list | None = None,
 def _facts(reports: list) -> str:
     """حوّل تقارير الوكلاء إلى حقائق نصّية موسومة — agents' findings as tagged facts."""
     lines: list[str] = []
+    # القاعدة العامة (قرار المالك): الحقيقة المتقادِمة تُذيَّل بوسم الإفصاح
+    # عند جمعها للكاتب. الاستيراد مرّة واحدة (لا لكل نقطة — مراجعة الشيفرة #5).
+    try:
+        from silk_staleness import is_stale_fact, fact_year, stale_tag
+    except Exception:  # noqa: BLE001 — الإفصاح تحسيني لا يكسر الجمع
+        is_stale_fact = None
     for rep in reports or []:
         name = getattr(rep, "agent_name", "agent")
         if getattr(rep, "failed", False):
@@ -209,16 +215,15 @@ def _facts(reports: list) -> str:
             if val is None:
                 lines.append(f"- [{name}] قيمة غير متوفّرة ({getattr(dp, 'note', '')})")
             else:
-                # القاعدة العامة (قرار المالك — التقادُم من المصدر لا النثر):
-                # الحقيقة المتقادِمة تحمل وسم الإفصاح **عند جمعها للكاتب**
-                # (نقطة الاختناق الوحيدة)، فيحمله الكاتب حرفياً مهما كانت صياغته.
+                # الحقيقة المتقادِمة تحمل وسم الإفصاح عند جمعها للكاتب (نقطة
+                # الاختناق الوحيدة)، فيحمله الكاتب حرفياً مهما كانت صياغته.
                 stale = ""
-                try:
-                    from silk_staleness import is_stale_fact, fact_year, stale_tag
-                    if is_stale_fact(dp):
-                        stale = f" [{stale_tag(fact_year(dp))}]"
-                except Exception:  # noqa: BLE001 — الإفصاح تحسيني لا يكسر الجمع
-                    stale = ""
+                if is_stale_fact is not None:
+                    try:
+                        if is_stale_fact(dp):
+                            stale = f" [{stale_tag(fact_year(dp))}]"
+                    except Exception:  # noqa: BLE001
+                        stale = ""
                 lines.append(
                     f"- [{name}] {val} | المصدر: {getattr(dp, 'source', '?')} | "
                     f"ثقة {getattr(dp, 'confidence', '?')} | "

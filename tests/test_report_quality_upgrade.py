@@ -180,6 +180,76 @@ def test_w2_1_food_word_year_untagged_when_no_stale_fact():
     assert R._STALE_TAG not in out
 
 
+def test_w2_1_keyword_backstop_does_not_tag_longer_number_prefix():
+    """مراجعة الشيفرة #3 — «عام 20135» لا يُوسَم (2013 بادئة رقمٍ أطول، حدّ يمينيّ)."""
+    import silk_render as R
+    out = R._tag_stale_years("نشر عام 20135 تقرير.", set())
+    assert R._STALE_TAG not in out
+    assert "20135" in out  # الرقم كما هو بلا كسر
+
+
+def test_w2_1_era_suffix_does_not_swallow_adjacent_word():
+    """مراجعة الشيفرة #4 — «2013مايو» تبقى «مايو» سليمة (لا ابتلاع أوّل حرفها)."""
+    import silk_render as R
+    out = R._tag_stale_years("عام 2013مايو حدث.", {2013})
+    assert "مايو" in out and R._STALE_TAG in out
+    # «2013م» المفردة عند حدّ كلمة تبقى لاحقتها ملاصقة.
+    assert "2013م — بيانات 2013" in R._tag_stale_years("عام 2013م.", {2013})
+
+
+def test_w2_1_comtrade_vintage_from_year_marker_not_fetch_date():
+    """مراجعة الشيفرة #1 (قرار المالك) — حقيقة كومتريد تحمل وسم year=؛ فتُقرأ
+    سنتها الحقيقية لا تاريخ الجلب: 2018 (جُلبت اليوم) => متقادِمة، 2024 => حديثة.
+    وطابع الجلب منتصفَ السنة لا يُعامَل سنةَ بيانات."""
+    from silk_staleness import fact_year, is_stale_fact
+    c18 = {"value": 9, "source": "UN Comtrade",
+           "note": "HS.. إجمالي استيراد 2018, USD year=2018",
+           "retrieved_at": "2026-07-15"}
+    c24 = {"value": 9, "source": "UN Comtrade",
+           "note": "HS.. إجمالي استيراد 2024, USD year=2024",
+           "retrieved_at": "2026-07-15"}
+    assert fact_year(c18) == 2018 and is_stale_fact(c18) is True
+    assert fact_year(c24) == 2024 and is_stale_fact(c24) is False
+    # طابع جلبٍ منتصفَ السنة ليس سنةَ بيانات؛ رصدٌ سنويّ (نهاية السنة) نعم.
+    assert fact_year({"value": 1, "note": "x", "retrieved_at": "2019-07-15"}) is None
+    assert fact_year({"value": 1, "note": "x", "retrieved_at": "2018-12-31"}) == 2018
+
+
+def test_w2_1_comtrade_collector_writes_structured_year_marker():
+    """مراجعة الشيفرة #1 — جامع كومتريد (silk_llm_runtime) يكتب وسم year=
+    البنيويّ في ملاحظة حقيقة الاستيراد، فيقرؤه fact_year مثل نمط البنك الدولي."""
+    import silk_llm_runtime as RT
+
+    class _M:
+        m49 = 887
+        name_en = "Yemen"
+    with mock.patch.object(RT, "comtrade_trade",
+                           return_value=[{"partnerCode": "0", "primaryValue": 5_000_000}]), \
+         mock.patch.object(RT, "primary_value", return_value=5_000_000):
+        out = RT._tool_comtrade_imports({"years": [2018]},
+                                        {"hs_code": "040510", "market": _M()})
+    note = out[0].note
+    assert "year=2018" in note
+    from silk_staleness import fact_year
+    assert fact_year({"value": out[0].value, "note": note,
+                      "retrieved_at": out[0].retrieved_at}) == 2018
+
+
+def test_w2_1_stale_miss_goes_to_ops_log_not_client_limits():
+    """مراجعة الشيفرة #2 — فوات وسمٍ يُسجَّل تشغيلياً، ولا يتسرّب دورٌ داخليّ
+    («الكاتب»/«مراجعة الكاتب») لحدود العميل."""
+    import silk_render as R
+    import silk_ops_log
+    calls = []
+    with mock.patch.object(R, "_stale_tag_misses", return_value=[2013]), \
+         mock.patch.object(silk_ops_log, "record_error",
+                           side_effect=lambda *a, **k: calls.append((a, k))):
+        dr = R.build_view(yemen_research_blob())["deep_research"]
+    joined = " ".join(dr["limits"])
+    assert "الكاتب" not in joined and "إفصاح تقادُم مفقود" not in joined
+    assert calls and calls[0][0][0] == "stale_tag_missing"
+
+
 def test_w2_1_yemen_report_tags_2013_2018_but_not_2008_2023():
     """التقرير المعروض لليمن: 2013/2018 موسومتان، 2008 (بند) و2023 (حديث) لا."""
     import silk_render as R

@@ -1107,8 +1107,8 @@ def _apply_merchant_language(text: "str | None") -> "tuple[str, list]":
 # النمطي أدناه **شبكة أمان أخيرة** فقط: سياق بيانات صريح (بين قوسين، أو كلمة
 # زمنية مسبوقة بفاصل حتى لا تُطابَق داخل كلمة مثل «الطعام» — مراجعة الشيفرة #1).
 _DATA_YEAR_CTX_RE = re.compile(
-    r"\((19\d\d|20\d\d)\)"                                # بين قوسين: (2013)
-    r"|(?:^|[\s(،؛:])(?:عام|سنة|لعام|منذ)\s+(19\d\d|20\d\d)")  # كلمة زمنية بفاصل
+    r"\((19\d\d|20\d\d)\)"                                       # بين قوسين: (2013)
+    r"|(?:^|[\s(،؛:])(?:عام|سنة|لعام|منذ)\s+(19\d\d|20\d\d)(?![\d/])")  # كلمة زمنية بفاصل، بحدّ يمينيّ (لا بادئة رقمٍ أطول)
 _STALE_TAG = "الأحدث المتاح"
 
 
@@ -1230,10 +1230,14 @@ def _tag_stale_years(text: "str | None",
     for start, end, yr in cands:
         if yr in tagged or end < last:
             continue
-        # ضمّ لاحقة السنة الميلادية/الهجرية (م/هـ) كي لا تتدلّى بعد الوسم
-        # («2013م» → «2013م — بيانات …» لا «2013 — بيانات …م»).
-        while end < len(s) and s[end] in "مهـ":
-            end += 1
+        # ضمّ لاحقة سنةٍ ميلادية/هجرية **مفردة عند حدّ كلمة فقط** (م/هـ/ـ) كي
+        # لا تتدلّى بعد الوسم — دون ابتلاع أوّل حرفٍ من كلمةٍ ملاصقة مثل «مايو»
+        # (مراجعة الشيفرة #4: «2013مايو» تبقى «مايو» سليمة).
+        _era_end = end
+        while _era_end < len(s) and s[_era_end] in "مهـ":
+            _era_end += 1
+        if _era_end > end and (_era_end >= len(s) or not s[_era_end].isalpha()):
+            end = _era_end
         # لا تُكرِّر إن كان الوسم مكتوباً أصلاً بعد السنة (نافذة ٤٠ محرفاً).
         if _STALE_TAG in s[end:end + 40]:
             tagged.add(yr)
@@ -1251,13 +1255,15 @@ def _stale_tag_misses(text: str, stale_fact_years: "set[int] | frozenset[int]") 
     «الأحدث المتاح» قريبٍ منها (تُبلَّغ مشكلةَ جودة، لا تُصحَّح صامتةً)."""
     misses: list[int] = []
     for yr in sorted(stale_fact_years or set()):
+        seen = disclosed = False
         for m in re.finditer(rf"(?<![\d/]){int(yr)}(?![\d/])", text):
+            seen = True
             if _STALE_TAG in text[m.end():m.end() + 40] \
                     or _STALE_TAG in text[max(0, m.start() - 40):m.start()]:
+                disclosed = True
                 break  # مُفصَحٌ عنها مرة على الأقل — يكفي
-        else:
-            if re.search(rf"(?<![\d/]){int(yr)}(?![\d/])", text):
-                misses.append(int(yr))
+        if seen and not disclosed:
+            misses.append(int(yr))
     return misses
 
 
@@ -1438,9 +1444,20 @@ def _deep_research_view(result: dict) -> dict | None:
                      for f in (v.get("findings") or [])]
     _stale_set = _stale_fact_years(_all_findings)
     _report_text_glossed = _tag_stale_years(_report_text_glossed, _stale_set)
-    for _yr in _stale_tag_misses(_report_text_glossed, _stale_set):
-        limits.append(f"إفصاح تقادُم مفقود: حقيقة سنة {_yr} ظهرت في التقرير "
-                      f"دون وسم «{_STALE_TAG}» — تتطلّب مراجعة الكاتب.")
+    # التحقّق تشخيصٌ **تشغيليّ** لا سطرٌ للعميل (مراجعة الشيفرة #2 — لا تسريب
+    # دور داخليّ «الكاتب» لحدود العميل، عائلة الدرسين ١٤/١٨): أيّ سنة حقيقة
+    # متقادِمة بقيت بلا وسمٍ تُسجَّل في سجلّ العمليات فقط.
+    _misses = _stale_tag_misses(_report_text_glossed, _stale_set)
+    if _misses:
+        try:
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "stale_tag_missing",
+                "سنوات حقائق متقادِمة بلا وسم إفصاح في التقرير: "
+                + "، ".join(str(y) for y in _misses),
+                context={"trace_id": dr.get("trace_id"), "years": _misses})
+        except Exception:  # noqa: BLE001 — تسجيل تشخيصيّ لا يكسر العرض
+            pass
     return {
         "market": result.get("market"),
         # Wave 2: اسم المنتج المدروس يصل عرض البحث كي يشتقّ منه المُصدِّرُ سطرَ

@@ -22,11 +22,14 @@ import datetime
 import os
 import re
 
-# وسم السنة البنيوي الذي يكتبه جامع البنك الدولي في الملاحظة («… year=2013»)
-# — استخلاصٌ من حقلٍ بنيويّ لا من نثرٍ عربيّ (silk_data_layer._world_bank_for_year).
+# وسم السنة البنيوي الذي يكتبه الجامعون في الملاحظة («… year=2013») — البنك
+# الدولي (`silk_data_layer._world_bank_for_year`) وكومتريد (`silk_llm_runtime.
+# _tool_comtrade_imports`). استخلاصٌ من حقلٍ بنيويّ لا من نثرٍ عربيّ.
 _YEAR_MARKER_RE = re.compile(r"\byear\s*=\s*(\d{4})\b")
-# سنة تاريخ ISO في بداية retrieved_at («2013-12-31»).
-_ISO_YEAR_RE = re.compile(r"^\s*(\d{4})\b")
+# سنة **رصدٍ سنويّ صريحة** فقط في retrieved_at — نهاية السنة «YYYY-12-31»
+# (مراجعة الشيفرة #1: طابع الجلب `_today()` منتصفَ السنة ليس سنةَ بيانات، فلا
+# يُعامَل تقادُماً؛ الفجوة الحقيقية تُغطّى بوسم year= عند الجامع).
+_OBS_YEAR_RE = re.compile(r"^\s*(\d{4})-12-31\b")
 
 STALE_TAG = "الأحدث المتاح"
 
@@ -68,8 +71,10 @@ def fact_year(dp: object) -> int | None:
     m = _YEAR_MARKER_RE.search(note)
     if m:
         return int(m.group(1))
+    # احتياط أخير: سنةُ رصدٍ سنويّ صريحة فقط (نهاية السنة) — لا طابعَ جلبٍ
+    # منتصفَ السنة (مراجعة الشيفرة #1: لا خلط تاريخ الجلب بسنة البيانات).
     ra = str(_get(dp, "retrieved_at") or "")
-    m = _ISO_YEAR_RE.match(ra)
+    m = _OBS_YEAR_RE.match(ra)
     if m:
         return int(m.group(1))
     return None

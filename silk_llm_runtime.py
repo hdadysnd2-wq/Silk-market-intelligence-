@@ -178,7 +178,7 @@ def _tool_comtrade_imports(args: dict, ctx: dict) -> list[DataPoint]:
                     f"HS{hs} تقدير استيراد {market.name_en} {year} من "
                     "مرآة تصريحات تصدير الشركاء (السوق لا تُبلِغ كومتريد "
                     "مباشرة لهذه السنة/الرمز) — أقل يقيناً من تصريح "
-                    "مباشر، تقدير احتياطي لا بديل كامل",
+                    f"مباشر، تقدير احتياطي لا بديل كامل year={year}",
                     _today(), status="mirrored"))
                 continue
             out.append(DataPoint(
@@ -188,7 +188,8 @@ def _tool_comtrade_imports(args: dict, ctx: dict) -> list[DataPoint]:
             continue
         out.append(DataPoint(
             sum(vals), "UN Comtrade", 0.9,
-            f"HS{hs} إجمالي استيراد {market.name_en} من العالم {year}, USD",
+            f"HS{hs} إجمالي استيراد {market.name_en} من العالم {year}, USD "
+            f"year={year}",
             _today()))
         # ترقية المرحلة ٢ب: متوسط سعر استيراد مرجعي (القيمة/الوزن الصافي)
         # — حقل netWgt يعود مع نفس السجلات المُستجلَبة أعلاه أصلاً بلا
