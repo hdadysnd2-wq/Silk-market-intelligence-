@@ -188,6 +188,40 @@ def _real_list(x: object) -> list:
     return out
 
 
+# Wave 3.1 (تدقيق زبدة الفول السوداني/اليمن — صفوف أسعار بلا وزن): سبب غياب
+# السعر/كجم لكل صفّ يُصرَّح صراحةً (وزن غير مذكور / وحدة غامضة) بدل خانة فارغة،
+# وسطر الفتح الوحيد «بطاقة منتج: التكلفة/كجم» يُذكَر مرة واحدة في قسم التسعير.
+_PER_KG_RE = re.compile(
+    r"(?:/|\bلكل\b|\bper\b)?\s*(?:كجم|كيلو|كغ|للكيلو|kg|كيلوغرام)"
+    r"|(?:كجم|كيلو|كغ|kg)\s*/?\s*(?:€|\$|£|دولار|يورو)")
+_CURRENCY_RE = re.compile(r"€|\$|£|دولار|يورو|ريال|درهم|\d")
+_WEIGHT_RE = re.compile(
+    r"\d+\s*(?:غ|جم|جرام|غرام|كجم|كيلو|كغ|kg|g|مل|لتر|ml|l|أونصة|oz)")
+
+PRICE_UNLOCK_LINE = ("لحساب موقعك السعري الدقيق: بطاقة منتجك (التكلفة/كجم) هي "
+                     "المُدخَل الناقص الوحيد.")
+
+
+def _price_row_reason(text: object) -> str:
+    """سبب تعذّر حساب السعر/كجم لصفّ سعر — «» إن كان قابلاً للحساب.
+
+    - يحوي سعراً لكل كيلوغرام/وحدة => «» (قابل للحساب).
+    - سعرٌ بلا وزن مذكور => «وزن غير مذكور».
+    - بلا سعر واضح أصلاً => «وحدة غامضة». حتمي، لا اختلاق."""
+    s = str(text or "").strip()
+    if not s:
+        return "وحدة غامضة"
+    if _PER_KG_RE.search(s):
+        return ""  # سعر/كجم مرصود مباشرة
+    has_currency = bool(_CURRENCY_RE.search(s))
+    has_weight = bool(_WEIGHT_RE.search(s))
+    if has_currency and has_weight:
+        return ""  # سعر + وزن => قابل للاشتقاق
+    if has_currency and not has_weight:
+        return "وزن غير مذكور"
+    return "وحدة غامضة"
+
+
 def _prices(row: dict) -> list:
     """أسعار السوق المرصودة — observed retail listings (localprice layer)."""
     out = []
@@ -1338,6 +1372,16 @@ def _deep_research_view(result: dict) -> dict | None:
         # أرقام كومتريد «مؤشر سياقي» عند التعليم. None/غير مؤكَّد لا يُطأطئ شيئاً.
         "hs_confirmation": hs_conf or {},
         "hs_flagged": bool(hs_flagged),
+        # Wave 3.1: سبب غياب السعر/كجم لكل صفّ سعر مرصود + سطر الفتح الوحيد.
+        "price_rows": [
+            {"value": (_dp(x).get("value")),
+             "store": _strip_internal_plumbing(str(_dp(x).get("note") or "")),
+             "reason": _price_row_reason(_dp(x).get("value"))}
+            for x in ((missions.get("pricing_scout") or {}).get("findings") or [])],
+        "price_unlock": PRICE_UNLOCK_LINE,
+        # Wave 3.2: عند تعليم الرمز، التركّز (HHI) سياقٌ فقط لا إشارة تسجيل
+        # للحكم لهذا المنتج — الشارة تستهلكها المُصدِّرات.
+        "concentration_context_only": bool(hs_flagged),
         "report": {"text": _report_text_glossed,
                   "review_cycles": report_out.get("review_cycles", 0),
                   "unresolved_notes": clean_unresolved,

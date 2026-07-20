@@ -206,6 +206,54 @@ def test_w2_3_no_broaden_when_exact_term_is_strong():
                              strong) is None
 
 
+# ════════════════════ الموجة ٣ — المنافسة والتسعير ════════════════════
+
+def test_w3_1_price_row_reason_classifier():
+    """3.1 — مصنِّف سبب غياب السعر/كجم: وزن غير مذكور / وحدة غامضة / قابل للحساب."""
+    import silk_render as R
+    assert R._price_row_reason("علبة 5 دولار") == "وزن غير مذكور"
+    assert R._price_row_reason("6.5 دولار/كجم") == ""
+    assert R._price_row_reason("سعر 12 يورو للكيلو") == ""
+    assert R._price_row_reason("عبوة كبيرة") == "وحدة غامضة"
+    assert R._price_row_reason("") == "وحدة غامضة"
+    assert R._price_row_reason("علبة 340 غرام بـ 5 دولار") == ""  # سعر+وزن
+
+
+def test_w3_1_yemen_price_rows_carry_per_row_reason_and_single_unlock():
+    """3.1 — صفوف أسعار اليمن تحمل سبباً لكل صفّ + سطر فتح واحد."""
+    import silk_render as R
+    dr = R.build_view(yemen_research_blob())["deep_research"]
+    rows = dr["price_rows"]
+    reasons = {r["reason"] for r in rows}
+    assert "وزن غير مذكور" in reasons          # «علبة 5 دولار»
+    assert "" in reasons                        # «6.5 دولار/كجم» قابل للحساب
+    # سطر الفتح الوحيد مذكور مرة واحدة كبنية.
+    assert "بطاقة منتج" in dr["price_unlock"] and "التكلفة/كجم" in dr["price_unlock"]
+
+
+def test_w3_2_hhi_present_but_context_only_under_flagged_code():
+    """3.2 — رمز مُعلَّم => التركّز حاضر لكنه سياقٌ فقط (لا إشارة تسجيل)، وثقة
+    الحكم مسقوفة (لا يرفعها التركّز)."""
+    import silk_render as R
+    dr = R.build_view(yemen_research_blob())["deep_research"]
+    assert dr["hs_flagged"] is True
+    assert dr["concentration_context_only"] is True
+    # HHI ما زال حاضراً في المتن/البعثات (لا يُحذَف — يُعاد تأطيره فقط).
+    assert "HHI" in dr["report"]["text"] or "3100" in dr["report"]["text"]
+    assert dr["verdict"]["confidence"] <= 0.5
+
+
+def test_w3_2_unflagged_code_concentration_is_not_context_only():
+    """3.2 — رمز مؤكَّد => التركّز إشارة عادية (context_only=False)."""
+    import silk_render as R
+    blob = yemen_research_blob()
+    blob["product"] = "تمور"
+    blob["hs_code"] = "080410"
+    blob.pop("hs_confirmation", None)
+    dr = R.build_view(blob)["deep_research"]
+    assert dr["concentration_context_only"] is False
+
+
 # ════════════════════ بوّابة /research (1.2 — قبل الإنفاق) ════════════════════
 
 def _client(**env):
