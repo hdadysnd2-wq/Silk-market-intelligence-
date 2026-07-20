@@ -144,6 +144,11 @@ class DataPoint:
     # تمييز بنيوي — "fetch_failed" (تعذّر الجلب: حد معدل/شبكة، أعد المحاولة)
     # مقابل "no_record" (ردّ ناجح بلا سجل فعلاً). "" = غير محدد (سلوك قديم).
     status: str = ""
+    # سنة البيانات البنيوية (قرار المالك — «حلِّل المصدر لا النثر»، الدرس ٣٣):
+    # فِنتيج الحقيقة كحقلٍ صريح لا كوسمٍ نصّيّ داخل note. الجامعون يضبطونه
+    # (البنك الدولي/كومتريد/المنافسون)، و`silk_staleness.fact_year` يقرؤه أولاً
+    # فيُقرَّر التقادُم دون تحليل نثرٍ ودون تسريب «year=» لأيّ سطح.
+    data_year: "int | None" = None
 
 
 # السجلّ العمومي لروابط المصادر (§6، أمر العمل الرئيس) — كل مصدرٍ عموميّ مسمّى
@@ -473,9 +478,18 @@ def _world_bank_for_year(iso3: str, indicator: str,
         records = payload[1] or []
         for rec in records:  # WB returns newest-first; take first non-null
             if isinstance(rec, dict) and rec.get("value") is not None:
+                _dy = None
+                try:
+                    _dy = int(str(rec.get("date"))[:4])
+                except (TypeError, ValueError):
+                    _dy = None
+                # سنة البيانات حقلٌ بنيويّ (data_year) لا وسمٌ نصّيّ «year=»
+                # (الدرس ٣٣ + مراجعة الشيفرة): الملاحظة تُبقي السنة بصيغة بشرية
+                # مقروءة «(2013)»، والفِنتيج يُقرأ من الحقل لا من النثر.
                 return DataPoint(
                     value=rec["value"], source="World Bank", confidence=0.95,
-                    note=f"{indicator} year={rec.get('date')}", retrieved_at=_today(),
+                    note=f"{indicator} ({rec.get('date')})", retrieved_at=_today(),
+                    data_year=_dy,
                 )
         note = f"{indicator}: no value returned for {iso3}"
         log.warning(note)

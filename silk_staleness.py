@@ -26,10 +26,10 @@ import re
 # الدولي (`silk_data_layer._world_bank_for_year`) وكومتريد (`silk_llm_runtime.
 # _tool_comtrade_imports`). استخلاصٌ من حقلٍ بنيويّ لا من نثرٍ عربيّ.
 _YEAR_MARKER_RE = re.compile(r"\byear\s*=\s*(\d{4})\b")
-# سنة **رصدٍ سنويّ صريحة** فقط في retrieved_at — نهاية السنة «YYYY-12-31»
-# (مراجعة الشيفرة #1: طابع الجلب `_today()` منتصفَ السنة ليس سنةَ بيانات، فلا
-# يُعامَل تقادُماً؛ الفجوة الحقيقية تُغطّى بوسم year= عند الجامع).
-_OBS_YEAR_RE = re.compile(r"^\s*(\d{4})-12-31\b")
+# سنة تاريخِ رصدٍ في retrieved_at — أيّ «YYYY-MM-DD» (مراجعة الشيفرة #3: لا
+# تُقيَّد بنهاية السنة). تمييزُ طابع الجلب عن سنة البيانات يتمّ في fact_year
+# بإشارةِ «السنة الماضية» (طابع `_today()` = السنة الجارية => ليس فِنتيج).
+_OBS_YEAR_RE = re.compile(r"^\s*(\d{4})-\d{2}-\d{2}\b")
 
 STALE_TAG = "الأحدث المتاح"
 
@@ -56,9 +56,12 @@ def _get(dp: object, key: str) -> object:
 
 
 def fact_year(dp: object) -> int | None:
-    """سنة بيانات الحقيقة من مصدرها البنيوي — لا تحليل نثر:
-    (١) حقل صريح `data_year`/`year`، (٢) وسم `year=YYYY` في الملاحظة (البنك
-    الدولي)، (٣) سنة `retrieved_at` (ISO). None إن تعذّر تحديدها."""
+    """سنة بيانات الحقيقة من مصدرها البنيوي — لا تحليل نثر (الدرس ٣٣):
+    (١) **الحقل البنيويّ `data_year`** الذي يضبطه الجامعون (المصدر المُعتمَد)،
+    (٢) `year=YYYY` في الملاحظة (**احتياط قديم** لمدوّنات مخزّنة قبل الحقل — لم
+    يعد يُكتَب)، (٣) سنة `retrieved_at` كتاريخِ رصدٍ (أيّ YYYY-MM-DD) **إن كانت
+    سنةً ماضية** لا طابعَ جلبٍ للسنة الجارية (مراجعة #3: يقبل غير نهاية السنة،
+    ويستبعد طابع الجلب بإشارةِ «السنة الماضية»). None إن تعذّر."""
     for k in ("data_year", "year"):
         v = _get(dp, k)
         if isinstance(v, bool):
@@ -68,15 +71,16 @@ def fact_year(dp: object) -> int | None:
         if isinstance(v, str) and v.strip().isdigit() and len(v.strip()) == 4:
             return int(v)
     note = str(_get(dp, "note") or "")
-    m = _YEAR_MARKER_RE.search(note)
+    m = _YEAR_MARKER_RE.search(note)  # احتياط قديم لا يُكتَب بعد اليوم
     if m:
         return int(m.group(1))
-    # احتياط أخير: سنةُ رصدٍ سنويّ صريحة فقط (نهاية السنة) — لا طابعَ جلبٍ
-    # منتصفَ السنة (مراجعة الشيفرة #1: لا خلط تاريخ الجلب بسنة البيانات).
     ra = str(_get(dp, "retrieved_at") or "")
     m = _OBS_YEAR_RE.match(ra)
     if m:
-        return int(m.group(1))
+        y = int(m.group(1))
+        # السنة الجارية = طابع جلبٍ (`_today()`) لا سنةَ بيانات؛ الماضية = رصد.
+        if y < datetime.date.today().year:
+            return y
     return None
 
 

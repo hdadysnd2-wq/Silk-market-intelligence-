@@ -19,10 +19,13 @@ from __future__ import annotations
 
 
 def _dp(value, source: str = "UN Comtrade", conf: float = 0.8,
-        note: str = "", ra: str = "2026-07-15", status: str = "") -> dict:
-    """نقطة بيانات خام كما تُخزَّن (لا كائن DataPoint). A raw DataPoint dict."""
+        note: str = "", ra: str = "2026-07-15", status: str = "",
+        data_year=None) -> dict:
+    """نقطة بيانات خام كما تُخزَّن (لا كائن DataPoint). A raw DataPoint dict.
+    `data_year`: الحقل البنيويّ لسنة البيانات (الدرس ٣٣) — يضبطه الجامعون."""
     return {"value": value, "source": source, "confidence": conf,
-            "note": note, "retrieved_at": ra, "status": status}
+            "note": note, "retrieved_at": ra, "status": status,
+            "data_year": data_year}
 
 
 # اسم المنتج ورمزه المُصنَّف خطأً — الصفة المميّزة «فول سوداني» ضاعت لصالح
@@ -108,10 +111,10 @@ def yemen_research_blob() -> dict:
                                  status="fetch_failed")]),
         # دخل بنك دولي قديم — 2013 و2018 (عيب 2.1).
         "economic": _m("دخل الفرد 1106 دولار (2013)",
-                       [_dp(1106, "World Bank", note="دخل الفرد",
-                            ra="2013-12-31"),
-                        _dp(31.5, "World Bank", note="نسبة الفقر",
-                            ra="2018-12-31")]),
+                       [_dp(1106, "World Bank", note="دخل الفرد (2013)",
+                            ra="2026-07-15", data_year=2013),
+                        _dp(31.5, "World Bank", note="نسبة الفقر (2018)",
+                            ra="2026-07-15", data_year=2018)]),
         "risk_news": _m("استقرار سياسي منخفض", []),
     }
     analyst = {

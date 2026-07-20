@@ -31,7 +31,10 @@ def _dp(obj: object) -> dict:
             "confidence": getattr(obj, "confidence", 0.0),
             "note": getattr(obj, "note", ""),
             "retrieved_at": getattr(obj, "retrieved_at", ""),
-            "status": getattr(obj, "status", "")}
+            "status": getattr(obj, "status", ""),
+            # الحقل البنيويّ لسنة البيانات (الدرس ٣٣) يُحفَظ في التطبيع كي
+            # يقرأه silk_staleness.fact_year في طبقة العرض/التصدير.
+            "data_year": getattr(obj, "data_year", None)}
 
 
 def _decision(top: dict | None) -> dict:
@@ -1250,23 +1253,6 @@ def _tag_stale_years(text: "str | None",
     return "".join(out)
 
 
-def _stale_tag_misses(text: str, stale_fact_years: "set[int] | frozenset[int]") -> list[int]:
-    """تحقّقٌ من بقاء الوسم — أيّ سنة حقيقة متقادِمة ظهرت في السرد بلا إفصاح
-    «الأحدث المتاح» قريبٍ منها (تُبلَّغ مشكلةَ جودة، لا تُصحَّح صامتةً)."""
-    misses: list[int] = []
-    for yr in sorted(stale_fact_years or set()):
-        seen = disclosed = False
-        for m in re.finditer(rf"(?<![\d/]){int(yr)}(?![\d/])", text):
-            seen = True
-            if _STALE_TAG in text[m.end():m.end() + 40] \
-                    or _STALE_TAG in text[max(0, m.start() - 40):m.start()]:
-                disclosed = True
-                break  # مُفصَحٌ عنها مرة على الأقل — يكفي
-        if seen and not disclosed:
-            misses.append(int(yr))
-    return misses
-
-
 def _deep_research_view(result: dict) -> dict | None:
     """قسم البحث العميق (الموجة ٤، V5) — إضافي بحت، لا يمسّ أي مفتاح قائم.
 
@@ -1439,25 +1425,16 @@ def _deep_research_view(result: dict) -> dict | None:
     # البنيوي** (silk_staleness) لا من النثر، فتُوسَم أينما وردت بأيّ صياغة، ولا
     # يُوسَم رمزُ HS. ثم تحقّقٌ: أيّ سنة حقيقة متقادِمة بلا وسمٍ في السرد
     # تُبلَّغ حدًّا (لا تُصحَّح صامتةً — عقد عدم الاختلاق).
+    # القاعدة العامة (قرار المالك): سنوات الحقائق المتقادِمة تُحسَب من الحقل
+    # البنيويّ `data_year` (silk_staleness) لا من النثر، فتُوسَم أينما وردت بأيّ
+    # صياغة، ولا يُوسَم رمزُ HS. التوسيمُ حتميٌّ شاملٌ لكلّ سنةٍ في القائمة —
+    # لا حاجة لمتحقّقٍ لاحق (كان `_stale_tag_misses` غيرَ قابلٍ للإطلاق عملياً،
+    # مراجعة الشيفرة #5 — حُذف).
     from silk_staleness import stale_fact_years as _stale_fact_years
     _all_findings = [f for v in missions.values()
                      for f in (v.get("findings") or [])]
     _stale_set = _stale_fact_years(_all_findings)
     _report_text_glossed = _tag_stale_years(_report_text_glossed, _stale_set)
-    # التحقّق تشخيصٌ **تشغيليّ** لا سطرٌ للعميل (مراجعة الشيفرة #2 — لا تسريب
-    # دور داخليّ «الكاتب» لحدود العميل، عائلة الدرسين ١٤/١٨): أيّ سنة حقيقة
-    # متقادِمة بقيت بلا وسمٍ تُسجَّل في سجلّ العمليات فقط.
-    _misses = _stale_tag_misses(_report_text_glossed, _stale_set)
-    if _misses:
-        try:
-            import silk_ops_log
-            silk_ops_log.record_error(
-                "stale_tag_missing",
-                "سنوات حقائق متقادِمة بلا وسم إفصاح في التقرير: "
-                + "، ".join(str(y) for y in _misses),
-                context={"trace_id": dr.get("trace_id"), "years": _misses})
-        except Exception:  # noqa: BLE001 — تسجيل تشخيصيّ لا يكسر العرض
-            pass
     return {
         "market": result.get("market"),
         # Wave 2: اسم المنتج المدروس يصل عرض البحث كي يشتقّ منه المُصدِّرُ سطرَ

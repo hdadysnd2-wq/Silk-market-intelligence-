@@ -276,7 +276,9 @@ _SYMBOL_ANCHORS_EXTRA = [
     (33, "silk_staleness.py", ["def fact_year", "def is_stale_fact",
                               "def stale_fact_years", "def stale_tag"]),
     (33, "silk_ai_judge.py", ["from silk_staleness import"]),
-    (33, "silk_render.py", ["def _stale_tag_misses", "stale_fact_years"]),
+    (33, "silk_render.py", ["stale_fact_years", "def _tag_stale_years"]),
+    # الحقل البنيويّ data_year هو مصدر الفِنتيج (لا وسم نصّيّ year=).
+    (33, "silk_data_layer.py", ["data_year"]),
     (33, "tests/test_report_quality_upgrade.py",
      ["def test_w2_1_fact_year_reads_structured_provenance_not_prose",
       "def test_w2_1_stale_fact_tagged_regardless_of_phrasing",
