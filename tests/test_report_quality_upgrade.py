@@ -374,6 +374,26 @@ def test_w5_1_measured_tone_draft_has_no_alarmist_issue():
     assert J._alarmist_issues(draft) == []
 
 
+def test_w5_1_yemen_narrative_free_of_banned_phrases_and_rule_in_contract():
+    """5.1 (طلب المالك) — السرد المعروض لمدوّنة اليمن خالٍ من العبارات الثلاث
+    المحظورة **وأقرب صيغها** (مثل «يجب التوقف فوراً»)، ونصّ قاعدة النبرة موجود
+    في ملف العقد."""
+    import silk_render as R
+    import silk_style_contract as SC
+    txt = R.build_view(yemen_research_blob())["deep_research"]["report"]["text"]
+    banned = ["يجب التوقف هنا فوراً", "يبطل كل الأرقام",
+              "سوق مضطربة وشحيحة البيانات", "يجب التوقف فوراً",
+              "تبطل كل الأرقام", "سوق مضطربة"]
+    present = [p for p in banned if p in txt]
+    assert present == [], present
+    # كل صيغة محظورة مغطّاة بقائمة الإنفاذ (فحص المراجع الحتمي يمسكها).
+    for p in banned:
+        assert p in SC.ALARMIST_PHRASES, p
+    # نصّ قاعدة النبرة + البديل المقيس حاضران في ملف العقد.
+    assert SC.PROFESSIONAL_TONE_RULE in SC.WRITER_STYLE_CONTRACT
+    assert "مؤشر سياقي لا كمقياس مباشر" in SC.MEASURED_TONE_HINT
+
+
 def test_w5_2_sentence_length_guidance_present():
     """5.2 — إرشاد طول الجملة (تفضيل القِصار) في العقد، لا حدّ محارف صلب."""
     import silk_style_contract as SC
