@@ -114,14 +114,22 @@ def _backoff_delay(attempt: int, retry_after: str = "") -> float:
     return min(base + random.uniform(0.0, base), 30.0)
 
 
-def _http_get(url: str, params: dict | None = None):
-    """جلب مرن عبر الجلسة المجمّعة — throttled GET with 429/5xx backoff (1b)."""
+def _http_get(url: str, params: dict | None = None,
+              headers: dict | None = None):
+    """جلب مرن عبر الجلسة المجمّعة — throttled GET with 429/5xx backoff (1b).
+
+    `headers` (اختياري): ترويسات لمصادر تمرّر مفتاحاً في ترويسة لا في الاستعلام
+    (فلا يظهر السرّ في الـURL)؛ None = سلوك قديم بلا ترويسات إضافية."""
     host = url.split("/")[2] if "://" in url else url
     retries = int(os.environ.get("SILK_HTTP_RETRIES", "3"))
     resp = None
     for attempt in range(retries + 1):
         _throttle(host)
-        resp = _session.get(url, params=params, timeout=_TIMEOUT)
+        # headers شرطيّ: بلا ترويسات يبقى النداء مطابقاً للتوقيع القديم (لا
+        # يكسر محاكاة `_session.get` القائمة) — الترويسات مسار WTO الجديد وحده.
+        resp = (_session.get(url, params=params, headers=headers,
+                             timeout=_TIMEOUT) if headers is not None
+                else _session.get(url, params=params, timeout=_TIMEOUT))
         if resp.status_code not in _RETRYABLE or attempt >= retries:
             return resp
         delay = _backoff_delay(attempt, resp.headers.get("Retry-After") or "")

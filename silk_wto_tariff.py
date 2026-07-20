@@ -113,17 +113,18 @@ def wto_applied_tariff(hs_code: str, market_iso3: str,
         "ps": str(year),
         "fmt": "json",
         "mode": "full",
-        "subscription-key": key,
     }
     if partner_m49:  # الشريك اختياري — MFN المطبَّق لا يعتمد على الشريك عادةً
         params["p"] = partner_m49.zfill(3)
+    # المفتاح في **ترويسة** لا في الاستعلام (الآلية الموثّقة لبوابة WTO/Azure
+    # APIM) — فلا يظهر السرّ في الـURL (تدقيق مراجعة: منع تسرّب المفتاح لسجلّات
+    # الوسطاء/البروكسي). لا يدخل مفتاح التخزين المؤقت (ثابت للخادم).
+    headers = {"Ocp-Apim-Subscription-Key": key}
     try:
         from silk_data_layer import _http_get
         from silk_cache import cached_get
-        # لا نُدرِج المفتاح في مفتاح التخزين — cached_get يبني المفتاح من
-        # (url+params) كاملاً، والمفتاح ثابت للخادم فلا تسرّب بين مستخدمين.
         data = cached_get(_WTO_BASE, params=params, ttl_seconds=_TTL,
-                          fetcher=_http_get)
+                          fetcher=_http_get, headers=headers)
     except Exception as e:  # noqa: BLE001 — لا استثناء يصل المستدعي
         data = None
         _record_failure(hs6, market_iso3, f"{type(e).__name__}: {e}")

@@ -5,6 +5,7 @@
 
 Run: python3 -m pytest tests/test_wave_datasources_integration.py -q
 """
+import datetime
 import os
 from contextlib import contextmanager
 from unittest.mock import patch
@@ -80,6 +81,24 @@ def test_imf_no_record_is_distinct_from_fetch_failure():
     assert dp.value is None and dp.status == "no_record"
 
 
+def test_imf_forecast_year_is_flagged_and_lower_confidence():
+    """#3 (صدق المصدر): قيمة سنة مستقبلية/حالية = تقدير WEO — تُوسَم وتُخفَّض
+    ثقتها (0.6 لا 0.85) فلا تُقدَّم بيقين الأرقام المُحقَّقة."""
+    future = str(datetime.date.today().year + 2)
+    shape = {"values": {"NGDP_RPCH": {"NLD": {future: 2.0}}}}
+    with patch("silk_cache.cached_get", return_value=shape):
+        dp = imf.imf_indicator("NLD", "gdp_growth")
+    assert dp.value == 2.0 and dp.confidence == 0.6 and "تقدير" in dp.note
+
+
+def test_imf_requested_year_unavailable_is_declared_not_silent():
+    """#4: سنة مطلوبة غير متاحة => أحدث متاح مع ملاحظة صريحة، لا تمرير صامت."""
+    shape = {"values": {"NGDP_RPCH": {"NLD": {"2015": 1.0}}}}
+    with patch("silk_cache.cached_get", return_value=shape):
+        dp = imf.imf_indicator("NLD", "gdp_growth", 2010)
+    assert dp.value == 1.0 and "غير متاحة" in dp.note and "2010" in dp.note
+
+
 def test_imf_reaches_risk_and_macro_via_tool_not_forced_network():
     """IMF يصل المخاطر/الكلي عبر أداة imf_indicator + تعليمات البعثة — لا إلحاق
     شبكة حتمي في المسار الحار (انسجام مع حساسية التكلفة/السرعة D-06)."""
@@ -116,6 +135,26 @@ def test_wto_no_key_is_declared_gap_with_zero_network_calls():
             dp = wto.wto_applied_tariff("080410", "NLD")
         cg.assert_not_called()
     assert dp.value is None and "غير مُهيَّأ" in dp.note
+
+
+def test_wto_key_sent_as_header_not_url_param():
+    """#5 (نظافة الأسرار): المفتاح في ترويسة Ocp-Apim-Subscription-Key لا في
+    استعلام الـURL — فلا يظهر السرّ في الرابط (تسرّب للوسطاء/البروكسي)."""
+    captured = {}
+
+    def fake_cached_get(url, params=None, ttl_seconds=0, fetcher=None,
+                        headers=None):
+        captured["params"] = params or {}
+        captured["headers"] = headers or {}
+        return _WTO_SHAPE
+
+    with patch.dict(os.environ, {"WTO_TTD_API_KEY": "secret-k"}):
+        with patch("silk_cache.cached_get", side_effect=fake_cached_get):
+            dp = wto.wto_applied_tariff("080410", "NLD", "SAU", 2021)
+    assert dp.value == 8.0
+    assert "subscription-key" not in captured["params"]
+    assert "secret-k" not in str(captured["params"])  # السرّ ليس في الاستعلام
+    assert captured["headers"].get("Ocp-Apim-Subscription-Key") == "secret-k"
 
 
 def test_wto_fetch_failure_declared_gap_and_ops_logged(tmp_path):
@@ -203,6 +242,57 @@ def test_preferred_domains_ignores_mismatched_host():
         out = WS.web_search_prioritized(
             "q", preferred_domains=["globalbusinessculture.com"])
     assert all("evil.com" not in (d.value or {}).get("link", "") for d in out)
+
+
+def test_preferred_domains_reject_suffix_spoofed_host():
+    """#2: مضيف يتضمّن النطاق كسابقة (ccacoalition.org.evil.com) يُرفَض؛ نطاق
+    فرعيّ حقيقيّ (blog.ccacoalition.org) يُقبَل."""
+    base = [_dp_result("g", "https://x.com/a")]
+    spoof = [_dp_result("spoof", "https://ccacoalition.org.evil.com/p")]
+
+    def fake_spoof(q, num=5, gl=None, hl=None):
+        return spoof if "site:" in q else base
+
+    with patch("silk_websearch_agent.web_search", side_effect=fake_spoof):
+        out = WS.web_search_prioritized("q", preferred_domains=["ccacoalition.org"])
+    assert all("evil.com" not in (d.value or {}).get("link", "") for d in out)
+
+    sub = [_dp_result("ok", "https://blog.ccacoalition.org/p")]
+
+    def fake_sub(q, num=5, gl=None, hl=None):
+        return sub if "site:" in q else base
+
+    with patch("silk_websearch_agent.web_search", side_effect=fake_sub):
+        out = WS.web_search_prioritized("q", preferred_domains=["ccacoalition.org"])
+    assert any("blog.ccacoalition.org" in (d.value or {}).get("link", "")
+               for d in out)
+
+
+def test_web_search_counts_each_serper_post_in_data_economics():
+    """#1 (لا إنفاق خفيّ، عائلة الدرسين ١٦/٢٦): كل نداء Serper فعليّ يُحسَب
+    live_fetches في عدّاد اقتصاد البيانات."""
+    import silk_context
+    c = silk_context.begin_data_counter()
+    with patch.dict(os.environ, {"SEARCH_API_KEY": "k"}):
+        with patch("requests.post", side_effect=OSError("blocked")):
+            WS.web_search("q")
+    assert c["live_fetches"] >= 1
+
+
+def test_preferred_domains_subqueries_are_capped():
+    """#1: عدد استعلامات site: الفرعية مسقوف (لا مُضاعِف غير محدود)."""
+    site_calls = []
+
+    def fake(q, num=5, gl=None, hl=None):
+        if "site:" in q:
+            site_calls.append(q)
+            return [_dp_result("r", "https://a.com/x")]
+        return [_dp_result("b", "https://x.com/a")]
+
+    with patch("silk_websearch_agent.web_search", side_effect=fake):
+        WS.web_search_prioritized(
+            "q", preferred_domains=["d1.com", "d2.com", "d3.com", "d4.com"])
+    assert len(site_calls) <= WS._MAX_PREFERRED_SUBQUERIES
 
 
 def test_preferred_domains_map_keys_all_have_web_search_tool():

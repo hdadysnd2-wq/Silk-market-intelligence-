@@ -118,8 +118,18 @@ def imf_indicator(iso3: str, metric: str, year: int | None = None) -> DataPoint:
         log.info(note)  # ردّ ناجح بلا سجل — ليس عطلاً تقنياً
         return DataPoint(None, "IMF WEO", 0.0, note, _today(),
                          status="no_record")
-    return DataPoint(round(float(val), 3), "IMF WEO", 0.85,
-                     f"{label} — {iso} سنة {yr} (IMF DataMapper)", _today())
+    # تدقيق مراجعة (#3/#4 — صدق المصدر): قيمة السنة الحالية/المستقبلية في WEO
+    # **تقدير/تنبؤ** لا رقم فعليّ — تُوسَم صراحةً وتُخفَّض ثقتها (0.6 لا 0.85)
+    # كي لا تُقدَّم بيقين الأرقام المُحقَّقة. والسنة المطلوبة غير المتاحة (استُبدلت
+    # بأحدث متاح) تُعلَن صراحةً لا تُمرَّر صامتة كأنها السنة المطلوبة.
+    is_estimate = yr >= datetime.date.today().year
+    est_tag = " — تقدير/تنبؤ IMF WEO لا قيمة فعلية" if is_estimate else ""
+    req_tag = (f" (السنة المطلوبة {year} غير متاحة — أحدث متاح {yr})"
+               if year is not None and yr != year else "")
+    conf = 0.6 if is_estimate else 0.85
+    return DataPoint(round(float(val), 3), "IMF WEO", conf,
+                     f"{label} — {iso} سنة {yr} (IMF DataMapper)"
+                     f"{est_tag}{req_tag}", _today())
 
 
 def _record_failure(iso: str, code: str, detail: str) -> None:
