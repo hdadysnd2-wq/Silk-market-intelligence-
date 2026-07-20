@@ -213,3 +213,23 @@ tone/length + clean exports) is the owner's paid gate (LAW §2 bucket 2), pendin
 | 6.1 Structured flip conditions + roadmap link | DONE-with-artifact (hermetic) | `silk_render._flip_conditions` (`view.flip_conditions`), rendered md + operator docx; writer roadmap-link rule; `test_w6_1_*` |
 | 6.2 Exec-summary cap (verdict+flips+3 nums+3 risks) | DONE-with-artifact (writer contract) | `silk_ai_judge` deep_report 6.2 rule; `test_w6_2_*`. **Export length-cap enforcement + measured: owner live-regen gate.** |
 | FINAL — live end-to-end regeneration | NOT DONE (owner paid gate) | Requires live server + paid writer tail. All engine fixes hermetic-green; regenerated committed samples updated (§10.6). |
+
+---
+
+## Final polish (live acceptance 2026-07-20) — § leak + IMF/WTO deep-research serve
+
+### Item 1 — last "§" on the client report → CLOSED-with-artifact
+**Symptom (live):** report.md line ~73 + client docx carried «قرار حتمي قابل للتفسير من حزمة **§4b** المتحقَّق منها …» — internal section notation on the client face (same family as the earlier §8 leaks, M-9).
+**Root (file:line):** deterministic decision strings — `silk_decision.py` `note` (§4b) and critical-risk `why` (§8), plus `silk_render.py` decision `stage` (§8). The existing §-guard (`test_no_section_glyph_in_client_facing_strings`) only scanned `web/index.html`, so rendered report surfaces slipped through.
+**Fix:** three source strings de-§'d (silk_decision `note`/`why`, silk_render `stage`); belt-and-suspenders client sanitizer rule `§[\w.]+ → ""` in `silk_reports._CLIENT_SANITIZE` (catches any stored-blob/model-echoed §); samples regenerated (§10.6) → `grep -c § samples/analysis_latest.json` = 0.
+**Lock-tests (`tests/test_analyze_persistence_and_glyph.py`):** `test_no_section_glyph_in_rendered_analyze_report` (hermetic engine run → report.md + render_docx §-free), `test_no_section_glyph_in_deep_research_client_surfaces` (md + client docx §-free even with an injected §-note), `test_client_sanitizer_strips_section_glyph_token`. Any future § on a client surface fails CI.
+
+### Item 2 — IMF WEO + WTO TTD on the deep-research path → OWNER-VERIFY (wiring hermetically proven)
+**Trace (file:line):** `imf_indicator` tool (`silk_llm_runtime._tool_imf_indicator:285` → `silk_imf_agent.imf_indicator`) is in `MISSIONS["demographics_economy"].allowed_tools` (silk_missions.py:145) and `MISSIONS["risk_news"].allowed_tools` (:253) — both **run only in `/research`**, so `/analyze` quick-scan correctly never invokes IMF (expected, not a bug). Tariff: `wits_tariff` tool (`_tool_wits_tariff:271` → `silk_tariffs_agent.tariff_with_fallback:189`) runs the chain **WTO TTD → WITS → declared gap** and logs `tariff path=wto|wits|gap` (silk_tariffs_agent.py:204-218); wired to `MISSIONS["tariffs_agreements"]` (:191).
+**Hermetic wiring lock (`tests/test_imf_wto_deep_research_wiring.py`, 5 tests):** tool declared to the missions + registered in `TOOLS`; `_tool_imf_indicator` reaches the IMF agent with the market; `_tool_wits_tariff` prefers WTO, falls to WITS, then to a declared gap (no fabrication). Wiring cannot silently break.
+**NOT live-proven** (no paid run in CI — LAW §2). **Owner live-run checklist:**
+1. `POST /research` with `{product:"تمر سكري فاخر", market:"Netherlands", hs_code:"080410"}` (correct HS family; ~4-min paid run).
+2. **IMF served** — in the report's risk (§9) / macro section, look for GDP-growth / inflation / current-account figures each tagged **source «IMF WEO» + year**. In the API result, `deep_research.missions.risk_news.findings[*]` / `.demographics_economy.findings[*]` carry `source="IMF WEO"` with `data_year`.
+3. **Tariff source** — the applied-tariff line served by **WTO TTD** (source «WTO TTD») or the honest fallback; confirm which via the server log `tariff path=wto|wits|gap` for HS 080410.
+4. **/ops confirmation** — `GET /ops/last-errors` shows a `service_failure` row only if a source failed; `data_economics.live_fetches` counts the live calls. A `tariff path=gap` log with a declared-gap tariff line = both sources unavailable (honest, not fabricated).
+Do not mark IMF/WTO "live-proven" until step 2–3 are observed on a real run.
