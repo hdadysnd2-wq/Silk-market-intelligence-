@@ -186,6 +186,41 @@ def _iter_json_obs(data: dict):
                 yield obs[0]
 
 
+def tariff_with_fallback(
+    hs_code: str,
+    market_iso3: str,
+    partner_iso3: str = "SAU",
+    year: int | None = None,
+) -> DataPoint:
+    """التعريفة المطبَّقة عبر سلسلة تراجع — WTO TTD → WITS → فجوة معلنة.
+
+    (الموجة: دمج مصادر جديدة) WTO TTD أولاً لأنه يسدّ فجوة التعريفة الثنائية
+    المزمنة في WITS للأسواق الأوروبية (بلاغ هولندا/HS 080410 — WITS لا يعيد
+    صفوف عضو الاتحاد الفردي). بلا مفتاح WTO يتدهور WTO فوراً لفجوة معلنة (لا
+    نداء)، فيتولّى WITS كالسابق تماماً — توافق كامل مع السلوك القائم. كلا
+    المصدرين فشلا => فجوة معلنة تحمل مصدر WITS وحالتَه (استقرار للاختبارات
+    التي تؤكّد «World Bank WITS») مع ملاحظة تسمّي محاولة WTO أيضاً.
+
+    يسجّل السطر التشخيصي أيّ مصدر خدم (`tariff path=wto/wits/gap`) — لا ادعاء
+    بلا أثر (الدرس ١٠)."""
+    from silk_wto_tariff import wto_applied_tariff
+    wto = wto_applied_tariff(hs_code, market_iso3, partner_iso3, year)
+    if wto.value is not None:
+        log.info("tariff path=wto HS%s %s<-%s: %s%%",
+                 _hs6(hs_code), market_iso3, partner_iso3, wto.value)
+        return wto
+    wits = applied_tariff(hs_code, market_iso3, partner_iso3, year)
+    if wits.value is not None:
+        log.info("tariff path=wits HS%s %s<-%s: %s%%",
+                 _hs6(hs_code), market_iso3, partner_iso3, wits.value)
+        return wits
+    log.info("tariff path=gap HS%s %s<-%s (WTO + WITS both unavailable)",
+             _hs6(hs_code), market_iso3, partner_iso3)
+    merged_note = f"{wits.note} | وWTO TTD أيضاً غير متاح: {wto.note}"
+    return DataPoint(None, wits.source, 0.0, merged_note, wits.retrieved_at,
+                     status=wits.status)
+
+
 class TariffsAgent(BaseAgent):
     """وكيل التعريفات — applied customs tariff (%) into a market for an HS code."""
 
@@ -209,7 +244,8 @@ class TariffsAgent(BaseAgent):
             return AgentReport(
                 self.name, [], True,
                 "لا يوجد HS أو سوق صالح — missing hs_code or resolvable market ISO3")
-        dp = applied_tariff(hs, iso3, partner, year)
+        # سلسلة التراجع (الموجة: دمج مصادر جديدة): WTO TTD → WITS → فجوة معلنة.
+        dp = tariff_with_fallback(hs, iso3, partner, year)
         failed = dp.value is None
         if failed:
             summary = "لا توجد بيانات تعريفة — no tariff data (WITS unavailable)"

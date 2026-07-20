@@ -221,6 +221,17 @@ _TEST_ANCHORS = [
     (31, "tests/test_regression_registry.py",
      ["def _guard_analyze_persist_canonical_db"]),
     (31, "tools/post_deploy_smoke.py", ["def _check_exports"]),
+    # البند ٣٢ — مصدرٌ جديد = نفس العقود (فجوة معلنة/ops/مخزَّن/محكوم/نظيف الشروط).
+    (34, "tests/test_wave_datasources_integration.py",
+     ["def test_imf_declared_gap_on_fetch_failure_and_ops_logged",
+      "def test_wto_no_key_is_declared_gap_with_zero_network_calls",
+      "def test_tariff_fallback_prefers_wto_when_available",
+      "def test_preferred_domains_map_keys_all_have_web_search_tool",
+      "def test_new_source_modules_do_no_html_scraping",
+      "def test_world_bank_arabic_portal_only_for_client_citation"]),
+    (34, "docs/DECISIONS.md",
+     ["INTEGRATED-with-artifact", "SEARCH-BIASED",
+      "REJECTED as a data source"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

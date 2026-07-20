@@ -75,6 +75,15 @@ def web_search(query: str, num: int = 5,
         body["hl"] = str(hl).strip().lower()
     geo_note = (f" gl={body['gl']}" if body.get("gl") else "") + \
                (f" hl={body['hl']}" if body.get("hl") else "")
+    # عدّ كل نداء Serper فعليّ في اقتصاد البيانات (تدقيق مراجعة، عائلة الدرسين
+    # ١٦/٢٦): الانحياز للنطاقات المُفضَّلة يُضاعِف نداءات Serper — يجب أن يظهر
+    # المُضاعِف في `data_economics` لا أن يكون إنفاقاً خفيّاً. no-op خارج تشغيلة
+    # ذات عدّاد نشط (نفس نمط silk_cache._count).
+    try:
+        import silk_context
+        silk_context.count_data("live_fetches")
+    except Exception:  # noqa: BLE001 — العدّ شفافية لا شرط تشغيل
+        pass
     try:
         import requests  # lazy: import works offline/keyless
         resp = requests.post(
@@ -103,6 +112,89 @@ def web_search(query: str, num: int = 5,
             "Web Search (Serper)", 0.5,
             f"organic result for '{q}'{geo_note}", _today()))
     return findings
+
+
+def _domain_of(link: object) -> str:
+    """المضيف (بلا www) من رابط — لمطابقة نطاق مُفضَّل. '' إن تعذّر."""
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(str(link or "")).netloc.lower()
+        return host[4:] if host.startswith("www.") else host
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+# وسم الدليل الثانوي للنطاقات المُفضَّلة (Wave 2) — نتيجة من نطاق مُفضَّل
+# استشهادٌ ثانويّ برابط وتاريخ (◐)، لا مصدر بيانات أوّليّ.
+_PREFERRED_NOTE = "◐ نطاق مُفضَّل (دليل ثانوي — استشهاد برابط، لا مصدر أوّلي)"
+# سقف استعلامات site: الفرعية لكل نداء بحث (تدقيق مراجعة: كل استعلام فرعيّ نداء
+# Serper إضافي — المُضاعِف مسقوف صراحةً، وأيّ اقتطاع يُعلَن لا يُبتَر صامتاً).
+_MAX_PREFERRED_SUBQUERIES = int(os.environ.get("SILK_MAX_PREFERRED_SUBQUERIES", "2"))
+
+
+def web_search_prioritized(
+    query: str, num: int = 5, gl: str | None = None, hl: str | None = None,
+    preferred_domains: list[str] | None = None) -> list[DataPoint]:
+    """بحث ويب مع انحياز للنطاقات المُفضَّلة لكل بعثة (Wave 2 — دمج المواقع
+    المحتوائية بلا كشط).
+
+    يشغّل الاستعلام العام، ثم لكل نطاق مُفضَّل استعلاماً مُقيَّداً `site:domain`
+    (مقتطفات فقط — لا جلب محتوى، انضباط حقوق النشر). نتائج النطاقات المُفضَّلة
+    **تُرتَّب أولاً وتُوسَم دليلاً ثانوياً ◐** برابطها وثقة منخفضة (0.4)، ثم
+    النتائج العامة. لا نطاقات مُفضَّلة => سلوك `web_search` القياسي حرفياً (لا
+    كسر توافق). لا اختلاق: الفشل يبقى فجوة معلنة كالأصل.
+
+    التكلفة مرئية ومسقوفة (تدقيق مراجعة، عائلة الدرسين ١٦/٢٦ — لا إنفاق خفيّ):
+    كل نداء `web_search` (أساسي + كل site: فرعيّ) يُحسَب `live_fetches` في عدّاد
+    اقتصاد البيانات (`silk_context`)، وعدد الاستعلامات الفرعية مسقوف بـ
+    `_MAX_PREFERRED_SUBQUERIES` (اقتطاع مُعلَن لا صامت).
+    """
+    domains = [d.strip().lower() for d in (preferred_domains or [])
+               if d and d.strip()]
+    base = web_search(query, num=num, gl=gl, hl=hl)
+    if not domains:
+        return base
+    if len(domains) > _MAX_PREFERRED_SUBQUERIES:
+        log.info("preferred-domain site: sub-queries capped at %d (dropped %s)",
+                 _MAX_PREFERRED_SUBQUERIES, domains[_MAX_PREFERRED_SUBQUERIES:])
+        domains = domains[:_MAX_PREFERRED_SUBQUERIES]
+    base_real = [f for f in base if f.value is not None]
+
+    seen_links = {(_first_link(f) or "") for f in base_real}
+    preferred: list[DataPoint] = []
+    for dom in domains:
+        # استعلام مُقيَّد بالنطاق — مقتطفات Serper فقط (title/snippet/link)،
+        # لا جلب صفحةٍ كاملة (لا كشط، لا استخراج محتوى جُملة).
+        sub = web_search(f"{query} site:{dom}", num=3, gl=gl, hl=hl)
+        for f in sub:
+            if f.value is None:
+                continue
+            link = _first_link(f) or ""
+            host = _domain_of(link)
+            # المطابقة على النطاق الفعلي للرابط — تطابق تامّ أو نطاق فرعيّ فقط
+            # (`host == dom` أو `host.endswith("."+dom)`)، لا تضمين نصّي: مضيف
+            # مثل `ccacoalition.org.evil.com` **يُرفَض** (تدقيق مراجعة: انتحال
+            # نطاق عبر التضمين النصّي).
+            if not (host == dom or host.endswith("." + dom)):
+                continue
+            if link and link in seen_links:
+                continue
+            seen_links.add(link)
+            v = dict(f.value)
+            preferred.append(DataPoint(
+                v, f"{f.source} — {dom}", 0.4,
+                f"{_PREFERRED_NOTE} · {dom}", f.retrieved_at))
+    if not preferred and not base_real:
+        return base  # حافظ على DataPoint الفجوة المعلنة الأصلي
+    return preferred + base_real
+
+
+def _first_link(dp: object) -> str:
+    """الرابط من قيمة DataPoint بحث (dict فيه 'link') — '' إن غاب."""
+    v = getattr(dp, "value", None)
+    if isinstance(v, dict):
+        return str(v.get("link") or "")
+    return ""
 
 
 _CURRENCY_SYMBOLS = {

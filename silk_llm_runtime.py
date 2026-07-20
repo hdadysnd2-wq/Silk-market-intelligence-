@@ -269,15 +269,27 @@ def _tool_worldbank_indicator(args: dict, ctx: dict) -> list[DataPoint]:
 
 
 def _tool_wits_tariff(args: dict, ctx: dict) -> list[DataPoint]:
-    from silk_tariffs_agent import applied_tariff
+    # سلسلة التراجع (الموجة: دمج مصادر جديدة): WTO TTD → WITS → فجوة معلنة —
+    # WTO TTD يسدّ فجوة التعريفة الثنائية المزمنة في WITS للأسواق الأوروبية.
+    from silk_tariffs_agent import tariff_with_fallback
     hs, market = ctx.get("hs_code"), ctx["market"]
     if not hs:
         return [DataPoint(None, "World Bank WITS", 0.0,
                           "لا رمز HS مرتبط بهذه المهمة", _today())]
     partner = str(args.get("partner_iso3") or "SAU").upper()
     year = args.get("year")
-    return [applied_tariff(hs, market.iso3, partner_iso3=partner,
-                           year=int(year) if year else None)]
+    return [tariff_with_fallback(hs, market.iso3, partner_iso3=partner,
+                                 year=int(year) if year else None)]
+
+
+def _tool_imf_indicator(args: dict, ctx: dict) -> list[DataPoint]:
+    """مؤشر اقتصاد كلي من IMF WEO (نمو/تضخم/حساب جارٍ) — يثري المخاطر/الاقتصاد
+    الكلي بجانب صرف البنك الدولي (الموجة: دمج مصادر جديدة). فجوة معلنة عند الفشل."""
+    from silk_imf_agent import imf_indicator
+    market = ctx["market"]
+    metric = str(args.get("indicator") or "").strip()
+    year = args.get("year")
+    return [imf_indicator(market.iso3, metric, int(year) if year else None)]
 
 
 def _tool_trends_interest(args: dict, ctx: dict) -> list[DataPoint]:
@@ -336,8 +348,21 @@ def _tool_faostat_supply(args: dict, ctx: dict) -> list[DataPoint]:
     return [per_capita_supply(market.iso3, item, year=int(year) if year else None)]
 
 
+def _preferred_domains(ctx: dict) -> list[str]:
+    """النطاقات المُفضَّلة لبعثة هذا السياق (Wave 2) — من silk_missions،
+    استيراد كسول (missions يستورد هذا الملف، فالاستيراد على مستوى الوحدة دورة)."""
+    key = str(ctx.get("mission_key") or "").strip()
+    if not key:
+        return []
+    try:
+        from silk_missions import PREFERRED_DOMAINS
+    except Exception:  # noqa: BLE001 — غياب الخريطة لا يكسر البحث
+        return []
+    return list(PREFERRED_DOMAINS.get(key) or [])
+
+
 def _tool_web_search(args: dict, ctx: dict) -> list[DataPoint]:
-    from silk_websearch_agent import web_search
+    from silk_websearch_agent import web_search, web_search_prioritized
     query = str(args.get("query") or "").strip()
     if not query:
         return [DataPoint(None, "Web Search", 0.0, "استعلام فارغ", _today())]
@@ -346,7 +371,14 @@ def _tool_web_search(args: dict, ctx: dict) -> list[DataPoint]:
     # للسوق (gl/hl مشتقّان من السوق لا مُخمَّنان). فارغ => بحث عام كالسابق.
     gl = str(args.get("gl") or "").strip() or _locale_gl(ctx)
     hl = str(args.get("hl") or "").strip() or _locale_hl(ctx)
-    return web_search(query, num=min(max(num, 1), 10), gl=gl or None, hl=hl or None)
+    n = min(max(num, 1), 10)
+    # Wave 2 (دمج مصادر جديدة): بعثة لها نطاقات مُفضَّلة => انحياز مُقيَّد
+    # site: يُرتّب نتائجها أولاً موسومة دليلاً ثانوياً ◐؛ غيرها => بحث عام.
+    domains = _preferred_domains(ctx)
+    if domains:
+        return web_search_prioritized(query, num=n, gl=gl or None,
+                                      hl=hl or None, preferred_domains=domains)
+    return web_search(query, num=n, gl=gl or None, hl=hl or None)
 
 
 def _tool_gdelt_news(args: dict, ctx: dict) -> list[DataPoint]:
@@ -486,6 +518,22 @@ TOOLS: dict[str, dict] = {
                 "partner_iso3": {"type": "string",
                                  "description": "default 'SAU'"},
                 "year": {"type": "integer"}}},
+        },
+    },
+    "imf_indicator": {
+        "fn": _tool_imf_indicator,
+        "spec": {
+            "name": "imf_indicator",
+            "description": "مؤشر اقتصاد كلي من صندوق النقد الدولي (IMF WEO) "
+                           "للسوق المستهدف: نمو الناتج الحقيقي/التضخم/رصيد "
+                           "الحساب الجاري — يثري المخاطر والاقتصاد الكلي بجانب "
+                           "بيانات صرف البنك الدولي. كل قيمة موسومة بمصدرها "
+                           "وسنتها؛ الفشل فجوة معلنة لا اختلاق.",
+            "input_schema": {"type": "object", "properties": {
+                "indicator": {"type": "string",
+                              "enum": ["gdp_growth", "inflation",
+                                       "current_account"]},
+                "year": {"type": "integer"}}, "required": ["indicator"]},
         },
     },
     "trends_interest": {
@@ -1050,8 +1098,11 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
     تعليق `_run_loop`.
     """
     eff_budget = {**_DEFAULT_BUDGET, **(budget or {})}
+    # mission_key يصل الأدوات (خاصةً web_search) كي تطبّق النطاقات المُفضَّلة
+    # لكل بعثة (الموجة: دمج مصادر جديدة، Wave 2) — لا يفتح مسار استشهاد جديداً.
     ctx = {"market": market, "product": product, "hs_code": hs_code,
-          "extra_findings": extra_findings or [], "extra_context": extra_context}
+          "extra_findings": extra_findings or [], "extra_context": extra_context,
+          "mission_key": mission.get("key", "")}
     eff_mission = dict(mission)
     if instruction:
         eff_mission["instructions"] = (

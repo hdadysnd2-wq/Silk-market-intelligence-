@@ -54,7 +54,7 @@ def _key(url: str, params: dict | None) -> str:
 
 def cached_get(
     url: str, params: dict | None = None, ttl_seconds: int = 86400,
-    fetcher=None,
+    fetcher=None, headers: dict | None = None,
 ) -> dict | list | None:
     """جلب مع تخزين مؤقت — GET JSON, serving fresh cache or fetching live.
 
@@ -62,7 +62,11 @@ def cached_get(
     `fetcher(url, params)` يُحقن من طبقة البيانات لاستعمال الجلسة المجمّعة
     (keep-alive)؛ بدونه يسقط إلى requests.get (تشغيل مستقل). Injected pooled
     getter for connection reuse; falls back to requests.get standalone.
-    """
+
+    `headers` (اختياري): ترويسات طلب — لمصادر تمرّر مفتاحاً في ترويسة لا في
+    الاستعلام (WTO: `Ocp-Apim-Subscription-Key`)، فلا يظهر السرّ في الـURL.
+    **لا تدخل مفتاح التخزين** (مفتاح ثابت للخادم؛ إدراجه يمنع أي إصابة كاش
+    ويعيد السرّ للتجزئة بلا داعٍ) — نفس منطق الاستعلام أحادي المستأجر."""
     cache_dir = _cache_dir()
     path = os.path.join(cache_dir, _key(url, params) + ".json")
     try:  # سباق exists/getmtime — ملف يُحذف بينهما لا يُسقط الطلب
@@ -86,8 +90,17 @@ def cached_get(
 
     _count("live_fetches")  # محاولة حية — تُحسب ولو فشلت (كلفة نداء فعلية)
     try:
-        resp = (fetcher(url, params) if fetcher is not None
-                else requests.get(url, params=params, timeout=_TIMEOUT))
+        # headers شرطيّ: بلا ترويسات يبقى النداء مطابقاً حرفياً للتوقيع القديم
+        # (لا يكسر مستدعياً/محاكاةً قائمةً بتوقيع الوسيطين) — الترويسات مسار
+        # WTO الجديد وحده.
+        if fetcher is not None:
+            resp = (fetcher(url, params, headers=headers)
+                    if headers is not None else fetcher(url, params))
+        elif headers is not None:
+            resp = requests.get(url, params=params, headers=headers,
+                                timeout=_TIMEOUT)
+        else:
+            resp = requests.get(url, params=params, timeout=_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
     except Exception as exc:  # network/HTTP/JSON — never crash, never fabricate

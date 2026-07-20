@@ -75,6 +75,35 @@ $1.5; the ~$3 the owner was billed is the honest cost of a complete report, not 
 overcharge. The target must be re-baselined against a run that actually succeeds
 end-to-end — which is the #6 live re-run gate.*
 
+### D-07 — New data-sources integration (six owner sites)
+
+**WAVE 0 triage (read-only).** Each owner-designated site was assessed for official
+API + auth + rate limits + ToS on automated access. Findings and per-source verdict:
+
+| # | Site | API? / Auth | ToS on automation | Verdict |
+|---|---|---|---|---|
+| 1 | ttd.wto.org (WTO Tariff & Trade Data) | **Yes** — WTO Timeseries API (`api.wto.org/timeseries/v1`), free **subscription key** (`Ocp-Apim-Subscription-Key`, register at apiportal.wto.org), rate-limited per plan | Automated access permitted **with a key** | **INTEGRATED-with-artifact** — `silk_wto_tariff.py`, primary in the tariff fallback chain (closes the WITS EU bilateral gap, e.g. NLD HS 080410). Key-gated: no key → declared gap, zero network. |
+| 2 | imf.org (IMF DataMapper / WEO) | **Yes** — `imf.org/external/datamapper/api/v1`, **free, no key**, generous limits | Public JSON API, automation permitted | **INTEGRATED-with-artifact** — `silk_imf_agent.py`, GDP growth / inflation / current-account into risk + macro missions. |
+| 3 | globalbusinessculture.com | No API (content site) | Copyright content — no bulk fetch | **SEARCH-BIASED** — `consumer_culture` preferred domain (site: bias, snippets + link only). |
+| 4 | tradingeconomics.com | API is **PAID**; scraping **violates ToS** | **No** bulk-fetch/scrape | **SEARCH-BIASED (citation-level only)** — `risk_news` preferred domain; NEVER fetched/scraped. Noted here so no later command reaches for its API. |
+| 5 | ccacoalition.org/ar/resources | No API (content/resources site) | Copyright content — no bulk fetch | **SEARCH-BIASED** — `customs_requirements` + `risk_news` preferred domain (environmental/climate-compliance angle, ◐ secondary). |
+| 6 | data.albankaldawli.org | **Not a new source** — Arabic UI of the SAME World Bank DB already integrated via `api.worldbank.org` | n/a | **REJECTED as a data source (zero new data)** — reused only as the client-facing WB citation URL for Arabic readability (`public_source_url(..., arabic=True)`). |
+
+**Contracts (all six follow the platform contracts — this is now a lesson, LESSONS #32):**
+a new source is **gap-declared on failure** (never fabricates), **ops-logged**
+(`record_service_failure`, appears in `/ops/last-errors`), **cached**
+(`silk_cache.cached_get`), **agent-panel gated** (rides existing mission gating),
+and **ToS-clean** (no scraping of copyright content; paid/keyed APIs degrade cleanly
+without the key).
+
+*Evidence bucket (LAW §2): **hermetic only** — the environment's network policy
+blocks all external hosts (only package registries reachable), so live IMF/WTO
+probes were impossible this session. WAVE 0 findings are `static code review` +
+public-API-documentation knowledge, not `direct reproduction`. Lock-tests validate
+each parser against a **recorded response shape**
+(`tests/test_wave_datasources_integration.py`); the live-shape confirmation is a
+pending owner/deploy step, not claimed here.*
+
 ---
 
 ## Execution order (gated — do not skip ahead)
