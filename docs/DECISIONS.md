@@ -154,3 +154,33 @@ live proof (e.g. A1–A3 closed by Command #2).
 | `/products/snapshot` — any internal callers? | **None.** Route defined `api.py:1675` and calls `silk_snapshot.quick_snapshot` at `api.py:1719` only inside that endpoint. No other module imports `silk_snapshot`. External callers: frontend `web/index.html:465,484`, acceptance harness `tools/acceptance_run.py:253`, tests only. → A1 may delete the endpoint + UI (module has no other consumer). | ☑ |
 | `"…"` truncation — storage or renderer? | **Both.** Assembly/STORAGE: `silk_llm_runtime._truncate_at_word` `:648-658` via `silk_market_analyst.py:140,215` (summary capped at 3000 before store/writer). RENDER: `silk_reports.py:81-92` (`_clean_report_text`, default 300). Both retreat to word boundary (mid-word bug fixed) but still append "…". | ☑ |
 | WGI — mission-fetch bug or writer-mapping bug? | **Writer-mapping bug.** Fetch is FIXED + lock-tested (`silk_data_layer.py:382-385,412-444`; `tests/test_technical_mission_failures_item2.py:39,58,76`). §9 has no deterministic binding of stored WGI facts — the writer prompt sources §9 from the `risk_news` mission's own findings `silk_ai_judge.py:918-921`, so numeric PV.EST/RL.EST + جودة التنظيم are absent when the mission doesn't surface them. | ☑ |
+
+---
+
+## Report Quality Engine Upgrade (زبدة الفول السوداني/اليمن — تدقيق المالك التحريري)
+
+**Principle (LESSON #32): engine fixes over report edits.** Every editorial defect
+family becomes a writer-contract rule + a deterministic view-layer enforcement + a
+lock-test against a production-shape reproduction blob (`tools/canonical_yemen.py`) —
+never a hand-edit of one report. All rows below are **hermetic-only** (rung 1 green);
+the end-to-end **live regeneration** (correct HS family via the new gate + measured
+tone/length + clean exports) is the owner's paid gate (LAW §2 bucket 2), pending.
+
+| Item | Status | Artifact (file:line / test) |
+|---|---|---|
+| 1.1 Verdict badge==body (AI-first single source) | DONE-with-artifact (hermetic) | `silk_render.py` `_deep_research_view` v_raw AI-first; `test_report_quality_upgrade.py::test_w1_1_verdict_badge_matches_body_verdict` |
+| 1.2 HS pre-flight confirmation gate (discriminating terms) | DONE-with-artifact (hermetic) | `silk_hs_confirm.confirm_hs`; `api.py` /research 422 gate behind `SILK_HS_CONFIRM_GATE`; tests `test_w1_2_*` (classifier + gate + no-fabrication). **Image-intake path: NOT DONE** (gate covers text /research; product-intake wiring deferred). |
+| 1.3 Invalidated-numbers reframe + confidence cap | DONE-with-artifact (hermetic) | `silk_render._deep_research_view` (single `CONTEXTUAL_TAG` note + `SILK_HS_FLAGGED_CONF_CAP`); writer reframe rule; `test_w1_3_*` |
+| 2.1 Stale-data inline tag + `SILK_STALE_DATA_YEARS` | DONE-with-artifact (hermetic) | `silk_render._tag_stale_years`; `test_w2_1_*` |
+| 2.2 Seasonality gap declared once + closure step | DONE-with-artifact (hermetic) | `silk_trends_agent.SEASONALITY_GAP_CLOSURE` + `silk_render._has_seasonality_gap`; `test_w2_2_*` |
+| 2.3 Weak-trends auto-broaden to category family | DONE-with-artifact (hermetic) | `silk_trends_agent.broaden_if_weak` (data-driven related term); `test_w2_3_*` |
+| 3.1 Per-row price reason + single unlock | DONE-with-artifact (hermetic) | `silk_render._price_row_reason` + `PRICE_UNLOCK_LINE`; `test_w3_1_*` |
+| 3.2 HHI context-only under flagged code | DONE-with-artifact (hermetic) | `silk_render` `concentration_context_only` + conf cap; `test_w3_2_*`. (Ranker /analyze HHI-score exclusion out of Yemen /research scope — noted.) |
+| 4.1 De-duplicate HS warning (≤1 full note) | DONE-with-artifact (hermetic) | single `CONTEXTUAL_TAG` in limits + writer «انظر الملاحظة المنهجية»; `test_w4_1_*` |
+| 4.2 Canonical section order | DONE-with-artifact (hermetic) | `silk_ai_judge._REPORT_SECTIONS`; `test_w4_2_*` |
+| 4.3 Length budget (~30% tighter) | DONE-with-artifact (hermetic, contract) | `silk_style_contract.TARGET_TIGHTEN_PCT`/`PROFESSIONAL_TONE_RULE`; `test_w4_3_*`. **Measured word-count delta: owner live-regen gate.** |
+| 5.1 Anti-alarmist tone + reviewer flag | DONE-with-artifact (hermetic) | `silk_style_contract.ALARMIST_PHRASES` + `silk_ai_judge._alarmist_issues` (non-blocking); `test_w5_1_*` |
+| 5.2 Sentence-length guidance | DONE-with-artifact (hermetic) | `silk_style_contract.SENTENCE_MAX_WORDS` + reviewer line; `test_w5_2_*` |
+| 6.1 Structured flip conditions + roadmap link | DONE-with-artifact (hermetic) | `silk_render._flip_conditions` (`view.flip_conditions`), rendered md + operator docx; writer roadmap-link rule; `test_w6_1_*` |
+| 6.2 Exec-summary cap (verdict+flips+3 nums+3 risks) | DONE-with-artifact (writer contract) | `silk_ai_judge` deep_report 6.2 rule; `test_w6_2_*`. **Export length-cap enforcement + measured: owner live-regen gate.** |
+| FINAL — live end-to-end regeneration | NOT DONE (owner paid gate) | Requires live server + paid writer tail. All engine fixes hermetic-green; regenerated committed samples updated (§10.6). |

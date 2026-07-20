@@ -593,6 +593,28 @@ def _guard_analyze_persist_canonical_db():
         importlib.reload(silk_storage)
 
 
+def _guard_report_quality_upgrade():
+    """LESSONS ٣٢ — إصلاحُ المحرّك لا تحرير التقرير (تدقيق زبدة الفول السوداني/
+    اليمن): كل عائلة عيبٍ تحريريّ صارت إنفاذًا حتميًّا. الحارس السلوكي على
+    مدوّنة اليمن الإنتاجية الشكل: (١) عقد التأكيد يُعلِّم الرمز الخاطئ ولا
+    يُعلِّم الصحيح؛ (٢) الرمز المُعلَّم يُعيد التأطير بملاحظةٍ واحدة + يسقف
+    الثقة؛ (٣) شرطا قلب الحكم حقلان مهيكلان."""
+    import silk_render as R
+    from silk_hs_confirm import confirm_hs, is_flagged, CONTEXTUAL_TAG
+    from tools.canonical_yemen import yemen_research_blob
+    # (١) عقد التأكيد: الصفة المميّزة لا تخسر أمام كلمة ثانوية عارية.
+    assert is_flagged(confirm_hs("زبدة الفول السوداني", "040510"))
+    assert confirm_hs("تمور", "080410")["confirmed"] is not False
+    # (٢) التأطير + سقف الثقة على المدوّنة، بملاحظةٍ واحدة (لا تكرار).
+    dr = R.build_view(yemen_research_blob())["deep_research"]
+    assert dr["hs_flagged"] is True
+    assert dr["verdict"]["confidence"] <= 0.5
+    assert sum(1 for l in dr["limits"] if CONTEXTUAL_TAG in l) == 1
+    # (٣) شرطا قلب الحكم المهيكلان (حكم مراقبة).
+    assert len(dr["flip_conditions"]) == 2
+    assert all(c.get("closes_via") for c in dr["flip_conditions"])
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -630,6 +652,7 @@ _LESSONS = {
     29: _guard_report_arabic_shape_a4,      # Wave 2 — «سلك» متّصلة + A4
     30: _guard_client_template_no_hardcoded_product,  # Wave 2 — لا منتج مثبَّت في القوالب
     31: _guard_analyze_persist_canonical_db,   # /analyze — التخزين للقاعدة القانونية لا قرصٍ نسبيّ فانٍ
+    32: _guard_report_quality_upgrade,         # ترقية جودة التقرير — إصلاحُ المحرّك لا تحرير التقرير
 }
 
 _TRAPS = [

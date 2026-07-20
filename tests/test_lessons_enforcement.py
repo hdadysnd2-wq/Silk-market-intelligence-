@@ -256,6 +256,21 @@ _SYMBOL_ANCHORS_EXTRA = [
                             'data-act="pdf"']),
     (19, "api.py", ["report.pdf", 'media_type="application/pdf"']),
     (19, "Dockerfile", ["libreoffice-writer"]),
+    # البند ٣٢ — إصلاحُ المحرّك لا تحرير التقرير (تدقيق زبدة الفول السوداني/
+    # اليمن): كل عائلة عيبٍ تحريريّ صارت قاعدةَ عقدٍ + إنفاذ عرضٍ حتميّ + قفلًا.
+    (32, "silk_hs_confirm.py", ["def confirm_hs", "def is_flagged",
+                                "CONTEXTUAL_TAG"]),
+    (32, "silk_render.py", ["_tag_stale_years", "_flip_conditions",
+                            "_price_row_reason", "_has_seasonality_gap"]),
+    (32, "silk_trends_agent.py", ["def broaden_if_weak",
+                                  "SEASONALITY_GAP_CLOSURE"]),
+    (32, "silk_style_contract.py", ["ALARMIST_PHRASES",
+                                    "PROFESSIONAL_TONE_RULE"]),
+    (32, "silk_ai_judge.py", ["def _alarmist_issues"]),
+    (32, "tools/canonical_yemen.py", ["def yemen_research_blob"]),
+    (32, "tests/test_report_quality_upgrade.py",
+     ["def test_w1_2_hs_confirm_flags_peanut_butter_but_not_valid_matches",
+      "def test_w6_1_watch_verdict_has_structured_flip_conditions"]),
 ]
 
 
