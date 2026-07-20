@@ -52,7 +52,7 @@ def analyze(product_name: str, countries: list[dict] | None = None,
             with_risk: bool = False, with_research: bool = False,
             product_card: dict | None = None,
             hs_code: str | None = None,
-            persist: bool = False, db_path: str = "data/silk.db",
+            persist: bool = False, db_path: str | None = None,
             check_quality: bool = True) -> dict:
     """حلّل منتجًا عبر الأسواق — full preliminary market analysis for one product.
 
@@ -91,7 +91,13 @@ def analyze(product_name: str, countries: list[dict] | None = None,
                       All of these are ADDITIVE context — they never change total_score.
       persist       — init_db + save_analysis(db_path); attaches result['analysis_id'].
       check_quality — annotate each market with quality_flags (flags only, no number edits).
-      db_path       — SQLite path for persist.
+      db_path       — SQLite path for persist. **افتراضيًا None** كي يُحسَم مسار
+                      القاعدة وقت النداء عبر `silk_storage._db_path()` (يحترم
+                      `SILK_DATA_DIR`/`SILK_DB` على القرص الدائم) — تمامًا مثل
+                      مسار `/research`. قيمةٌ صريحة (اختبارات) تُحترَم. لا يُثبَّت
+                      مسارٌ نسبيّ هنا: تثبيت `"data/silk.db"` سابقًا كان يكتب
+                      لقرصٍ فانٍ نسبةً للمجلد الجاري بينما القرّاء يقرؤون
+                      `/data/silk.db` — فيخرج المعرّف «1» ثم 404 (LESSONS ٣١).
     All optional layers degrade gracefully offline (provenance-tagged None, no fabrication).
     """
     year = year or _default_year()
@@ -611,8 +617,13 @@ def _annotate_quality(result: dict) -> None:
         log.warning("quality annotation skipped: %s", e)
 
 
-def _persist(result: dict, db_path: str) -> None:
-    """خزّن النتيجة — init_db + save_analysis; attaches result['analysis_id']."""
+def _persist(result: dict, db_path: str | None) -> None:
+    """خزّن النتيجة — init_db + save_analysis; attaches result['analysis_id'].
+
+    `db_path=None` (الافتراضي من `analyze`) يُمرَّر كما هو إلى `init_db`/
+    `save_analysis` فيحسمان المسار عبر `silk_storage._db_path()` — نفس القرص
+    الدائم الذي يقرأ منه `/analyses/{id}` و`/research`. لا نُثبِّت مسارًا نسبيًّا
+    هنا كي لا نكتب لقرصٍ فانٍ يقرأ منه أحدٌ (LESSONS ٣١)."""
     try:
         from silk_storage import init_db, save_analysis
         init_db(db_path)

@@ -14,9 +14,16 @@
   5. GET /analyses/{id}/report.pdf  → 200 + توقيع %PDF (§3، أمر العمل الرئيس):
      يُثبِت أن محرّك التحويل (LibreOffice) يعمل حياً — لا يُكتشَف هرمتياً.
      503 هنا = محرّك التحويل غائب على النشر (فشل صريح لا صمت).
+  6. **مسار /analyze الحيّ (Guardrail 1، LESSONS ٣١):** POST /analyze (مسح سريع
+     مجانيّ، persist=true) → analysis_id حقيقيّ → GET /analyses/{id} ينجح →
+     نفس فحوص التصدير الثلاثة عليه → يظهر في «بحوثي السابقة». هذا الخطُّ لم
+     يُدخَّن حيًّا قط (Commands #1-6 غطّت /research حصرًا) فكتب لقرصٍ فانٍ أعاد
+     المعرّف «1» ثم 404 — الآن يُثبَت حيًّا مثل /research تمامًا.
 
 الاستعمال:
     python3 tools/post_deploy_smoke.py https://<railway-host>  [--key SILK_API_KEY]
+                                        [--analyze-product "اسم منتج"]
+                                        [--skip-analyze]
 
 يخرج برمز 0 عند نجاح كل ما هو قابل للفحص، و1 عند أوّل فشل صريح (مع سبب).
 لا يختلق نجاحاً: تحليل غير موجود = فحص تصدير «متخطّى» معلَن لا «ناجح».
@@ -45,10 +52,73 @@ def _get(base: str, path: str, key: str | None, raw: bool = False):
         return None, str(e).encode()
 
 
+def _post(base: str, path: str, payload: dict, key: str | None,
+          timeout: int = 180):
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(base.rstrip("/") + path, data=data,
+                                 method="POST")
+    req.add_header("Content-Type", "application/json")
+    if key:
+        req.add_header("X-API-Key", key)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+    except Exception as e:  # noqa: BLE001
+        return None, str(e).encode()
+
+
+def _check_exports(base: str, aid: int, key: str | None,
+                   fails: list[str]) -> None:
+    """فحوص التصدير الثلاثة لمعرّفٍ محفوظ — md/docx/pdf. تُلحِق أي فشل صريح
+    بـ`fails` (لا تختلق نجاحًا). 404 هنا = التحليل غير موجود (جذر LESSONS ٣١)."""
+    # report.md
+    st, body = _get(base, f"/analyses/{aid}/report.md", key)
+    if st != 200 or not (body or b"").strip():
+        fails.append(f"report.md id={aid}: HTTP {st}, حجم={len(body or b'')}")
+    else:
+        print(f"  ✓ report.md 200 — {len(body)} بايت")
+
+    # report.docx — عائلة 501: هنا يُلتقَط الفشل الحيّ
+    st, body = _get(base, f"/analyses/{aid}/report.docx", key)
+    if st != 200:
+        fails.append(f"report.docx id={aid}: HTTP {st} — {(body or b'')[:200]!r}")
+    elif not (body[:2] == b"PK"):     # docx = حاوية ZIP
+        fails.append(f"report.docx id={aid}: 200 لكن ليس ملف ZIP/docx صالحاً")
+    else:
+        opened = "غير مفحوص (python-docx غير مثبّتة محلياً)"
+        try:
+            import docx  # noqa: F401
+            from docx import Document
+            Document(io.BytesIO(body))
+            opened = "يُفتَح عبر python-docx"
+        except ImportError:
+            pass
+        except Exception as e:  # noqa: BLE001
+            fails.append(f"report.docx id={aid}: 200 لكن python-docx فشل فتحه: {e}")
+            opened = "فشل الفتح"
+        print(f"  ✓ report.docx 200 — {len(body)} بايت، {opened}")
+
+    # report.pdf — §3: المُسلَّم النهائي؛ يُثبِت أن soffice يعمل حياً
+    st, body = _get(base, f"/analyses/{aid}/report.pdf", key)
+    if st != 200:
+        fails.append(f"report.pdf id={aid}: HTTP {st} — {(body or b'')[:200]!r} "
+                     "(503 = محرّك تحويل PDF غائب على النشر)")
+    elif not ((body or b"")[:5] == b"%PDF-"):
+        fails.append(f"report.pdf id={aid}: 200 لكن ليس ملف PDF صالحاً")
+    else:
+        print(f"  ✓ report.pdf 200 — {len(body)} بايت، توقيع %PDF")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("base", help="live base URL, e.g. https://x.up.railway.app")
     ap.add_argument("--key", default=None, help="X-API-Key if auth is enabled")
+    ap.add_argument("--analyze-product", default="زبدة الفول السوداني",
+                    help="اسم منتج المسح السريع الحيّ (خطوة /analyze)")
+    ap.add_argument("--skip-analyze", action="store_true",
+                    help="تخطَّ خطوة /analyze الحيّة (مثلاً بيئة بلا شبكة مصادر)")
     args = ap.parse_args()
     base, key = args.base, args.key
     fails: list[str] = []
@@ -81,42 +151,42 @@ def main() -> int:
     aid = completed[0]["id"]
     print(f"✓ /analyses 200 — أحدث تحليل مكتمل id={aid}")
 
-    # 3) report.md
-    st, body = _get(base, f"/analyses/{aid}/report.md", key)
-    if st != 200 or not (body or b"").strip():
-        fails.append(f"report.md id={aid}: HTTP {st}, حجم={len(body or b'')}")
-    else:
-        print(f"✓ report.md 200 — {len(body)} بايت")
+    # 3-5) تصديرات أحدث تحليل مكتمل (قد يكون /research)
+    _check_exports(base, aid, key, fails)
 
-    # 4) report.docx — عائلة 501: هنا يُلتقَط الفشل الحيّ
-    st, body = _get(base, f"/analyses/{aid}/report.docx", key)
-    if st != 200:
-        fails.append(f"report.docx id={aid}: HTTP {st} — {(body or b'')[:200]!r}")
-    elif not (body[:2] == b"PK"):     # docx = حاوية ZIP
-        fails.append(f"report.docx id={aid}: 200 لكن ليس ملف ZIP/docx صالحاً")
+    # 6) مسار /analyze الحيّ (Guardrail 1، LESSONS ٣١): مسح سريع مجانيّ يُنشئ
+    #    صفًّا حقيقيًّا، ثم إعادة فتحه + تصديره — الجذر بالضبط الذي كان يُرجِع
+    #    المعرّف «1» ثم 404 لأنّ /analyze كان يكتب لقرصٍ فانٍ لا يقرأ منه أحد.
+    if args.skip_analyze:
+        print("⊘ خطوة /analyze الحيّة متخطّاة (--skip-analyze)")
     else:
-        opened = "غير مفحوص (python-docx غير مثبّتة محلياً)"
-        try:
-            import docx  # noqa: F401
-            from docx import Document
-            Document(io.BytesIO(body))
-            opened = "يُفتَح عبر python-docx"
-        except ImportError:
-            pass
-        except Exception as e:  # noqa: BLE001
-            fails.append(f"report.docx id={aid}: 200 لكن python-docx فشل فتحه: {e}")
-            opened = "فشل الفتح"
-        print(f"✓ report.docx 200 — {len(body)} بايت، {opened}")
-
-    # 5) report.pdf — §3: المُسلَّم النهائي؛ يُثبِت أن soffice يعمل حياً
-    st, body = _get(base, f"/analyses/{aid}/report.pdf", key)
-    if st != 200:
-        fails.append(f"report.pdf id={aid}: HTTP {st} — {(body or b'')[:200]!r} "
-                     "(503 = محرّك تحويل PDF غائب على النشر)")
-    elif not ((body or b"")[:5] == b"%PDF-"):
-        fails.append(f"report.pdf id={aid}: 200 لكن ليس ملف PDF صالحاً")
-    else:
-        print(f"✓ report.pdf 200 — {len(body)} بايت، توقيع %PDF")
+        st, body = _post(base, "/analyze",
+                         {"product": args.analyze_product, "persist": True},
+                         key)
+        if st != 200:
+            fails.append(f"POST /analyze: HTTP {st} — {(body or b'')[:200]!r}")
+        else:
+            res = json.loads(body)
+            qid = res.get("analysis_id")
+            if qid is None:
+                fails.append("POST /analyze: 200 لكن بلا analysis_id "
+                             "(persist=true لم يُحفَظ — جذر LESSONS ٣١)")
+            else:
+                print(f"✓ POST /analyze 200 — analysis_id={qid} "
+                      f"(«{args.analyze_product}»)")
+                st2, _ = _get(base, f"/analyses/{qid}", key)
+                if st2 != 200:
+                    fails.append(f"GET /analyses/{qid}: HTTP {st2} "
+                                 "(404 = الصفّ غير موجود = الجذر)")
+                else:
+                    print(f"  ✓ GET /analyses/{qid} 200 — إعادة الفتح تعمل")
+                    _check_exports(base, qid, key, fails)
+                st3, lb = _get(base, "/analyses", key)
+                ids = {r.get("id") for r in json.loads(lb)} if st3 == 200 else set()
+                if qid not in ids:
+                    fails.append(f"analysis_id={qid} لا يظهر في «بحوثي السابقة»")
+                else:
+                    print(f"  ✓ id={qid} يظهر في «بحوثي السابقة»")
 
     if fails:
         print("\n✗ فشل فحص الدخان:")
