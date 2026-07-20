@@ -1119,6 +1119,39 @@ def _stale_years_threshold() -> int:
     return datetime.date.today().year - n
 
 
+# Wave 6.1 (تدقيق زبدة الفول السوداني/اليمن): حين يكون الحكم «مراقبة»/«مشروط»،
+# يجب تسمية **شرطَي قلب الحكم** كحقلين مهيكلين (لا نثر حظّ): بيانات استيراد
+# موثوقة تحت الرمز الصحيح (إن كان الرمز مُعلَّماً)، وموزّع محلي مؤكَّد تعاقدياً
+# بالاسم. كل شرط يحمل خطوة الإغلاق التي تُقفله فتربطه خارطة الـ٩٠ يوماً. مبنيّ
+# على البيانات (لا قائمة منتج صلبة) — يُستهلَك في العرض/المُصدِّرات/المختصر.
+FLIP_CONDITIONS_HEADING = "شرطا قلب الحكم"
+
+
+def _flip_conditions(verdict_tone: str, hs_flagged: bool,
+                     importer_leads: dict, market_ar: str) -> list[dict]:
+    """اشتقّ شرطَي قلب الحكم المهيكلين — يُفعَّل فقط للحكم watch/conditional.
+
+    كل شرط: {condition, closes_via, met}. `met=True` حين يوجد دليل مرصود
+    يُغلقه فعلاً (لا اختلاق) — موزّع بجهة اتصال مؤكَّدة => شرط الموزّع محقَّق."""
+    if verdict_tone not in ("watch", "conditional"):
+        return []
+    conds: list[dict] = []
+    if hs_flagged:
+        conds.append({
+            "condition": "توفّر بيانات استيراد موثوقة تحت رمز HS الصحيح",
+            "closes_via": "إعادة تصنيف الرمز ثم سحب واردات كومتريد تحته",
+            "met": False})
+    leads = (importer_leads or {}).get("leads") or []
+    has_confirmed = any(
+        isinstance(l, dict) and (l.get("phone") or l.get("email"))
+        and (l.get("title") or l.get("name")) for l in leads)
+    conds.append({
+        "condition": f"التعاقد مع موزّع محلي مؤكَّد بالاسم في {market_ar or 'السوق'}",
+        "closes_via": "خدمة تحقّق جهات الاتصال المدفوعة ثم عقد موزّع",
+        "met": bool(has_confirmed)})
+    return conds
+
+
 def _has_seasonality_gap(missions: dict) -> bool:
     """هل رصدت بعثة فجوةَ موسمية (قيمة None + ملاحظة تخصّ الموسمية/رمضان)؟
 
@@ -1382,6 +1415,12 @@ def _deep_research_view(result: dict) -> dict | None:
         # Wave 3.2: عند تعليم الرمز، التركّز (HHI) سياقٌ فقط لا إشارة تسجيل
         # للحكم لهذا المنتج — الشارة تستهلكها المُصدِّرات.
         "concentration_context_only": bool(hs_flagged),
+        # Wave 6.1: شرطا قلب الحكم المهيكلان (حكم مراقبة/مشروط) — يعرضهما كل
+        # مُصدِّر «شرطا قلب الحكم»، وتربط خارطة الـ٩٠ يوماً كل خطوة بأيّهما تُغلق.
+        "flip_conditions": _flip_conditions(
+            verdict_tone, hs_flagged,
+            dr.get("importer_leads") or {},
+            (result.get("market") or {}).get("name_ar") or ""),
         "report": {"text": _report_text_glossed,
                   "review_cycles": report_out.get("review_cycles", 0),
                   "unresolved_notes": clean_unresolved,

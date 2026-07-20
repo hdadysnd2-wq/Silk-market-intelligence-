@@ -332,6 +332,77 @@ def test_w5_2_sentence_length_guidance_present():
     assert "القصير" in SC.PROFESSIONAL_TONE_RULE or "تُقسَم" in SC.PROFESSIONAL_TONE_RULE
 
 
+# ════════════════════ الموجة ٦ — عقد الحكم وخارطة الطريق ════════════════════
+
+def test_w6_1_watch_verdict_has_structured_flip_conditions():
+    """6.1 — حكم «مراقبة» => شرطا قلب الحكم حقلان مهيكلان: بيانات تحت الرمز
+    الصحيح (لأن الرمز مُعلَّم) + موزّع محلي مؤكَّد."""
+    import silk_render as R
+    dr = R.build_view(yemen_research_blob())["deep_research"]
+    flips = dr["flip_conditions"]
+    assert len(flips) == 2
+    conds = " ".join(c["condition"] for c in flips)
+    assert "الصحيح" in conds and "موزّع" in conds
+    # كل شرط بخطوة إغلاق + حالة تحقّق (لا اختلاق: الموزّع غير محقَّق بلا جهات اتصال).
+    for c in flips:
+        assert c["closes_via"] and c["met"] is False
+
+
+def test_w6_1_go_verdict_has_no_flip_conditions():
+    """6.1 — حكم GO لا يحمل شرطي قلب (البنية مشروطة بمراقبة/مشروط فقط)."""
+    import silk_render as R
+    blob = yemen_research_blob()
+    blob["deep_research"]["verdict"] = {"verdict": "GO", "confidence": 0.8,
+                                        "ai": {"verdict": "GO", "reasoning": "x"}}
+    # رمز مؤكَّد كي لا يُسقَف/يُعلَّم.
+    blob["product"] = "تمور"
+    blob["hs_code"] = "080410"
+    blob.pop("hs_confirmation", None)
+    dr = R.build_view(blob)["deep_research"]
+    assert dr["flip_conditions"] == []
+
+
+def test_w6_1_flip_conditions_render_in_markdown_export():
+    """6.1 — شرطا قلب الحكم يظهران في تصدير Markdown تحت عنوانهما."""
+    import silk_render as R
+    import silk_reports as RP
+    from silk_render import FLIP_CONDITIONS_HEADING
+    view = R.build_view(yemen_research_blob())
+    md = RP.render_markdown(view) if hasattr(RP, "render_markdown") else None
+    if md is None:
+        md = RP._md_deep_research(view, [])
+    assert FLIP_CONDITIONS_HEADING in md
+    assert "الصحيح" in md and "موزّع" in md
+
+
+def test_w6_1_distributor_condition_met_when_confirmed_lead_exists():
+    """6.1 — لا اختلاق: وجود موزّع بجهة اتصال مؤكَّدة => شرط الموزّع محقَّق."""
+    import silk_render as R
+    blob = yemen_research_blob()
+    blob["deep_research"]["importer_leads"] = {
+        "leads": [{"title": "موزّع عدن", "phone": "+967-1-000000"}],
+        "path": "scraper"}
+    dr = R.build_view(blob)["deep_research"]
+    dist = [c for c in dr["flip_conditions"] if "موزّع" in c["condition"]][0]
+    assert dist["met"] is True
+
+
+def test_w6_2_writer_prompt_caps_exec_summary_and_requires_flip_and_risks():
+    """6.2 — عقد الكاتب يفرض سقف صفحتين للخلاصة التنفيذية + الحكم + شرطي
+    القلب + ٣ أرقام + ٣ مخاطر."""
+    import silk_ai_judge as J
+    captured = {}
+    with mock.patch.object(J, "available", return_value=True), \
+         mock.patch.object(J, "_call",
+                           side_effect=lambda s, u, **k: captured.setdefault("u", u) or "## 1. خلاصة\nx"):
+        J.deep_report({}, "م", {"verdict": "WATCH"}, "زبدة الفول السوداني",
+                      "اليمن", hs_code="040510")
+    u = captured["u"]
+    assert "شرطا قلب الحكم" in u
+    assert "صفحتين" in u
+    assert "ثلاثة مخاطر" in u and "ثلاثة أرقام" in u
+
+
 # ════════════════════ بوّابة /research (1.2 — قبل الإنفاق) ════════════════════
 
 def _client(**env):
