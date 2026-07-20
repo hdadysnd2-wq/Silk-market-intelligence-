@@ -1189,6 +1189,42 @@ def _deep_research_view(result: dict) -> dict | None:
                       f"{_strip_internal_plumbing(verdict['ai_note'])}")
     v_raw = (verdict.get("ai") or {}).get("verdict") or verdict.get("verdict") or ""
     verdict_tone = _verdict_tone(v_raw)
+    # Wave 1.3/3.2/4.1 (تدقيق زبدة الفول السوداني/اليمن): حين يُعلَّم رمز HS
+    # غير مؤكَّد (صفة المنتج المميّزة غائبة عن وصف الرمز، silk_hs_confirm)،
+    # كل رقم مشتقّ من كومتريد (حجم السوق/HHI/حصص/CAGR) يُعاد تأطيره «مؤشر
+    # سياقي لا مقياس فعلي» بملاحظة **منهجية واحدة** (لا تكرار في كل قسم،
+    # 4.1)، وثقة الحكم تُسقَف (1.3)، وHHI يخرج من مدخلات تسجيل الحكم (3.2).
+    # العقد يُحسَب مرة إن غاب من المدوّنة (نتائج مخزّنة قديمة) — لا اختلاق:
+    # confirmed=None (غير قابل للتأكيد) لا يُعامَل تعليماً.
+    from silk_hs_confirm import confirm_hs, is_flagged, CONTEXTUAL_TAG
+    hs_conf = result.get("hs_confirmation")
+    if not isinstance(hs_conf, dict) and result.get("hs_code"):
+        try:
+            hs_conf = confirm_hs(str(result.get("product") or ""),
+                                 str(result.get("hs_code") or ""))
+        except Exception:
+            hs_conf = None
+    hs_flagged = is_flagged(hs_conf)
+    if hs_flagged:
+        # سقف ثقة الحكم عند تعليم الرمز — config-driven، لا يرفع ثقة قط.
+        try:
+            _cap = float(os.environ.get("SILK_HS_FLAGGED_CONF_CAP", "0.5"))
+        except (TypeError, ValueError):
+            _cap = 0.5
+        _c = verdict.get("confidence")
+        if isinstance(_c, (int, float)) and _c > _cap:
+            verdict = {**verdict, "confidence": _cap}
+        _ai = verdict.get("ai")
+        if isinstance(_ai, dict) and isinstance(_ai.get("confidence"), (int, float)) \
+                and _ai["confidence"] > _cap:
+            verdict = {**verdict, "ai": {**_ai, "confidence": _cap}}
+        # ملاحظة منهجية واحدة (4.1) — تُضاف مرة واحدة إلى الحدود، لا في كل قسم.
+        _missing = "، ".join((hs_conf or {}).get("missing_terms") or [])
+        limits.insert(0, f"{CONTEXTUAL_TAG}: رمز HS {hs_conf.get('hs_code')} "
+                      f"(«{hs_conf.get('code_desc')}») لا يشمل صفة المنتج المميّزة"
+                      + (f" ({_missing})" if _missing else "")
+                      + " — تُقرأ أرقام الاستيراد والتركّز والحصص كمؤشر سياقي "
+                      "حتى تأكيد الرمز الصحيح.")
     _report_text_glossed, _glossary = _apply_merchant_language(
         _strip_internal_plumbing(report_out.get("report")))
     return {
@@ -1216,6 +1252,10 @@ def _deep_research_view(result: dict) -> dict | None:
         "verdict_tone": verdict_tone,
         "verdict_label": _VERDICT_LABELS_AR[verdict_tone],
         "verdict": verdict,
+        # Wave 1.3: عقد تأكيد رمز HS — يعرضه كل مُصدِّر/لوحة كي يعيد تأطير
+        # أرقام كومتريد «مؤشر سياقي» عند التعليم. None/غير مؤكَّد لا يُطأطئ شيئاً.
+        "hs_confirmation": hs_conf or {},
+        "hs_flagged": bool(hs_flagged),
         "report": {"text": _report_text_glossed,
                   "review_cycles": report_out.get("review_cycles", 0),
                   "unresolved_notes": clean_unresolved,

@@ -1,0 +1,171 @@
+"""بوابة تأكيد رمز HS المسبقة — HS pre-flight confirmation gate (Wave 1.2).
+
+> **العائلة.** `unresolved-hs-silent-spend` موسَّعةً: رمز HS قد يُحسَم بثقة
+> عالية لكنه **خاطئ دلالياً** — صفة المنتج المميّزة تضيع لصالح تطابق كلمة
+> ثانوية عارية. البلاغ الأصلي (تدقيق المالك، تقرير زبدة الفول السوداني/اليمن):
+> «زبدة الفول السوداني» حُسِمت إلى 040510 (زبدة/Butter) لأن «زبدة» طابقت،
+> بينما الصفة المميّزة «فول سوداني» غائبة عن وصف الرمز — العائلة الصحيحة
+> 200811 (فول سوداني محضّر) / 210690 (محضرات غذائية).
+>
+> **القاعدة الدائمة (عقد التأكيد المسبق).** قبل أيّ إنفاق، يُقاس تداخل صفات
+> المنتج المميّزة مع وصف الرمز المُصنَّف. تداخل ضعيف => الرمز **غير مؤكَّد**
+> (`confirmed=False`) => بوابة صلبة (خلف `SILK_HS_CONFIRM_GATE`) تُوقِف
+> التشغيل وتسأل المستخدم، وطبقة العرض/الكاتب تعيد تأطير كل رقم مشتقّ من الرمز
+> «مؤشر سياقي لا مقياس فعلي». صفر اسم منتج/رمز مكتوب صلباً — القاعدة مبنيّة
+> على البيانات (`data/hs_codes.csv`) والعتبة من env (عائلة `hardcoded-product-rule`،
+> الدرس ٢٤).
+
+المكتبات: stdlib فقط — يستورده api (البوابة) وطبقة العرض (التأطير) بلا شبكة.
+"""
+from __future__ import annotations
+
+import os
+import re
+
+# عتبة التداخل الأدنى لاعتبار الرمز مؤكَّداً — config-driven (لا رقم صلب في
+# المنطق). تداخل صفات المنتج المغطّاة بوصف الرمز دونها => غير مؤكَّد.
+_DEFAULT_MIN_OVERLAP = 0.5
+
+
+def _min_overlap() -> float:
+    """عتبة التداخل من env (`SILK_HS_CONFIRM_MIN_OVERLAP`) أو الافتراضي."""
+    try:
+        v = float(os.environ.get("SILK_HS_CONFIRM_MIN_OVERLAP", ""))
+        return v if 0.0 < v <= 1.0 else _DEFAULT_MIN_OVERLAP
+    except (TypeError, ValueError):
+        return _DEFAULT_MIN_OVERLAP
+
+
+def gate_enabled() -> bool:
+    """هل بوابة التأكيد الصلبة مفعّلة؟ (`SILK_HS_CONFIRM_GATE`) — مُطفأة
+    افتراضياً (نمط الميزات المحروسة بصمّام)؛ الحساب الاستشاري يعمل دائماً."""
+    return os.environ.get("SILK_HS_CONFIRM_GATE", "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+# كلمات ربط/أدوات عامة تُستبعَد من صفات المنتج المميّزة (عربي + إنجليزي).
+_STOPWORDS = frozenset({
+    "و", "من", "في", "على", "عن", "مع", "او", "أو", "ذو", "ذات", "هذا",
+    "the", "of", "and", "or", "with", "for", "in", "a", "an", "to",
+    "fresh", "dried", "other", "n.e.c", "nec", "prepared", "preserved",
+})
+
+# التشكيل العربي — يُزال قبل المطابقة.
+_DIACRITICS = re.compile(r"[ؗ-ًؚ-ْٰ]")
+
+
+def _norm(s: str) -> str:
+    """طبّع نصاً للمطابقة — إزالة تشكيل/تنميط ألف وياء وتصغير لاتيني."""
+    s = (s or "").lower().strip()
+    s = _DIACRITICS.sub("", s)
+    s = (s.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+          .replace("ى", "ي").replace("ة", "ه"))
+    return s
+
+
+def _tokens(text: str) -> list[str]:
+    """قسّم نصاً إلى صفات ذات معنى — إسقاط «ال» التعريف وأدوات الربط والقِصار."""
+    raw = re.split(r"[\s,/\-()·،؛;]+", _norm(text))
+    out: list[str] = []
+    for t in raw:
+        t = t.strip()
+        if t.startswith("ال") and len(t) > 4:  # إسقاط أل التعريف
+            t = t[2:]
+        if len(t) < 2 or t in _STOPWORDS:
+            continue
+        out.append(t)
+    return out
+
+
+def _covered(term: str, code_terms: list[str]) -> bool:
+    """هل صفة المنتج مغطّاة بأي صفة من وصف الرمز؟ (احتواء باتجاهين)."""
+    for c in code_terms:
+        if not c:
+            continue
+        if term == c or term in c or c in term:
+            return True
+    return False
+
+
+def _code_terms(row: dict) -> list[str]:
+    """صفات وصف الرمز — الاسم العربي/الإنجليزي + الكلمات المفتاحية، مُنمَّطة."""
+    parts: list[str] = []
+    for field in ("name_ar", "name_en", "keywords"):
+        parts.extend(_tokens(row.get(field, "")))
+    return parts
+
+
+def _code_desc(row: dict) -> str:
+    """وصف مقروء للرمز للعرض — العربي إن وُجد وإلا الإنجليزي."""
+    return (row.get("name_ar") or row.get("name_en") or "").strip()
+
+
+def _find_row(hs_code: str, path: str = "data/hs_codes.csv") -> dict | None:
+    """صفّ الرمز من البذرة — reuse resolver's cached CSV loader."""
+    from silk_hs_resolver import load_hs_codes
+    code = str(hs_code or "").strip()
+    for r in load_hs_codes(path):
+        if str(r.get("hs_code", "")).strip() == code:
+            return r
+    return None
+
+
+# رسالة موحّدة للتأطير — تُعرَض مرة واحدة في المنهجية (الدرس ٤.١: لا تكرار).
+CONTEXTUAL_TAG = "بيانات فئة مجاورة — مؤشر سياقي لا مقياس فعلي"
+
+
+def confirm_hs(product_name: str, hs_code: str,
+               path: str = "data/hs_codes.csv") -> dict:
+    """قِس تطابق صفات المنتج المميّزة مع وصف الرمز المُصنَّف — عقد التأكيد.
+
+    يعيد dict: {confirmed, hs_code, code_desc, product_terms, shared_terms,
+    missing_terms, overlap, reason}. `confirmed=False` حين يقلّ تداخل صفات
+    المنتج المغطّاة عن العتبة (`SILK_HS_CONFIRM_MIN_OVERLAP`) — أي أن صفةً
+    مميّزةً للمنتج غائبة عن وصف الرمز. لا اختلاق: رمزٌ غير موجود في البذرة =>
+    `confirmed=None` (غير قابل للتأكيد) لا False كاذبة.
+    """
+    p_terms = _tokens(product_name)
+    row = _find_row(hs_code, path)
+    if row is None:
+        return {"confirmed": None, "hs_code": str(hs_code or ""),
+                "code_desc": "", "product_terms": p_terms,
+                "shared_terms": [], "missing_terms": [], "overlap": None,
+                "reason": "الرمز خارج بذرة التصنيف — تعذّر تأكيده"}
+    if not p_terms:
+        return {"confirmed": None, "hs_code": str(hs_code or ""),
+                "code_desc": _code_desc(row), "product_terms": [],
+                "shared_terms": [], "missing_terms": [], "overlap": None,
+                "reason": "اسم المنتج بلا صفات قابلة للمطابقة"}
+    c_terms = _code_terms(row)
+    shared = [t for t in p_terms if _covered(t, c_terms)]
+    missing = [t for t in p_terms if not _covered(t, c_terms)]
+    overlap = round(len(shared) / len(p_terms), 2)
+    confirmed = overlap >= _min_overlap()
+    if confirmed:
+        reason = "وصف الرمز يشمل صفات المنتج المميّزة"
+    else:
+        reason = ("وصف الرمز «" + _code_desc(row) + "» لا يشمل الصفة/الصفات "
+                  "المميّزة: " + "، ".join(missing))
+    return {"confirmed": confirmed, "hs_code": str(hs_code or ""),
+            "code_desc": _code_desc(row), "product_terms": p_terms,
+            "shared_terms": shared, "missing_terms": missing,
+            "overlap": overlap, "reason": reason}
+
+
+def is_flagged(confirmation: object) -> bool:
+    """هل الرمز مُعلَّم غير مؤكَّد؟ — True فقط عند `confirmed is False`.
+
+    None (غير قابل للتأكيد) لا يُعامَل تعليماً — لا نُطأطئ ثقة على مجهول
+    (عقد عدم الاختلاق: لا نُعلن عيباً بلا دليل)."""
+    return isinstance(confirmation, dict) and confirmation.get("confirmed") is False
+
+
+if __name__ == "__main__":  # فحص يدوي — عيّنات صحيحة وخاطئة
+    for name, code in [("زبدة الفول السوداني", "040510"),
+                       ("تمور", "080410"),
+                       ("عسل سدر", "040900"),
+                       ("زبدة", "040510"),
+                       ("olive oil", "150910")]:
+        c = confirm_hs(name, code)
+        print(f"{name:>22} / {code}  confirmed={c['confirmed']}  "
+              f"overlap={c['overlap']}  missing={c['missing_terms']}")

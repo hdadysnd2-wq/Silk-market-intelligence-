@@ -749,7 +749,8 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
                 product: str, market_name: str,
                 review_notes: list | None = None,
                 trace_id: str | None = None,
-                hs_code: str | None = None) -> str | None:
+                hs_code: str | None = None,
+                hs_confirmation: dict | None = None) -> str | None:
     """اكتب تقرير البحث العميق — the 11-section international-structure report
     (وكيل الكتابة، الموجة ١٠ — أسلوب Euromonitor/ESOMAR).
 
@@ -780,6 +781,22 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
             f"فئة المنتج (من فصل HS): {cat[0]}. **كيّف تركيز اشتراطات القسم "
             f"٧ على هذه الفئة تحديداً: {cat[1]}** — لا تفترض اشتراطات فئة "
             "أخرى (المنصّة تخدم كل المنتجات لا الغذاء وحده).")
+    # Wave 1.3/4.1 (تدقيق زبدة الفول السوداني/اليمن): رمز HS غير مؤكَّد (صفة
+    # المنتج المميّزة غائبة عن وصف الرمز) => كل رقم مشتقّ من كومتريد «مؤشر
+    # سياقي لا مقياس فعلي»، يُصرَّح بذلك **مرة واحدة** في المنهجية (لا تكرار
+    # التحذير في كل قسم — طبقة العرض تُلحِق سطر المنهجية آلياً أيضاً).
+    if isinstance(hs_confirmation, dict) and hs_confirmation.get("confirmed") is False:
+        _miss = "، ".join(hs_confirmation.get("missing_terms") or [])
+        parts.append(
+            "تنبيه تصنيف حاسم: رمز HS المستخدم غير مؤكّد لهذا المنتج — وصفه "
+            f"«{_isolate(str(hs_confirmation.get('code_desc') or ''))}» لا يشمل "
+            f"صفة المنتج المميّزة{(' (' + _isolate(_miss) + ')') if _miss else ''}. "
+            "**اذكر هذا مرة واحدة فقط في قسم المنهجية (٢) كملاحظة منهجية واحدة**، "
+            "وأطِّر كل رقم مشتقّ من كومتريد (حجم الاستيراد، CAGR، HHI، حصص "
+            "المورّدين) بوصفه «مؤشراً سياقياً لفئة مجاورة لا مقياساً فعلياً»؛ "
+            "**لا تُكرّر التحذير في كل قسم** — أشِر إليه لاحقاً بإحالة موجزة "
+            "«(انظر الملاحظة المنهجية)». وبنبرة مهنية مقيسة لا تنبيهية: قل "
+            "«ينبغي التعامل مع هذه الأرقام كمؤشر سياقي» لا «تبطل كل الأرقام».")
     if review_notes:
         parts.append("ملاحظات المراجع من دورة سابقة — عالجها في هذه المسوّدة:\n"
                      + _isolate("\n".join(f"- {n}" for n in review_notes)))
@@ -1230,7 +1247,8 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
                           max_cycles: "int | None" = None,
                           trace_id: str | None = None,
                           hs_code: str | None = None,
-                          on_stage: Callable[[str], None] | None = None) -> dict:
+                          on_stage: Callable[[str], None] | None = None,
+                          hs_confirmation: dict | None = None) -> dict:
     """حلقة الكتابة والمراجعة — Writer → Reviewer.
 
     `max_cycles=None` (الافتراضي) يقرأ SILK_MAX_REVIEW_CYCLES (افتراضياً ١،
@@ -1263,7 +1281,8 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
 
     _stage("writer")
     draft = deep_report(mission_reports, analyst_summary, verdict, product,
-                        market_name, trace_id=trace_id, hs_code=hs_code)
+                        market_name, trace_id=trace_id, hs_code=hs_code,
+                        hs_confirmation=hs_confirmation)
     if not draft:
         return {"report": None, "review_cycles": 0, "unresolved_notes": [],
                 "failure_reason": failure_reason()}
@@ -1286,7 +1305,8 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
         _stage("writer")
         fixed = deep_report(mission_reports, analyst_summary, verdict,
                             product, market_name, review_notes=notes,
-                            trace_id=trace_id, hs_code=hs_code)
+                            trace_id=trace_id, hs_code=hs_code,
+                            hs_confirmation=hs_confirmation)
         if fixed:
             draft = fixed
     return {"report": draft, "review_cycles": cycles, "unresolved_notes": notes}
