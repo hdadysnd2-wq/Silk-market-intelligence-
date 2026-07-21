@@ -392,3 +392,49 @@ def test_breadth_active_resolution_surfaces_correct_primary_not_rejected_or_blan
         f"{product!r}: المرشّح الأساسي {primary['hs6']} (فصل "
         f"{primary['hs6'][:2]}) خارج الفصول المقبولة {ok_chapters} — لم "
         f"يتصدّر المرشّح الصحيح رغم توفّره ضمن {[c['hs6'] for c in r['candidates']]}")
+
+
+# ══════════════ اللائحة ٤٣ — الصمّام فشل-آمن مفعّل افتراضياً ══════════════
+
+def test_general_classifier_valve_is_fail_safe_on_by_default():
+    """LESSONS ٤٣ — بلاغ حيّ (المالك): المصنّف العام مُصلَحٌ ومُمتَحَنٌ فعلياً
+    (يتعرَّف على الرمز الصحيح متعدِّد الصفات لا الصفة الثانوية العارضة فقط)
+    لكنه كان خلف صمّامٍ `SILK_HS_CLASSIFIER` **مُطفأٍ افتراضياً** — فلا يعمل
+    أبداً في الإنتاج ما لم يتذكَّر أحدٌ ضبط متغيّر بيئةٍ غامض، فيعود النظام
+    صامتاً لسقف جدول البحث الجزئي (نفس الحادثة المتكرّرة رغم الإصلاح).
+    الصمّام الآن فشل-آمن: مفعّلٌ ما لم يُطفَأ صراحةً (نفس نمط
+    `silk_hs_confirm.gate_enabled`)."""
+    import silk_hs_classifier as hsc
+    os.environ.pop("SILK_HS_CLASSIFIER", None)
+    assert hsc.enabled() is True
+    for off in ("0", "false", "False", "no", "off", "OFF"):
+        with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": off}):
+            assert hsc.enabled() is False, f"{off!r} يجب أن يُطفئ الصمّام"
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}):
+        assert hsc.enabled() is True
+
+
+def test_general_classifier_actually_resolves_peanut_butter_with_default_valve():
+    """إثباتٌ حيّ للسيناريو الذي أبلغ عنه المالك: «زبدة الفول السوداني» (رمزٌ
+    خاطئٌ متكرّر 040510) تُصنَّف تلقائياً للفصل الصحيح (٢٠٠٨/٢١٠٦ — محضرات
+    الفول السوداني) بمجرّد توفّر مفتاح كلود، **بلا** ضبط أيّ صمّامٍ إضافي —
+    الإصلاح يعمل بالإعدادات الافتراضية كما يجربها المالك فعلياً."""
+    import silk_hs_classifier as hsc
+    os.environ.pop("SILK_HS_CLASSIFIER", None)      # الافتراضي فقط — لا تفعيل يدوي
+    fake = _fake_llm([
+        {"hs6": "200811", "description_ar": "فول سوداني محضّر أو محفوظ",
+         "reason_ar": "زبدة الفول السوداني محضّرةٌ من الفول السوداني",
+         "confidence": 0.92},
+        {"hs6": "210690", "description_ar": "محضرات غذائية أخرى",
+         "reason_ar": "بديلٌ عام", "confidence": 0.4},
+    ])
+    with patch("silk_ai_judge.available", return_value=True), \
+         patch("silk_ai_judge._call", return_value=fake), \
+         patch("silk_usage.try_reserve_paid_calls", return_value=True), \
+         patch("silk_usage.try_reserve_usd", return_value=True):
+        r = hsc.classify_general("زبدة الفول السوداني", hs_code="040510",
+                                 allow_claude=True)
+    assert r["tier"] == "auto", (
+        f"لم يُحسَم تلقائياً بالإعدادات الافتراضية: {r}")
+    assert r["hs6"][:2] in {"20", "21"}, r["hs6"]
+    assert r["hs6"] != "040510"
