@@ -138,6 +138,28 @@ def test_health_exposes_persist_guard_state():
     assert off["storage"]["persist_guard"] is False
 
 
+def test_health_exposes_hs_classifier_valve_state_and_warns_when_disabled():
+    """اللائحة ٤٣ (بلاغ حي متكرّر — رمز HS خاطئ رغم إصلاح المُصنِّف العام):
+    صمّام `SILK_HS_CLASSIFIER` مرئي من /health — كان غير قابل للتفتيش عن
+    بُعد فلا يعرف المالك أن الإصلاح المدموج لا يعمل فعلياً على النشر."""
+    with _env(SILK_HS_CLASSIFIER=None, SILK_API_KEY=None,
+              ANTHROPIC_API_KEY="k", VOLZA_API_KEY=None,
+              EXPLEE_API_KEY=None, LOCALPRICE_API_KEY=None):
+        default_on = _client().get("/health").json()
+    assert default_on["hs_classifier"]["enabled"] is True
+    assert not any("SILK_HS_CLASSIFIER" in w
+                  for w in (default_on.get("warnings") or []))
+    with _env(SILK_HS_CLASSIFIER="0", SILK_API_KEY=None,
+              ANTHROPIC_API_KEY="k", VOLZA_API_KEY=None,
+              EXPLEE_API_KEY=None, LOCALPRICE_API_KEY=None):
+        explicitly_off = _client().get("/health").json()
+    assert explicitly_off["hs_classifier"]["enabled"] is False
+    assert any("SILK_HS_CLASSIFIER" in w
+              for w in (explicitly_off.get("warnings") or [])), (
+        "تعطيل الصمّام صراحةً مع مفتاح كلود متاح يجب أن يظهر تحذيراً — "
+        "وإلا يعود المالك لعدم رؤية أن الإصلاح مُعطَّل فعلياً على النشر")
+
+
 def test_health_no_storage_warning_when_explicit_silk_db_set():
     """لا تحذير أيضاً حين يُوجَّه SILK_DB صراحةً بلا SILK_DATA_DIR — نفس
     منطق تراجُع _db_path نفسه (لا انحدار على المسارات الصريحة الفردية)."""

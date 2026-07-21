@@ -144,6 +144,18 @@ def main() -> int:
         fails.append("storage.data_dir فارغ — التخزين فانٍ (لا وحدة تخزين)")
     if health.get("warnings"):
         print("  ⚠ warnings:", "; ".join(health["warnings"]))
+    # اللائحة ٤٣ (بلاغ حي متكرّر — رمز HS خاطئ رغم إصلاح المُصنِّف العام):
+    # الصمّام فشل-آمن مفعَّل افتراضياً الآن، لكن ضبطٌ صريحٌ سابقٌ على النشر
+    # (SILK_HS_CLASSIFIER=0) يبقى ممكناً ويُسقِط الإصلاح صامتاً إن لم يُفحَص
+    # هنا — نفس منطق فحص بوّابة HS الحيّة أدناه، لا افتراض أن الكود يكفي.
+    hsc = health.get("hs_classifier") or {}
+    print(f"  hs_classifier.enabled={hsc.get('enabled')}")
+    if hsc.get("enabled") is False:
+        fails.append(
+            "hs_classifier.enabled=False — SILK_HS_CLASSIFIER مُعطَّل صراحةً "
+            "على هذا النشر؛ المُصنِّف العام لن يستدعي كلود فيعود للرمز "
+            "الخاطئ (بلاغ «زبدة الفول السوداني»). أزِل هذا المتغيّر أو "
+            "اضبطه على قيمةٍ غير 0/false/no/off")
 
     # 2) أحدث تحليل مكتمل
     st, body = _get(base, "/analyses", key)

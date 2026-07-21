@@ -57,6 +57,7 @@ _SYMBOL_ANCHORS = [
     (42, "tools/canonical_dza_peanut_butter.py", ["def dza_research_blob"]),
     # البند ٤٣ — المُصنِّف العام: صمّام فشل-آمن مفعَّل افتراضياً.
     (43, "silk_hs_classifier.py", ["def enabled", '"0", "false", "no", "off"']),
+    (43, "api.py", ['health["hs_classifier"]']),
 ]
 
 # كل مدخلة: (رقم الدرس، مسار الوثيقة، علامات المنهج التي يجب أن تبقى).
