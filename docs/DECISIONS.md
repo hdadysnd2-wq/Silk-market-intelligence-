@@ -279,3 +279,51 @@ correct badge, and the sidebar "تقرير الحارس" entry renders the table
 `docs/LESSONS.md` row 38 added (same-session, test-first per the self-update protocol), anchored in
 `tests/test_regression_registry.py::_guard_watchdog_owner_only_no_client_contamination` and
 `tests/test_lessons_enforcement.py`.
+
+---
+
+## The general-purpose HS classifier — the systemic fix (2026-07-21)
+
+**Order.** After the Kuwait-report stabilization (#134) and the watchdog build, the supervisor
+identified the *root* problem behind the peanut-butter/dairy-butter misclassification: the resolver
+is a static, partial CSV lookup table — it will keep failing on every unusual product forever (rose
+water, flavored chips, oud incense…), not just the one reported instance. Two structural changes
++ the UI dialog, framed explicitly as "a lookup table is a starting hint, never the decider."
+
+| Part | Status | Evidence (path / test) |
+|---|---|---|
+| PART 1 — general-purpose resolver | DONE-with-artifact | `silk_hs_classifier.classify_general()` — deterministic-first (zero LLM calls when the CSV seed already gives a strict, unambiguous match, e.g. "تمور"→080410); on cache-miss + genuine ambiguity, ONE Haiku call (`_claude_classify_general`) asks the model for its top-3 HS6 candidates **from its own full-nomenclature knowledge**, not constrained to our CSV. Every candidate (deterministic or LLM-sourced) passes the SAME validation gate (`_validated_candidate`): chapter-sanity against `silk_hs_resolver.VALID_HS_CHAPTERS` (the real WCO chapter structure, 01–97 minus withdrawn 77 — a structural constant, not a product/ISO hardcode) + discriminating-term overlap via `silk_hs_confirm.confirm_against_description` (a new shared core, `_overlap_stats`, factored out of the existing `confirm_hs` so both paths use one comparison, not two that could drift). Three explicit outcome tiers: `auto` (strict — top candidate ≥0.8 overlap, verified against our reference, AND a clear margin over the runner-up — genuine ambiguity between two candidates never auto-passes), `candidates` (a 422/advisory carrying up to 3 ranked, validated candidates), `manual` (nothing defensible — raw CSV rows as a manual-picker starting point only, never a confident suggestion). Cached per normalized product name in `silk_store` (new `hs_classify_cache` table, migration `004_hs_classify_cache.sql`) — repeat products cost zero extra calls (`silk_hs_classifier._reserve_llm_call` self-meters, count+dollar, right before the one real network call — not speculatively on every flagged request). |
+| PART 2 — UI confirmation dialog | DONE-with-artifact | `web/index.html`: `showHsCandidates(detail, cb)` replaces the old single-proposal `showHsProposal` — one dialog function reused for BOTH `/classify_hs` (pre-flight, `ensureHs()`) and the `hs_confirmation_needed` 422 from `/analyze` **and** `/research` (both previously unhandled for `/analyze`; `preflight_block` now attaches `candidates` to its blocking response, computed by the exact same `classify_general()`). Candidates render as clickable cards (code + Arabic description + one-line reason + a "✓ من مرجعنا"/"اقتراح" grounding badge) plus manual-entry and cancel. The auto-classified checkmark ("✓ صُنّف تلقائياً") is structurally impossible to render on a 422 — it only appears in `ensureHs()`'s own `tier==="auto"` branch, never inside the dialog. `/analyze`'s `buildBody()` now sends `hs_code`/`hs_confirmed` (it sent neither before). |
+| PART 3 — regression battery | DONE-with-artifact | `tests/test_hs_general_classifier.py::_BATTERY` — 10 product families (peanut butter, rose water, cheese-flavored chips, sukkari dates, sidr honey, oud incense, roasted salted nuts, chili sauce, specialty roasted coffee, zamzam-style bottled water) parametrized against their acceptable HS2 chapter set. Contract asserted for all 10, **with the LLM unavailable** (worst case — deterministic resolver alone): if tier reaches `auto`, the chapter MUST be in the acceptable set, or the run fails loudly — no silent wrong-chapter auto-pass is tolerated regardless of AI availability. A second parametrized pass (5 of the harder products) mocks realistic LLM candidates and asserts the correct chapter surfaces in the top-3 even when the deterministic seed alone would have produced junk (e.g., "شيبس بنكهة الجبن" lexically matching "بن" — coffee — via a substring-containment quirk in the pre-existing `_covered()` heuristic; caught and confirmed non-auto-passing during this battery's construction). |
+
+**Real gap found and fixed during construction (documented, not silently patched):** the first draft of
+`_validated_candidate` matched only the CSV row's own description when the code was in our reference —
+several reference rows carry English-only descriptions (`name_ar=""`), so a correct Arabic-named product
+scored a hard 0.0 overlap against a code that was semantically exactly right (`200811`, prepared
+groundnuts, English-only in our seed) purely because the two texts were in different scripts. Fixed by
+taking the better of (CSV description) vs. (model-supplied description + its stated reason) per candidate
+— `verified` still reflects whether the code is structurally grounded in our reference, independent of
+which description won the term-overlap check.
+
+**Playwright/e2e-live-shape (rung 3):** `tests/e2e/hs_candidates_flow.cjs` + `test_rung3_playwright_e2e.py::
+test_rung3_hs_candidates_dialog_blocks_on_flagged_product_and_never_auto_badges` — a real headless-chromium
+run against a real uvicorn server, product name injected via a minimal test-only hook
+(`window.__silkTestSetProduct`, since "زبدة الفول السوداني" is deliberately absent from the product-search
+index — that absence is exactly why it needs this gate) confirms: the dialog blocks with at least one real
+candidate, the auto-checkmark text never appears in it, and picking a candidate closes the dialog and sets
+the confirmed badge to the chosen code. Existing `prerun_flow.cjs` / `readiness_flow.cjs` updated in the
+same PR — they previously asserted the OLD single-proposal `#hsOk` modal always appeared for "تمور", which
+the new strict-auto tier now correctly skips (no dialog for a clean, unambiguous match) — both re-verified
+green against a live server in this session.
+
+**What is NOT live-proven here (LAW §2, bucket 2/3 boundary):** e2e-live-shape strips `ANTHROPIC_API_KEY`
+deliberately (same policy as every other rung-3 test, so CI never fires a real paid call) — the candidates
+shown in the e2e run above are deterministic-CSV-only. Confirming that a live Claude call surfaces `200811`
+specifically for "زبدة الفول السوداني" (the literal acceptance-criteria example) is the owner's live,
+keyed run — `tests/test_hs_general_classifier.py`'s mocked-LLM tests hermetically prove the mechanism
+handles that response correctly, which is the strongest claim obtainable without spending real money in
+this session.
+
+`docs/LESSONS.md` row 39 added (same-session, test-first), anchored in
+`tests/test_regression_registry.py::_guard_general_hs_classifier_no_lookup_table_ceiling` and
+`tests/test_lessons_enforcement.py`.

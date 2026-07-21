@@ -399,7 +399,7 @@ def _guard_unresolved_hs_silent_spend():
     api = _read("api.py")
     assert "def _require_hs6" in api and '"error": "unresolved_hs"' in api, \
         "بوّابة hs6 الصلبة غائبة"
-    assert "def classify_hs" in api and "def _classify_ai_allowed" in api, \
+    assert "def classify_hs" in api and "def _classify_general_allow_claude" in api, \
         "نقطة/حارس التصنيف غائبة"
     gate = api.index('"error": "unresolved_hs"')
     reserve = api.index("try_reserve_usd(_expected_usd)")
@@ -770,6 +770,36 @@ def _guard_golden_contract_test_exists_and_covers_both_paths():
         "فحص الدخان بعد النشر يجب أن يثبت بوّابة HS حياً (Wave 3.2)")
 
 
+def _guard_general_hs_classifier_no_lookup_table_ceiling():
+    """LESSONS ٣٩ — عائلة `lookup-table-ceiling`: بذرة CSV تلميحٌ ابتدائي لا
+    الحاكم النهائي. الحارس السلوكي: (١) بوّابة سلامة الفصل ترفض رمزاً خارج
+    بنية WCO الحقيقية بمعزلٍ عن ادّعاء أيّ نموذج؛ (٢) منتجٌ محسومٌ جيداً
+    («تمور») تلقائيٌّ بلا أيّ نداء كلود؛ (٣) منتجٌ مُعلَّم (زبدة الفول
+    السوداني) لا يمرّ تلقائياً بلا كلود؛ (٤) نقطة الاختناق `preflight_block`
+    تُلحِق `candidates` فعلياً بردّ الحجب — لا رفضٌ عارٍ بلا توجيه."""
+    import silk_hs_classifier as hsc
+    from silk_hs_resolver import chapter_valid
+    # (١) سلامة الفصل بنيويةٌ بمعزلٍ عن مصدر الادّعاء.
+    assert chapter_valid("999999") is False
+    assert hsc._validated_candidate("أيّ منتج", "999999") is None
+    # (٢) لا هدر — منتجٌ واثقٌ لا يستدعي كلود إطلاقاً.
+    from unittest.mock import patch
+    with patch("silk_ai_judge._call") as mock_call:
+        r = hsc.classify_general("تمور", allow_claude=True)
+    assert r["tier"] == "auto" and r["hs6"] == "080410"
+    assert mock_call.called is False
+    # (٣) منتجٌ مُعلَّم — لا تلقائي بلا مساعدة (نفس عائلة الحادثة الأصلية).
+    r2 = hsc.classify_general("زبدة الفول السوداني", hs_code="040510",
+                              allow_claude=False)
+    assert r2["tier"] != "auto" and r2["hs6"] is None
+    # (٤) preflight_block يُلحِق مرشّحين فعليّين بردّ الحجب.
+    from silk_hs_confirm import preflight_block
+    with patch.dict(os.environ, {"SILK_HS_CONFIRM_GATE": "1"}):
+        blocked = preflight_block("زبدة الفول السوداني", "040510",
+                                  allow_claude=False)
+    assert blocked is not None and blocked.get("candidates")
+
+
 def _guard_watchdog_owner_only_no_client_contamination():
     """LESSONS ٣٨ — الحارس («كاميرا مراقبة»، طلب المُشرِف): مراقبةٌ دائمة
     مملوكة للمالك حصراً بلا أيّ تلوّث لسطح العميل. الحارس السلوكي:
@@ -841,6 +871,7 @@ _LESSONS = {
     36: _guard_cross_market_checkpoint_leak,          # تقرير الكويت — تسرّب يمن↔كويت عبر نقاط تفتيش بعثات
     37: _guard_golden_contract_test_exists_and_covers_both_paths,  # الاختبار الذهبي — كل العقود، كلا المسارين
     38: _guard_watchdog_owner_only_no_client_contamination,  # الحارس — مراقبةٌ للمالك حصراً، صفر تلوّث للعميل
+    39: _guard_general_hs_classifier_no_lookup_table_ceiling,  # المصنّف العام — جدول البحث تلميحٌ ابتدائي لا حاكمٌ نهائي
 
 }
 

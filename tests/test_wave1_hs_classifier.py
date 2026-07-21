@@ -136,38 +136,42 @@ def _client():
 
 
 def test_endpoint_deterministic_needs_no_key_no_reservation():
-    """منتجٌ معروف => اقتراح حتمي 200 بلا مفتاح/حجز."""
+    """منتجٌ معروفٌ بلا التباس => اقتراح حتمي 200 بلا مفتاح/حجز (الموجة ٣:
+    شكل `classify_general` — tier/candidates لا status/alternates القديم)."""
     pytest.importorskip("fastapi")
     with _env(SILK_API_KEY=None, ANTHROPIC_API_KEY=None), _block_net():
-        r = _client().post("/classify_hs", json={"product": "rice"})
+        r = _client().post("/classify_hs", json={"product": "تمور"})
     assert r.status_code == 200
     body = r.json()
-    assert body["source"] == "deterministic" and body["hs6"]
+    assert body["tier"] == "auto" and body["source"] == "deterministic" \
+        and body["hs6"] == "080410"
 
 
 def test_endpoint_low_confidence_is_metered_count_from_the_cap():
-    """ثقةٌ منخفضة + الصمّام مفعّل + مفتاح: النداء الأول يحجز تفعيلةً من السقف،
-    والثاني (السقف=١ مستنفد) يتدهور لمنتقٍ يدوي — لا 429 على مسارٍ مجاني."""
+    """منتجٌ غامضٌ + الصمّام مفعّل + مفتاح: النداء الأول يحجز تفعيلةً من
+    السقف (`used_llm=True`)، والثاني (السقف=١ مستنفد) يتدهور بلا كلود
+    (`used_llm=False`) — لا 429 على مسارٍ مجاني."""
     pytest.importorskip("fastapi")
+    fake = '{"candidates":[{"hs6":"100630","description_ar":"أرز","reason_ar":"x","confidence":0.8}]}'
     with tempfile.TemporaryDirectory() as td:
         usage = os.path.join(td, "usage.db")
         with _env(SILK_HS_CLASSIFIER="1", ANTHROPIC_API_KEY="k",
                   SILK_API_KEY="s", SILK_PAID_DAILY_CAP="1",
                   SILK_USAGE_DB=usage, SILK_PAID_DAILY_USD_CAP=None), \
-             mock.patch("silk_ai_judge._call",
-                        return_value='{"hs6":"100630","confidence":0.8}'):
+             mock.patch("silk_ai_judge.available", return_value=True), \
+             mock.patch("silk_ai_judge._call", return_value=fake):
             c = _client()
             h = {"X-API-Key": "s"}
             r1 = c.post("/classify_hs", json={"product": "zzxq غامض"}, headers=h)
-            r2 = c.post("/classify_hs", json={"product": "zzxq غامض"}, headers=h)
-    assert r1.status_code == 200 and r1.json()["source"] == "claude"
-    # الثاني: السقف مستنفد => منتقٍ يدوي (تدهور صادق لا 429).
-    assert r2.status_code == 200 and r2.json()["status"] == "manual"
+            r2 = c.post("/classify_hs", json={"product": "zzxq غامض٢"}, headers=h)
+    assert r1.status_code == 200 and r1.json()["used_llm"] is True
+    # الثاني (منتجٌ مختلفٌ — لا إصابة ذاكرة): السقف مستنفد => بلا كلود.
+    assert r2.status_code == 200 and r2.json()["used_llm"] is False
 
 
 def test_endpoint_dollar_cap_blocks_and_degrades_to_manual():
     """سقفٌ دولاريٌّ أدنى من تكلفة التصنيف المتوقَّعة => يُحجَب النداء ويتدهور
-    لمنتقٍ يدوي (دولار-metered، يُغلق نمط تدقيق #6 لهذا المسار)."""
+    بلا كلود (دولار-metered، يُغلق نمط تدقيق #6 لهذا المسار)."""
     pytest.importorskip("fastapi")
     with tempfile.TemporaryDirectory() as td:
         usage = os.path.join(td, "usage.db")
@@ -175,21 +179,24 @@ def test_endpoint_dollar_cap_blocks_and_degrades_to_manual():
                   SILK_API_KEY="s", SILK_USAGE_DB=usage,
                   SILK_PAID_DAILY_USD_CAP="0.001",
                   SILK_HS_CLASSIFY_EXPECTED_USD="0.02"), \
+             mock.patch("silk_ai_judge.available", return_value=True), \
              mock.patch("silk_ai_judge._call",
-                        return_value='{"hs6":"100630","confidence":0.8}') as m:
+                        return_value='{"candidates":[{"hs6":"100630","confidence":0.8}]}') as m:
             r = _client().post("/classify_hs", json={"product": "zzxq غامض"},
                                headers={"X-API-Key": "s"})
-    assert r.status_code == 200 and r.json()["status"] == "manual"
+    assert r.status_code == 200
+    assert r.json()["used_llm"] is False and r.json()["hs6"] is None
     assert m.call_count == 0, "لا يجب أن يُستدعى كلود بعد حجب السقف الدولاري"
 
 
 def test_endpoint_disabled_or_no_key_degrades_to_manual_never_fabricates():
-    """الصمّام مُطفأ (افتراضي) على منتجٍ منخفض الثقة => منتقٍ يدوي 200، لا
+    """الصمّام مُطفأ (افتراضي) على منتجٍ منخفض الثقة => تدهورٌ 200، لا
     اختلاق ولا نداء كلود (السلوك كاليوم)."""
     pytest.importorskip("fastapi")
     with _env(SILK_HS_CLASSIFIER=None, SILK_API_KEY=None), _block_net():
         r = _client().post("/classify_hs", json={"product": "zzxq غامض"})
-    assert r.status_code == 200 and r.json()["status"] == "manual"
+    assert r.status_code == 200
+    assert r.json()["tier"] in ("candidates", "manual")
     assert r.json()["hs6"] is None
 
 
@@ -368,11 +375,12 @@ def test_web_prerun_flow_is_wired():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     html = open(os.path.join(root, "web", "index.html"), encoding="utf-8").read()
     for needle in (
-        "function ensureHs(", "function showHsProposal(",
+        "function ensureHs(", "function showHsCandidates(",
         "function showHsManual(", "function showProducerAdvisory(",
         "function startResearch(", '"/classify_hs"',
         "producer_ack:true", 'd.error==="producer_country_advisory"',
-        'd.error==="unresolved_hs"', "S.cfg", "صُنِّف: ",
+        'd.error==="unresolved_hs"', 'd.error==="hs_confirmation_needed"',
+        "S.cfg", "تأكيد رمز HS",
         "تعذّر التصنيف — اختر الرمز يدويًا",
     ):
         assert needle in html, f"وصلة تدفّق ما قبل التشغيل مفقودة: {needle}"
