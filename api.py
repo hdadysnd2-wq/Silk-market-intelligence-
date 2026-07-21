@@ -407,6 +407,24 @@ def create_app():
                     "تُركَّب وحدة تخزين (Volume) وتُوجَّه إليها هذا المتغيّر")
         except Exception as _e:  # noqa: BLE001 — تشخيص لا شرط
             log.debug("storage health section skipped: %s", _e)
+        # اللائحة ٤٣ (بلاغ حي متكرّر — رمز HS خاطئ رغم إصلاح المُصنِّف العام):
+        # صمّام `SILK_HS_CLASSIFIER` نفسه لم يكن قابلاً للتفتيش عن بُعد، فلا
+        # يعرف المالك أن الإصلاح المدموج فعلياً لا يعمل على النشر الفعلي —
+        # نفس عائلة `persist_guard` أعلاه (سطح مراقبة، لا تخمين). فشل-آمنٌ
+        # افتراضياً الآن، لكن يبقى قابلاً للتعطيل الصريح؛ هذا الحقل يُظهر
+        # الحالة الفعلية الحيّة بدل انتظار بلاغٍ حيٍّ آخر لاكتشافها.
+        try:
+            import silk_hs_classifier as _hsc
+            _hs_enabled = _hsc.enabled()
+            health["hs_classifier"] = {"enabled": _hs_enabled}
+            if not _hs_enabled and _claude_key:
+                _warnings.append(
+                    "SILK_HS_CLASSIFIER مُعطَّل صراحةً — المُصنِّف العام "
+                    "(تصنيف HS الدقيق لمنتجات متعدّدة الصفات) لن يستدعي "
+                    "كلود؛ يعتمد على جدول بحثٍ جزئي وحده وقد يُخطئ الفصل "
+                    "(نفس عائلة بلاغ «زبدة الفول السوداني»)")
+        except Exception as _e:  # noqa: BLE001 — تشخيص لا شرط
+            log.debug("hs_classifier health section skipped: %s", _e)
         unprotected = _unprotected_paid_keys()
         if unprotected:
             _warnings.append(

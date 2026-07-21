@@ -931,6 +931,21 @@ def _guard_hs_classifier_valve_fail_safe_default():
                                  allow_claude=True)
     assert r["tier"] == "auto", f"لم يُحسَم تلقائياً بالإعدادات الافتراضية: {r}"
     assert r["hs6"] != "040510"
+    # (٤) الصمّام مرئيٌّ عن بُعد من /health (نفس نمط persist_guard) — لا
+    # اعتماد على قراءة الشيفرة لمعرفة حالته الفعلية على النشر الحيّ.
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    import api
+    with patch.dict(os.environ, {"SILK_API_KEY": "", "ANTHROPIC_API_KEY": "k"}):
+        health = TestClient(api.create_app()).get("/health").json()
+    assert health["hs_classifier"]["enabled"] is True
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "0",
+                                 "ANTHROPIC_API_KEY": "k"}):
+        health_off = TestClient(api.create_app()).get("/health").json()
+    assert health_off["hs_classifier"]["enabled"] is False
+    assert any("SILK_HS_CLASSIFIER" in w
+              for w in (health_off.get("warnings") or [])), (
+        "تعطيلٌ صريحٌ للصمّام مع مفتاح كلود متاح يجب أن يظهر تحذيراً في /health")
 
 
 _LESSONS = {
