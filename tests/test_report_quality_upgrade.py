@@ -466,6 +466,27 @@ def test_w4_1_writer_prompt_uses_short_backreference_for_hs_note():
     assert "انظر الملاحظة المنهجية" in captured["u"]
 
 
+def test_w1_3_writer_prompt_names_import_price_as_contextual_and_explains_contradiction():
+    """1.3 (أمر التثبيت 2026-07-21) — تقرير الكويت الحيّ أظهر تناقض سعرٍ
+    (تجزئة 0.67$/كجم < استيراد/جملة 6$/كجم) لأن عقد الكاتب السابق أطّر
+    «حجم الاستيراد/CAGR/HHI/الحصص» فقط، بلا ذكر صريح لبند سعر الاستيراد —
+    فالكاتب رصد التناقض نثراً بلا تفسيرٍ بنيوي. العقد الآن يسمّي «متوسط سعر
+    الاستيراد/الجملة» صراحةً ويوجّه لتفسير التناقض بسبب فئة كومتريد مجاورة
+    لا رقمٍ مُصلَح تخميناً."""
+    import silk_ai_judge as J
+    captured = {}
+    with mock.patch.object(J, "available", return_value=True), \
+         mock.patch.object(J, "_call",
+                           side_effect=lambda s, u, **k: captured.setdefault("u", u) or "## 1. خلاصة\nx"):
+        J.deep_report({}, "م", {"verdict": "WATCH"}, "زبدة الفول السوداني",
+                      "الكويت", hs_code="040510",
+                      hs_confirmation={"confirmed": False, "code_desc": "زبدة",
+                                       "missing_terms": ["فول", "سوداني"]})
+    u = captured["u"]
+    assert "متوسط سعر الاستيراد" in u
+    assert "ليس خطأً يُصحَّح تخميناً" in u
+
+
 def test_w4_2_canonical_section_order_matches_target_sequence():
     """4.2 — الترتيب القانوني للأقسام يطابق التسلسل المطلوب في أمر العمل."""
     from silk_ai_judge import _REPORT_SECTIONS
@@ -676,8 +697,12 @@ def test_w1_2_research_gate_422_on_unconfirmed_hs_before_spend():
                 == "hs_confirmation_needed")
 
 
-def test_w1_2_research_gate_off_by_default_no_block():
-    """1.2 — الصمّام مُطفأ افتراضياً => لا حجب (السلوك كاليوم)."""
+def test_w1_2_research_gate_on_by_default_blocks_unconfirmed_hs():
+    """1.2 — **فشل-آمن**: بلا أيّ صمّام (افتراضُ الإنتاج) يُحجَب رمزٌ غير مؤكَّد.
+
+    البلاغ الحيّ (2026-07-21): تشغيلةُ `/research` مدفوعة على «زبدة الفول
+    السوداني» مضت على 040510 لأن البوّابة كانت خلف صمّامٍ مُطفأ في الإنتاج.
+    القانون: لا إنفاق صامت على رمزٍ خاطئ. البوّابة الآن مفعّلة افتراضياً."""
     pytest.importorskip("fastapi")
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
@@ -690,6 +715,71 @@ def test_w1_2_research_gate_off_by_default_no_block():
                         json={"product": "زبدة الفول السوداني",
                               "market": "Yemen", "hs_code": "040510",
                               "async_run": False, "persist": False})
+    assert r.status_code == 422
+    assert r.json()["detail"]["error"] == "hs_confirmation_needed"
+
+
+def test_w1_2_research_gate_explicit_off_disables_block():
+    """1.2 — إطفاءٌ صريح (`SILK_HS_CONFIRM_GATE=0`) يُعطّل الحجب (مهرب واعٍ)."""
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    api_mod = _client(SILK_HS_CONFIRM_GATE="0", SILK_API_KEY=None,
+                      SILK_REQUIRE_HS6=None, SILK_WORLD_MARKETS=None)
+    client = TestClient(api_mod.create_app())
+    with mock.patch("requests.get",
+                    side_effect=OSError("net blocked for offline test")):
+        r = client.post("/research",
+                        json={"product": "زبدة الفول السوداني",
+                              "market": "Yemen", "hs_code": "040510",
+                              "async_run": False, "persist": False})
     assert not (r.status_code == 422
                 and r.json().get("detail", {}).get("error")
                 == "hs_confirmation_needed")
+
+
+# ══════ الموجة ٢ (2026-07-21، أمر التثبيت): نقطة اختناق مشتركة — البوّابة
+# تعمل على /analyze و/research معاً بلا صمّامٍ إضافي (نفس `preflight_block`
+# المستدعى من كلا المعالجَين، silk_hs_confirm.py). إصلاحٌ سابقٌ اقتصر على
+# /research وحده فأنتج تقرير كويت/زبدة الفول السوداني الحيّ — «إصلاحٌ على
+# مسارٍ واحد نصفُ إصلاح». ══════
+
+def test_w2_hs_gate_blocks_on_both_analyze_and_research_by_default():
+    """الموجة ٢ — كلا المسارين (/analyze و/research) يحجبان رمزاً غير
+    مؤكَّد **بلا أيّ صمّام مضبوط** (افتراض الإنتاج)؛ التقاعس عن أحدهما هو
+    بالضبط الحادثة الحيّة (تقرير الكويت/زبدة الفول السوداني، 2026-07-21)."""
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    api_mod = _client(SILK_HS_CONFIRM_GATE=None, SILK_API_KEY=None,
+                      SILK_REQUIRE_HS6=None, SILK_WORLD_MARKETS=None)
+    client = TestClient(api_mod.create_app())
+    with mock.patch("requests.get",
+                    side_effect=OSError("net blocked for offline test")):
+        r_research = client.post(
+            "/research", json={"product": "زبدة الفول السوداني",
+                               "market": "Kuwait", "hs_code": "040510",
+                               "async_run": False, "persist": False})
+        r_analyze = client.post(
+            "/analyze", json={"product": "زبدة الفول السوداني",
+                              "hs_code": "040510", "persist": False})
+    for label, r in (("research", r_research), ("analyze", r_analyze)):
+        assert r.status_code == 422, f"{label}: {r.status_code} {r.text}"
+        assert r.json()["detail"]["error"] == "hs_confirmation_needed", label
+
+
+def test_w2_hs_gate_choke_point_is_shared_not_duplicated():
+    """الموجة ٢ — بنيوياً: كلا معالجَي HTTP يستدعيان نفس دالة الاختناق
+    `silk_hs_confirm.preflight_block` — لا منطق مكرَّر في كل معالج (لو
+    اختفى الاستدعاء من أحدهما بصمت، هذا الحارس يفشل قبل أيّ بلاغ حيّ)."""
+    src = _read_api_source()
+    assert src.count("preflight_block(") >= 2, (
+        "نقطة الاختناق المشتركة preflight_block يجب أن تُستدعى من كلا "
+        "معالجَي /analyze و/research")
+
+
+def _read_api_source() -> str:
+    import os as _os
+    root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    with open(_os.path.join(root, "api.py"), encoding="utf-8") as f:
+        return f.read()

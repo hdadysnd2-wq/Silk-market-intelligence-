@@ -137,16 +137,22 @@ def _run_and_assert_full_flow(body: dict):
 
 
 def test_quick_scan_analyze_full_persisted_flow_no_404():
-    """مسحٌ سريع لسوقٍ محدّد (peanut butter/UAE-شكل): كل التدفّق يعمل."""
+    """مسحٌ سريع لسوقٍ محدّد (peanut butter/UAE-شكل): كل التدفّق يعمل.
+
+    hs_confirmed=True: هذا الاسم يُصادف تعليم بوّابة تأكيد HS (الموجة ٢ —
+    040510/«زبدة» لا يشمل «فول سوداني»، عمداً — نفس عيّنة الحادثة الحيّة)
+    والاختبار يقصد فحص تدفّق الحفظ/التصدير لا البوّابة، فيتجاوزها كمستخدمٍ
+    أكّد الرمز صراحةً (اختبار البوّابة نفسها في test_report_quality_upgrade.py)."""
     _run_and_assert_full_flow(
         {"product": "زبدة الفول السوداني", "persist": True,
-         "markets": ["ARE"]})
+         "markets": ["ARE"], "hs_confirmed": True})
 
 
 def test_compare_all_markets_analyze_shares_the_same_fixed_flow():
     """«مسح الأسواق» = نداء /analyze بلا سوق محدّد. جذرٌ مشترك مع المسح
     السريع (كلاهما عبر نفس المعالج) — فيُصلَح بنفس الإصلاح."""
-    _run_and_assert_full_flow({"product": "زبدة الفول السوداني", "persist": True})
+    _run_and_assert_full_flow({"product": "زبدة الفول السوداني",
+                               "persist": True, "hs_confirmed": True})
 
 
 def test_analyze_backend_honors_persist_false_contract():
@@ -156,7 +162,8 @@ def test_analyze_backend_honors_persist_false_contract():
         c = _client()
         res = c.post("/analyze",
                      json={"product": "زبدة الفول السوداني",
-                           "persist": False, "markets": ["ARE"]}).json()
+                           "persist": False, "markets": ["ARE"],
+                           "hs_confirmed": True}).json()
         assert res.get("analysis_id") is None
         assert c.get("/analyses").json() == []
 

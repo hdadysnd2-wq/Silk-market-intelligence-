@@ -19,6 +19,13 @@
      نفس فحوص التصدير الثلاثة عليه → يظهر في «بحوثي السابقة». هذا الخطُّ لم
      يُدخَّن حيًّا قط (Commands #1-6 غطّت /research حصرًا) فكتب لقرصٍ فانٍ أعاد
      المعرّف «1» ثم 404 — الآن يُثبَت حيًّا مثل /research تمامًا.
+  7. **بوّابة تأكيد HS الحيّة (LESSONS ٣٥، تقرير الكويت):** المنتج الافتراضي
+     لهذه الخطوة («زبدة الفول السوداني») هو **بعينه** منتج الحادثة الحية —
+     يُرسَل أولاً **بلا** `hs_confirmed` فيجب أن يُرفَض ٤٢٢
+     `hs_confirmation_needed` حياً (إثباتٌ حيّ أن البوّابة فشل-آمنة على
+     النشر الفعلي، لا الاختبار الهرمتي فقط)، ثم يُعاد بـ`hs_confirmed=true`
+     لإتمام فحوص الحفظ/التصدير المعتادة. أيّ إعادة ضبط `SILK_HS_CONFIRM_GATE=0`
+     على النشر تُسقِط هذا الفحص بصمت — فيُعلَن ذلك صراحةً لا يُخفى.
 
 الاستعمال:
     python3 tools/post_deploy_smoke.py https://<railway-host>  [--key SILK_API_KEY]
@@ -160,8 +167,35 @@ def main() -> int:
     if args.skip_analyze:
         print("⊘ خطوة /analyze الحيّة متخطّاة (--skip-analyze)")
     else:
+        # 6ب) بوّابة تأكيد HS (LESSONS ٣٥): المنتج الافتراضي هو منتج حادثة
+        # الكويت الحيّة بعينه — أوّل نداءٍ **بلا** hs_confirmed يجب أن يُرفَض
+        # ٤٢٢ حياً؛ فشل-آمن يعني أن الصمّام مفعّلٌ افتراضياً على النشر لا
+        # الاختبار الهرمتي فقط. غياب الرفض (200 أو أيّ خطأ آخر) = انحدارٌ حيّ
+        # على البوّابة الأهم في هذه الجولة، لا يُمرَّر بصمت.
+        st_gate, body_gate = _post(
+            base, "/analyze", {"product": args.analyze_product}, key)
+        if st_gate == 422:
+            try:
+                err = json.loads(body_gate).get("detail", {}).get("error")
+            except Exception:  # noqa: BLE001
+                err = None
+            if err == "hs_confirmation_needed":
+                print(f"  ✓ بوّابة HS الحيّة رفضت «{args.analyze_product}» "
+                      "بلا تأكيد (422 hs_confirmation_needed) — فشل-آمن يعمل حياً")
+            else:
+                fails.append(f"POST /analyze (بلا تأكيد): 422 لكن error="
+                             f"{err!r}، متوقَّع hs_confirmation_needed")
+        elif st_gate == 200:
+            fails.append(
+                "POST /analyze (بلا تأكيد HS): 200 — بوّابة تأكيد HS لم "
+                "تحجب رمزاً غير مؤكَّد حياً (LESSONS ٣٥؛ تحقّق "
+                "SILK_HS_CONFIRM_GATE على النشر)")
+        else:
+            fails.append(f"POST /analyze (بلا تأكيد HS): HTTP {st_gate} غير متوقَّع")
+
         st, body = _post(base, "/analyze",
-                         {"product": args.analyze_product, "persist": True},
+                         {"product": args.analyze_product, "persist": True,
+                          "hs_confirmed": True},
                          key)
         if st != 200:
             fails.append(f"POST /analyze: HTTP {st} — {(body or b'')[:200]!r}")

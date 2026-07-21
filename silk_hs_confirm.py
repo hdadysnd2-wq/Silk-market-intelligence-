@@ -37,10 +37,19 @@ def _min_overlap() -> float:
 
 
 def gate_enabled() -> bool:
-    """هل بوابة التأكيد الصلبة مفعّلة؟ (`SILK_HS_CONFIRM_GATE`) — مُطفأة
-    افتراضياً (نمط الميزات المحروسة بصمّام)؛ الحساب الاستشاري يعمل دائماً."""
-    return os.environ.get("SILK_HS_CONFIRM_GATE", "").strip().lower() in (
-        "1", "true", "yes", "on")
+    """هل بوابة التأكيد الصلبة مفعّلة؟ (`SILK_HS_CONFIRM_GATE`).
+
+    **فشل-آمن: مفعّلة افتراضياً** (البلاغ الحيّ 2026-07-21، عائلة
+    `unresolved-hs-silent-spend`): تشغيلةُ `/research` مدفوعة على «زبدة الفول
+    السوداني» مضت على 040510 (زبدة ألبان) لأن البوّابة كانت خلف صمّامٍ مُطفأ
+    في الإنتاج، فأُنفِقت دولارات على فئةٍ مجاورةٍ خاطئةٍ دلالياً ولم يُحذَّر
+    إلا نثراً. القانون (LAW): لا إنفاق صامت على رمزٍ خاطئ؛ المالك آخِر مؤكِّد.
+    لذا البوّابة تعمل ما لم تُطفَأ صراحةً (`SILK_HS_CONFIRM_GATE=0/false/off`).
+    الحساب الاستشاري (`confirm_hs`) يعمل دائماً بمعزلٍ عن هذا الصمّام."""
+    raw = os.environ.get("SILK_HS_CONFIRM_GATE", "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return True
 
 
 # كلمات ربط/أدوات عامة تُستبعَد من صفات المنتج المميّزة (عربي + إنجليزي).
@@ -158,6 +167,34 @@ def is_flagged(confirmation: object) -> bool:
     None (غير قابل للتأكيد) لا يُعامَل تعليماً — لا نُطأطئ ثقة على مجهول
     (عقد عدم الاختلاق: لا نُعلن عيباً بلا دليل)."""
     return isinstance(confirmation, dict) and confirmation.get("confirmed") is False
+
+
+def preflight_block(product: str, hs_code: str | None,
+                    hs_confirmed: bool = False,
+                    path: str = "data/hs_codes.csv") -> dict | None:
+    """نقطةُ الاختناق المشتركة الوحيدة للبوّابة — the ONE choke-point both
+    `/analyze` و`/research` يستدعيانها قبل أيّ إنفاق (الموجة ٢، تدقيق
+    المُشرِف 2026-07-21: الحادثة الأصلية أُصلِحت على `/research` فقط ثم
+    عاودت الظهور — «إصلاحٌ على مسارٍ واحد نصفُ إصلاح»). تُعيد `dict` تفاصيل
+    422 (`error`, `message`, `hs_confirmation`) أو `None` إن كان الرمز
+    مؤكَّداً/غير محسوم/الصمّام مُطفأ صراحةً/المستخدم أكّد صراحةً.
+
+    منطقٌ واحدٌ يعيش هنا — لا نسخة مكرّرة داخل كل معالج HTTP؛ المعالجات
+    تستدعي هذه الدالة فقط ثم ترفع `HTTPException` بنفسها (هذه الوحدة لا
+    تستورد fastapi عمداً — تبقى مكتبة منطق صرفة بلا إطار HTTP)."""
+    if not hs_code or hs_confirmed or not gate_enabled():
+        return None
+    conf = confirm_hs(product or "", hs_code, path)
+    if not is_flagged(conf):
+        return None
+    return {
+        "error": "hs_confirmation_needed",
+        "message": (f"رمز HS {hs_code} («{conf.get('code_desc')}») "
+                    "قد لا يطابق هذا المنتج — الصفة المميّزة غير مشمولة: "
+                    f"{'، '.join(conf.get('missing_terms') or [])}. "
+                    "أكّد الرمز أو صنِّفه من جديد قبل بدء التحليل."),
+        "hs_confirmation": conf,
+    }
 
 
 if __name__ == "__main__":  # فحص يدوي — عيّنات صحيحة وخاطئة
