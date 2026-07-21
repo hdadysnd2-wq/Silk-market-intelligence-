@@ -393,6 +393,62 @@ def test_web_prerun_flow_is_wired():
         "ensureHs يتخطّى نافذة التأكيد حين S.hs محسوم — يخالف «تأكيد قبل الحجز»"
 
 
+def test_web_ui_never_shows_auto_badge_from_unverified_source():
+    """قفلٌ بنيويّ (الموجة ٤ — بلاغ «UI-ONLY FIX»): شارة «✓ صُنّف تلقائياً»
+    نصٌّ حرفيٌّ واحدٌ في كامل الملف، وموقعه الوحيد داخل `ensureHs` مشروطًا
+    بـ`res.tier==="auto"` — قرار الحسم يعيش في نقطة الاختناق (endpoint)
+    وحدها؛ أيّ مسار واجهةٍ ثانٍ يعرض الشارة من مصدرٍ آخر هو بالضبط عائلة
+    الخطأ («زبدة الفول السوداني» ← ثقة زائفة) التي أُغلِقت هنا.
+
+    الحارس يغطّي مسارَي البيانات الخام اللذين كانا يتجاوزان البوّابة قبل هذا
+    الإصلاح: نقر صفّ الفهرس (`#pDrop`) واستقبال الصورة (`#intakeGo`) — كلاهما
+    يجب أن يمرّ عبر `ensureHs(...)` حين المصنّف مفعّل، لا أن يضبط
+    `S.hsConfirmed=true` مباشرةً من رمزٍ غير محقَّق."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    html = open(os.path.join(root, "web", "index.html"), encoding="utf-8").read()
+
+    badge = "✓ صُنّف تلقائياً"
+    count = html.count(badge)
+    assert count == 1, (
+        f"شارة «{badge}» ظهرت {count} مرّة — يجب أن تكون نقطة انطلاقٍ واحدة "
+        "فقط داخل ensureHs؛ ظهورٌ إضافيٌّ يعني مساراً واجهةً ثانياً يختلق "
+        "ثقةً بلا بوّابة"
+    )
+
+    ensure_hs_start = html.index("function ensureHs(")
+    # الدالة التالية تبدأ نطاق ensureHs — الشارة يجب أن تقع قبلها لتكون
+    # فعليًا "داخل" ensureHs (نفس نمط الفحص البنيويّ في الاختبار أعلاه).
+    next_fn_start = html.index("function _pct(", ensure_hs_start)
+    ensure_hs_body = html[ensure_hs_start:next_fn_start]
+    assert badge in ensure_hs_body, (
+        "شارة «✓ صُنّف تلقائياً» انتقلت خارج ensureHs — نقطة الاختناق الوحيدة "
+        "لقرار الحسم يجب أن تبقى هناك"
+    )
+    assert 'res.tier==="auto"' in ensure_hs_body, (
+        "ensureHs لم يعد يفرّع على res.tier==='auto' قبل عرض الشارة — "
+        "بلا هذا الشرط تُعرَض الشارة على رمزٍ غير محسوم"
+    )
+    # الشارة تقع بعد الشرط نصّيًا (لا قبل الفرع) — تأكيدٌ بسيط لترتيب الكود.
+    assert ensure_hs_body.index('res.tier==="auto"') < ensure_hs_body.index(badge)
+
+    # مساران كانا يتجاوزان ensureHs (بلاغ الموجة ٤): كِلاهما يستدعي
+    # ensureHs الآن حين المصنّف مفعّل، بدل ضبط hsConfirmed مباشرةً من رمزٍ خام.
+    pdrop_start = html.index('$("#pDrop").addEventListener("click"')
+    pdrop_end = html.index("\n\n", pdrop_start)
+    pdrop_body = html[pdrop_start:pdrop_end]
+    assert "ensureHs(function(){})" in pdrop_body, (
+        "معالج نقر صفّ الفهرس (#pDrop) لا يمرّ عبر ensureHs — يعيد فخّ "
+        "الثقة العمياء برمز الفهرس الخام"
+    )
+
+    intake_go_start = html.index('$("#intakeGo").addEventListener("click"')
+    intake_go_body = html[intake_go_start:intake_go_start + 800]
+    assert "ensureHs(function(){})" in intake_go_body, (
+        "معالج تأكيد استخلاص الصورة (#intakeGo) لا يمرّ عبر ensureHs — "
+        "يعيد فخّ الثقة العمياء برمز /resolve الخام"
+    )
+
+
 def test_classifier_module_has_no_hardcoded_hs_literal():
     """المُصنِّف لا يحمل أيّ رمز HS من ٤–٦ أرقام مكتوب صلبًا (يعمل من المرجع)."""
     import inspect

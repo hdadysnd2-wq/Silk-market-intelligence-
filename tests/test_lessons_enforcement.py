@@ -279,6 +279,15 @@ _TEST_ANCHORS = [
       "def test_repeat_product_hits_cache_zero_extra_llm_calls"]),
     (39, "tests/test_regression_registry.py",
      ["def _guard_general_hs_classifier_no_lookup_table_ceiling"]),
+    # البند ٤٠ — UI-ONLY FIX: نقطة اختناق tier واحدة، لا مسار واجهةٍ ثانٍ
+    # يثق بـhs6 خامًا.
+    (40, "web/index.html", ["function ensureHs(", 'res.tier==="auto"']),
+    (40, "tests/test_wave1_hs_classifier.py",
+     ["def test_web_ui_never_shows_auto_badge_from_unverified_source"]),
+    (40, "tests/test_rung3_playwright_e2e.py",
+     ["def test_rung3_ui_tier_consumption_locked_across_product_families"]),
+    (40, "tests/test_regression_registry.py",
+     ["def _guard_ui_tier_consumption_single_choke_point"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

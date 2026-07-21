@@ -357,7 +357,7 @@ var T={
  marketsCount:{ar:"سوقاً في القائمة — و«قارن كل الأسواق» قد يتجاوزها ديناميكياً",en:"markets listed — “compare all” may extend beyond them dynamically"},
  worldGroup:{ar:"كل دول العالم",en:"All world countries"},worldCov:{ar:"تغطية أساسية — بيانات محلية محدودة",en:"Basic coverage — limited local data"},
  readyFor:{ar:"جاهز لتحليل",en:"Ready to analyze"},inM:{ar:"في",en:"in"},over:{ar:"عبر",en:"over"},allM:{ar:"كل الأسواق",en:"all markets"},pickFirst:{ar:"اختر منتجاً للبدء",en:"Pick a product to start"},
- yearsWord:{ar:"سنوات",en:"years"},yearWord:{ar:"سنة",en:"year"},resolvedAs:{ar:"✓ صُنّف تلقائياً — رمز HS ",en:"✓ Auto-classified — HS code "},
+ yearsWord:{ar:"سنوات",en:"years"},yearWord:{ar:"سنة",en:"year"},resolvedAs:{ar:"رمز HS: ",en:"HS code: "},
  searchPh:{ar:"تمر، زعفران، عسل، رطب…",en:"dates, saffron, honey…"},chatPh:{ar:"اسأل عن أي منتج أو سوق…",en:"Ask about any product or market…"},
  tabName:{ar:"اكتب الاسم",en:"Type name"},tabProduct:{ar:"صوّر المنتج",en:"Photo product"},tabLabel:{ar:"صوّر بطاقة المكوّنات",en:"Photo label"},
  intakeReading:{ar:"جارٍ قراءة الصورة…",en:"Reading image…"},intakeConfirm:{ar:"أكّد اسم المنتج قبل التحليل:",en:"Confirm the product name before analysis:"},intakeConfirmBtn:{ar:"تأكيد ومتابعة",en:"Confirm & continue"},intakeCat:{ar:"الفئة",en:"Category"},intakeIng:{ar:"المكوّنات",en:"Ingredients"},intakeConf:{ar:"ثقة القراءة",en:"Read confidence"},
@@ -455,8 +455,16 @@ var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim()
     $("#pDrop").innerHTML=list.map(function(it){return '<div class="drow" data-n="'+esc(it.name)+'" data-hs="'+esc(it.hs)+'"><span>'+esc(it.name)+'</span><span class="hs">'+esc(it.hs)+'</span></div>'}).join("");
     $("#pDrop").classList.add("open")}).catch(function(){})},200)});
 $("#pDrop").addEventListener("click",function(e){var r=e.target.closest(".drow");if(!r)return;
-  S.product=r.dataset.n;S.hs=r.dataset.hs;$("#pSearch").value=S.product;$("#pDrop").classList.remove("open");
-  $("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+S.hs;sync()});
+  S.product=r.dataset.n;S.hs=r.dataset.hs;S.hsConfirmed=false;$("#pSearch").value=S.product;$("#pDrop").classList.remove("open");
+  // بلاغ حي (الموجة ٤ — اختيار الفهرس كان يتجاوز البوّابة): رمز صفّ الفهرس
+  // كان يُعرَض فوراً كـ«محسوم» بلا أيّ تحقّق تداخل (نفس فخّ «زبدة»→040510
+  // لو اختير صفٌّ لفظياً قريباً لا صحيحاً). المُصنِّف مُطفأ => السلوك كاليوم
+  // (رمز الفهرس نقطة انطلاق؛ بوّابة الخادم عند الإرسال تحسم فعلياً). مفعَّل
+  // => نفس نقطة اختناق التصنيف (`ensureHs`) — لا شارة «محسوم» قبل التحقّق.
+  if(!(S.cfg&&S.cfg.hs_classifier)){
+    $("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+S.hs;sync();return}
+  $("#pResolved").classList.remove("on");sync();
+  ensureHs(function(){})});
 
 /* ── استقبال المنتج متعدّد الوسائط (الميزة ب) — three-tab intake ──
    التبويبات مخفيّة حتى يؤكّد /config أن SILK_IMAGE_INTAKE مفعَّل (الافتراضي
@@ -501,12 +509,16 @@ function renderIntake(res){
   S.intakeCategory=x.category_hint||null;
   $("#intakeGo").addEventListener("click",function(){
     var nm=($("#intakeName").value||"").trim();if(!nm)return;
-    // الاسم المؤكَّد يدخل المسار القائم: يملأ الصندوق ويُحلّ عبر /resolve كالمعتاد.
-    $("#pSearch").style.display="";$("#pSearch").value=nm;S.product=nm;S.hs=null;
-    c.hidden=true;
-    fetch(base()+"/resolve/"+encodeURIComponent(nm),{headers:hdrs(false)}).then(function(r){return r.json()}).then(function(d){
-      if(d&&d.hs_code){S.hs=d.hs_code;$("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+d.hs_code}sync()}).catch(function(){sync()});
-    sync()})}
+    // بلاغ حي (الموجة ٤ — مسار الصورة كان يتجاوز البوّابة): كان يُحلّ عبر
+    // `/resolve` الحتمي الخام مباشرةً — يُظهر رمزاً «محسوماً» بلا أيّ تحقّق
+    // درجات، وهو بالضبط نفس فخّ «زبدة الفول السوداني» (تطابقٌ لفظيٌّ خاطئ)
+    // لكن من استخلاص صورةٍ لا بحثٍ مكتوب. الآن يمرّ عبر `ensureHs` — **نفس**
+    // نقطة اختناق التصنيف التي يستعملها الاسم المكتوب: تلقائيٌّ صارمٌ فقط
+    // حين محسومٌ فعلاً، وإلا صندوق حوار المرشّحين — لا ثقةٌ عمياء بـhs6.
+    $("#pSearch").style.display="";$("#pSearch").value=nm;S.product=nm;S.hs=null;S.hsConfirmed=false;
+    $("#pResolved").classList.remove("on");
+    c.hidden=true;sync();
+    ensureHs(function(){})})}
 
 /* ── الأسواق ── */
 function drawMarkets(list){
@@ -658,8 +670,9 @@ function _pct(c){return Math.round((c||0)*100)}
    لكِلا مسارَي /classify_hs (ما قبل التشغيل) و422 hs_confirmation_needed
    (وقت الإرسال، /analyze و/research معاً) — نفس شكل المرشّح
    {hs6, description_ar, reason_ar, confidence, verified} في كلا المصدرين.
-   **لا يُعرَض «✓ صُنّف تلقائياً» هنا إطلاقاً** — هذا الصندوق بحكم تعريفه
-   حالة «غير محسوم»؛ الشارة الوحيدة تظهر بعد اختيار المستخدم فعلياً. */
+   **لا تُعرَض شارة الحسم التلقائيّ هنا إطلاقاً** — هذا الصندوق بحكم تعريفه
+   حالة «غير محسوم»؛ تلك الشارة الوحيدة (نصّها في ensureHs) تظهر فقط حين
+   tier==="auto"، لا بعد اختيار المستخدم من هذا الصندوق. */
 function showHsCandidates(detail,cb){
   var cands=((detail&&detail.candidates)||[]).filter(function(c){return c&&c.hs6});
   var msg=(detail&&detail.message)||"لم يُحسَم رمز HS بثقة — اختر من المرشّحين أدناه أو أدخل رمزاً يدوياً.";

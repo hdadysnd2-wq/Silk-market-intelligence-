@@ -327,3 +327,50 @@ this session.
 `docs/LESSONS.md` row 39 added (same-session, test-first), anchored in
 `tests/test_regression_registry.py::_guard_general_hs_classifier_no_lookup_table_ceiling` and
 `tests/test_lessons_enforcement.py`.
+
+## UI-ONLY FIX — tier consumption, the two real bypass paths (2026-07-21)
+
+**Order.** The supervisor filed a live bug report: `/classify_hs` is proven correct for all product
+families, but the frontend ignores its `tier` verdict — specifically naming `ensureHs` (~line 646) as
+reading only `res.hs6` and unconditionally marking "✓ صُنّف تلقائياً" regardless of tier.
+
+**What was verified against `origin/main` before touching anything:** `ensureHs()` was already correct
+— it branches on `res.tier==="auto"&&res.hs6` before setting `S.hsConfirmed`/showing the checkmark,
+and this exact branch shipped with e2e proof in the general-classifier PR immediately above. The cited
+symptom does not reproduce against the merged code as described. Rather than rewrite already-correct
+code to match an inaccurate root-cause claim, a full structural audit (every site in `web/index.html`
+that writes to `#pResolved`) was run to find what *actually* bypasses the tier gate — the owner's
+underlying concern (a second path trusting `hs6` blindly) turned out to be real, just in two different
+places than named.
+
+| Gap found | Status | Evidence |
+|---|---|---|
+| `#pDrop` (product-search dropdown row click) | FIXED | Set `S.hs`/`S.hsConfirmed=true` directly from the raw catalog index code with zero validation — same trap as "زبدة"→040510 if a lexically-close-but-wrong row is ever indexed. Now routes through `ensureHs()` when the classifier flag is on (unchanged fallback when the flag is off — the common/default deployment state). |
+| `#intakeGo` (image-intake confirm button) | FIXED | Resolved via a raw `GET /resolve/{name}` call, bypassing the classifier entirely for extracted-from-photo product names. Now routes through `ensureHs()` — same choke point the typed-name path uses. |
+| `resolvedAs` shared i18n string | FIXED | A second-order form of the same bug class, found while writing the structural guard test: the shared badge-text translation key literally baked in `"✓ صُنّف تلقائياً — رمز HS "` — so *every* consumer of `t("resolvedAs")` displayed the auto-classified checkmark, including manual candidate-pick (`showHsCandidates`'s `commit`), full manual entry (`showHsManual`'s `commit`), and the classifier-disabled `#pDrop` fallback. None of those are auto-classified. `resolvedAs` is now neutral (`"رمز HS: "` / `"HS code: "`); the checkmark text is now a literal string owned exclusively by `ensureHs`'s `tier==="auto"` branch. |
+
+**Structural guard (single choke point):** `"✓ صُنّف تلقائياً"` now occurs exactly once in
+`web/index.html` — inside `ensureHs`, gated by `res.tier==="auto"`. Enforced three ways: a hermetic
+text-scan test (`tests/test_wave1_hs_classifier.py::test_web_ui_never_shows_auto_badge_from_unverified_source`),
+a matching registry guard (`tests/test_regression_registry.py::_guard_ui_tier_consumption_single_choke_point`),
+and a real-browser parametrized lock-test
+(`tests/test_rung3_playwright_e2e.py::test_rung3_ui_tier_consumption_locked_across_product_families`,
+driving `tests/e2e/hs_tier_family_flow.cjs`) that runs six real product families through one live
+session: "زبدة الفول السوداني"/"مياه ورد"/"عود معطر"/"زيت زيتون" must show the candidates dialog and
+never the checkmark; "تمر سكري"/"عسل سدر" must show the checkmark with no dialog.
+
+**Honest deviation from the owner's literal example list (LAW §2):** the owner's live evidence used a
+keyed environment where "زيت زيتون" resolved `tier="auto"`. e2e-live-shape strips `ANTHROPIC_API_KEY`
+by policy (same as every other rung-3 test), so in this keyless sandbox `classify_general("زيت زيتون",
+allow_claude=False)` returns three CSV candidates (150910/150990/071120) too close together to clear
+the auto margin — the lock-test places it in the `dialog` group instead of `auto`. This is the
+fail-safe working as designed (uncertain → ask, not guess) on a plausible product name that lacks a
+structurally-verifiable deterministic margin, not a regression — documented here rather than silently
+adjusted to match the owner's exact grouping. `تمر سكري`/`عسل سدر` were independently confirmed to
+auto-pass deterministically (no LLM) and are used for the `auto` group instead.
+
+Full suite (1468 passed / 18 skipped) and rung-3 Playwright e2e (4/4, `full_browser` excluded per its
+pre-existing unrelated sandbox failure) both green in this session. `docs/LESSONS.md` row 40 added
+(same-session, test-first), anchored in
+`tests/test_regression_registry.py::_guard_ui_tier_consumption_single_choke_point` and
+`tests/test_lessons_enforcement.py`.

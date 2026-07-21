@@ -827,6 +827,36 @@ def _guard_watchdog_owner_only_no_client_contamination():
     assert rec is not None and rec.get("self_error")
 
 
+def _guard_ui_tier_consumption_single_choke_point():
+    """LESSONS ٤٠ — بلاغ «UI-ONLY FIX» (المُشرِف): نقطة اختناق التصنيف
+    (`res.tier` من `/classify_hs`) لها موقعُ استهلاكٍ واحدٌ في الواجهة، لا
+    مسارٌ ثانٍ يثق بـhs6 خامًا. الحارس السلوكي: (١) شارة «✓ صُنّف تلقائياً»
+    نصٌّ حرفيٌّ ظهورهُ الوحيد داخل `ensureHs` مشروطًا بـ`tier==="auto"`؛
+    (٢) معالجا نقر صفّ الفهرس (`#pDrop`) وتأكيد استخلاص الصورة (`#intakeGo`)
+    يمرّان عبر `ensureHs` بدل ضبط الحسم مباشرةً؛ (٣) نصّ الشارة المشترك
+    (`resolvedAs`) لم يعد يحمل ادّعاء «صُنّف تلقائياً» بذاته — وإلا يظهر على
+    أيّ تأكيدٍ يدويّ (اختيار مرشّح، إدخال يدويّ) رغم أنه ليس تلقائيًا فعلاً."""
+    html = _read("web/index.html")
+    badge = "✓ صُنّف تلقائياً"
+    assert html.count(badge) == 1, (
+        f"شارة «{badge}» ظهرت {html.count(badge)} مرّة — يجب أن تكون نقطة "
+        "انطلاقٍ واحدة فقط داخل ensureHs")
+    ensure_hs_start = html.index("function ensureHs(")
+    ensure_hs_body = html[ensure_hs_start:html.index("function _pct(", ensure_hs_start)]
+    assert badge in ensure_hs_body and 'res.tier==="auto"' in ensure_hs_body
+    pdrop_start = html.index('$("#pDrop").addEventListener("click"')
+    assert "ensureHs(function(){})" in html[pdrop_start:pdrop_start + 1000]
+    intake_go_start = html.index('$("#intakeGo").addEventListener("click"')
+    assert "ensureHs(function(){})" in html[intake_go_start:intake_go_start + 1000]
+    # نصّ الشارة المشتركة نفسه بلا ادّعاء «تلقائي» — وإلا تظهر على أيّ تأكيدٍ
+    # يدويّ (اختيار مرشّح/إدخال يدويّ) عبر إعادة استعمال t("resolvedAs").
+    resolved_as_start = html.index("resolvedAs:{")
+    resolved_as_line = html[resolved_as_start:resolved_as_start + 120]
+    assert "صُنّف تلقائياً" not in resolved_as_line, (
+        "resolvedAs المشتركة تحمل ادّعاء «صُنّف تلقائياً» — تُعيد ظهور الشارة "
+        "على مساراتٍ يدويةٍ غير محسومة (نفس عائلة الحادثة)")
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -872,7 +902,7 @@ _LESSONS = {
     37: _guard_golden_contract_test_exists_and_covers_both_paths,  # الاختبار الذهبي — كل العقود، كلا المسارين
     38: _guard_watchdog_owner_only_no_client_contamination,  # الحارس — مراقبةٌ للمالك حصراً، صفر تلوّث للعميل
     39: _guard_general_hs_classifier_no_lookup_table_ceiling,  # المصنّف العام — جدول البحث تلميحٌ ابتدائي لا حاكمٌ نهائي
-
+    40: _guard_ui_tier_consumption_single_choke_point,  # UI-ONLY FIX — نقطة اختناق tier واحدة، لا مسار ثانٍ يثق بـhs6 خامًا
 }
 
 _TRAPS = [
