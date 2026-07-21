@@ -374,3 +374,60 @@ pre-existing unrelated sandbox failure) both green in this session. `docs/LESSON
 (same-session, test-first), anchored in
 `tests/test_regression_registry.py::_guard_ui_tier_consumption_single_choke_point` and
 `tests/test_lessons_enforcement.py`.
+
+## ONE FIX — the classifier must actively resolve, not echo a rejected code (2026-07-21)
+
+**Order.** Owner report: for "زبدة الفول السوداني" the dialog correctly *rejects* the lexical match
+040510, but then offers only "إدخال رمز يدوياً" / "إلغاء" — a dead end for a merchant who does not
+know HS codes and must never be asked to type one. Requested: one behavior change — when the
+deterministic lookup rejects its match, the classifier must actively invoke the existing LLM path,
+validate the result through the same gate, and return it as the **primary** one-click candidate.
+Explicit scope discipline: no new UI surfaces, guards, or paths — reuse the existing dialog and
+LLM/validation code.
+
+**Root cause (two compounding bugs in `silk_hs_classifier.classify_general`'s existing mechanism —
+the LLM-invocation trigger itself was already correct and already fired; the bug was in what happened
+*after*):**
+
+1. `_rank_key` sorted candidates `(verified, overlap, model_confidence)` — `verified` (mere presence
+   in our partial CSV reference) as the *primary* key. A wrong-but-in-our-table deterministic guess
+   (e.g. 040510, `verified=True`, weak overlap) could rank above a correct LLM-proposed candidate that
+   happened not to be in our partial reference, or lose a near-tie it should have won — the exact
+   `lookup-table-ceiling` family (LESSONS row 39) leaking into *candidate ordering* rather than the
+   auto-tier gate that row 39 already closed.
+2. `silk_hs_confirm._covered()` (the shared discriminating-term overlap core) allowed containment
+   matches on roots as short as 2 characters. Reproduced live: for "شيبس بنكهة الجبن" (cheese-flavored
+   chips), the 2-letter root "بن" (coffee) is a literal substring of both "بنكهة" (flavored) and "جبن"
+   (cheese) — a coincidental collision, not a real semantic match — inflating the wrong deterministic
+   candidate 090111 ("بن غير محمص", unroasted coffee beans) to overlap 0.67, *beating* the correct
+   LLM-proposed 200520 (potato chips) at 0.33. This is why the mechanism's own regression battery
+   (`test_battery_llm_assisted_surfaces_correct_chapter_when_deterministic_weak`) never caught it — that
+   test only asserted the correct chapter *appeared somewhere* in `candidates`, never that it was
+   `candidates[0]` (the one-click primary).
+
+**Fix (`silk_hs_classifier.py` + `silk_hs_confirm.py`, both minimal, no new surfaces):**
+
+| Change | What it does |
+|---|---|
+| `_rank_key` | Now `(passes_min_overlap_gate, source=="llm", overlap, model_confidence)`. A candidate that clears the same discriminating-term gate everything else must clear ranks above one that doesn't, regardless of origin. Among gate-passers, an LLM-sourced candidate — invoked specifically *because* the deterministic-only result was rejected — outranks a deterministic one on a lexical-overlap tie (a coincidental tie should not defeat an actively-verified semantic conclusion). `_clearly_auto`'s explicit `verified` requirement for the strict `auto` tier (LESSONS 39) is untouched — this only changes which candidate leads the `candidates` tier's one-click list. |
+| `_covered()` | Containment matches now require the shorter of the two compared roots to be ≥3 characters (`SILK_HS_CONFIRM_MIN_CONTAINMENT_LEN`, default 3) — exact-equality matches remain unconstrained by length. Kills short-root coincidences (2-letter Arabic roots collide inside unrelated longer words disproportionately often) without weakening genuine matches (verified against the existing `confirm_hs`/`_validated_candidate` test suite — all still pass, including the exact "زبدة"/040510 whole-word match the original incident depended on). |
+
+**Breadth proof, not a peanut-butter patch.** `tests/test_hs_general_classifier.py::
+test_breadth_active_resolution_surfaces_correct_primary_not_rejected_or_blank` — parametrized over the
+owner's literal 8-family list (زبدة الفول السوداني، مياه ورد، عود معطر، شيبس بنكهة الجبن، قهوة عربية
+محمصة، صلصة شطة، مكسرات محمصة مملحة، لبان مستكة), each with a realistic mocked Claude response,
+asserts `candidates[0]`'s HS2 chapter is in the acceptable set for every one of the 8 — no family
+needed a declared-gap exception; the two-bug fix above generalizes cleanly across all 8, not just the
+original incident's product.
+
+**Env honesty (LAW §2, bucket 2/3):** the active-resolution step needs `ANTHROPIC_API_KEY` +
+`SILK_HS_CLASSIFIER=1` live. The breadth test mocks `silk_ai_judge._call` (a recorded/realistic Claude
+response shape) to prove the mechanism hermetically — dedup/ranking/gate logic, not the live model
+call itself. Confirming the *literal* live Claude response for each of the 8 products is the owner's
+keyed environment; this session proves the pipeline handles a correct LLM answer properly once one
+arrives, which is the strongest claim obtainable without spending real money here.
+
+Full suite (1469 passed / 19 skipped) green in this session. `docs/LESSONS.md` row 41 added
+(same-session, test-first), anchored in
+`tests/test_regression_registry.py::_guard_active_resolution_beats_rejected_and_short_root_collision`
+and `tests/test_lessons_enforcement.py`.
