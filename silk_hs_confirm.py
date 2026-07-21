@@ -86,12 +86,27 @@ def _tokens(text: str) -> list[str]:
     return out
 
 
+# حدُّ الطول الأدنى لاحتواء الجذر — دون التطابق التامّ (term==c، مسموحٌ دوماً
+# بمعزلٍ عن الطول)، احتواءٌ لجذرٍ أقصر من هذا يُرفَض: جذورٌ قصيرة (حرفان)
+# تتصادف داخل كلماتٍ لا علاقة لها لفظياً («بن» — قهوة — داخل «بنكهة»/«جبن»؛
+# منتجٌ غذائيٌّ لا علاقة له بالبنّ يُصنَّف خطأً لمجرّد هذا التصادف الحرفي).
+_MIN_CONTAINMENT_LEN = int(
+    os.environ.get("SILK_HS_CONFIRM_MIN_CONTAINMENT_LEN", "3") or "3")
+
+
 def _covered(term: str, code_terms: list[str]) -> bool:
-    """هل صفة المنتج مغطّاة بأي صفة من وصف الرمز؟ (احتواء باتجاهين)."""
+    """هل صفة المنتج مغطّاة بأي صفة من وصف الرمز؟ (احتواء باتجاهين، بشرط ألّا
+    يكون الجذر المُحتوى أقصر من `_MIN_CONTAINMENT_LEN` — تطابقٌ حرفيٌّ تامّ
+    (term==c) لا يخضع لهذا الشرط أبداً)."""
     for c in code_terms:
         if not c:
             continue
-        if term == c or term in c or c in term:
+        if term == c:
+            return True
+        shorter = c if len(c) <= len(term) else term
+        if len(shorter) < _MIN_CONTAINMENT_LEN:
+            continue
+        if term in c or c in term:
             return True
     return False
 

@@ -857,6 +857,33 @@ def _guard_ui_tier_consumption_single_choke_point():
         "على مساراتٍ يدويةٍ غير محسومة (نفس عائلة الحادثة)")
 
 
+def _guard_active_resolution_beats_rejected_and_short_root_collision():
+    """LESSONS ٤١ — «ONE FIX» (المُشرِف): رفضٌ بلا بديلٍ صحيحٍ مأزقٌ لا حَل؛
+    التاجر لا يعرف رموز HS ولا يجوز أن يُطلَب منه ذلك. الحارس السلوكي:
+    (١) مرشّح كلود المصادَق يتصدّر على مرشّحٍ حتميٍّ مرفوضٍ (تداخلٌ دون
+    العتبة) رغم بقاء الأخير «مُتحقَّقاً» لمجرّد وجوده في بذرتنا الجزئية —
+    نفس بلاغ «زبدة الفول السوداني»، منتجٌ مختلف؛ (٢) احتواء جذرٍ من حرفين
+    («بن» داخل «بنكهة»/«جبن») لا يُحتسَب تداخلاً حقيقياً — نواة المطابقة
+    ترفض التصادف اللفظي القصير بمعزلٍ عن تدفّق المصنِّف بأكمله."""
+    import silk_hs_classifier as hsc
+    from silk_hs_confirm import _covered
+    # (١) الترتيب: مرشّحٌ حتميٌّ مرفوضٌ (متحقَّق، تداخلٌ ضعيف) لا يتصدّر على
+    # مرشّح كلود (غير متحقَّق لكنه عابرٌ للعتبة وأعلى تداخلاً) — نفس السيناريو
+    # الذي كان يُبقي الرمز المرفوض معروضاً كخيارٍ أساسيّ بلا بديل.
+    rejected = {"hs6": "040510", "overlap": 0.33, "verified": True,
+               "model_confidence": 0.5, "source": "deterministic"}
+    resolved = {"hs6": "200811", "overlap": 0.6, "verified": False,
+               "model_confidence": 0.9, "source": "llm"}
+    ordered = sorted([rejected, resolved], key=hsc._rank_key, reverse=True)
+    assert ordered[0]["hs6"] == "200811", (
+        "المرشّح المرفوض تصدّر على المرشّح المصادَق من كلود — التاجر يبقى "
+        "بين تأكيد رمزٍ خاطئ وإدخال رمزٍ يجهله")
+    # (٢) نواة التداخل: احتواء جذرٍ قصيرٍ (حرفان) لا يُعَدّ تطابقاً — التطابق
+    # التامّ يبقى بلا قيدٍ على الطول.
+    assert _covered("بنكهه", ["بن", "غير", "محمص"]) is False
+    assert _covered("زبده", ["زبده"]) is True
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -903,6 +930,7 @@ _LESSONS = {
     38: _guard_watchdog_owner_only_no_client_contamination,  # الحارس — مراقبةٌ للمالك حصراً، صفر تلوّث للعميل
     39: _guard_general_hs_classifier_no_lookup_table_ceiling,  # المصنّف العام — جدول البحث تلميحٌ ابتدائي لا حاكمٌ نهائي
     40: _guard_ui_tier_consumption_single_choke_point,  # UI-ONLY FIX — نقطة اختناق tier واحدة، لا مسار ثانٍ يثق بـhs6 خامًا
+    41: _guard_active_resolution_beats_rejected_and_short_root_collision,  # ONE FIX — المصادَق يتصدّر على المرفوض، لا تصادف جذرٍ قصير
 }
 
 _TRAPS = [

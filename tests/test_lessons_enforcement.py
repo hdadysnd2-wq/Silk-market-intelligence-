@@ -288,6 +288,14 @@ _TEST_ANCHORS = [
      ["def test_rung3_ui_tier_consumption_locked_across_product_families"]),
     (40, "tests/test_regression_registry.py",
      ["def _guard_ui_tier_consumption_single_choke_point"]),
+    # البند ٤١ — ONE FIX: المصادَق فعلياً من كلود يتصدّر على المرفوض
+    # الحتمي؛ نواة التداخل ترفض تصادف جذرٍ قصير.
+    (41, "silk_hs_classifier.py", ["def _rank_key"]),
+    (41, "silk_hs_confirm.py", ["_MIN_CONTAINMENT_LEN", "def _covered"]),
+    (41, "tests/test_hs_general_classifier.py",
+     ["def test_breadth_active_resolution_surfaces_correct_primary_not_rejected_or_blank"]),
+    (41, "tests/test_regression_registry.py",
+     ["def _guard_active_resolution_beats_rejected_and_short_root_collision"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

@@ -318,3 +318,77 @@ def test_battery_llm_assisted_surfaces_correct_chapter_when_deterministic_weak(
         f"{[c['hs6'] for c in r['candidates']]}")
     if r["tier"] == "auto":
         assert r["hs6"][:2] in ok_chapters
+
+
+# ══════════════ ONE FIX — الأساسي المصادَق يتصدّر، لا المرفوض ولا الفراغ ═══
+#
+# البلاغ الحيّ (طلب المُشرِف): التاجر لا يعرف رموز HS ولا يجوز أن يُطلَب منه
+# كتابة واحد أبداً. حين يرفض اللاحق الحتمي مرشّحه الوحيد (تداخل صفاتٍ مميّزة
+# دون العتبة)، يجب أن **يتصدّر** مرشّحٌ صحيحٌ مصادَقٌ عليه فعلياً (نداء كلود
+# مُحاكًى هنا) — لا الرمز المرفوض نفسه (حتى لو بقي «مُتحقَّقاً» لمجرّد وجوده
+# في بذرتنا الجزئية)، ولا منتقٍ يدويٌّ فارغ. ثماني عائلاتٍ متنوّعة (طلب
+# المُشرِف الصريح) تثبت التعميم — لا حالة «زبدة الفول السوداني» وحدها من
+# جديد. القفل يفحص **موضع** المرشّح الأول تحديداً (`candidates[0]`) — عكس
+# الاختبار أعلاه الذي يكتفي بظهور الفصل الصحيح في أيّ مكان ضمن القائمة.
+
+_BREADTH_8 = [
+    # (المنتج، فصولُ HS2 المقبولة للمرشّح **الأساسي**، تلميحُ كلود المُحاكى)
+    ("زبدة الفول السوداني", {"20", "21"},
+     [{"hs6": "200811", "description_ar": "فول سوداني محضّر أو محفوظ",
+       "reason_ar": "زبدة الفول السوداني تندرج تحت محضرات الفول السوداني لا الألبان",
+       "confidence": 0.9}]),
+    ("مياه ورد", {"33"},
+     [{"hs6": "330129", "description_ar": "مياه مقطّرة عطرية",
+       "reason_ar": "مياه ورد منتجٌ من المياه العطرية المقطّرة",
+       "confidence": 0.85}]),
+    ("عود معطر", {"33", "44"},
+     [{"hs6": "330741", "description_ar": "بخور وعود",
+       "reason_ar": "عود معطر بخورٌ عطري", "confidence": 0.8}]),
+    ("شيبس بنكهة الجبن", {"19", "20", "21"},
+     [{"hs6": "200520", "description_ar": "بطاطس محضّرة أو محفوظة",
+       "reason_ar": "شيبس البطاطس محضّرات خضروات لا أجبان",
+       "confidence": 0.8}]),
+    ("قهوة عربية محمصة", {"09"},
+     [{"hs6": "090121", "description_ar": "بن محمص غير منزوع الكافيين",
+       "reason_ar": "قهوة عربية محمصة بنٌّ محمّص", "confidence": 0.85}]),
+    ("صلصة شطة", {"20", "21"},
+     [{"hs6": "210390", "description_ar": "صلصات وتوابل مركّبة أخرى",
+       "reason_ar": "صلصة شطة صلصةٌ مركّبة", "confidence": 0.8}]),
+    ("مكسرات محمصة مملحة", {"20", "08"},
+     [{"hs6": "200819", "description_ar": "مكسرات أخرى محضّرة أو محفوظة",
+       "reason_ar": "تحميص وتمليح لا يغيّر الفصل الأساسي",
+       "confidence": 0.85}]),
+    ("لبان مستكة", {"13"},
+     [{"hs6": "130190", "description_ar": "صموغ وراتنجات طبيعية أخرى",
+       "reason_ar": "لبان المستكة راتنجٌ طبيعي", "confidence": 0.8}]),
+]
+
+
+@pytest.mark.parametrize("product,ok_chapters,hints", _BREADTH_8,
+                         ids=[c[0] for c in _BREADTH_8])
+def test_breadth_active_resolution_surfaces_correct_primary_not_rejected_or_blank(
+        product, ok_chapters, hints):
+    """ONE FIX — طلب المُشرِف الصريح، حرفياً: عبر ثماني عائلاتٍ متنوّعة،
+    حين يرفض اللاحق الحتمي مرشّحه الوحيد، مسار كلود (مُحاكًى — بيئة CI بلا
+    مفتاح حيّ) يُستدعى فعلياً ويتصدّر **المرشّح الأول** (`candidates[0]`)
+    بنقرة واحدة — لا الرمز المرفوض (حتى لو تعادل لفظياً أو تصدّر بمجرّد
+    وجوده في بذرتنا الجزئية)، ولا تدهورٌ لمنتقٍ يدويٍّ رغم توفّر مرشّحٍ صحيح.
+
+    الحسم الحيّ (بمفتاح كلود فعلي) يتطلّب بيئة المالك — هذا القفل يثبت
+    **الآلية** (استدعاءٌ + تحقّقٌ + صدارةٌ) حتمياً بمحاكاة استجابة النموذج."""
+    import silk_hs_classifier as hsc
+    fake = _fake_llm(hints)
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
+         patch("silk_ai_judge.available", return_value=True), \
+         patch("silk_ai_judge._call", return_value=fake), \
+         patch("silk_usage.try_reserve_paid_calls", return_value=True), \
+         patch("silk_usage.try_reserve_usd", return_value=True):
+        r = hsc.classify_general(product, allow_claude=True)
+    assert r["tier"] != "manual", (
+        f"{product!r}: تدهورٌ لمنتقٍ يدويٍّ فارغ رغم مرشّحٍ صحيحٍ متاحٍ من كلود")
+    assert r["candidates"], f"{product!r}: لا مرشّحين إطلاقاً"
+    primary = r["candidates"][0]
+    assert primary["hs6"][:2] in ok_chapters, (
+        f"{product!r}: المرشّح الأساسي {primary['hs6']} (فصل "
+        f"{primary['hs6'][:2]}) خارج الفصول المقبولة {ok_chapters} — لم "
+        f"يتصدّر المرشّح الصحيح رغم توفّره ضمن {[c['hs6'] for c in r['candidates']]}")
