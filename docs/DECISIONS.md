@@ -431,3 +431,92 @@ Full suite (1469 passed / 19 skipped) green in this session. `docs/LESSONS.md` r
 (same-session, test-first), anchored in
 `tests/test_regression_registry.py::_guard_active_resolution_beats_rejected_and_short_root_collision`
 and `tests/test_lessons_enforcement.py`.
+
+## Migrate to the complete official HS2022 list + invert the classifier flow (2026-07-21)
+
+**Order.** Owner uploaded `hscodes_full.csv` — the complete official UN Comtrade HS2022 six-digit
+reference (5,613 codes: `hs_code,chapter,chapter_desc_en,heading,heading_desc_en,description_en,
+keywords_ar`) — to replace the prior partial curated seed (`data/hs_codes.csv`, ~5,627 rows, columns
+`hs_code,name_en,name_ar,keywords`) and to **invert** the classifier's flow: the model proposes for
+every product, the local list only validates existence + description consistency, never proposes or
+overrides on its own.
+
+| Step | Status | Evidence |
+|---|---|---|
+| 1 — sole validation source | DONE | `data/hscodes_full.csv` copied in; `silk_hs_resolver.load_hs_codes()`'s default `path` moved from `data/hs_codes.csv`; `_keywords()`/`resolve_all()`'s note-building read `description_en`/`keywords_ar` (semicolon-separated) instead of `name_en`/`name_ar`/`keywords`. `hs_code` stays a plain `str` throughout — stdlib `csv.DictReader` never coerces types, so the "read as text" requirement holds without any explicit `dtype` handling (that's a pandas-specific concern this codebase doesn't have, per its stdlib-only convention). |
+| 2 — migrate Arabic keywords | DONE | `tools/migrate_hs_keywords.py` (new, stdlib `csv` only) joins by `hs_code` and **appends** (does not overwrite) into `keywords_ar`, semicolon-delimited to match the uploaded file's own existing convention. Discovery mid-migration: the uploaded file already carried 5 hand-curated rows (040510 dairy butter / 090111 coffee / 151590 shea butter / 180400 cocoa butter / 200811 peanut butter) — exactly the "زبدة" family collisions this session's prior two PRs fixed algorithmically. The merge preserves those first, old-seed terms appended after, deduped case-insensitively. 143 additional rows migrated (145 total with Arabic terms out of 5,613). 13 old codes (all with real Arabic labels: فستق، فول سوداني، فانيليا، قرفة، قرنفل، هيل، زيت زيتون بكر، etc.) have no exact match in HS2022 — the old codes were **superseded by the revision** (e.g. old 150910 "olive oil, virgin" split into 150920/150930/150940/150990 in HS2022) — their terms did not carry over verbatim, logged explicitly by the migration script rather than silently dropped. `data/hs_codes.csv` deleted after the full suite went green. |
+| 3/4 — invert the flow + auto-accept threshold | DONE | `silk_hs_classifier.classify_general()` rewritten: `_deterministic_validated_candidates()` (the old CSV-fuzzy-match proposal step) deleted outright. Candidates now come from exactly two sources — a caller-`given` code (external, not the list proposing) and the model's top-3 (`_claude_classify_general`, called for every product when the classifier flag + key are on, not gated behind "deterministic already failed" anymore). Every candidate — whichever source — passes the same `_validated_candidate` gate. `_clearly_auto`'s threshold logic (verified + overlap ≥0.8 + ≥0.15 margin over runner-up) is unchanged; it now operates purely over LLM-sourced (+ given) candidates, which already implements "auto-accept only high confidence, dialog on conflict/low-confidence/validation-failure" — no new threshold code needed. |
+| 5 — breadth: compound-phrase + section coverage | DONE | `tests/test_hs_general_classifier.py::test_section_and_compound_phrase_breadth_surfaces_correct_primary` — 8 new mocked-LLM cases: 4 illustrate a single word landing in a different chapter than the full phrase ("زيت السمسم" — "زيت" alone risks the *excluded* petroleum chapter 27; "أنابيب بلاستيكية للري" — "أنابيب" alone risks steel-tube chapter 73; "معجون طماطم" — "معجون" alone risks cosmetics; "سبيكة ذهب خام" — "سبيكة" alone risks base-metal chapters), plus explicit section coverage (textiles 52, machinery 84, organic/inorganic chemicals 29/28). All 8 pass — primary candidate is the correct chapter. |
+| 6 — full suite + e2e + PR | DONE | See test plan below. |
+
+**Real gap found and fixed during construction, not by a later live bug report (documented, not
+silently patched):** three display functions read the *old* column names directly (`r.get("name_ar")`
+etc.) and would have degraded to a silently empty/`None` display for every row — `api._index_search`
+(the product-search dropdown box), `silk_hs_classifier._candidate_rows` (the manual-picker's hint
+list), and `silk_discovery._hs_names` (reverse-discovery's display names). None of these raise —
+`dict.get` on a missing key just returns the default — so nothing in CI would have caught this without
+inspecting actual response content. Found by `grep`-ing every reader of the old column names across the
+repo (not just the two modules directly touched by the rewrite) before declaring the migration done,
+per this session's now-standard discipline of auditing every consumer of a changed shared contract, not
+just the ones the task description named. Fixed to read `description_en`/`keywords_ar`; locked by
+`tests/test_regression_registry.py::_guard_full_hs_list_migration_no_silent_display_breakage`, which
+asserts each of the three functions returns a non-empty name for a known-good row (previously nothing
+in the suite inspected `_index_search`'s/`_candidate_rows`'s/`_hs_names`'s *content*, only status codes
+or presence of a `hs6` field).
+
+**Cost trade-off — flagged explicitly, not buried (credit-economics discipline).** Before this change,
+a confidently-known product ("تمور") never called the model at all — `test_classify_general_
+deterministic_only_never_needs_llm_for_clean_match` asserted exactly zero LLM calls for it. That
+optimization is now **gone by design**: every classification of a not-yet-cached product costs one
+metered Claude call, even an "obvious" one, because the local list is structurally barred from
+proposing anything on its own — that was the explicit ask ("the local list must never propose or
+override codes on its own"). The existing per-product cache (`silk_store.cache_hs_classification`,
+unchanged) still makes *repeat* classifications of the same product free, and `silk_usage`'s daily
+cap/dollar reservation still gates every call — but the cap will be exercised far more often in
+practice than before. When the classifier flag is off, or no key is configured, or the cap is
+exhausted, classification now degrades straight to the manual picker for essentially everything (no
+local fallback proposal survives to fill the gap) — an honest declared gap, not a functional break, but
+a materially different day-to-day experience from before. Renamed/rewrote the four tests whose names
+asserted the old "zero-LLM-for-a-clean-match" invariant (`test_classify_general_always_asks_the_model_
+no_local_shortcut_even_for_clean_product`, `test_classify_general_no_llm_available_never_guesses_
+locally_even_for_clean_product`, `test_no_reservation_when_classifier_flag_off`, `test_reservation_
+denied_degrades_to_declared_gap_not_local_guess`) to assert the new one instead of leaving them passing
+for the wrong reason.
+
+**What is NOT live-proven here (LAW §2, bucket 2/3 boundary):** exactly as with the prior two PRs, the
+live Claude call for any specific product in the owner's keyed environment is outside this sandbox's
+reach — e2e-live-shape strips `ANTHROPIC_API_KEY` by policy. This session's spot-checks of `silk_hs_
+resolver.resolve()` / `api._index_search()` against the new file (dates, saffron, olive oil, silk
+scarf, gold jewelry, coffee — all resolving to plausible, correctly-chaptered codes) prove the
+*deterministic-matching-only* layer (used by the resolver's own free-text search and the manual
+picker), not the now-mandatory LLM proposal path itself.
+
+**Second gap found only by actually running rung-3 (real browser), not the hermetic suite alone.**
+`tests/e2e/prerun_flow.cjs` and `readiness_flow.cjs` (both select "تمور" via the real `#pDrop`
+dropdown row, not the test-only hook) started failing with Playwright "element intercepts pointer
+events" timeouts. Root cause: `#pDrop`'s click handler already calls `ensureHs()` on selection (a
+fix from the prior "UI-ONLY FIX" PR) — before this migration that was invisible because "تمور"
+always auto-passed silently both there and again on the "بحث عميق" click. Now that nothing auto-passes
+without a live key, the `#pDrop` selection itself pops the candidates dialog — and since `ensureHs()`
+had no memoization, clicking "بحث عميق" afterward called `/classify_hs` *again* for the same product,
+opening a **second** dialog stacked on top of the first, unclosed one; Playwright's click on a real
+`.hsCand` button then hit the newer dialog's DOM sitting on top of it. Fixed with one added guard at
+the top of `ensureHs()` (`web/index.html`): `if(S.hsConfirmed&&S.hs){return cb()}` — skips
+re-classification only when the *current* product was already confirmed (every product-changing
+handler already resets `hsConfirmed=false` first, so this can never smuggle a stale confirmation
+across products, and it does not weaken the "confirm before every run" guarantee from LESSONS row 40 —
+it only skips a *redundant* second confirmation of something already confirmed). Both e2e scripts
+rewritten to close the dialog raised by product selection before proceeding to market selection, since
+that is genuinely where it now appears. `tests/e2e/hs_tier_family_flow.cjs` also rewritten: with local
+proposing gone, *every* keyless product shows the dialog now (not just the "hard" ones) — the old
+auto-vs-dialog split it demonstrated is no longer something a keyless browser session can show; it now
+proves the dialog-first mechanism holds across 8 diverse families in one session, while the
+auto/candidates/manual *tier logic itself* stays proven hermetically (mocked LLM) in
+`test_hs_general_classifier.py`, where it can actually be exercised. All 4 rung-3 tests (`full_browser`
+excluded, its failure is the pre-existing unrelated sandbox issue noted in earlier sessions) verified
+green after the fix.
+
+`docs/LESSONS.md` row 42 added (same-session, test-first) — covering both the column-rename display
+breakage and this stacked-dialog finding — anchored in `tests/test_regression_
+registry.py::_guard_full_hs_list_migration_no_silent_display_breakage` and `tests/test_lessons_
+enforcement.py`.

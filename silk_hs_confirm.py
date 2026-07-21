@@ -12,8 +12,8 @@
 > (`confirmed=False`) => بوابة صلبة (خلف `SILK_HS_CONFIRM_GATE`) تُوقِف
 > التشغيل وتسأل المستخدم، وطبقة العرض/الكاتب تعيد تأطير كل رقم مشتقّ من الرمز
 > «مؤشر سياقي لا مقياس فعلي». صفر اسم منتج/رمز مكتوب صلباً — القاعدة مبنيّة
-> على البيانات (`data/hs_codes.csv`) والعتبة من env (عائلة `hardcoded-product-rule`،
-> الدرس ٢٤).
+> على البيانات (`data/hscodes_full.csv` — القائمة الرسمية الكاملة HS2022،
+> ٥٦١٣ رمزاً) والعتبة من env (عائلة `hardcoded-product-rule`، الدرس ٢٤).
 
 المكتبات: stdlib فقط — يستورده api (البوابة) وطبقة العرض (التأطير) بلا شبكة.
 """
@@ -111,20 +111,30 @@ def _covered(term: str, code_terms: list[str]) -> bool:
     return False
 
 
+def _keywords_ar_list(row: dict) -> list[str]:
+    """كلمات `keywords_ar` كقائمة — مفصولةٌ بفاصلةٍ منقوطة `;` (راجع
+    tools/migrate_hs_keywords.py)، الأولى هي الاسم العربي الأساسي عرفاً."""
+    return [t.strip() for t in (row.get("keywords_ar") or "").split(";")
+           if t.strip()]
+
+
 def _code_terms(row: dict) -> list[str]:
-    """صفات وصف الرمز — الاسم العربي/الإنجليزي + الكلمات المفتاحية، مُنمَّطة."""
-    parts: list[str] = []
-    for field in ("name_ar", "name_en", "keywords"):
-        parts.extend(_tokens(row.get(field, "")))
+    """صفات وصف الرمز — الوصف الرسمي الإنجليزي + الكلمات المفتاحية العربية،
+    مُنمَّطة (القائمة الرسمية الكاملة: `description_en`/`keywords_ar`)."""
+    parts: list[str] = list(_tokens(row.get("description_en", "")))
+    for kw in _keywords_ar_list(row):
+        parts.extend(_tokens(kw))
     return parts
 
 
 def _code_desc(row: dict) -> str:
-    """وصف مقروء للرمز للعرض — العربي إن وُجد وإلا الإنجليزي."""
-    return (row.get("name_ar") or row.get("name_en") or "").strip()
+    """وصف مقروء للرمز للعرض — العربي الأساسي إن وُجد وإلا الوصف الرسمي
+    الإنجليزي."""
+    ar = _keywords_ar_list(row)
+    return (ar[0] if ar else (row.get("description_en") or "")).strip()
 
 
-def _find_row(hs_code: str, path: str = "data/hs_codes.csv") -> dict | None:
+def _find_row(hs_code: str, path: str = "data/hscodes_full.csv") -> dict | None:
     """صفّ الرمز من البذرة — reuse resolver's cached CSV loader."""
     from silk_hs_resolver import load_hs_codes
     code = str(hs_code or "").strip()
@@ -157,12 +167,12 @@ def confirm_against_description(product_name: str, hs_code: str,
     """قِس تطابق صفات المنتج مع **وصفٍ حرّ** لرمزٍ ما — نفس شكل/عقد
     `confirm_hs` بالضبط، لكن بلا اشتراط وجود الرمز في بذرة CSV.
 
-    الاستعمال (الموجة ٣ — التصنيف العام `silk_hs_classifier.classify_general`):
-    مرشّحٌ اقترحه نموذجٌ برمزٍ خارج بذرتنا الجزئية (~٥٦٠٠ من ~٦٩٤٠ رمزاً
-    دولياً) يُصادَق عليه بوصفه **الرسمي الذي قدّمه النموذج نفسه** — عقد
-    عدم الاختلاق لا يزال ساريًا: لا نثق برمزٍ لمجرّد ادّعائه، بل نقيس
-    تداخل الصفات المميّزة مع الوصف المُقدَّم فعليًا، تمامًا كما نفعل مع
-    صفّ CSV. `code_desc` فارغ => `confirmed=None` (لا وصف = لا حكم)."""
+    الاستعمال (الموجة ٤ — عكس التدفّق: النموذج يقترح دوماً، القائمة تتحقّق
+    فقط): مرشّحٌ اقترحه النموذج يُصادَق عليه بوصفه **الرسمي الذي قدّمه
+    النموذج نفسه** — عقد عدم الاختلاق لا يزال ساريًا: لا نثق برمزٍ لمجرّد
+    ادّعائه، بل نقيس تداخل الصفات المميّزة مع الوصف المُقدَّم فعليًا، تمامًا
+    كما نفعل مع صفّ القائمة الرسمية. `code_desc` فارغ => `confirmed=None`
+    (لا وصف = لا حكم)."""
     p_terms = _tokens(product_name)
     desc = (code_desc or "").strip()
     if not desc:
@@ -191,7 +201,7 @@ def confirm_against_description(product_name: str, hs_code: str,
 
 
 def confirm_hs(product_name: str, hs_code: str,
-               path: str = "data/hs_codes.csv") -> dict:
+               path: str = "data/hscodes_full.csv") -> dict:
     """قِس تطابق صفات المنتج المميّزة مع وصف الرمز المُصنَّف — عقد التأكيد.
 
     يعيد dict: {confirmed, hs_code, code_desc, product_terms, shared_terms,
@@ -241,7 +251,7 @@ def is_flagged(confirmation: object) -> bool:
 
 def preflight_block(product: str, hs_code: str | None,
                     hs_confirmed: bool = False,
-                    path: str = "data/hs_codes.csv",
+                    path: str = "data/hscodes_full.csv",
                     allow_claude: bool = False,
                     ingredients: list | None = None,
                     category: str | None = None,

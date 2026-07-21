@@ -5,12 +5,15 @@ curated CSV seed plus stdlib matching (difflib + keyword lookup). No network,
 no fuzzy-match dependency, fully offline.
 
 seed scope / نطاق البيانات:
-    data/hs_codes.csv started as a small curated seed (~110 rows) of products
-    Silk plausibly exports and has since been GROWN via extend_from_comtrade_rows()
-    with the full official UN Comtrade HS6 reference (data/hs_reference.csv,
-    ~6,940 codes) — now ~5,627 rows covering the full international HS6
-    nomenclature, not just Silk's original shortlist. All codes are real
-    international HS6 values; nothing here is invented.
+    data/hscodes_full.csv is the complete official HS2022 six-digit reference
+    (5,613 codes, UN Comtrade) — chapter/heading hierarchy + English official
+    description on every row, Arabic keywords (`keywords_ar`, semicolon-
+    separated) on the subset migrated from the prior curated seed
+    (`tools/migrate_hs_keywords.py`) plus a small hand-curated disambiguation
+    set for known lexical collisions (butter: dairy/shea/cocoa/peanut; بن vs
+    بنكهة). All codes are real international HS6 values; nothing is invented.
+    The former partial seed (`data/hs_codes.csv`, ~5,627 rows) is retired —
+    this file is now the sole reference for both resolution and validation.
 
 Every result is a provenance-tagged DataPoint: weak/no match -> value=None,
 confidence=0.0. The resolver never fabricates a code.
@@ -95,18 +98,19 @@ def _abspath(path: str) -> str:
 
 
 @functools.lru_cache(maxsize=1)
-def load_hs_codes(path: str = "data/hs_codes.csv") -> list[dict]:
-    """حمّل بذرة رموز HS من CSV — load the curated HS seed as a list of dict rows.
+def load_hs_codes(path: str = "data/hscodes_full.csv") -> list[dict]:
+    """حمّل مرجع رموز HS الكامل من CSV — load the full HS reference as dict rows.
 
-    Cached: the 5,600+ row CSV is parsed once and reused across resolve() calls.
-    extend_from_comtrade_rows() clears the cache after it appends new rows.
+    Cached: the 5,613-row CSV is parsed once and reused across resolve() calls.
+    Every field is read as-is (csv.DictReader never coerces types — leading
+    zeros in hs_code survive intact, no dtype handling needed).
     """
     fp = _abspath(path)
     try:
         with open(fp, newline="", encoding="utf-8") as f:
             return list(csv.DictReader(f))
     except Exception as exc:  # missing/unreadable file degrades to empty
-        log.warning("failed to load HS seed %s: %s", fp, exc)
+        log.warning("failed to load HS reference %s: %s", fp, exc)
         return []
 
 
@@ -116,9 +120,12 @@ def _norm(s: str) -> str:
 
 
 def _keywords(row: dict) -> list[str]:
-    """استخرج الكلمات المفتاحية لصف — keyword + name tokens for a row."""
-    kw = [_norm(k) for k in (row.get("keywords") or "").split(",") if k.strip()]
-    return kw + [_norm(row.get("name_en", "")), _norm(row.get("name_ar", ""))]
+    """استخرج الكلمات المفتاحية لصف — keyword + description tokens for a row.
+
+    `keywords_ar` مفصولةٌ بفاصلةٍ منقوطة `;` (لا فاصلة عادية — تفادياً لخلط
+    فاصل القائمة بفاصل حقول CSV نفسه)."""
+    kw = [_norm(k) for k in (row.get("keywords_ar") or "").split(";") if k.strip()]
+    return kw + [_norm(row.get("description_en", ""))]
 
 
 def _score(query: str, row: dict) -> float:
@@ -135,7 +142,7 @@ def _score(query: str, row: dict) -> float:
     return best                                    # fuzzy ratio (medium/low)
 
 
-def resolve(product_name: str, path: str = "data/hs_codes.csv") -> DataPoint:
+def resolve(product_name: str, path: str = "data/hscodes_full.csv") -> DataPoint:
     """طابق أفضل رمز HS لاسم منتج عربي أو إنجليزي — best HS6 match for one name."""
     results = resolve_all(product_name, top_n=1, path=path)
     if results:
@@ -146,7 +153,7 @@ def resolve(product_name: str, path: str = "data/hs_codes.csv") -> DataPoint:
 
 
 def resolve_all(product_name: str, top_n: int = 3,
-                path: str = "data/hs_codes.csv") -> list[DataPoint]:
+                path: str = "data/hscodes_full.csv") -> list[DataPoint]:
     """رتّب أفضل المرشحين — ranked HS6 candidates as DataPoints (weak -> None)."""
     today = datetime.date.today().isoformat()
     rows = load_hs_codes(path)
@@ -163,7 +170,8 @@ def resolve_all(product_name: str, top_n: int = 3,
         if sc < 0.7:
             out.append(DataPoint(None, _SOURCE, 0.0,
                                  note=f"weak match for {product_name!r} "
-                                      f"(best='{r.get('name_en')}', score={sc:.2f})",
+                                      f"(best='{r.get('description_en')}', "
+                                      f"score={sc:.2f})",
                                  retrieved_at=today))
             continue
         # بوابة النطاق غير النفطي (8d): تطابق قوي في فصل مستبعد يُعلن خارج
@@ -172,24 +180,28 @@ def resolve_all(product_name: str, top_n: int = 3,
         if excl:
             out.append(DataPoint(None, _SOURCE, 0.0,
                                  note=f"{excl} — أقرب تطابق: "
-                                      f"{r.get('name_ar') or r.get('name_en')} "
-                                      f"({r['hs_code']})",
+                                      f"{r.get('description_en')} ({r['hs_code']})",
                                  retrieved_at=today))
             continue
         out.append(DataPoint(
             r["hs_code"], _SOURCE, round(sc, 2),
-            note=f"{r.get('name_en')} / {r.get('name_ar')}",
+            note=r.get("description_en", ""),
             retrieved_at=today))
     return out
 
 
 def extend_from_comtrade_rows(rows: list[dict],
                               path: str = "data/hs_codes.csv") -> int:
-    """وسّع البذرة من جدول مرجع Comtrade — append official HS reference rows.
+    """[متروكة/deprecated] وسّع بذرةً قديمة الشكل (hs_code,name_en,name_ar,
+    keywords) من جدول مرجع Comtrade. القائمة الحالية (`data/hscodes_full.csv`)
+    كاملةٌ رسمياً أصلاً (٥٦١٣ رمزاً) فلا حاجة عملية للتوسيع، وشكل أعمدتها
+    مختلفٌ عن هذه الدالة (`chapter/description_en/keywords_ar` لا
+    `name_en/name_ar/keywords`) — استدعاؤها على المسار الجديد سيُفسِد الملف.
+    أُبقيت للتوافق التاريخي فقط؛ راجع `tools/migrate_hs_keywords.py` للترحيل
+    الفعلي المستعمَل في هذه الهجرة.
 
     Each input row needs at least hs_code + name_en (name_ar/keywords optional).
-    Skips codes already present. Returns the number of rows added. Use this to
-    grow the curated seed toward the full Comtrade HS list without inventing codes.
+    Skips codes already present. Returns the number of rows added.
     """
     fp = _abspath(path)
     existing = {r["hs_code"] for r in load_hs_codes(path)}

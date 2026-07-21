@@ -35,21 +35,29 @@ async function main() {
     await page.waitForSelector("#marketBox .mrow", { timeout: 15000 });
     ok("dashboard_render");
 
+    // نقرة صفّ الفهرس تستدعي ensureHs فوراً (الموجة ٤ — بلاغ حي: #pDrop
+    // يمرّ عبر نقطة اختناق التصنيف منذ PR سابق). بلا مفتاح كلود حيّ (كل
+    // بيئات e2e) القائمة المحلية لا تقترح تلقائياً بعد الآن — صندوق حوار
+    // المرشّحين يظهر هنا مباشرةً حتى لـ«تمور». يجب إغلاقه **قبل** أيّ نقرةٍ
+    // تالية — تركه مفتوحاً يجعل نقرة «بحث عميق» تستدعي ensureHs مجدداً
+    // فتنتج صندوقاً ثانياً يتراكب فوقه ويحجب أزراره (فخّ e2e ضبطناه حياً).
     await page.fill("#pSearch", PRODUCT);
     await page.waitForSelector("#pDrop.open .drow", { timeout: 10000 });
     await page.locator("#pDrop .drow").first().click();
+    await page.waitForSelector(".hsCand", { timeout: 15000 });
+    await page.locator(".hsCand").first().click();
+    await page.waitForFunction(() => !document.querySelector(".prov"),
+      { timeout: 15000 });
+    ok("product_classified");
+
     const mrow = page.locator(`#marketBox .mrow[data-iso3="${MARKET}"]`);
     if ((await mrow.count()) < 1) fail("select", `no market row ${MARKET}`);
     await mrow.first().click();
     ok("product_market_selected");
 
-    // «بحث عميق» — الموجة ٣: «تمور» تُصنَّف تلقائياً (tier=auto) بلا صندوق
-    // حوار — الشارة الصادقة تكفي، ثم مباشرةً للوحة الجاهزية.
+    // «بحث عميق» — الرمز مؤكَّدٌ فعلاً (hsConfirmed) فلا تُعاد الاستشارة
+    // (حارس ensureHs الجديد)؛ يتابع مباشرةً للوحة الجاهزية.
     await page.locator("#researchBtn").click();
-    await page.waitForFunction(() => {
-      const el = document.querySelector("#pResolved");
-      return el && el.classList.contains("on") && /✓/.test(el.textContent || "");
-    }, { timeout: 15000 });
 
     // لوحة الجاهزية — تظهر بدل نافذة الاستشارة المنفردة، بسطر ⚠ واحد على الأقل.
     await page.waitForSelector("#rdGo", { timeout: 15000 });

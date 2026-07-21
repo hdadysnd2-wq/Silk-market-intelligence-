@@ -35,9 +35,10 @@ def _index_search(q: str = "", limit: int = 20) -> list[dict]:
     list. Pure/offline (the HS CSV load is lru_cached). Never fabricates.
     """
     import silk_hs_resolver as resolver
+    from silk_hs_confirm import _code_desc
 
     def _row(r: dict) -> dict:
-        return {"name": r.get("name_ar") or r.get("name_en"),
+        return {"name": _code_desc(r) or r.get("hs_code"),
                 "hs": r.get("hs_code"), "analyzed": False}
 
     rows = resolver.load_hs_codes()
@@ -48,8 +49,7 @@ def _index_search(q: str = "", limit: int = 20) -> list[dict]:
     out: list[dict] = []
     for r in rows:
         hay = " ".join([
-            (r.get("name_ar") or ""), (r.get("name_en") or ""),
-            (r.get("keywords") or ""),
+            (r.get("description_en") or ""), (r.get("keywords_ar") or ""),
         ]).lower()
         if q in hay:
             out.append(_row(r))

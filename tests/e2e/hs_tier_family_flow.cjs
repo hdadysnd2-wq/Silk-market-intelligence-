@@ -1,21 +1,15 @@
-// رُتبة ٣ — قفل مُعمَّم عبر عائلات منتجات حقيقية (الموجة ٤: بلاغ «UI-ONLY
-// FIX»، اختبار القفل الصريح الذي طلبه المُشرِف): لكل زوج {منتج، توقّع}،
-// يُضبَط المنتج عبر خطّاف الاختبار، يُنقَر «بحث عميق»، ثم:
-//   expect=dialog → صندوق حوار «تأكيد رمز HS» يظهر، و«✓ صُنّف تلقائياً»
-//                   لا يظهر على #pResolved في أيّ لحظة قبل اختيار مرشّح.
-//   expect=auto   → «✓ صُنّف تلقائياً» يظهر مباشرةً على #pResolved، وصندوق
-//                   حوار تصنيف HS لا يظهر إطلاقاً (عنوانه «تأكيد رمز HS»
-//                   تحديدًا — يُميَّز عن نافذة استشارة بلد المنشأ المنفصلة
-//                   التي قد تلي الحسم لبعض أزواج HS/سوق مبذورة وتستعمل نفس
-//                   فئة .prov؛ إن ظهرت تُقفَل كي تتحرّر الحالة للجولة التالية).
+// رُتبة ٣ — قفل مُعمَّم عبر عائلات منتجات حقيقية (الموجة ٤: ترحيل القائمة
+// الرسمية الكاملة + عكس التدفّق — طلب المُشرِف). لكل منتج: يُضبَط عبر خطّاف
+// الاختبار، يُنقَر «بحث عميق»، ثم صندوق حوار «تأكيد رمز HS» يظهر — أبداً
+// «✓ صُنّف تلقائياً» — واختيار مرشّحٍ يُتابع التدفّق فعلياً.
 //
-// بلا مفتاح كلود (يُنزَع عمداً في كل e2e، LAW §2 — الدلو الثاني فقط):
-// التصنيف هنا حتميٌّ (بذرة CSV) لا عامٌّ بمساعدة نموذج. لذا القائمة أدناه
-// مبنيّةٌ على ما يُحسَم فعليًا بلا نموذج في هذه البيئة — وليست نسخةً حرفيّةً
-// من دليل المالك الحيّ (الذي عمل بمفتاح كلود فعليّ): «زيت زيتون» تحديدًا
-// حُسم تلقائيًا لدى المالك (مفتاح حيّ) لكنّه يعطي ٣ مرشّحين متقاربين بلا
-// مفتاح هنا (هامشٌ<٠.١٥) => نتوقّع صندوق حوار، لا «✓» — وهذا سلوكٌ سليمٌ
-// (فشل-آمن) لا تراجعًا: الشكّ يعني السؤال لا التخمين حين لا دليل حاسم.
+// بلا مفتاح كلود (يُنزَع عمداً في كل e2e، LAW §2 — الدلو الثاني فقط): بعد
+// عكس التدفّق (الموجة ٤)، القائمة المحلية **لا تقترح رمزاً تلقائياً أبداً**
+// بمعزلٍ عن كلود — فالتلقائي الصارم مستحيلٌ بنيوياً في بيئةٍ بلا مفتاح، لكل
+// منتجٍ بلا استثناء (لا فقط الغامض منها كما كان سابقاً). هذا القفل يثبت
+// الآلية الحيّة (متصفّحٌ حقيقي) لثماني عائلاتٍ متنوّعة على التوالي — الحسم
+// التلقائي الفعلي (اقتراح كلود يتجاوز عتبة الثقة) بوّابة المالك المدفوعة،
+// ومُثبَتٌ هرمتياً بمحاكاة LLM في tests/test_hs_general_classifier.py.
 
 const { chromium } = require("playwright");
 
@@ -24,15 +18,9 @@ const MARKET = process.env.PRERUN_MARKET_ISO3 || "ARE";
 
 if (!BASE) { console.error("MISSING BASE_URL env"); process.exit(2); }
 
-// dialog: منتجاتٌ ضعيفة التمثيل أو غامضة في بذرتنا الحتمية بلا نموذج.
-// auto:   منتجاتٌ تُحسَم بثقةٍ صارمة (تداخلٌ ≥٠.٨ + هامشٌ واضح) بلا نموذج.
-const CASES = [
-  { product: "زبدة الفول السوداني", expect: "dialog" },
-  { product: "مياه ورد", expect: "dialog" },
-  { product: "عود معطر", expect: "dialog" },
-  { product: "زيت زيتون", expect: "dialog" },
-  { product: "تمر سكري", expect: "auto" },
-  { product: "عسل سدر", expect: "auto" },
+const PRODUCTS = [
+  "زبدة الفول السوداني", "مياه ورد", "عود معطر", "زيت زيتون",
+  "تمر سكري", "عسل سدر", "شيبس بنكهة الجبن", "صودا كاوية",
 ];
 
 const steps = [];
@@ -42,9 +30,9 @@ function fail(name, detail) {
   throw new Error(`STEP FAILED: ${name} — ${detail || ""}`);
 }
 
-// يلي الحسمَ (تلقائيًّا أو باختيار مرشّح) احتمالُ نافذة استشارة بلد منشأٍ
-// منفصلة تمامًا (بوّابةٌ أخرى، بلا علاقة بهذا القفل) لبعض أزواج HS/سوق
-// مبذورة. أغلقها إن ظهرت كي تتحرّر الحالة للجولة التالية، ولا تنتظرها إن لم تظهر.
+// يلي اختيار المرشّح احتمالُ نافذة استشارة بلد منشأٍ منفصلة تماماً (بوّابةٌ
+// أخرى، بلا علاقة بهذا القفل) لبعض أزواج HS/سوق مبذورة. أغلقها إن ظهرت كي
+// تتحرّر الحالة للجولة التالية، ولا تنتظرها إن لم تظهر.
 async function settleAfterClassification(page) {
   try {
     await page.waitForSelector("#advOk", { timeout: 4000 });
@@ -57,7 +45,7 @@ async function settleAfterClassification(page) {
   }, { timeout: 15000 }).catch(() => {});
 }
 
-async function runCase(page, { product, expect }) {
+async function runCase(page, product) {
   // أعِد الحالة لكلّ جولة (بلا إعادة تحميل الصفحة — أسرع، ونفس نمط
   // __silkTestSetProduct الذي يصفّر S.hs/hsConfirmed/#pResolved أصلاً).
   await page.evaluate((name) => window.__silkTestSetProduct(name), product);
@@ -75,38 +63,25 @@ async function runCase(page, { product, expect }) {
 
   await page.locator("#researchBtn").click();
 
-  if (expect === "dialog") {
-    await page.waitForSelector(".prov", { timeout: 15000 });
-    const dialogText = await page.locator(".prov").first().innerText();
-    if (!/تأكيد رمز HS/.test(dialogText))
-      fail(`${product}:candidates_modal`, `dialog missing heading: ${dialogText}`);
-    if (/صُنّف تلقائياً/.test(dialogText))
-      fail(`${product}:candidates_modal`,
-        `dialog must never show the auto-classified checkmark: ${dialogText}`);
-    // القفل الصريح الذي طلبه المُشرِف: الشارة لا تظهر إطلاقاً بينما الصندوق حاجب.
-    const badgeText = await page.locator("#pResolved").innerText().catch(() => "");
-    if (/صُنّف تلقائياً/.test(badgeText))
-      fail(`${product}:no_auto_badge_behind_dialog`,
-        `#pResolved shows the auto badge while a candidates dialog is open: ${badgeText}`);
-    ok(`${product}:candidates_modal`, "blocking dialog shown, no auto-badge anywhere");
-    // أغلِق الصندوق باختيار أوّل مرشّحٍ لتحرير الحالة للجولة التالية.
-    const candCount = await page.locator(".hsCand").count();
-    if (candCount < 1) fail(`${product}:candidates_present`, "no candidate buttons rendered");
-    await page.locator(".hsCand").first().click();
-    await page.waitForFunction(() => !document.querySelector(".prov"), { timeout: 15000 });
-    ok(`${product}:candidate_selected`);
-    await settleAfterClassification(page);
-  } else {
-    await page.waitForFunction(() => {
-      const el = document.querySelector("#pResolved");
-      return el && el.classList.contains("on") && /✓/.test(el.textContent || "");
-    }, { timeout: 15000 });
-    const badgeText = await page.locator("#pResolved").innerText();
-    if (!/صُنّف تلقائياً/.test(badgeText))
-      fail(`${product}:auto_classify`, `resolved badge missing the auto text: ${badgeText}`);
-    ok(`${product}:auto_classify`, "honest ✓ badge shown, no blocking HS dialog");
-    await settleAfterClassification(page);
-  }
+  await page.waitForSelector(".prov", { timeout: 15000 });
+  const dialogText = await page.locator(".prov").first().innerText();
+  if (!/تأكيد رمز HS/.test(dialogText))
+    fail(`${product}:candidates_modal`, `dialog missing heading: ${dialogText}`);
+  if (/صُنّف تلقائياً/.test(dialogText))
+    fail(`${product}:candidates_modal`,
+      `dialog must never show the auto-classified checkmark: ${dialogText}`);
+  const badgeText = await page.locator("#pResolved").innerText().catch(() => "");
+  if (/صُنّف تلقائياً/.test(badgeText))
+    fail(`${product}:no_auto_badge_behind_dialog`,
+      `#pResolved shows the auto badge while a candidates dialog is open: ${badgeText}`);
+  ok(`${product}:candidates_modal`, "blocking dialog shown, no auto-badge anywhere");
+
+  const candCount = await page.locator(".hsCand").count();
+  if (candCount < 1) fail(`${product}:candidates_present`, "no candidate buttons rendered");
+  await page.locator(".hsCand").first().click();
+  await page.waitForFunction(() => !document.querySelector(".prov"), { timeout: 15000 });
+  ok(`${product}:candidate_selected`);
+  await settleAfterClassification(page);
 }
 
 async function main() {
@@ -121,8 +96,8 @@ async function main() {
     await page.waitForSelector("#marketBox .mrow", { timeout: 15000 });
     ok("dashboard_render");
 
-    for (const c of CASES) {
-      await runCase(page, c);
+    for (const product of PRODUCTS) {
+      await runCase(page, product);
     }
 
     if (consoleErrors.length)

@@ -101,6 +101,7 @@ def _candidate_rows(product: str, n: int = _CANDIDATE_N) -> list[dict]:
     تُصفّى فلا تُعرَض كخيارٍ قابل. صفر رمز مكتوب صلبًا — كلّه من المرجع.
     """
     from silk_hs_resolver import load_hs_codes, _score, exclusion_note
+    from silk_hs_confirm import _code_desc
     rows = load_hs_codes()
     if not rows:
         return []
@@ -111,8 +112,7 @@ def _candidate_rows(product: str, n: int = _CANDIDATE_N) -> list[dict]:
         code = str(r.get("hs_code") or "").strip()
         if not code or exclusion_note(code):
             continue
-        out.append({"hs6": code,
-                    "label": r.get("name_ar") or r.get("name_en") or "",
+        out.append({"hs6": code, "label": _code_desc(r),
                     "confidence": round(float(sc), 2)})
         if len(out) >= max(1, n):
             break
@@ -345,21 +345,6 @@ def _rank_key(c: dict) -> tuple:
            c.get("model_confidence") or 0.0)
 
 
-def _deterministic_validated_candidates(product: str, top_n: int) -> list[dict]:
-    """مرشّحون حتميّون (بذرتنا) مصادَقٌ عليهم بنفس بوابة التحقّق — رخيصون
-    (بلا كلود) ويدخلون نفس مسار الترتيب/الفرز الموحّد مع مرشّحي النموذج."""
-    out = []
-    for dp in _candidates(product, top_n):
-        if dp.value is None:
-            continue
-        v = _validated_candidate(product, dp.value, model_desc=dp.note,
-                                 model_confidence=dp.confidence,
-                                 source="deterministic")
-        if v is not None:
-            out.append(v)
-    return out
-
-
 def _dedupe_candidates(cands: list[dict]) -> list[dict]:
     seen: dict[str, dict] = {}
     for c in cands:
@@ -374,18 +359,27 @@ def classify_general(product: str, hs_code: str | None = None,
                      category: str | None = None,
                      allow_claude: bool = False,
                      instruction: str = "") -> dict:
-    """التصنيفُ العام — عقدُ الموجة ٣: مرشّحون من معرفة النموذج الكاملة
-    بنظام HS (لا بذرتنا الجزئية وحدها)، مصادَقٌ عليهم ببوابةٍ حتمية واحدة،
-    بثلاث درجات نتيجة صريحة.
+    """التصنيفُ العام — عقدُ الموجة ٤ (عكس التدفّق، طلب المُشرِف): **النموذج
+    يقترح، القائمة الرسمية الكاملة تتحقّق فقط — لا تقترح أبداً**. القائمة
+    المحلية (`data/hscodes_full.csv` — القائمة الرسمية الكاملة) لم تعد مصدر مرشّحين
+    (لا مطابقةً لفظية حتمية تقترح رمزاً بمعزلٍ عن كلود بعد الآن) — دورها
+    الوحيد بوابة تحقّقٍ: هل الرمز المقترَح موجودٌ فعلاً (سلامة فصل) ووصفه
+    الرسمي متّسقٌ مع صفات المنتج المميّزة (تداخل)؟ نداءٌ واحدٌ لكلود (مُخزَّنٌ
+    لكل منتجٍ جديد) يقترح أفضل ٣ مرشّحين **لأيّ** منتج — لا شرطَ فشلٍ حتميٍّ
+    مسبق. كل مرشّح (من كلود، أو المُعطى صراحةً `hs_code`) يمرّ نفس بوابة
+    التحقّق الحتمية بمعزلٍ عن مصدره.
 
     يعيد dict: {tier: "auto"|"candidates"|"manual", hs6, confidence,
     candidates: [...] (حتى ٣، كلٌّ منها {hs6, code_desc, reason_ar, overlap,
     verified, source})، message, source, used_llm}.
 
-    `tier="auto"` **صارمٌ**: أفضل مرشّح مؤكَّدٌ (مرسًى على بذرتنا) بتداخلٍ
-    ≥ `SILK_HS_AUTO_MIN_OVERLAP` (٠٫٨ افتراضياً) **ويتفوّق بهامشٍ واضح** على
-    الثاني — التباسٌ حقيقي بين مرشّحين لا يمرّ تلقائياً أبداً (الأمر: «عند
-    الشك اسأل»). لا نداء كلود إن كفى المُحلِّل الحتمي وحده."""
+    `tier="auto"` **صارمٌ**: أفضل مرشّح مؤكَّدٌ (مرسًى على القائمة الرسمية)
+    بتداخلٍ ≥ `SILK_HS_AUTO_MIN_OVERLAP` (٠٫٨ افتراضياً) **ويتفوّق بهامشٍ
+    واضح** على الثاني — التباسٌ حقيقي بين مرشّحين لا يمرّ تلقائياً أبداً
+    (الأمر: «عند الشك اسأل»). `tier="candidates"`: تعارضٌ بين مرشّحين، أو
+    ثقةٌ منخفضة، أو تحقّقٌ فاشل — صندوق حوارٍ حاجب. `tier="manual"`: لا
+    كلودَ متاحاً (مفتاحٌ غائب/الصمّام مُطفأ/السقف مستنفَد) ولا رمزٍ مُعطًى
+    يُحسَم بثقة — فجوةٌ معلنة صادقة، لا اختلاق محليّ بديل."""
     product = (product or "").strip()
     if not product:
         return {"tier": "manual", "hs6": None, "confidence": 0.0,
@@ -393,15 +387,12 @@ def classify_general(product: str, hs_code: str | None = None,
                "used_llm": False}
 
     candidates: list[dict] = []
-    # (١) المرشّح المُعطى صراحةً (رمزٌ محسومٌ سابقاً) يدخل السباق أيضاً —
-    # قد يفوز تلقائياً بلا أيّ نداء إضافي إن كان فعلاً جيداً.
+    # المرشّح المُعطى صراحةً (رمزٌ محسومٌ/مُعلَّمٌ سابقاً من مسارٍ آخر) —
+    # مُعطًى من المستدعي لا من القائمة المحلية؛ يمرّ نفس بوابة التحقّق.
     if hs_code:
         given = _validated_candidate(product, hs_code, source="given")
         if given is not None:
             candidates.append(given)
-    # (٢) مرشّحو بذرتنا الحتميّون — رخيصون، دائماً.
-    candidates.extend(_deterministic_validated_candidates(product, _CANDIDATE_N))
-    candidates = _dedupe_candidates(candidates)
 
     def _clearly_auto(cands: list[dict]) -> dict | None:
         if not cands:
@@ -416,9 +407,9 @@ def classify_general(product: str, hs_code: str | None = None,
                 return None            # التباسٌ حقيقي — لا تلقائي
         return top
 
+    # النموذج يقترح — لأيّ منتج، لا فقط حين يفشل لاحقٌ حتمي (عُزل الآن).
     used_llm = False
-    top = _clearly_auto(candidates)
-    if top is None and allow_claude and enabled():
+    if allow_claude and enabled():
         cache_key = product if not (ingredients or category) else (
             product + "|" + "|".join(sorted(str(i) for i in (ingredients or [])))
             + "|" + str(category or ""))
@@ -441,8 +432,9 @@ def classify_general(product: str, hs_code: str | None = None,
                     model_confidence=c.get("confidence", 0.0), source="llm")
                 if v is not None:
                     candidates.append(v)
-            candidates = _dedupe_candidates(candidates)
-            top = _clearly_auto(candidates)
+
+    candidates = _dedupe_candidates(candidates)
+    top = _clearly_auto(candidates)
 
     if top is not None:
         return {"tier": "auto", "hs6": top["hs6"],
