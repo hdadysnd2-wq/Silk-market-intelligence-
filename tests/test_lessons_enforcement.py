@@ -48,6 +48,13 @@ _SYMBOL_ANCHORS = [
     (7, "silk_agents.py", ["class BaseAgent"]),
     # البند ٨ — عقد DataPoint (لا اختلاق)
     (8, "silk_data_layer.py", ["class DataPoint"]),
+    # البند ٤٢ — تحليل #1 DZA: تنقية Markdown شارد/ثقة خام + إصلاح عمود
+    # العملة + علم مراجع حتمي لتكرار رقم مفتاحي.
+    (42, "silk_render.py", ["_strip_stray_markdown", "_AR_RAW_CONF_RE",
+                           "_fix_price_column_currency_label"]),
+    (42, "silk_ai_judge.py", ["_repeated_key_figure_issues"]),
+    (42, "silk_quality_gate.py", ["currency_label_mismatch"]),
+    (42, "tools/canonical_dza_peanut_butter.py", ["def dza_research_blob"]),
 ]
 
 # كل مدخلة: (رقم الدرس، مسار الوثيقة، علامات المنهج التي يجب أن تبقى).
@@ -296,6 +303,12 @@ _TEST_ANCHORS = [
      ["def test_breadth_active_resolution_surfaces_correct_primary_not_rejected_or_blank"]),
     (41, "tests/test_regression_registry.py",
      ["def _guard_active_resolution_beats_rejected_and_short_root_collision"]),
+    # البند ٤٢ — تحليل #1 DZA: ست نتائج فشل بوّابة الجودة معاً (Markdown
+    # شارد، ثقة خام، تكرار رقم مفتاحي، عمود سعر مضلِّل، سقف الملحق).
+    (42, "tests/test_dza_quality_gate_fixes.py",
+     ["def test_overall_verdict_moves_from_fail_to_pass_with_warnings"]),
+    (42, "tests/test_regression_registry.py",
+     ["def _guard_dza_quality_gate_six_findings"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

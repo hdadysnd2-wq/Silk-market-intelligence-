@@ -884,6 +884,27 @@ def _guard_active_resolution_beats_rejected_and_short_root_collision():
     assert _covered("زبده", ["زبده"]) is True
 
 
+def _guard_dza_quality_gate_six_findings():
+    """LESSONS ٤٢ — «تحليل #1» (زبدة الفول السوداني/الجزائر DZA، 2026-07-21):
+    ستّ نتائج فشل بوّابة الجودة معاً على تشغيلة واحدة (Markdown/تنسيق شارد،
+    ثقة خام، تكرار رقم مفتاحي ×٢، عمود سعر مضلِّل، سقف الملحق التقني). رمز
+    HS الخاطئ خارج نطاق هذا الحارس عمداً (يُصلَح عبر مسار مصنِّف HS العام).
+    الحارس السلوكي: يعيد بناء المدوّنة الحقيقية الشكل (tools/canonical_
+    dza_peanut_butter.py) ويؤكّد أن الحكم لم يعد FAIL بعد الإصلاح، وأن
+    حارسي الانحدار الحقيقيين (raw_confidence/currency_label_mismatch) صفر."""
+    from tools.canonical_dza_peanut_butter import dza_research_blob
+    import silk_render
+    import silk_quality_gate as QG
+    view = silk_render.build_view(dza_research_blob())
+    out = QG.run_quality_gate(view)
+    assert out["verdict"] != "FAIL", f"لا يزال FAIL: {out['findings']}"
+    checks = {f["check"] for f in out["findings"]}
+    assert "raw_confidence" not in checks
+    assert "currency_label_mismatch" not in checks
+    fired = checks & QG._REGRESSION_GUARD_FIRED
+    assert fired == set(), f"حارس انحدار أُطلِق رغم الإصلاح: {fired}"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -931,6 +952,7 @@ _LESSONS = {
     39: _guard_general_hs_classifier_no_lookup_table_ceiling,  # المصنّف العام — جدول البحث تلميحٌ ابتدائي لا حاكمٌ نهائي
     40: _guard_ui_tier_consumption_single_choke_point,  # UI-ONLY FIX — نقطة اختناق tier واحدة، لا مسار ثانٍ يثق بـhs6 خامًا
     41: _guard_active_resolution_beats_rejected_and_short_root_collision,  # ONE FIX — المصادَق يتصدّر على المرفوض، لا تصادف جذرٍ قصير
+    42: _guard_dza_quality_gate_six_findings,  # تحليل #1 DZA — ست نتائج فشل بوّابة الجودة معاً على تشغيلة واحدة
 }
 
 _TRAPS = [
