@@ -232,6 +232,28 @@ _TEST_ANCHORS = [
     (34, "docs/DECISIONS.md",
      ["INTEGRATED-with-artifact", "SEARCH-BIASED",
       "REJECTED as a data source"]),
+    # البند ٣٥ — بوّابة HS فشل-آمن + نقطة اختناق مشتركة (تقرير الكويت الحيّ).
+    (35, "silk_hs_confirm.py", ["def preflight_block"]),
+    (35, "tests/test_report_quality_upgrade.py",
+     ["def test_w1_2_research_gate_on_by_default_blocks_unconfirmed_hs",
+      "def test_w2_hs_gate_blocks_on_both_analyze_and_research_by_default",
+      "def test_w2_hs_gate_choke_point_is_shared_not_duplicated"]),
+    (35, "tests/test_regression_registry.py",
+     ["def _guard_hs_gate_shared_choke_point_fail_safe"]),
+    # البند ٣٦ — تسرّب اليمن↔الكويت عبر نقاط تفتيش بعثات /research.
+    (36, "silk_storage.py", ["market_iso3"]),
+    (36, "tests/test_cross_market_leak_guard.py",
+     ["def test_resume_with_different_market_is_rejected_409_not_silently_served",
+      "def test_checkpoint_store_rejects_foreign_market_even_if_api_gate_bypassed"]),
+    (36, "tests/test_regression_registry.py",
+     ["def _guard_cross_market_checkpoint_leak"]),
+    # البند ٣٧ — الاختبار الذهبي: كل العقود معاً على نفس سيناريو الحادثة.
+    (37, "tools/canonical_kuwait_peanut_butter.py", ["def kuwait_research_blob"]),
+    (37, "tests/test_golden_deep_research_contract.py",
+     ["def test_golden_a_zero_cross_market_leak_in_kuwait_view",
+      "def test_golden_b_hs_gate_blocks_kuwait_peanut_butter_on_both_paths_live",
+      "def test_golden_b_resume_of_kuwait_run_as_different_market_is_rejected_live"]),
+    (37, "tools/post_deploy_smoke.py", ["بوّابة تأكيد HS الحيّة"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

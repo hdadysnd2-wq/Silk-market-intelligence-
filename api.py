@@ -253,6 +253,9 @@ def create_app():
         # كلود حصراً داخل العزل — لا يغيّر رقماً ولا يصل وكيل بيانات.
         agent_prefs: dict | None = None
         persist: bool = False
+        # hs_confirmed=true بعد مراجعة المستخدم يتجاوز بوّابة تأكيد HS
+        # (الموجة ٢ — نفس عقد /research، silk_hs_confirm.preflight_block).
+        hs_confirmed: bool = False
 
     class IntakeRequest(BaseModel):
         """طلب استقبال منتج متعدّد الوسائط — {name} أو {image_base64,kind}.
@@ -825,6 +828,31 @@ def create_app():
         """
         _require_key(request)
         _rate_limit(request)
+        # بوّابة تأكيد رمز HS (الموجة ٢، تدقيق المُشرِف 2026-07-21 — نفس
+        # نقطة الاختناق المشتركة `silk_hs_confirm.preflight_block` التي
+        # يستدعيها `/research`؛ إصلاحٌ سابقٌ اقتصر على `/research` وحده
+        # فعاود الظهور — «إصلاحٌ على مسارٍ واحد نصفُ إصلاح» — LESSONS ٣٦).
+        # رمزٌ صريح يُفحَص كما هو؛ رمزٌ غائب يُحسَم حتميّاً (بلا نداء كلود،
+        # نفس مُحلِّل `/research`) قبل أيّ عملٍ فعليّ. تُتخطّى بتأكيد المستخدم
+        # الصريح (hs_confirmed=True) — لا يُنفَق زمن/ميزانية كومتريد على
+        # فئة مجاورة خاطئة دلالياً.
+        _analyze_hs_code = req.hs_code
+        if not _analyze_hs_code and req.product:
+            from silk_hs_resolver import resolve as _resolve_hs_preflight
+            _analyze_hs_code = _resolve_hs_preflight(req.product).value
+        from silk_hs_confirm import preflight_block
+        _blocked = preflight_block(req.product, _analyze_hs_code,
+                                   req.hs_confirmed)
+        if _blocked is not None:
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "hs_confirmation_blocked",
+                f"رُفض بدءُ تحليلٍ برمز HS غير مؤكَّد لمنتج {req.product!r}: "
+                f"{_blocked['hs_confirmation'].get('reason')}",
+                context={"product": req.product, "hs_code": _analyze_hs_code,
+                         "missing_terms":
+                             _blocked["hs_confirmation"].get("missing_terms")})
+            raise HTTPException(status_code=422, detail=_blocked)
         policy = _source_policy()
         ai_ok, ai_note = _free_ai_extras_allowed()
         # P5 (بلاغ المالك: «كلود العادي يتفوق على المنصة»): حكم كلود
@@ -1378,6 +1406,21 @@ def create_app():
             "detail_ar": (f"HS {hs_code}" if hs_code
                           else "لم يُحسَم رمز HS — صنِّف المنتج أو اختر يدويًا"),
             "blocking": not bool(hs_code)})
+        # (١ب) رمز HS **مؤكَّد دلالياً** — البلاغ الحيّ 2026-07-21 (زبدة الفول
+        # السوداني/040510): رمزٌ محسومٌ لكنه خاطئ دلالياً كان يمرّ كـ«ok» لأن
+        # اللوحة تفحص الحسم لا المطابقة. البوّابة (فشل-آمن) تحجبه الآن؛ فتظهر
+        # هنا **قبل** الحجز اتّساقاً مع بوّابة `/research` (لا تدهورٌ بعد الدفع).
+        if hs_code:
+            from silk_hs_confirm import confirm_hs, is_flagged, gate_enabled
+            _c = confirm_hs(product or "", hs_code)
+            if is_flagged(_c):
+                checks.append({
+                    "key": "hs_confirmed", "label_ar": "مطابقة رمز HS للمنتج",
+                    "status": "blocked" if gate_enabled() else "advisory",
+                    "detail_ar": (f"رمز HS {hs_code} («{_c.get('code_desc')}») "
+                                  "قد لا يطابق المنتج — صفة مميّزة غير مشمولة: "
+                                  + "، ".join(_c.get("missing_terms") or [])),
+                    "blocking": gate_enabled()})
         # (٢) السوق ضمن التغطية.
         from silk_market_ranker import _world_markets_enabled
         if _world_markets_enabled() and hs_code and iso3:
@@ -1523,15 +1566,40 @@ def create_app():
                     "error": "not_a_research_run",
                     "reason": f"analysis {req.resume} is not a /research "
                               "run — resume only applies to /research"})
+            stored_request = run_row.get("request") or {}
+            # بوّابة نطاق السوق (البلاغ الحي — تسرّب اليمن↔الكويت،
+            # 2026-07-21) — **تسبق** مسار «مكتملة => أعِدها كما هي» أدناه
+            # عمداً: ذلك المسار كان يُعيد نتيجة اليمن المخزَّنة بصمتٍ متجاهلاً
+            # `req.market="Kuwait"` (لا تسريب تسمية، لكن تجاهل صامت لطلب
+            # المستخدم يخفي بالضبط الخطأ الذي أدّى للحادثة الحية عبر مسارٍ
+            # آخر — تشغيلة غير مكتملة استؤنفت بسوقٍ مختلف). رفضٌ صريح هنا
+            # أوضح من إرجاعٍ صامت لبيانات سوقٍ لم يُطلَب.
+            _stored_iso3 = stored_request.get("market_iso3")
+            if req.market and _stored_iso3:
+                from silk_market_resolver import resolve_market as _rm_check
+                _req_ref, _ = _rm_check(req.market)
+                if (_req_ref is not None and _req_ref.iso3
+                        and _req_ref.iso3 != _stored_iso3):
+                    raise HTTPException(status_code=409, detail={
+                        "error": "resume_market_mismatch",
+                        "reason": (f"analysis {req.resume} was created for "
+                                  f"market {_stored_iso3}, not "
+                                  f"{_req_ref.iso3} — resuming under a "
+                                  "different market would reuse that "
+                                  "market's mission checkpoints. start a "
+                                  "fresh /research run instead."),
+                        "stored_market_iso3": _stored_iso3,
+                        "requested_market_iso3": _req_ref.iso3})
             if run_row.get("status") == "completed":
                 # مكتملة فعلاً — أعِدها كما هي، لا إعادة تشغيل ولا حرق
                 # اعتمادات إضافي (استئناف مكتمل يجب أن يكون آمناً للتكرار).
                 existing = get_analysis(req.resume)
                 if existing is not None:
                     return _json(existing)
-            stored_request = run_row.get("request") or {}
             analysis_id = req.resume
-            resume_reports = load_mission_checkpoints(req.resume)
+            # نقاط تفتيش البعثات تُحمَّل **بعد** حسم السوق أدناه (لا هنا) —
+            # كي تُفلتَر بسوق التشغيلة المحسوم لا تُقرأ خاماً هنا. راجع
+            # البوّابة أسفل حسم market_ref.
 
         product = req.product or stored_request.get("product")
         market_name = req.market or stored_request.get("market")
@@ -1547,6 +1615,16 @@ def create_app():
             raise HTTPException(status_code=422, detail={
                 "error": f"unknown or ambiguous market {market_name!r}",
                 "suggestions": suggestions})
+
+        if req.resume is not None:
+            # نقاط تفتيش البعثات تُحمَّل هنا بعد حسم `market_ref` — مُفلترة
+            # بسوقه (شبكة أمان بنيوية، `silk_storage.load_mission_checkpoints`)
+            # فوق بوّابة الرفض الصريحة أعلاه (البلاغ الحي — تسرّب اليمن↔الكويت):
+            # حتى لو مرّت بوّابة الرفض بطريقةٍ ما (تعارض غير مُكتشَف)، أيّ صفّ
+            # مختوم بسوقٍ آخر لن يُعاد من المخزن أصلاً.
+            from silk_storage import load_mission_checkpoints
+            resume_reports = load_mission_checkpoints(
+                req.resume, market_iso3=market_ref.iso3)
 
         # ── تحديد رمز HS مرّةً واحدة قبل أيّ بوّابة/حجز (Wave 1) ──────────────
         # نظامٌ عام: كلُّ البوّابات (التغطية، بلد المنشأ، الحجز الدولاري) تعمل
@@ -1582,32 +1660,28 @@ def create_app():
                 "hs_note": hs_note})
 
         # بوّابة تأكيد رمز HS (Wave 1.2، عائلة unresolved-hs-silent-spend
-        # موسَّعةً — تدقيق زبدة الفول السوداني/اليمن): رمزٌ محسومٌ لكنه **خاطئ
-        # دلالياً** (صفة المنتج المميّزة «فول سوداني» غائبة عن وصف الرمز
-        # 040510 «زبدة») يُوقِف التشغيل **قبل** أيّ حجز/دولار ويطلب تأكيد
-        # المستخدم — لا تُنفَق دولارات على فئة مجاورة. مُطفأة افتراضياً
-        # (SILK_HS_CONFIRM_GATE) => السلوك كاليوم. تُتخطّى عند الاستئناف
-        # وعند تأكيد المستخدم الصريح (req.hs_confirmed=True).
-        from silk_hs_confirm import confirm_hs, is_flagged, gate_enabled
-        if (req.resume is None and gate_enabled() and hs_code
-                and not getattr(req, "hs_confirmed", False)):
-            _pre = confirm_hs(product or "", hs_code)
-            if is_flagged(_pre):
+        # موسَّعةً — تدقيق زبدة الفول السوداني/اليمن؛ الموجة ٢ (2026-07-21):
+        # المنطق يعيش الآن في `silk_hs_confirm.preflight_block` — نقطة
+        # اختناق واحدة يستدعيها **كل** من `/research` و`/analyze` (أدناه)
+        # بلا نسخ؛ إصلاحٌ سابق على `/research` وحده عاود الظهور فتوحّد
+        # هنا). رمزٌ محسومٌ لكنه **خاطئ دلالياً** يُوقِف **قبل** أيّ حجز/دولار
+        # ويطلب تأكيد المستخدم. فشل-آمن: مفعّلة افتراضياً (`gate_enabled`).
+        # تُتخطّى عند الاستئناف وعند تأكيد المستخدم الصريح (hs_confirmed=True).
+        if req.resume is None:
+            from silk_hs_confirm import preflight_block
+            _blocked = preflight_block(
+                product, hs_code, getattr(req, "hs_confirmed", False))
+            if _blocked is not None:
                 import silk_ops_log
                 silk_ops_log.record_error(
                     "hs_confirmation_blocked",
                     f"رُفض بدءُ بحثٍ برمز HS غير مؤكَّد لمنتج {product!r}: "
-                    f"{_pre.get('reason')}",
+                    f"{_blocked['hs_confirmation'].get('reason')}",
                     context={"product": product, "hs_code": hs_code,
                              "market_iso3": market_ref.iso3,
-                             "missing_terms": _pre.get("missing_terms")})
-                raise HTTPException(status_code=422, detail={
-                    "error": "hs_confirmation_needed",
-                    "message": (f"رمز HS {hs_code} («{_pre.get('code_desc')}») "
-                                "قد لا يطابق هذا المنتج — الصفة المميّزة "
-                                f"غير مشمولة: {'، '.join(_pre.get('missing_terms') or [])}. "
-                                "أكّد الرمز أو صنِّفه من جديد قبل بدء البحث."),
-                    "hs_confirmation": _pre})
+                             "missing_terms":
+                                 _blocked["hs_confirmation"].get("missing_terms")})
+                raise HTTPException(status_code=422, detail=_blocked)
 
         # بوابة «خارج التغطية» (اتفاق المالك) — تسبق الجهوزية/الحجز: مع تفعيل
         # تغطية العالم، سوقٌ ليس Tier-1 ولا ضمن مجموعة أكبر مستوردي هذا الرمز
@@ -1753,7 +1827,10 @@ def create_app():
         if analysis_id is None and req.persist:
             from silk_storage import create_research_run
             request_snapshot = {
-                "product": product, "market": market_name, "hs_code": hs_code,
+                "product": product, "market": market_name,
+                # الموجة ٢ (بوّابة نطاق السوق أعلاه): iso3 مُخزَّن بنيوياً —
+                # لا استنتاج لاحق من اسمٍ عربي/إنجليزي غامض عند الاستئناف.
+                "market_iso3": market_ref.iso3, "hs_code": hs_code,
                 "product_card": product_card_dict, "own_price": own_price,
                 "agent_prefs": prefs, "allow_degraded": req.allow_degraded}
             analysis_id = create_research_run(

@@ -688,6 +688,87 @@ def _guard_parse_provenance_not_prose():
     assert stale_fact_years(allf) == {2013, 2018}
 
 
+def _guard_hs_gate_shared_choke_point_fail_safe():
+    """LESSONS ٣٥ — تقرير الكويت الحيّ (زبدة الفول السوداني، 2026-07-21):
+    بوّابة تأكيد HS كانت موصولة بـ/research وحده خلف صمّامٍ مُطفأ افتراضياً.
+    الحارس السلوكي: (١) `gate_enabled` فشل-آمن — مفعّلة بلا أيّ متغيّر env؛
+    (٢) `preflight_block` نقطة اختناق واحدة تحجب رمزاً غير مؤكَّد؛ (٣) كلا
+    معالجَي `/analyze` و`/research` في api.py يستدعيانها فعلياً (لا نسخة
+    مكرَّرة/مسار واحد فقط)."""
+    import silk_hs_confirm as C
+    saved = os.environ.pop("SILK_HS_CONFIRM_GATE", None)
+    try:
+        # (١) فشل-آمن: بلا أيّ ضبط => مفعّلة.
+        assert C.gate_enabled() is True
+        # إطفاءٌ صريح فقط يُعطّلها.
+        os.environ["SILK_HS_CONFIRM_GATE"] = "0"
+        assert C.gate_enabled() is False
+        os.environ["SILK_HS_CONFIRM_GATE"] = "1"
+        assert C.gate_enabled() is True
+        del os.environ["SILK_HS_CONFIRM_GATE"]
+        # (٢) نقطة الاختناق تحجب فعلياً — نفس عيّنة الحادثة الحية.
+        blocked = C.preflight_block("زبدة الفول السوداني", "040510")
+        assert blocked is not None and blocked["error"] == "hs_confirmation_needed"
+        assert C.preflight_block("زبدة الفول السوداني", "040510",
+                                 hs_confirmed=True) is None
+    finally:
+        if saved is None:
+            os.environ.pop("SILK_HS_CONFIRM_GATE", None)
+        else:
+            os.environ["SILK_HS_CONFIRM_GATE"] = saved
+    # (٣) كلا المعالجَين يستدعيان preflight_block — لا مسارٌ واحد فقط.
+    api_src = _read("api.py")
+    assert api_src.count("preflight_block(") >= 2, (
+        "preflight_block يجب أن تُستدعى من كلا /analyze و/research")
+
+
+def _guard_cross_market_checkpoint_leak():
+    """LESSONS ٣٦ — تسرّب اليمن↔الكويت: نقاط تفتيش بعثات `/research` كانت
+    تُقرأ بمفتاح analysis_id فقط بلا عمود سوق، واستئنافٌ بسوقٍ مختلف يُعيد
+    استهلاكها بصمت. الحارس السلوكي: (١) نقطة تفتيش مختومة بسوقٍ (اليمن) لا
+    تُعاد لطلبٍ بسوقٍ آخر (الكويت)؛ (٢) صفوفٌ قديمة بلا ختم لا تُحجَب؛
+    (٣) بوّابة `/research`'s resume_market_mismatch (٤٠٩) موجودة في api.py
+    **قبل** فرع «مكتملة => أعِدها كما هي» (لا إرجاعٌ صامتٌ يتجاهل الطلب)."""
+    import silk_storage
+    from silk_agents import AgentReport
+    import tempfile as _tf
+    db = os.path.join(_tf.mkdtemp(), "silk.db")
+    yemen_report = AgentReport(agent_name="x", findings=[], failed=False,
+                               summary="سوق عدن المركزي / ربوع")
+    silk_storage.save_mission_checkpoint(1, "consumer_culture", yemen_report,
+                                         path=db, market_iso3="YEM")
+    # (١) طلبٌ بسوق آخر لا يستلم الصفّ.
+    assert "consumer_culture" not in silk_storage.load_mission_checkpoints(
+        1, path=db, market_iso3="KWT")
+    assert "consumer_culture" in silk_storage.load_mission_checkpoints(
+        1, path=db, market_iso3="YEM")
+    # (٢) صفٌّ قديم بلا ختم (market_iso3=None) لا يُحجَب.
+    old_report = AgentReport(agent_name="y", findings=[], failed=False, summary="s")
+    silk_storage.save_mission_checkpoint(2, "tradeflow", old_report, path=db)
+    assert "tradeflow" in silk_storage.load_mission_checkpoints(
+        2, path=db, market_iso3="KWT")
+    # (٣) بوّابة API تسبق فرع الإعادة الصامتة لتشغيلةٍ مكتملة.
+    api_src = _read("api.py")
+    assert "resume_market_mismatch" in api_src
+    gate_idx = api_src.index("resume_market_mismatch")
+    completed_shortcut_idx = api_src.index(
+        'if run_row.get("status") == "completed"')
+    assert gate_idx < completed_shortcut_idx, (
+        "بوّابة تعارض السوق يجب أن تسبق فرع «مكتملة => أعِدها كما هي»")
+
+
+def _guard_golden_contract_test_exists_and_covers_both_paths():
+    """LESSONS ٣٧ — الاختبار الذهبي موجودٌ فعلياً ويفحص كِلا مسارَي الدخول
+    على نفس سيناريو الحادثة (زبدة الفول السوداني/الكويت)، لا مساراً واحداً."""
+    assert _exists("tools/canonical_kuwait_peanut_butter.py")
+    assert _exists("tests/test_golden_deep_research_contract.py")
+    golden_src = _read("tests/test_golden_deep_research_contract.py")
+    assert '"/analyze"' in golden_src and '"/research"' in golden_src
+    assert "resume_market_mismatch" in golden_src
+    smoke_src = _read("tools/post_deploy_smoke.py")
+    assert "hs_confirmation_needed" in smoke_src, (
+        "فحص الدخان بعد النشر يجب أن يثبت بوّابة HS حياً (Wave 3.2)")
+
 
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
@@ -729,6 +810,9 @@ _LESSONS = {
     32: _guard_report_quality_upgrade,         # ترقية جودة التقرير — إصلاحُ المحرّك لا تحرير التقرير
     33: _guard_parse_provenance_not_prose,     # التقادُم من المصدر لا النثر (قرار المالك)
     34: _guard_new_source_contracts,           # دمج مصادر جديدة — نفس العقود (فجوة/ops/مخزَّن/محكوم/نظيف)
+    35: _guard_hs_gate_shared_choke_point_fail_safe,  # تقرير الكويت — بوّابة HS فشل-آمن + نقطة اختناق مشتركة
+    36: _guard_cross_market_checkpoint_leak,          # تقرير الكويت — تسرّب يمن↔كويت عبر نقاط تفتيش بعثات
+    37: _guard_golden_contract_test_exists_and_covers_both_paths,  # الاختبار الذهبي — كل العقود، كلا المسارين
 
 }
 
