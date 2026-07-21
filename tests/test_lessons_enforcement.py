@@ -254,6 +254,17 @@ _TEST_ANCHORS = [
       "def test_golden_b_hs_gate_blocks_kuwait_peanut_butter_on_both_paths_live",
       "def test_golden_b_resume_of_kuwait_run_as_different_market_is_rejected_live"]),
     (37, "tools/post_deploy_smoke.py", ["بوّابة تأكيد HS الحيّة"]),
+    # البند ٣٨ — الحارس: مراقبةٌ دائمة للمالك حصراً، صفر تلوّث للعميل.
+    (38, "silk_watchdog.py", ["def observe", "def render_report_md",
+                              "def trend_report"]),
+    (38, "tests/test_watchdog.py",
+     ["def test_cross_market_leak_seeded_violation_is_red",
+      "def test_clean_run_is_overall_green",
+      "def test_watchdog_crash_is_isolated_never_raises",
+      "def test_no_watchdog_strings_reach_rendered_client_markdown",
+      "def test_three_known_service_failures_produce_yellow_findings"]),
+    (38, "tests/test_regression_registry.py",
+     ["def _guard_watchdog_owner_only_no_client_contamination"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

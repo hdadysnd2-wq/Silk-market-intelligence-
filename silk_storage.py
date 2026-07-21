@@ -474,6 +474,23 @@ def load_mission_checkpoints(analysis_id: int,
     return out
 
 
+def checkpoint_market_iso3s(analysis_id: int, path: str | None = None) -> set[str]:
+    """أسواق **مختلفة** مختومة على نقاط تفتيش التشغيلة — قراءة خام بلا فلترة
+    (على النقيض من `load_mission_checkpoints`)، للحارس (`silk_watchdog`):
+    كشف أي بقايا سوقٍ آخر وصلت الجدول رغم بوّابة API (البند ٣٦، تسرّب
+    اليمن↔الكويت) — شبكة أمان قابلة للرصد لا الرفض وحده. صفوفٌ قديمة بلا
+    ختم (`market_iso3 IS NULL`) تُهمَل — لا انحدار."""
+    path = path or _db_path()
+    if not os.path.exists(path):
+        return set()
+    with _connect(path) as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT market_iso3 FROM research_missions "
+            "WHERE analysis_id = ? AND market_iso3 IS NOT NULL", (analysis_id,)
+        ).fetchall()
+    return {r["market_iso3"] for r in rows if r["market_iso3"]}
+
+
 def mission_status_map(analysis_id: int, path: str | None = None) -> dict:
     """{mission_key: 'completed'|'failed'} للبعثات المخزَّنة فقط — البعثات
     الغائبة تعني 'pending' (لم تكتمل/تبدأ بعد) من منظور المستدعي."""
