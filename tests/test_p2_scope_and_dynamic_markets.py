@@ -43,13 +43,20 @@ def test_resolver_strong_petroleum_match_returns_none_with_reason():
     from silk_hs_resolver import resolve
     path = os.path.join(tempfile.mkdtemp(), "seed.csv")
     with open(path, "w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["hs_code", "name_en", "name_ar",
-                                          "keywords"])
+        w = csv.DictWriter(f, fieldnames=["hs_code", "chapter", "chapter_desc_en",
+                                          "heading", "heading_desc_en",
+                                          "description_en", "keywords_ar"])
         w.writeheader()
-        w.writerow({"hs_code": "270900", "name_en": "crude oil",
-                    "name_ar": "نفط خام", "keywords": "نفط,crude,oil"})
-        w.writerow({"hs_code": "040900", "name_en": "natural honey",
-                    "name_ar": "عسل طبيعي", "keywords": "عسل,honey"})
+        w.writerow({"hs_code": "270900", "chapter": "27",
+                    "chapter_desc_en": "Mineral fuels", "heading": "2709",
+                    "heading_desc_en": "Petroleum oils; crude",
+                    "description_en": "Petroleum oils; crude",
+                    "keywords_ar": "نفط خام;crude oil"})
+        w.writerow({"hs_code": "040900", "chapter": "04",
+                    "chapter_desc_en": "Dairy produce", "heading": "0409",
+                    "heading_desc_en": "Honey; natural",
+                    "description_en": "Honey; natural",
+                    "keywords_ar": "عسل طبيعي;natural honey"})
     dp = resolve("نفط خام", path=path)
     assert dp.value is None and "غير النفطي" in dp.note
     dp2 = resolve("عسل طبيعي", path=path)          # غير المستبعد يمرّ طبيعياً

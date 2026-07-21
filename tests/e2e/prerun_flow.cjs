@@ -41,10 +41,35 @@ async function main() {
     ok("dashboard_render");
 
     // ٢) اختر المنتج من قائمة البحث (يضبط S.product) — نكتب ثم ننقر صفًّا.
+    //    نقرة الصفّ تستدعي ensureHs فوراً (الموجة ٤ — بلاغ حي: #pDrop يمرّ
+    //    عبر نقطة اختناق التصنيف منذ PR سابق) — بلا مفتاحٍ حيّ (كل بيئات
+    //    e2e، LAW §2) القائمة المحلية لم تعد تقترح تلقائياً، فحتى «تمور»
+    //    يعرض صندوق حوار المرشّحين هنا مباشرةً (رمزها الصحيح كأوّل مرشّحٍ
+    //    خامّ). يجب إغلاق هذا الصندوق **قبل** أيّ نقرةٍ تالية — تركه مفتوحاً
+    //    يجعل نقرة «بحث عميق» تستدعي ensureHs مجدداً فتنتج صندوقاً ثانياً
+    //    يتراكب فوقه ويحجب أزراره (فخّ e2e ضبطناه حياً هنا).
     await page.fill("#pSearch", PRODUCT);
     await page.waitForSelector("#pDrop.open .drow", { timeout: 10000 });
     await page.locator("#pDrop .drow").first().click();
     ok("product_selected");
+
+    await page.waitForSelector(".prov", { timeout: 15000 });
+    const dialogText = await page.locator(".prov").first().innerText();
+    if (!/تأكيد رمز HS/.test(dialogText))
+      fail("candidates_modal", `dialog missing heading: ${dialogText}`);
+    ok("candidates_modal", "blocking dialog shown (no live key => no auto-pass)");
+
+    // اختر المرشّح المطابق للرمز المتوقَّع — يُغلق الصندوق ويضبط الرمز.
+    const hsCand = page.locator(`.hsCand[data-hs="${HS}"]`);
+    const chosen = (await hsCand.count()) ? hsCand.first()
+      : page.locator(".hsCand").first();
+    await chosen.click();
+    await page.waitForFunction(() => !document.querySelector(".prov"),
+      { timeout: 15000 });
+    const resolvedText = await page.locator("#pResolved").innerText();
+    if (!resolvedText.includes(HS))
+      fail("candidate_selected", `resolved badge missing HS ${HS}: ${resolvedText}`);
+    ok("candidate_selected", "product HS confirmed via candidate dialog");
 
     // ٣) اختر السوق المنتِجة (الإمارات — من أكبر مصدّري التمور).
     const mrow = page.locator(`#marketBox .mrow[data-iso3="${MARKET}"]`);
@@ -53,21 +78,9 @@ async function main() {
     await mrow.first().click();
     ok("market_selected", MARKET);
 
-    // ٤) «بحث عميق» — الموجة ٣ (المصنّف العام): «تمور» تُصنَّف تلقائياً
-    //    بثقةٍ صارمة (tier=auto) بلا أيّ صندوق حوار — الشارة الصادقة
-    //    «✓ صُنّف تلقائياً» تظهر مباشرةً على #pResolved، والتدفّق يتابع
-    //    مباشرةً لاستشارة بلد المنشأ (لا نقرة تأكيدٍ وسيطة لمنتجٍ محسومٍ).
+    // ٤) «بحث عميق» — الرمز مؤكَّدٌ فعلاً (hsConfirmed) فلا تُعاد الاستشارة
+    //    (حارس ensureHs الجديد)؛ يتابع مباشرةً لاستشارة بلد المنشأ.
     await page.locator("#researchBtn").click();
-    await page.waitForFunction(() => {
-      const el = document.querySelector("#pResolved");
-      return el && el.classList.contains("on") && /✓/.test(el.textContent || "");
-    }, { timeout: 15000 });
-    const resolvedText = await page.locator("#pResolved").innerText();
-    if (!resolvedText.includes(HS))
-      fail("auto_classify", `resolved badge missing HS ${HS}: ${resolvedText}`);
-    ok("auto_classify", "honest ✓ badge shown, no blocking dialog for a clean match");
-
-    // ٥) (لا نقرة تأكيدٍ هنا — تلقائيٌّ فعلاً، الفرق الجوهري عن مسار المرشّحين.)
 
     // ٦) استشارة بلد المنشأ — سوقٌ من أكبر مصدّري هذا الرمز => نافذة تحذير.
     await page.waitForSelector("#advOk", { timeout: 15000 });

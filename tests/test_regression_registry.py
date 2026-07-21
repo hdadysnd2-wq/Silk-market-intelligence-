@@ -773,8 +773,11 @@ def _guard_golden_contract_test_exists_and_covers_both_paths():
 def _guard_general_hs_classifier_no_lookup_table_ceiling():
     """LESSONS ٣٩ — عائلة `lookup-table-ceiling`: بذرة CSV تلميحٌ ابتدائي لا
     الحاكم النهائي. الحارس السلوكي: (١) بوّابة سلامة الفصل ترفض رمزاً خارج
-    بنية WCO الحقيقية بمعزلٍ عن ادّعاء أيّ نموذج؛ (٢) منتجٌ محسومٌ جيداً
-    («تمور») تلقائيٌّ بلا أيّ نداء كلود؛ (٣) منتجٌ مُعلَّم (زبدة الفول
+    بنية WCO الحقيقية بمعزلٍ عن ادّعاء أيّ نموذج؛ (٢) بلا كلود، القائمة
+    المحلية لا تقترح إطلاقاً — حتى منتجٌ واضحٌ («تمور») يتدهور بصدقٍ لمنتقٍ
+    يدوي بدل تخمينٍ محليّ (**سطرٌ مُحدَّثٌ عن أصل الحادثة**: القائمة المحلية
+    توسّطت لاحقاً — LESSONS ٤١/٤٢ — فأُزيلت من دور الاقتراح كلياً، لا مجرّد
+    تخفيف أولويتها؛ راجع docs/DECISIONS.md)؛ (٣) منتجٌ مُعلَّم (زبدة الفول
     السوداني) لا يمرّ تلقائياً بلا كلود؛ (٤) نقطة الاختناق `preflight_block`
     تُلحِق `candidates` فعلياً بردّ الحجب — لا رفضٌ عارٍ بلا توجيه."""
     import silk_hs_classifier as hsc
@@ -782,11 +785,12 @@ def _guard_general_hs_classifier_no_lookup_table_ceiling():
     # (١) سلامة الفصل بنيويةٌ بمعزلٍ عن مصدر الادّعاء.
     assert chapter_valid("999999") is False
     assert hsc._validated_candidate("أيّ منتج", "999999") is None
-    # (٢) لا هدر — منتجٌ واثقٌ لا يستدعي كلود إطلاقاً.
+    # (٢) القائمة المحلية لا تقترح أبداً — بلا كلود، حتى منتجٌ واضحٌ يتدهور
+    # لمنتقٍ يدوي (لا اقتراحاً حتمياً كان كافياً وحده قبل عكس التدفّق).
     from unittest.mock import patch
     with patch("silk_ai_judge._call") as mock_call:
         r = hsc.classify_general("تمور", allow_claude=True)
-    assert r["tier"] == "auto" and r["hs6"] == "080410"
+    assert r["tier"] == "manual" and r["hs6"] is None
     assert mock_call.called is False
     # (٣) منتجٌ مُعلَّم — لا تلقائي بلا مساعدة (نفس عائلة الحادثة الأصلية).
     r2 = hsc.classify_general("زبدة الفول السوداني", hs_code="040510",
@@ -884,6 +888,53 @@ def _guard_active_resolution_beats_rejected_and_short_root_collision():
     assert _covered("زبده", ["زبده"]) is True
 
 
+def _guard_full_hs_list_migration_no_silent_display_breakage():
+    """LESSONS ٤٢ — الترحيل للقائمة الرسمية الكاملة (HS2022، ٥٦١٣ رمزاً)
+    غيّر أسماء أعمدة صفوف `load_hs_codes()` (`description_en`/`keywords_ar`
+    بدل `name_en`/`name_ar`/`keywords`) — ثلاث دوالّ عرض قرأت الأعمدة
+    القديمة مباشرةً (`r.get("name_ar")`) فكانت ستُعيد **فراغاً صامتاً** لكل
+    صفٍّ (لا استثناء، `dict.get` لا يفشل على مفتاحٍ غائب) رغم أنّ التصنيف
+    نفسه يعمل تماماً: صندوق بحث المنتج (`api._index_search`) كان سيُظهر
+    كل نتيجةٍ باسم `None`/فارغ، والمنتقي اليدوي (`_candidate_rows`) وخريطة
+    أسماء الاكتشاف العكسي (`silk_discovery._hs_names`) كذلك — عطلُ عرضٍ
+    صامتٌ تماماً لا يُسقِط أيّ اختبارٍ ولا يرفع استثناءً، يُكتشَف فقط بفحصٍ
+    يدويٍّ فعليّ لمحتوى الاستجابة. الحارس السلوكي: كل دالة عرضٍ تُعيد اسماً
+    غير فارغ لصفٍّ حقيقيّ.
+
+    وجدنا أيضاً أثناء التحقّق الحيّ (متصفّحٌ حقيقي، رُتبة ٣): بعد عكس التدفّق،
+    منتجاتٌ كانت تُصنَّف تلقائياً («تمور») صارت تعرض صندوق حوارٍ الآن — و`#pDrop`
+    (نقر صفّ الفهرس) يستدعي `ensureHs` فوراً عند الاختيار (إصلاحٌ سابق)، ثم
+    «بحث عميق» يستدعيها **مجدداً** بلا حارسٍ يتحقّق من تأكيدٍ سابق — فيظهر
+    صندوقا حوارٍ متراكبان لنفس المنتج، والثاني يحجب أزرار الأول (فشل e2e حيّ:
+    `page.locator('.hsCand').first().click()` يُعلَّق ٣٠ ثانية، «intercepts
+    pointer events»). الحارس: `ensureHs` تتجاوز أيّ نداءٍ ثانٍ لمنتجٍ **مؤكَّدٍ
+    فعلاً** (`hsConfirmed&&S.hs`) — لا يخالف عقد «تأكيد قبل كل تشغيل» (الدرس
+    ٤٠) لأنّ `hsConfirmed` لا يصير true إلا بعد تأكيدٍ فعليّ، ويُصفَّر عند أيّ
+    تغييرٍ للمنتج."""
+    import api
+    import silk_discovery
+    from silk_hs_classifier import _candidate_rows
+
+    rows = api._index_search("تمور", limit=3)
+    assert rows and all(r.get("name") for r in rows), (
+        f"صندوق بحث المنتج يُعيد اسماً فارغاً: {rows}")
+
+    cand = _candidate_rows("تمور", n=3)
+    assert cand and all(c.get("label") for c in cand), (
+        f"المنتقي اليدوي يُعيد تسميةً فارغة: {cand}")
+
+    names = silk_discovery._hs_names()
+    assert names and names.get("080410"), (
+        "خريطة أسماء الاكتشاف العكسي فارغة لرمزٍ حقيقيّ (080410/تمور)")
+
+    html = _read("web/index.html")
+    ensure_hs_start = html.index("function ensureHs(")
+    ensure_hs_body = html[ensure_hs_start:html.index("function _pct(", ensure_hs_start)]
+    assert "S.hsConfirmed&&S.hs" in ensure_hs_body, (
+        "ensureHs لم تعد تتجاوز إعادة التصنيف لمنتجٍ مؤكَّدٍ فعلاً — "
+        "يعيد صندوقَي حوارٍ متراكبين (فخّ e2e حيّ)")
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -931,6 +982,7 @@ _LESSONS = {
     39: _guard_general_hs_classifier_no_lookup_table_ceiling,  # المصنّف العام — جدول البحث تلميحٌ ابتدائي لا حاكمٌ نهائي
     40: _guard_ui_tier_consumption_single_choke_point,  # UI-ONLY FIX — نقطة اختناق tier واحدة، لا مسار ثانٍ يثق بـhs6 خامًا
     41: _guard_active_resolution_beats_rejected_and_short_root_collision,  # ONE FIX — المصادَق يتصدّر على المرفوض، لا تصادف جذرٍ قصير
+    42: _guard_full_hs_list_migration_no_silent_display_breakage,  # ترحيل القائمة الكاملة — لا عطل عرضٍ صامت من تغيّر أسماء الأعمدة
 }
 
 _TRAPS = [

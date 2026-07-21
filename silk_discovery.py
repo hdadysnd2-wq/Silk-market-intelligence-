@@ -48,8 +48,15 @@ def _hs_names() -> dict:
     """أسماء رموز HS من المرجع القائم — HS names from the existing seed CSV."""
     try:
         from silk_hs_resolver import load_hs_codes
-        return {r["hs_code"]: (r.get("name_ar") or r.get("name_en") or "")
-                for r in load_hs_codes()}
+
+        def _name(r: dict) -> str:
+            # الاسم العربي الأساسي أوّل عنصرٍ في keywords_ar (اتفاقية الترحيل
+            # — راجع tools/migrate_hs_keywords.py)، وإلا الوصف الرسمي الإنجليزي.
+            ar = (r.get("keywords_ar") or "").split(";")
+            return (ar[0].strip() if ar and ar[0].strip()
+                   else r.get("description_en") or "")
+
+        return {r["hs_code"]: _name(r) for r in load_hs_codes()}
     except Exception as e:  # noqa: BLE001 — الاسم زينة، الرمز هو الأصل
         log.warning("HS names unavailable: %s", e)
         return {}

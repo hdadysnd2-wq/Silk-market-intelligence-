@@ -135,16 +135,16 @@ def _client():
     return TestClient(api.create_app())
 
 
-def test_endpoint_deterministic_needs_no_key_no_reservation():
-    """منتجٌ معروفٌ بلا التباس => اقتراح حتمي 200 بلا مفتاح/حجز (الموجة ٣:
-    شكل `classify_general` — tier/candidates لا status/alternates القديم)."""
+def test_endpoint_no_key_degrades_honestly_no_local_guess_even_for_clean_product():
+    """عكس التدفّق (الموجة ٤، طلب المُشرِف): القائمة المحلية لم تعد تقترح —
+    بلا مفتاح كلود، حتى منتجٌ واضحٌ («تمور») يتدهور بصدقٍ لمنتقٍ يدوي
+    (200، لا 5xx) بدل اقتراحٍ حتميٍّ محليّ مجاني (ذلك المسار حُذف عمداً)."""
     pytest.importorskip("fastapi")
     with _env(SILK_API_KEY=None, ANTHROPIC_API_KEY=None), _block_net():
         r = _client().post("/classify_hs", json={"product": "تمور"})
     assert r.status_code == 200
     body = r.json()
-    assert body["tier"] == "auto" and body["source"] == "deterministic" \
-        and body["hs6"] == "080410"
+    assert body["tier"] == "manual" and body["hs6"] is None
 
 
 def test_endpoint_low_confidence_is_metered_count_from_the_cap():

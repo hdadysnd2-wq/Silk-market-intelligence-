@@ -296,6 +296,17 @@ _TEST_ANCHORS = [
      ["def test_breadth_active_resolution_surfaces_correct_primary_not_rejected_or_blank"]),
     (41, "tests/test_regression_registry.py",
      ["def _guard_active_resolution_beats_rejected_and_short_root_collision"]),
+    # البند ٤٢ — ترحيل القائمة الرسمية الكاملة HS2022 + عكس التدفّق كلياً؛
+    # لا عطل عرضٍ صامت من تغيّر أسماء الأعمدة.
+    (42, "data/hscodes_full.csv", ["hs_code,chapter,chapter_desc_en"]),
+    (42, "web/index.html", ["S.hsConfirmed&&S.hs"]),
+    (42, "tools/migrate_hs_keywords.py", ["def migrate", "def build_keywords_ar"]),
+    (42, "silk_hs_classifier.py",
+     ["النموذج يقترح — لأيّ منتج، لا فقط حين يفشل لاحقٌ حتمي"]),
+    (42, "tests/test_regression_registry.py",
+     ["def _guard_full_hs_list_migration_no_silent_display_breakage"]),
+    (42, "tests/test_hs_general_classifier.py",
+     ["def test_section_and_compound_phrase_breadth_surfaces_correct_primary"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

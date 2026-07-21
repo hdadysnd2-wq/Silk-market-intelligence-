@@ -46,28 +46,61 @@ def test_chapter_sanity_rejects_malformed_and_out_of_range_codes():
 
 
 def test_validated_candidate_combines_csv_and_model_description():
-    """صفٌّ من بذرتنا بلا ترجمةٍ عربية (إنجليزي فقط) لا يُطأطئ التداخل صفراً
-    حين يقدّم النموذج وصفاً عربياً صحيحاً — الأفضل من المصدرين يفوز، لكن
-    `verified` يبقى صحيحاً (الرمز فعلاً في مرجعنا) بمعزلٍ عن أيّ وصفٍ حسم."""
+    """صفٌّ من القائمة الرسمية بلا ترجمةٍ عربية (إنجليزي فقط، `keywords_ar`
+    فارغ) لا يُطأطئ التداخل صفراً حين يقدّم النموذج وصفاً عربياً صحيحاً —
+    الأفضل من المصدرين يفوز، لكن `verified` يبقى صحيحاً (الرمز فعلاً في
+    المرجع) بمعزلٍ عن أيّ وصفٍ حسم."""
     import silk_hs_classifier as hsc
-    # 200811 في بذرتنا بوصفٍ إنجليزي فقط (name_ar فارغ) — راجع data/hs_codes.csv.
+    from silk_hs_resolver import load_hs_codes
+    # 200850 (مشمش محفوظ) بوصفٍ إنجليزيٍّ فقط — لم يُرحَّل له مقابلٌ عربي في
+    # الترحيل (لا يوجد رمزٌ مطابقٌ في البذرة القديمة) — راجع data/hscodes_full.csv.
+    row = next(r for r in load_hs_codes() if r["hs_code"] == "200850")
+    assert not (row.get("keywords_ar") or "").strip(), (
+        "الاختبار يفترض صفّاً إنجليزياً فقط — عدِّل الرمز إن أُضيفت له ترجمةٌ لاحقاً")
     v = hsc._validated_candidate(
-        "زبدة الفول السوداني", "200811",
-        model_desc="فول سوداني محضّر أو محفوظ")
+        "مشمش مجفف محفوظ", "200850", model_desc="مشمش محفوظ")
     assert v is not None
     assert v["verified"] is True
     assert v["overlap"] >= 0.6
 
 
-def test_classify_general_deterministic_only_never_needs_llm_for_clean_match():
-    """منتجٌ محسومٌ جيداً في بذرتنا («تمور») => تلقائي بلا أيّ نداء كلود،
-    حتى مع `allow_claude=True` — لا هدر."""
+def test_classify_general_always_asks_the_model_no_local_shortcut_even_for_clean_product():
+    """عكس التدفّق (طلب المُشرِف): القائمة المحلية لم تعد تقترح أبداً — حتى
+    منتجٌ واضحٌ («تمور») يستلزم استشارة النموذج (مُحاكاة هنا)، لا اقتراحاً
+    محلياً مجانياً. أول نداءٍ فعليّ؛ التكرار الثاني لنفس المنتج **مجانيّ**
+    (الذاكرة) — لا هدرٌ متكرّر، لكن صفر نداءٍ للمرّة الأولى لم يعد ممكناً."""
     import silk_hs_classifier as hsc
-    with patch("silk_ai_judge._call") as mock_call:
+    fake = _fake_llm([{"hs6": "080410", "description_ar": "تمور طازجة أو مجففة",
+                       "reason_ar": "تمور تمور تمور — تطابقٌ مباشر",
+                       "confidence": 0.95}])
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
+         patch("silk_ai_judge.available", return_value=True), \
+         patch("silk_ai_judge._call", return_value=fake) as mock_call, \
+         patch("silk_usage.try_reserve_paid_calls", return_value=True), \
+         patch("silk_usage.try_reserve_usd", return_value=True):
+        r1 = hsc.classify_general("تمور", allow_claude=True)
+        n1 = mock_call.call_count
+        r2 = hsc.classify_general("تمور", allow_claude=True)
+        n2 = mock_call.call_count
+    assert n1 == 1, "أول تصنيفٍ لمنتجٍ جديد يجب أن يستشير النموذج فعلياً"
+    assert n2 == n1, "التكرار الثاني لنفس المنتج مجانيٌّ عبر الذاكرة"
+    assert r1["tier"] == "auto" and r1["hs6"] == "080410"
+    assert r1["message"] == "✓ صُنّف تلقائياً"
+    assert r2["hs6"] == "080410"
+
+
+def test_classify_general_no_llm_available_never_guesses_locally_even_for_clean_product():
+    """بلا كلود إطلاقاً (لا مفتاح/الصمّام مُطفأ) — القائمة المحلية **لا
+    تقترح بديلاً أبداً** حتى لمنتجٍ واضح؛ فجوةٌ معلنة صادقة (يدويّ) لا
+    تخمينٌ محليّ. هذا الفارق الجوهري عن السلوك القديم (اللاحق الحتمي كان
+    يقترح بثقة بلا أيّ نداء) — الآن التحقّق المحلي لا يقترح مطلقاً."""
+    import silk_hs_classifier as hsc
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "0"}), \
+         patch("silk_ai_judge._call") as mock_call:
         r = hsc.classify_general("تمور", allow_claude=True)
-    assert r["tier"] == "auto" and r["hs6"] == "080410"
     assert mock_call.called is False
-    assert r["message"] == "✓ صُنّف تلقائياً"
+    assert r["tier"] == "manual"
+    assert r["hs6"] is None
 
 
 def test_classify_general_never_auto_passes_flagged_product_without_llm():
@@ -104,9 +137,9 @@ def test_classify_general_llm_assisted_surfaces_correct_family_over_wrong_one():
               for c in r["candidates"])
 
 
-def test_classify_general_manual_when_llm_disabled_and_deterministic_insufficient():
-    """صمّام `SILK_HS_CLASSIFIER` مُطفأ + منتجٌ غير مغطّى جيداً => لا اختلاق،
-    تدهورٌ صادقٌ لمنتقٍ يدوي (لا تلقائي، لا نداء)."""
+def test_classify_general_manual_when_llm_disabled_no_local_fallback():
+    """صمّام `SILK_HS_CLASSIFIER` مُطفأ => لا اختلاق، تدهورٌ صادقٌ لمنتقٍ
+    يدوي (لا تلقائي، لا نداء) — القائمة المحلية لا تقترح بديلاً أبداً."""
     import silk_hs_classifier as hsc
     with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "0"}), \
          patch("silk_ai_judge._call") as mock_call:
@@ -117,8 +150,10 @@ def test_classify_general_manual_when_llm_disabled_and_deterministic_insufficien
 
 
 def test_classify_general_llm_candidate_outside_our_csv_still_validated():
-    """مرشّحٌ برمزٍ **خارج بذرتنا الجزئية** (لا يوجد في data/hs_codes.csv)
-    لا يُرفَض تلقائياً — يُصادَق عليه ضد وصف النموذج نفسه (`verified=False`
+    """مرشّحٌ برمزٍ **خارج المرجع الرسمي الكامل** (لا يوجد في
+    data/hscodes_full.csv — نظرياً فقط الآن؛ المرجع كاملٌ رسمياً، لكن
+    الحارس البنيوي يبقى ضرورياً لأيّ رمزٍ مشوَّه/مُختلَق من النموذج) لا
+    يُرفَض تلقائياً — يُصادَق عليه ضد وصف النموذج نفسه (`verified=False`
     صراحةً، لا اختلاقاً)، ويظهر إن مرّ البوابة."""
     import silk_hs_classifier as hsc
     from silk_hs_confirm import _find_row
@@ -189,15 +224,19 @@ def test_cache_key_normalizes_diacritics_and_case():
 
 # ══════════════ الحجز — لا حجزَ استكشافيّ، فقط عند الحاجة الفعلية ══════════
 
-def test_no_reservation_when_deterministic_already_sufficient():
+def test_no_reservation_when_classifier_flag_off():
+    """الصمّام `SILK_HS_CLASSIFIER` هو البوّابة — مُطفأً (الافتراضي هنا، لا
+    ضبط بيئةٍ صريح) لا حجز إطلاقاً مهما كان `allow_claude`؛ لا اقتراحاً
+    محلياً بديلاً يُغني عن الحجز (ذلك المسار حُذف — عكس التدفّق)."""
     import silk_hs_classifier as hsc
     with patch("silk_usage.try_reserve_paid_calls") as mock_reserve:
         hsc.classify_general("تمور", allow_claude=True)
     mock_reserve.assert_not_called()
 
 
-def test_reservation_denied_degrades_to_deterministic_candidates_only():
-    """رفض الحجز (سقف مستنفَد) => تدهورٌ صادق، لا استثناء ولا اختلاق."""
+def test_reservation_denied_degrades_to_declared_gap_not_local_guess():
+    """رفض الحجز (سقف مستنفَد) => تدهورٌ صادق (فجوةٌ معلنة)، لا استثناء ولا
+    اختلاقٌ محلّي بديل — القائمة المحلية لا تقترح شيئاً عوضاً عن كلود."""
     import silk_hs_classifier as hsc
     with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
          patch("silk_ai_judge.available", return_value=True), \
@@ -376,6 +415,79 @@ def test_breadth_active_resolution_surfaces_correct_primary_not_rejected_or_blan
 
     الحسم الحيّ (بمفتاح كلود فعلي) يتطلّب بيئة المالك — هذا القفل يثبت
     **الآلية** (استدعاءٌ + تحقّقٌ + صدارةٌ) حتمياً بمحاكاة استجابة النموذج."""
+    import silk_hs_classifier as hsc
+    fake = _fake_llm(hints)
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
+         patch("silk_ai_judge.available", return_value=True), \
+         patch("silk_ai_judge._call", return_value=fake), \
+         patch("silk_usage.try_reserve_paid_calls", return_value=True), \
+         patch("silk_usage.try_reserve_usd", return_value=True):
+        r = hsc.classify_general(product, allow_claude=True)
+    assert r["tier"] != "manual", (
+        f"{product!r}: تدهورٌ لمنتقٍ يدويٍّ فارغ رغم مرشّحٍ صحيحٍ متاحٍ من كلود")
+    assert r["candidates"], f"{product!r}: لا مرشّحين إطلاقاً"
+    primary = r["candidates"][0]
+    assert primary["hs6"][:2] in ok_chapters, (
+        f"{product!r}: المرشّح الأساسي {primary['hs6']} (فصل "
+        f"{primary['hs6'][:2]}) خارج الفصول المقبولة {ok_chapters} — لم "
+        f"يتصدّر المرشّح الصحيح رغم توفّره ضمن {[c['hs6'] for c in r['candidates']]}")
+
+
+# ══════════════ القائمة الرسمية الكاملة — التباسٌ عبر-فصولٍ + تغطية الأقسام ═
+#
+# طلب المُشرِف الصريح (الترحيل للقائمة الرسمية الكاملة HS2022): (أ) عباراتٌ
+# مركّبة حيث كلمةٌ واحدةٌ بمفردها تقع في فصلٍ مختلفٍ عن العبارة كاملةً —
+# «زيت» وحدها قد تصادف الفصل ٢٧ المستبعَد (وقود معدني) بينما «زيت السمسم»
+# فصلٌ غذائيٌّ ١٥ بلا علاقة؛ «أنابيب» وحدها قد تصادف الفصل ٧٣ (صلب) بينما
+# «أنابيب بلاستيكية» فصلٌ ٣٩ مختلفٌ تماماً. (ب) قسمٌ واحدٌ على الأقل من كل
+# قسمٍ رئيسي (غذاء/نسيج/آلات/كيماويات) — إثباتُ عمومية الآلية عبر تصنيف
+# النظام المنسّق كاملاً، لا الأغذية وحدها التي هيمنت على البطاريات السابقة.
+
+_SECTION_AND_COMPOUND_PHRASE = [
+    # (المنتج، فصولُ HS2 المقبولة للمرشّح الأساسي، تلميحُ كلود المُحاكى)
+    ("معجون طماطم", {"20"},  # غذاء — «معجون» وحدها قد تصادف معاجين تجميلية
+     [{"hs6": "200290", "description_ar": "طماطم محضّرة أو محفوظة",
+       "reason_ar": "معجون طماطم محضّرات طماطم غذائية لا معجوناً تجميلياً",
+       "confidence": 0.85}]),
+    ("زيت السمسم", {"15"},  # غذاء/دهون — «زيت» وحدها قد تصادف الفصل ٢٧ المستبعَد
+     [{"hs6": "151550", "description_ar": "زيت السمسم وكسوره",
+       "reason_ar": "زيت السمسم زيتٌ نباتيٌّ غذائي لا وقوداً معدنياً",
+       "confidence": 0.85}]),
+    ("أنابيب بلاستيكية للري", {"39"},  # بلاستيك — «أنابيب» وحدها قد تصادف صلب الفصل ٧٣
+     [{"hs6": "391722", "description_ar": "أنابيب بلاستيكية من البولي بروبلين",
+       "reason_ar": "أنابيب بلاستيكية للري من مادة البلاستيك لا الصلب",
+       "confidence": 0.85}]),
+    ("خيوط قطن للحياكة", {"52"},  # نسيج — «خيوط» وحدها قد تصادف حرير/صناعي
+     [{"hs6": "520512", "description_ar": "خيوط قطنية غير مخصّصة للبيع بالتجزئة",
+       "reason_ar": "خيوط قطن للحياكة من القطن الطبيعي لا الحرير أو الصناعي",
+       "confidence": 0.85}]),
+    ("سبيكة ذهب خام", {"71"},  # معادن ثمينة/مجوهرات — «سبيكة» وحدها قد تصادف معادن أساسية
+     [{"hs6": "710812", "description_ar": "ذهب خام غير مصكوك",
+       "reason_ar": "سبيكة ذهب خام من المعدن الثمين لا المعادن الأساسية",
+       "confidence": 0.85}]),
+    ("مضخة مياه طرد مركزي", {"84"},  # آلات
+     [{"hs6": "841370", "description_ar": "مضخات طرد مركزي للسوائل",
+       "reason_ar": "مضخة مياه طرد مركزي آلةٌ ميكانيكية",
+       "confidence": 0.85}]),
+    ("حمض الستريك", {"29"},  # كيماويات عضوية
+     [{"hs6": "291814", "description_ar": "حمض الستريك",
+       "reason_ar": "حمض الستريك حمضٌ عضويٌّ كربوكسيلي",
+       "confidence": 0.85}]),
+    ("صودا كاوية", {"28"},  # كيماويات غير عضوية
+     [{"hs6": "281511", "description_ar": "هيدروكسيد الصوديوم — صودا كاوية صلبة",
+       "reason_ar": "صودا كاوية مادّةٌ كيماويةٌ غير عضوية",
+       "confidence": 0.85}]),
+]
+
+
+@pytest.mark.parametrize("product,ok_chapters,hints", _SECTION_AND_COMPOUND_PHRASE,
+                         ids=[c[0] for c in _SECTION_AND_COMPOUND_PHRASE])
+def test_section_and_compound_phrase_breadth_surfaces_correct_primary(
+        product, ok_chapters, hints):
+    """ترحيل القائمة الكاملة (طلب المُشرِف): عباراتٍ مركّبة (كلمةٌ منفردة
+    تقع في فصلٍ مختلفٍ عن العبارة كاملةً) + قسمٌ واحدٌ على الأقل من كل قسمٍ
+    رئيسي (غذاء/بلاستيك/نسيج/معادن ثمينة/آلات/كيماويات×٢) — المرشّح الأساسي
+    دوماً بالفصل الصحيح، لا فصل الكلمة المفردة المُضلِّل."""
     import silk_hs_classifier as hsc
     fake = _fake_llm(hints)
     with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "1"}), \
