@@ -770,6 +770,33 @@ def _guard_golden_contract_test_exists_and_covers_both_paths():
         "فحص الدخان بعد النشر يجب أن يثبت بوّابة HS حياً (Wave 3.2)")
 
 
+def _guard_watchdog_owner_only_no_client_contamination():
+    """LESSONS ٣٨ — الحارس («كاميرا مراقبة»، طلب المُشرِف): مراقبةٌ دائمة
+    مملوكة للمالك حصراً بلا أيّ تلوّث لسطح العميل. الحارس السلوكي:
+    (١) نقطة استدعاءٍ واحدة مشتركة يُستدعاها كلا `/analyze` و`/research`
+    (نفس معيار البند ٣٥: عدّ استدعاءات `_attach_watchdog(` ≥ ٣ — التعريف
+    + نداءان)؛ (٢) `silk_render.py`/`silk_reports.py` (طبقتا العرض/التصدير
+    التي يراها العميل) لا تستوردان `silk_watchdog` إطلاقاً؛ (٣) `observe()`
+    لا يعدّل نتيجة التحليل الممرَّرة إليه؛ (٤) عطلٌ داخلي في الحارس لا يرفع
+    استثناءً أبداً — يُعاد سجلٌّ يحمل `self_error` بدل إسقاط التحليل."""
+    import inspect
+    api_src = _read("api.py")
+    assert api_src.count("_attach_watchdog(") >= 3, (
+        "_attach_watchdog يجب أن تُستدعى من كلا /analyze و/research")
+    import silk_render
+    import silk_reports
+    assert "silk_watchdog" not in inspect.getsource(silk_render)
+    assert "silk_watchdog" not in inspect.getsource(silk_reports)
+    import silk_watchdog
+    result = {"product": "x", "view": {"deep_research": {}},
+             "data_economics": {}, "market": {}}
+    before = dict(result)
+    silk_watchdog.observe(result, "research", analysis_id=None)
+    assert result == before, "الحارس عدَّل نتيجة التحليل — خرق مبدأ عدم التلوّث"
+    rec = silk_watchdog.observe(object(), "research", analysis_id=999)
+    assert rec is not None and rec.get("self_error")
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -813,6 +840,7 @@ _LESSONS = {
     35: _guard_hs_gate_shared_choke_point_fail_safe,  # تقرير الكويت — بوّابة HS فشل-آمن + نقطة اختناق مشتركة
     36: _guard_cross_market_checkpoint_leak,          # تقرير الكويت — تسرّب يمن↔كويت عبر نقاط تفتيش بعثات
     37: _guard_golden_contract_test_exists_and_covers_both_paths,  # الاختبار الذهبي — كل العقود، كلا المسارين
+    38: _guard_watchdog_owner_only_no_client_contamination,  # الحارس — مراقبةٌ للمالك حصراً، صفر تلوّث للعميل
 
 }
 

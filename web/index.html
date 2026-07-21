@@ -200,6 +200,10 @@
     <div class="navbtn" data-go="chat">✎ <span data-t="navChat">دردشة</span></div>
     <div class="rail-lbl" data-t="recent">التحليلات الأخيرة</div>
     <div id="histList"></div>
+    <!-- تقرير الحارس (LAW — تسلسل القيادة: أداةٌ مملوكة للمالك حصراً) —
+         مدخلٌ منفصلٌ تماماً عن أي تحليل: وجهةٌ خاصّتها (v-watchdog) لا قسمٌ
+         داخل عرض تحليل. صفر سطرٍ حارسٍ يصل أي سطح عميل (مبدأ عدم التلوّث). -->
+    <div class="navbtn" id="watchdogNav" data-go="watchdog">🛡 <span data-t="navWatchdog">تقرير الحارس</span></div>
     <div class="rail-foot"><div class="gear" id="gearBtn">⚙ <span data-t="agentSettings">إعدادات الوكلاء</span></div>
       <div class="gear" id="svcKeyBtn" title="مفتاح الخدمة X-API-Key — خارج لوحة الوكلاء">🔑 <span data-t="svcKey">مفتاح الخدمة</span></div></div>
   </div>
@@ -284,6 +288,28 @@
         <button class="sendb" id="sendBtn">↑</button></div>
         <div class="fnote" data-t="chatNote">كل سؤال يُطلق الوكلاء المفعّلين · نفس إعدادات المسار الأساسي</div></div>
     </div>
+
+    <!-- ===== الحارس (تقرير مراقبة منفصل تماماً — LAW: للمالك حصراً) ===== -->
+    <div class="view" id="v-watchdog">
+      <div class="topbar"><span class="ttl" data-t="navWatchdog">تقرير الحارس</span></div>
+      <div class="wrap">
+        <div class="card" id="wdBadgeCard" style="margin-bottom:16px">
+          <div id="wdBadge" style="font-weight:700;font-size:16px">…</div>
+          <div id="wdBacklog" style="font-size:12px;color:var(--ink-soft);margin-top:6px"></div>
+          <div style="margin-top:12px"><button class="resetb" id="wdExportBtn">⇩ تنزيل تقرير مراقبة المنصّة (md)</button>
+            <button class="resetb" id="wdRefreshBtn" style="margin-inline-start:8px">↻ تحديث</button></div>
+        </div>
+        <div class="card">
+          <table style="width:100%;border-collapse:collapse;font-size:13px" id="wdTable">
+            <thead><tr style="text-align:start;border-bottom:1px solid var(--line)">
+              <th style="padding:8px 6px">التشغيلة</th><th style="padding:8px 6px">التاريخ</th>
+              <th style="padding:8px 6px">المنتج/السوق</th><th style="padding:8px 6px">الحالة</th>
+              <th style="padding:8px 6px">ما رُصد</th><th style="padding:8px 6px">الشدة</th></tr></thead>
+            <tbody id="wdRows"><tr><td colspan="6" style="padding:16px;color:var(--ink-soft)">جارٍ التحميل…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -308,6 +334,7 @@ var CURY=new Date().getFullYear();
 var T={
  tag:{ar:"ذكاء الأسواق",en:"Market Intelligence"},
  navNew:{ar:"تحليل جديد",en:"New analysis"},navBoard:{ar:"اللوحة الأخيرة",en:"Latest board"},navChat:{ar:"دردشة",en:"Chat"},
+ navWatchdog:{ar:"تقرير الحارس",en:"Watchdog report"},
  recent:{ar:"التحليلات الأخيرة",en:"RECENT ANALYSES"},agentSettings:{ar:"إعدادات الوكلاء",en:"Agent settings"},
  modeInput:{ar:"إدخال",en:"Form"},eyebrow:{ar:"ابدأ بمنتجك",en:"START WITH YOUR PRODUCT"},
  h1:{ar:"حلّل سوق تصدير",en:"Analyze an export market"},
@@ -1008,6 +1035,40 @@ function dlReport(kind){var id=S.raw&&S.raw.analysis_id;if(id==null){toast("شغ
 $("#pdfBtn").addEventListener("click",function(){dlReport("pdf")});
 $("#wordBtn").addEventListener("click",function(){dlReport("docx")});
 $("#mdBtn").addEventListener("click",function(){dlReport("md")});
+
+/* ── تقرير الحارس — سطحٌ منفصلٌ تماماً عن أي تحليل (LAW: للمالك حصراً).
+   لا يقرأ S.raw/S.view (نتيجة التحليل الحالية) إطلاقاً — استقلالٌ بنيويٌّ
+   عن مسار العميل، لا فقط بصرياً. ── */
+var WD_SEV_AR={green:"أخضر",yellow:"أصفر",red:"أحمر"};
+function renderWatchdog(){
+  $("#wdBadge").textContent="…جارٍ التحميل";$("#wdRows").innerHTML='<tr><td colspan="6" style="padding:16px;color:var(--ink-soft)">جارٍ التحميل…</td></tr>';
+  getJSON("/watchdog?n=50").then(function(d){
+    var b=d&&d.badge||{};$("#wdBadge").textContent=(b.label_ar||"—");
+    $("#wdBacklog").textContent=d&&d.known_backlog_note||"";
+    var recs=(d&&d.records)||[];
+    if(!recs.length){$("#wdRows").innerHTML='<tr><td colspan="6" style="padding:16px;color:var(--ink-soft)">لا تشغيلات مرصودة بعد.</td></tr>';return}
+    $("#wdRows").innerHTML=recs.map(function(r){
+      var findings=(r.findings||[]).slice().sort(function(a,b){var rank={red:2,yellow:1,green:0};return (rank[b.severity]||0)-(rank[a.severity]||0)});
+      var top=findings[0];
+      var what=top?esc(top.message_ar):"لا ملاحظات";
+      var sev=top?top.severity:"green";
+      var pm=esc((r.product||"—")+" / "+(r.market||"—"));
+      return '<tr style="border-bottom:1px solid var(--line)">'+
+        '<td style="padding:8px 6px">'+esc(r.analysis_id!=null?r.analysis_id:"—")+'</td>'+
+        '<td style="padding:8px 6px">'+esc(r.created_at||"—")+'</td>'+
+        '<td style="padding:8px 6px">'+pm+'</td>'+
+        '<td style="padding:8px 6px">'+esc(WD_SEV_AR[r.overall]||r.overall)+'</td>'+
+        '<td style="padding:8px 6px">'+what+'</td>'+
+        '<td style="padding:8px 6px">'+esc(WD_SEV_AR[sev]||sev)+'</td></tr>'
+    }).join("")
+  }).catch(function(e){$("#wdBadge").textContent="تعذّر التحميل";$("#wdRows").innerHTML='<tr><td colspan="6" style="padding:16px;color:var(--ink-soft)">'+esc(e.message)+'</td></tr>'})
+}
+$("#watchdogNav").addEventListener("click",function(){nav("watchdog");renderWatchdog()});
+$("#wdRefreshBtn").addEventListener("click",renderWatchdog);
+$("#wdExportBtn").addEventListener("click",function(){
+  dlBlob("/watchdog/report.md","text/markdown","تقرير_مراقبة_المنصة_"+new Date().toISOString().slice(0,10)+".md")
+    .catch(function(e){toast("فشل التنزيل: "+e.message)})
+});
 
 /* ── الدردشة — نفس المحرّك ونفس الإعدادات ── */
 function chatAdd(html,me){var t=document.createElement("div");t.className="turn"+(me?" me":"");

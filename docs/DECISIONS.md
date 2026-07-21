@@ -233,3 +233,49 @@ tone/length + clean exports) is the owner's paid gate (LAW §2 bucket 2), pendin
 3. **Tariff source** — the applied-tariff line served by **WTO TTD** (source «WTO TTD») or the honest fallback; confirm which via the server log `tariff path=wto|wits|gap` for HS 080410.
 4. **/ops confirmation** — `GET /ops/last-errors` shows a `service_failure` row only if a source failed; `data_economics.live_fetches` counts the live calls. A `tariff path=gap` log with a declared-gap tariff line = both sources unavailable (honest, not fabricated).
 Do not mark IMF/WTO "live-proven" until step 2–3 are observed on a real run.
+
+---
+
+## The Watchdog ("كاميرا مراقبة") — permanent owner-only monitoring (2026-07-21)
+
+**Order.** Following the Kuwait-report stabilization (PR #134 — HS gate + cross-market leak
+fixes, LESSONS 35–37), the supervisor requested a standing monitoring agent: watch every
+`/analyze` and `/research` run, catch what the three Kuwait bugs would have caught automatically,
+and report it in a **separate, owner-only surface** — zero contamination of any client deliverable.
+
+**Prerequisite verified:** `#134` is merged into `main` (commit `b16ef6d`); the shared choke-point
+(`silk_hs_confirm.preflight_block`, called from both `/analyze` and `/research`) exists and the
+watchdog rides the same two call sites via `api._attach_watchdog`.
+
+**Insertion point (smallest change).** Exactly two call sites in `api.py` — `_attach_watchdog(result, analysis_id, kind)`
+called once at the end of `/analyze` (after `result["view"] = _view(result)`) and once inside
+`_run_research_pipeline` right after the existing `_attach_quality_gate` call — mirroring the
+established Wave-10 quality-gate pattern (`_attach_quality_gate` is already extracted for the
+exact same reason: called from both the full `/research` run and the standalone report-regen
+endpoint without duplicating logic). No pipeline re-routing; the watchdog hangs off the same
+post-view choke-point every prior gate already uses.
+
+| Part | Status | Evidence (path / test) |
+|---|---|---|
+| PART 1 — sensor layer | DONE-with-artifact | `silk_watchdog.py::observe`/`_observe_unsafe` — deterministic checks (hs_gate, badge/body, cross-market leak via `silk_storage.checkpoint_market_iso3s`, vendor/§/placeholder leaks reusing `silk_reports._client_sanitize`+`_client_forbidden_hits`, stale-tag consistency, price-sanity retail<wholesale, no-fabrication contract, quality-gate verdict, economics bands, mission failures, tariff path from finding `.source` not log-scraping, service failures via `silk_ops_log` time-window). Zero LLM calls (verified: no `silk_llm_runtime`/`silk_ai_judge` import in `silk_watchdog.py`). Stored in `watchdog.db`, independent of `silk.db`/`ops_errors.db`/`usage.db`. |
+| PART 2 — separate report (owner-only) | DONE-with-artifact | `GET /watchdog` (JSON: badge/records/trend), `GET /watchdog/report.md` (standalone downloadable file, both key-protected like `/ops/last-errors`); `web/index.html` sidebar entry `#watchdogNav` → dedicated view `#v-watchdog` (structurally separate from `#v-board`/`#v-input`, never rendered inside an analysis view — locked by `tests/test_watchdog.py::test_web_ui_watchdog_entry_is_a_separate_view_not_inside_analysis`); each record carries `analysis_id` for one-way linkage (analysis never references the watchdog — locked structurally: `silk_render.py`/`silk_reports.py` never import `silk_watchdog`). |
+| PART 3 — trend brain | DONE-with-artifact | `silk_watchdog.trend_report()` — on-demand aggregation (no cron) over the last N records: cost/duration trend (first/last/avg), contract-violation rate, advisory rate, WTO-vs-WITS fallback rate, service-fallback count; rendered as a section of `render_report_md()`. `KNOWN_OPEN_BACKLOG_NOTE` states the H-1..H-9 open-backlog count so the report always distinguishes monitored vs. known-and-open. |
+| PART 4 — self-protection | DONE-with-artifact | `observe()` never raises (internal `try/except` around `_observe_unsafe`, returns a `self_error`-carrying yellow record on any internal failure, mirrors "الحارس تعطّل في التشغيلة X" wording); `api._attach_watchdog` wraps the call in its own `try/except` as a second layer; watchdog never blocks/slows a run (no return value consumed by the caller, pure side-effect write); measured overhead ~8ms/run (`test_observe_adds_negligible_latency`, printed). |
+
+**Lock-tests (`tests/test_watchdog.py`, 29 tests):** seeded cross-market violation → red; clean run
+→ green; watchdog internal crash → isolated (`self_error`, never raises, analysis result untouched);
+zero watchdog strings reach `render_markdown()`/exported client surfaces; all three known
+service-failure kinds (`scraper`/`trends`/`imf`) each produce the correct yellow finding; `observe()`
+never mutates the `result` dict passed to it (confidentiality-by-design, same principle as vendor-name
+redaction, LESSON 18); API endpoints return records/badge/trend and require the key when configured;
+`_attach_watchdog` call-count structural guard (≥3, same pattern as the HS-gate choke-point check).
+
+**Evidence bucket (LAW §2):** hermetic only — `python3 -m pytest tests/ -q --ignore=tests/test_r3_trends_context.py`
+green (1434 passed, 17 skipped, plus the 29 new watchdog tests). No real-server/browser (rung 2/3) run
+in this sandbox; the sidebar UI wiring is source-verified (grep-locked), not click-tested live. Owner's
+next real run should confirm: `GET /watchdog` after a live `/research` run shows the new record with the
+correct badge, and the sidebar "تقرير الحارس" entry renders the table in a live browser.
+
+`docs/LESSONS.md` row 38 added (same-session, test-first per the self-update protocol), anchored in
+`tests/test_regression_registry.py::_guard_watchdog_owner_only_no_client_contamination` and
+`tests/test_lessons_enforcement.py`.

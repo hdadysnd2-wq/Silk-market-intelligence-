@@ -882,6 +882,7 @@ def create_app():
         if not ai_ok:
             result["ai_extras_note"] = ai_note   # الغياب مُعلَن لا صامت
         result["view"] = _view(result)
+        _attach_watchdog(result, result.get("analysis_id"), "analyze")
         return _json(result)
 
     def _clean_agent_prefs(raw: dict | None) -> dict | None:
@@ -1098,6 +1099,21 @@ def create_app():
                     finding_count=len(gate_out["findings"]))
         except Exception as e:  # noqa: BLE001 — البوابة تحسين لا شرط تسليم
             log.warning("quality gate skipped: %s", e)
+
+    def _attach_watchdog(result: dict, analysis_id: int | None,
+                         kind: str) -> None:
+        """نقطةُ اختناقٍ مشتركةٌ واحدة يستدعيها **كلا** المسارين (/analyze
+        و/research) — الحارس («كاميرا مراقبة»، طلب المُشرِف): سجلّ صحّةٍ
+        حتميٌّ (صفر نداء كلود) يُخزَّن في مخزنه المستقل (`silk_watchdog.py`)
+        لسطح مالكٍ منفصل تماماً («تقرير الحارس»). **لا يمسّ `result` إطلاقاً**
+        (لا حقل يُضاف لنتيجة التحليل) — مبدأ عدم التلوّث: صفر سطر حارسٍ يصل
+        أي سطح عميل. فشلها الداخلي مُعزولٌ بالفعل (`silk_watchdog.observe`
+        لا ترفع أبداً)؛ هذا `try` طبقة حمايةٍ إضافية فقط."""
+        try:
+            import silk_watchdog
+            silk_watchdog.observe(result, kind, analysis_id)
+        except Exception as e:  # noqa: BLE001 — مراقبة لا تُسقِط تحليلاً أبداً
+            log.warning("watchdog skipped: %s", e)
 
     def _collect_importer_leads(scrape_future, product: str, market_ref,
                                 mission_reports: dict, scrape_t0: float,
@@ -1349,6 +1365,7 @@ def create_app():
         # النهائي **قبل** أي عرض docx، فتلحَق نتيجتها بالتتبّع وبقسم
         # "منهجية البحث ونطاقه" داخل التقرير (طبقة العرض، silk_reports.py).
         _attach_quality_gate(result, research_run.get("trace_id"))
+        _attach_watchdog(result, analysis_id, "research")
         return result
 
     def _finish_research_run(analysis_id: int | None, result: dict) -> None:
@@ -2039,6 +2056,33 @@ def create_app():
         _rate_limit(request)
         import silk_ops_log
         return _json({"errors": silk_ops_log.last_errors(n)})
+
+    @app.get("/watchdog")
+    def watchdog(request: Request, n: int = 50):
+        """الحارس — سطحُ مالكٍ منفصلٌ تماماً (LAW: تسلسل القيادة، «تقرير
+        الحارس» ليس جزءاً من أي تحليل). آخر `n` سجلّ صحّةٍ + الشارة العامة +
+        اتجاهات آخر التشغيلات. محروسة كبقية سطوح المشغّل."""
+        _require_key(request)
+        _rate_limit(request)
+        import silk_watchdog
+        records = silk_watchdog.list_records(n)
+        return _json({
+            "badge": silk_watchdog.overall_badge(records),
+            "records": records,
+            "trend": silk_watchdog.trend_report(records),
+            "known_backlog_note": silk_watchdog.KNOWN_OPEN_BACKLOG_NOTE,
+        })
+
+    @app.get("/watchdog/report.md")
+    def watchdog_report_md(request: Request, n: int = 50):
+        """تقرير مراقبة المنصّة — ملفٌّ مستقلٌّ تماماً بذاته (PART 2-2: لا
+        علاقة بأي مُصدِّر تحليل/عميل). محروسة، نفس عقد `report.md`."""
+        _require_key(request)
+        _rate_limit(request)
+        import silk_watchdog
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(silk_watchdog.render_report_md(n=n),
+                                 media_type="text/markdown; charset=utf-8")
 
     @app.get("/sources")
     def sources(request: Request):
