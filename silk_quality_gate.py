@@ -462,26 +462,37 @@ _CURRENCY_LABELS = {
 }
 
 
+_PRICE_HEADER_CUR_RE = re.compile(
+    r"السعر[^|\n]{0,20}?(بالدولار|باليورو|بالجنيه)")
+_HEADER_PHRASE_TO_CUR = {"بالدولار": "USD", "باليورو": "EUR", "بالجنيه": "GBP"}
+
+
 def _check_currency_label_mismatch(dr: dict) -> list[dict]:
     """اكشف عمودَ سعرٍ يَعِد بعملةٍ بينما القيم بعملةٍ أخرى (تحويل غير مُنجَز).
 
-    البلاغ الحيّ: عنوان العمود «السعر/كجم بالدولار» بينما الخلايا يورو. نكتفي
-    بإشارةٍ نصّية حتمية: ذكرُ «بالدولار» (وعدُ عمودٍ بالدولار) مع وجود رموز
-    يورو/جنيه في التقرير نفسه (أو العكس) = وعدُ تحويلٍ لم يُجرَ."""
+    البلاغ الحيّ: عنوان العمود «السعر/كجم بالدولار» بينما الخلايا يورو. البحث
+    عن العملة الأخرى **يقتصر على نافذة الجدول نفسه** (من الترويسة حتى أول
+    سطرٍ فارغ) — لا كامل نص التقرير: تقارير حقيقية تخلط عملات مشروعة بأقسام
+    مختلفة (استيراد بالدولار دوماً §1، تجزئة بعملة الرصد §6) بلا أيّ خطأ؛
+    فحصٌ على كامل النص كان يُبلِّغ تعارضاً زائفاً بين قسمين مستقلّين تماماً.
+    **قابل للإصلاح** فعلياً — راجع silk_render._fix_price_column_currency_label
+    (يُعنوِن العمود بالعملة المرصودة فعلاً قبل وصول النص هنا)؛ هذا الفحص
+    حارس انحدار يتأكّد أنّ الإصلاح نجح فعلاً لهذه التشغيلة."""
     text = (dr.get("report") or {}).get("text") or ""
-    # عنوان عمود يَعِد بعملة صراحةً (صيغة «بالـ…» داخل ترويسة السعر).
-    promised = [cur for cur, pat in _CURRENCY_LABELS.items()
-                if re.search(r"السعر[^|]{0,20}" + {"USD": "بالدولار",
-                             "EUR": "باليورو", "GBP": "بالجنيه"}[cur], text)]
-    for cur in promised:
-        others = [c for c in _CURRENCY_LABELS
-                  if c != cur and _CURRENCY_LABELS[c].search(text)]
-        if others:
-            return [{
-                "check": "currency_label_mismatch", "repairable": False,
-                "note": (f"عمود السعر مُعنوَن بـ{cur} بينما التقرير يحمل قيماً "
-                         f"بعملة أخرى ({'، '.join(others)}) — عنوِن العمود "
-                         "بالعملة المرصودة فعلاً، ولا تَعِد بتحويلٍ لم يُجرَ")}]
+    m = _PRICE_HEADER_CUR_RE.search(text)
+    if not m:
+        return []
+    cur = _HEADER_PHRASE_TO_CUR[m.group(1)]
+    block_end = text.find("\n\n", m.end())
+    block = text[m.start():block_end if block_end != -1 else len(text)]
+    others = [c for c, pat in _CURRENCY_LABELS.items()
+             if c != cur and pat.search(block)]
+    if others:
+        return [{
+            "check": "currency_label_mismatch", "repairable": True,
+            "note": (f"عمود السعر مُعنوَن بـ{cur} بينما جدول الأسعار نفسه يحمل "
+                     f"قيماً بعملة أخرى ({'، '.join(others)}) — عنوِن العمود "
+                     "بالعملة المرصودة فعلاً، ولا تَعِد بتحويلٍ لم يُجرَ")}]
     return []
 
 
@@ -506,7 +517,12 @@ _REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
                            "style_currency_shorthand",
                            "style_inline_enumeration",
                            "style_connector_excess",
-                           "style_repeated_key_figure_excess"}
+                           "style_repeated_key_figure_excess",
+                           # البند ٥ (تدقيق «تحليل #1» DZA): وعدُ عملةٍ لم
+                           # يُنجَز تحويلها بلاغٌ مضلِّل حقيقي (لا مجرّد أسلوب)
+                           # — الإصلاح الفعلي في silk_render._fix_price_
+                           # column_currency_label؛ ظهوره يعني فشل الإصلاح.
+                           "currency_label_mismatch"}
 
 
 def run_quality_gate(view: dict) -> dict:

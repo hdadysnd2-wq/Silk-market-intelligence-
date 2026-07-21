@@ -670,6 +670,75 @@ _CLAUDE_WORD_RE = re.compile(r"\bClaude\b|كلود")
 # §7: كلمة (٣ أحرف فأكثر) تكرّرت فوراً — تُطوى إلى واحدة («التوصية التوصية»).
 _DUP_WORD_RE = re.compile(r"(?<!\S)([^\W\d_]{3,})\s+\1(?!\S)")
 
+# البند ١ (تدقيق «تحليل #1» DZA — silk_quality_gate.markdown_artifacts):
+# أسوار كود عشوائية («```» بمحتواها الكامل) وتنسيق «**» شارد قد تتسرّب من
+# مقطع مصدر مقتبَس حرفياً أو من صياغة الكاتب — تُزالان. **لا تُمَسّ** عناوين
+# "## "/"### " البنيوية: هذه إلزامية (silk_ai_judge._REPORT_SECTIONS) وتُقرَأ
+# عناوين Word فعلية في silk_reports._docx_deep_research (`line.startswith
+# ("## ")`)، وتبقى تُبلَّغ WARN متوقَّعة في بوابة الجودة (test_quality_gate_
+# stays_warn_for_ordinary_repairable_findings) — هذا الإصلاح يعالج التسريب
+# الفعلي الإضافي (الأسوار/التنسيق الشارد) لا العناوين المطلوبة.
+_CODE_FENCE_RE = re.compile(r"```[\s\S]*?```\n?")
+_SANCTIONED_BOLD = "**ماذا يعني هذا لقرارك:**"
+_STRAY_BOLD_RE = re.compile(r"\*\*([^\n*]{1,200}?)\*\*")
+
+
+def _strip_stray_markdown(text: str) -> str:
+    """أزل تنسيق «**» شارد خارج العبارة المرخَّصة الوحيدة (راجع تعليق الثوابت
+    أعلاه) — لا يمسّ عناوين "## "/"### ". أسوار الكود («```») تُزال أبكر في
+    `_strip_internal_plumbing` (قبل معالجة تسريب JSON) — راجع تعليقها هناك."""
+    if not text:
+        return text
+    return _STRAY_BOLD_RE.sub(
+        lambda m: m.group(0) if m.group(0) == _SANCTIONED_BOLD else m.group(1),
+        text)
+
+
+# البند ٢ (تدقيق «تحليل #1» DZA — silk_quality_gate.raw_confidence): رقم ثقة
+# عربي خام «ثقة 0.x» متسرّب في السرد رغم حظر عقد الكاتب له صراحة (silk_ai_judge
+# deep_report prompt) — شبكة أمان أخيرة، بنفس منطق _EN_CONF_VALUE_RE أعلاه
+# للإنجليزية لكن للعربية؛ يستبدل الرقم الخام بعبارة لغوية عبر
+# silk_narrative.confidence_phrase (نفس القيمة، عبارة مقروءة — لا اختلاق).
+_AR_RAW_CONF_RE = re.compile(r"ثقة\s*[:=]?\s*\(?(0\.\d{1,4})\)?")
+
+
+def _ar_conf_repl(m: "re.Match") -> str:
+    from silk_narrative import confidence_phrase
+    try:
+        c = float(m.group(1))
+    except ValueError:
+        return m.group(0)
+    return f"ثقة {confidence_phrase(c)}"
+
+
+# البند ٥ (تدقيق «تحليل #1» DZA — silk_quality_gate.currency_label_mismatch):
+# عمود سعر يَعِد بعملة غير التي رُصدت فعلاً ("السعر/كجم بالدولار" بينما
+# الصفوف تحمل €/يورو) — وعدُ تحويلٍ لم يُجرَ، بلاغٌ حيّ حقيقي (لا تسريب
+# سرّية). الإصلاح يُعنوِن العمود بالعملة **المرصودة فعلاً** بدل حذف الصفّ أو
+# اختلاق تحويل (لا سعر صرف بين الحقائق).
+_PRICE_HEADER_CUR_RE = re.compile(r"(السعر[^\n|]{0,20}?)(بالدولار|\bUSD\b)")
+_OTHER_CUR_RELABEL = (
+    ("باليورو", re.compile(r"باليورو|\bEUR\b|€|يورو")),
+    ("بالجنيه الإسترليني", re.compile(r"بالجنيه|\bGBP\b|£|جنيه إسترليني")),
+)
+
+
+def _fix_price_column_currency_label(text: str) -> str:
+    """عنوِن عمود السعر بالعملة المرصودة فعلاً في متن التقرير نفسه، لا
+    باليورو/الدولار حسب الترويسة وحدها. إن لم تظهر عملة أخرى غير الموعودة في
+    الترويسة، لا تغيير (لا مؤشّر مطابَق سلباً — نفس منطق الاكتشاف في
+    silk_quality_gate._check_currency_label_mismatch)."""
+    if not text:
+        return text
+    m = _PRICE_HEADER_CUR_RE.search(text)
+    if not m:
+        return text
+    rest = text[:m.start()] + text[m.end():]
+    for label, pat in _OTHER_CUR_RELABEL:
+        if pat.search(rest):
+            return text[:m.start()] + m.group(1) + label + text[m.end():]
+    return text
+
 
 def _extract_or_gap(blob: str) -> str:
     """استخرج قيمة مفتاح مقروء من تفريغ JSON، وإلا فجوة معلنة — لا JSON خام
@@ -815,6 +884,11 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     لم تلتقطه الأنماط أعلاه. None/فارغ يمر كما هو."""
     if not text:
         return text
+    # البند ١ (تدقيق «تحليل #1» DZA): أسوار كود عشوائية («```...```») تُزال
+    # **قبل** معالجة تسريب JSON أدناه — وإلا تسبق `_strip_raw_json_leak`
+    # فتُزيل أسوار الكود وحدها (فرع (٢) فيها، عام لأي سياج لا JSON فقط)
+    # وتترك محتوى الكتلة الخام (مقطع مصدر مقتبَس حرفياً) عارياً كفقرة زائدة.
+    text = _CODE_FENCE_RE.sub("", text)
     text = _strip_raw_json_leak(text)
     # حيِّد أيّ ريبر DataPoint(...) **كاملاً** قبل ترجمة الحقول (وإلا نصف-ترجمة):
     # تُستخرَج القيمة المقروءة، أو تُعلَن فجوة إن كانت None/فارغة (لا اختلاق).
@@ -824,6 +898,10 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     text = _strip_mission_key_prefix(text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
     text = _DP_TAG_RE.sub("", text)
+    # §٢ (تدقيق «تحليل #1» DZA): تنسيق «**» شارد + رقم ثقة عربي خام — راجع
+    # تعليقات الثوابت أعلاه لماذا لا يُمَسّ "## "/"### ".
+    text = _strip_stray_markdown(text)
+    text = _AR_RAW_CONF_RE.sub(_ar_conf_repl, text)
     # §2.3 (أمر العمل الرئيس): مفتاح بعثة داخلي (snake_case) تسرَّب في المتن
     # أو جدول الحكم («(consumer_culture)») يُستبدَل باسمه العربي المعروض.
     text = _map_mission_keys(text)
@@ -1433,6 +1511,9 @@ def _deep_research_view(result: dict) -> dict | None:
                       "حتى تأكيد الرمز الصحيح.")
     _report_text_glossed, _glossary = _apply_merchant_language(
         _strip_internal_plumbing(report_out.get("report")))
+    # البند ٥ (تدقيق «تحليل #1» DZA): عنوِن عمود السعر بالعملة المرصودة
+    # فعلاً قبل التخزين في النموذج القانوني — راجع تعليق الدالة أعلاه.
+    _report_text_glossed = _fix_price_column_currency_label(_report_text_glossed)
     # القاعدة العامة (قرار المالك): سنوات الحقائق المتقادِمة تُحسَب من **مصدرها
     # البنيوي** (silk_staleness) لا من النثر، فتُوسَم أينما وردت بأيّ صياغة، ولا
     # يُوسَم رمزُ HS. ثم تحقّقٌ: أيّ سنة حقيقة متقادِمة بلا وسمٍ في السرد

@@ -1222,6 +1222,23 @@ def _alarmist_issues(draft: str) -> list[str]:
             f"(مثل: {MEASURED_TONE_HINT})" for p in hits]
 
 
+def _repeated_key_figure_issues(draft: str) -> list[str]:
+    """فحص حتمي (لا كلود) لتكرار رقم مفتاحي أكثر من مرّتين (§8 — عقد الكاتب
+    أعلاه: 'اذكره كاملاً مرّة ثم أَحِل إليه') — بلاغ حي (تدقيق «تحليل #1»
+    DZA): المراجع السريع كان يُطالَب بهذا الفحص نثراً فقط (راجع تعليمات
+    المراجع أدناه) فقد يفوته؛ حارس حتمي مستقل يعيد استعمال نفس عدّاد
+    silk_quality_gate.style_digest (مصدر حقيقة واحد للعتبة، لا تكرار منطق)
+    فيُضاف للمشاكل دوماً بمعزل عن نجاح/فشل نداء المراجع نفسه."""
+    try:
+        from silk_quality_gate import style_digest
+    except Exception:  # pragma: no cover
+        return []
+    figures = style_digest(draft or "").get("key_figures") or {}
+    return [f"رقم مفتاحي «{tok}» تكرّر {n} مرّات في المتن (الحدّ مرّتان) — "
+            "اذكره كاملاً مرّة ثم أحِل إليه لاحقاً بإحالة موجزة"
+            for tok, n in figures.items() if n > 2]
+
+
 def review_report(draft: str, mission_reports: dict,
                   trace_id: str | None = None) -> dict | None:
     """راجع مسوّدة التقرير — المراجع (نموذج سريع): هل كل رقم مسنود؟ تناقضات؟
@@ -1233,6 +1250,9 @@ def review_report(draft: str, mission_reports: dict,
     # Wave 5.1: نبرة تنبيهية مشكلةُ أسلوب (غير حاجبة) — تُضاف للـissues لا
     # للـblocking (لا دورة تنقيح مدفوعة إضافية، اتفاق D-01/E1).
     tone_issues = _alarmist_issues(draft)
+    # تدقيق «تحليل #1» DZA — بند ٣+٤: فحص حتمي مستقلّ لتكرار رقم مفتاحي
+    # (لا يعتمد وحده على ملاحظة المراجع النثرية في user prompt أدناه).
+    keyfig_issues = _repeated_key_figure_issues(draft)
     facts = _isolate(_facts(list(mission_reports.values())))
     user = (
         f"الحقائق الخام المرجعية (لا غيرها):\n{facts}\n\n"
@@ -1287,16 +1307,16 @@ def review_report(draft: str, mission_reports: dict,
         lambda: _call(_PRINCIPLE, user, max_tokens=900, model=_FAST_MODEL,
                      timeout=30))
     if not raw:
-        _fb = structural_issues + tone_issues
+        _fb = structural_issues + tone_issues + keyfig_issues
         return {"issues": _fb, "blocking": structural_issues,
                "approved": not _fb} if _fb else None
     obj = _extract_json(raw)  # noqa: BLE001 — رد غير-JSON = لا مراجعة، لا اختلاق
     if obj is None:
-        _fb = structural_issues + tone_issues
+        _fb = structural_issues + tone_issues + keyfig_issues
         return {"issues": _fb, "blocking": structural_issues,
                "approved": not _fb} if _fb else None
     llm_issues = [str(i) for i in (obj.get("issues") or []) if str(i).strip()]
-    issues = structural_issues + tone_issues + llm_issues
+    issues = structural_issues + tone_issues + keyfig_issues + llm_issues
     # PART C1 (أمر العمل الرئيس — انحدار التكلفة $1.6→$2.0): المشاكل «الحاجبة»
     # وحدها تبرّر دورة تنقيح ثانية (نداء كاتب Opus كامل إضافي). الحاجب =
     # مشاكل البنية الحتمية (أقسام ناقصة/بترتيب خاطئ) دوماً + ما صنّفه المراجع
