@@ -905,6 +905,34 @@ def _guard_dza_quality_gate_six_findings():
     assert fired == set(), f"حارس انحدار أُطلِق رغم الإصلاح: {fired}"
 
 
+def _guard_hs_classifier_valve_fail_safe_default():
+    """LESSONS ٤٣ — بلاغ حيّ متكرّر (المالك): المُصنِّف العام مُصلَحٌ ومُختبَرٌ
+    ليتعرَّف على الرمز الصحيح لمنتجٍ متعدِّد الصفات، لكنه كان خلف صمّامٍ
+    `SILK_HS_CLASSIFIER` مُطفأٍ افتراضياً — فلا يعمل أبداً في الإنتاج ما لم
+    يُضبَط صراحةً. الحارس السلوكي: (١) الصمّام مفعَّلٌ حين المتغيّر غير
+    مضبوط إطلاقاً؛ (٢) يُطفَأ فقط بقيمةٍ صريحة (0/false/no/off)؛ (٣) مع
+    الصمّام الافتراضي وحده (بلا أيّ ضبطٍ إضافي)، محاكاة تصنيف منتجٍ متعدِّد
+    الصفات تحسم تلقائياً للفصل الصحيح لا الصفة الثانوية العارضة."""
+    import os
+    from unittest.mock import patch
+    import silk_hs_classifier as hsc
+    os.environ.pop("SILK_HS_CLASSIFIER", None)
+    assert hsc.enabled() is True, "الصمّام يجب أن يكون فشلاً-آمناً (مفعَّلاً) دون ضبط"
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "0"}):
+        assert hsc.enabled() is False
+    fake = ('{"candidates":[{"hs6":"200811","description_ar":'
+           '"فول سوداني محضّر أو محفوظ","reason_ar":'
+           '"زبدة الفول السوداني محضّرةٌ من الفول السوداني","confidence":0.92}]}')
+    with patch("silk_ai_judge.available", return_value=True), \
+         patch("silk_ai_judge._call", return_value=fake), \
+         patch("silk_usage.try_reserve_paid_calls", return_value=True), \
+         patch("silk_usage.try_reserve_usd", return_value=True):
+        r = hsc.classify_general("زبدة الفول السوداني", hs_code="040510",
+                                 allow_claude=True)
+    assert r["tier"] == "auto", f"لم يُحسَم تلقائياً بالإعدادات الافتراضية: {r}"
+    assert r["hs6"] != "040510"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -953,6 +981,7 @@ _LESSONS = {
     40: _guard_ui_tier_consumption_single_choke_point,  # UI-ONLY FIX — نقطة اختناق tier واحدة، لا مسار ثانٍ يثق بـhs6 خامًا
     41: _guard_active_resolution_beats_rejected_and_short_root_collision,  # ONE FIX — المصادَق يتصدّر على المرفوض، لا تصادف جذرٍ قصير
     42: _guard_dza_quality_gate_six_findings,  # تحليل #1 DZA — ست نتائج فشل بوّابة الجودة معاً على تشغيلة واحدة
+    43: _guard_hs_classifier_valve_fail_safe_default,  # المُصنِّف العام — صمّامٌ فشل-آمن مفعَّل افتراضياً لا مُطفأ
 }
 
 _TRAPS = [

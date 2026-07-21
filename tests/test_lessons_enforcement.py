@@ -55,6 +55,8 @@ _SYMBOL_ANCHORS = [
     (42, "silk_ai_judge.py", ["_repeated_key_figure_issues"]),
     (42, "silk_quality_gate.py", ["currency_label_mismatch"]),
     (42, "tools/canonical_dza_peanut_butter.py", ["def dza_research_blob"]),
+    # البند ٤٣ — المُصنِّف العام: صمّام فشل-آمن مفعَّل افتراضياً.
+    (43, "silk_hs_classifier.py", ["def enabled", '"0", "false", "no", "off"']),
 ]
 
 # كل مدخلة: (رقم الدرس، مسار الوثيقة، علامات المنهج التي يجب أن تبقى).
@@ -309,6 +311,10 @@ _TEST_ANCHORS = [
      ["def test_overall_verdict_moves_from_fail_to_pass_with_warnings"]),
     (42, "tests/test_regression_registry.py",
      ["def _guard_dza_quality_gate_six_findings"]),
+    (43, "tests/test_hs_general_classifier.py",
+     ["def test_general_classifier_valve_is_fail_safe_on_by_default"]),
+    (43, "tests/test_regression_registry.py",
+     ["def _guard_hs_classifier_valve_fail_safe_default"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
