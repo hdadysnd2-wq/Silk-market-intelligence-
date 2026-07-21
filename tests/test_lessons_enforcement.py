@@ -265,6 +265,20 @@ _TEST_ANCHORS = [
       "def test_three_known_service_failures_produce_yellow_findings"]),
     (38, "tests/test_regression_registry.py",
      ["def _guard_watchdog_owner_only_no_client_contamination"]),
+    # البند ٣٩ — المصنّف العام: جدول البحث تلميحٌ ابتدائي لا حاكمٌ نهائي.
+    (39, "silk_hs_classifier.py",
+     ["def classify_general", "def _validated_candidate",
+      "def _claude_classify_general"]),
+    (39, "silk_hs_resolver.py", ["VALID_HS_CHAPTERS", "def chapter_valid"]),
+    (39, "silk_hs_confirm.py", ["def confirm_against_description"]),
+    (39, "silk_store.py",
+     ["def cache_hs_classification", "def get_cached_hs_classification"]),
+    (39, "tests/test_hs_general_classifier.py",
+     ["def test_battery_never_auto_passes_wrong_chapter_without_llm",
+      "def test_classify_general_never_auto_passes_flagged_product_without_llm",
+      "def test_repeat_product_hits_cache_zero_extra_llm_calls"]),
+    (39, "tests/test_regression_registry.py",
+     ["def _guard_general_hs_classifier_no_lookup_table_ceiling"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

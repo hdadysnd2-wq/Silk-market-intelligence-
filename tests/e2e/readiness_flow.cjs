@@ -43,10 +43,13 @@ async function main() {
     await mrow.first().click();
     ok("product_market_selected");
 
-    // «بحث عميق» → نافذة التصنيف → تأكيد.
+    // «بحث عميق» — الموجة ٣: «تمور» تُصنَّف تلقائياً (tier=auto) بلا صندوق
+    // حوار — الشارة الصادقة تكفي، ثم مباشرةً للوحة الجاهزية.
     await page.locator("#researchBtn").click();
-    await page.waitForSelector("#hsOk", { timeout: 15000 });
-    await page.locator("#hsOk").click();
+    await page.waitForFunction(() => {
+      const el = document.querySelector("#pResolved");
+      return el && el.classList.contains("on") && /✓/.test(el.textContent || "");
+    }, { timeout: 15000 });
 
     // لوحة الجاهزية — تظهر بدل نافذة الاستشارة المنفردة، بسطر ⚠ واحد على الأقل.
     await page.waitForSelector("#rdGo", { timeout: 15000 });

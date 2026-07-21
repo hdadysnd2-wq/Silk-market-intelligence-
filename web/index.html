@@ -377,10 +377,17 @@ function applyLang(){
 var CAR={SAU:"السعودية",ARE:"الإمارات",QAT:"قطر",KWT:"الكويت",OMN:"عُمان",BHR:"البحرين",JOR:"الأردن",LBN:"لبنان",EGY:"مصر",MAR:"المغرب",TUN:"تونس",DZA:"الجزائر",IRQ:"العراق",TUR:"تركيا",YEM:"اليمن",ZAF:"جنوب أفريقيا",NGA:"نيجيريا",KEN:"كينيا",ETH:"إثيوبيا",GHA:"غانا",IND:"الهند",PAK:"باكستان",BGD:"بنغلاديش",IDN:"إندونيسيا",MYS:"ماليزيا",SGP:"سنغافورة",THA:"تايلند",VNM:"فيتنام",CHN:"الصين",JPN:"اليابان",KOR:"كوريا الجنوبية",GBR:"بريطانيا",DEU:"ألمانيا",FRA:"فرنسا",ITA:"إيطاليا",ESP:"إسبانيا",NLD:"هولندا",USA:"الولايات المتحدة",CAN:"كندا"};
 var AGENT_AR={market_size:{ar:"حجم السوق",en:"Market size"},competitor:{ar:"المنافسة",en:"Competition"},regulatory:{ar:"الاشتراطات",en:"Regulatory"},pricing:{ar:"التسعير",en:"Pricing"},risk:{ar:"المخاطر",en:"Risk"},consumer_demand:{ar:"ثقافة المستهلك",en:"Consumer demand"},supplier:{ar:"المورّدون",en:"Suppliers"},logistics:{ar:"اللوجستيات",en:"Logistics"}};
 function agentName(k){var e=AGENT_AR[k];return e?(e[LANG]||e.ar):"بيانات إضافية"}
-var S={product:"",hs:"",market:null,span:5,raw:null,view:null,busy:false,
+var S={product:"",hs:"",hsConfirmed:false,market:null,span:5,raw:null,view:null,busy:false,
   adminKey:localStorage.getItem("silk_admin_key")||"",
   prefs:JSON.parse(localStorage.getItem("silk_agent_prefs")||"null"),
   hist:JSON.parse(localStorage.getItem("silk_hist")||"[]")};
+/* خطّافُ اختبارٍ فقط (Playwright/rung 3) — يضبط اسم منتجٍ حرٍّ لا يتطلّب
+   تطابقاً في فهرس البحث `#pSearch` (بعض عيّنات الاختبار — كتحقيق «زبدة الفول
+   السوداني» — غائبةٌ عمداً عن الفهرس، فهذا بالضبط سبب حاجتها لبوّابة
+   التصنيف العام). لا يُغيّر أيّ سلوك إنتاجي — مجرّد بديلٍ لنقر صفّ فهرسٍ. */
+window.__silkTestSetProduct=function(name){
+  S.product=name;S.hs=null;S.hsConfirmed=false;
+  $("#pSearch").value=name;$("#pResolved").classList.remove("on");sync()};
 
 /* الوكلاء المعروضون في الدرج — مرآة سجل الخادم (silk_agents.AGENT_CATALOG).
    القائمة القانونية تُجلب من GET /settings/agents عند فتح الدرج؛ هذه نسخة
@@ -441,7 +448,7 @@ var pT;$("#pSearch").addEventListener("input",function(){var q=this.value.trim()
   // MED (تدقيق الواجهة، M12): أي تعديل يُبطل الحلّ السابق فوراً — وإلا يبقى
   // S.product/S.hs قديمَين (من اختيار سابق) فيُحلَّل منتج غير الظاهر في
   // الصندوق صامتاً حين يُنقَر «مسح الأسواق» بلا اختيار صفٍّ جديد من القائمة.
-  if(S.product&&q!==S.product){S.product=null;S.hs=null;S.intakeIngredients=null;S.intakeCategory=null;$("#pResolved").classList.remove("on");sync()}
+  if(S.product&&q!==S.product){S.product=null;S.hs=null;S.hsConfirmed=false;S.intakeIngredients=null;S.intakeCategory=null;$("#pResolved").classList.remove("on");sync()}
   if(!q){$("#pDrop").classList.remove("open");return}
   pT=setTimeout(function(){fetch(base()+"/index?q="+encodeURIComponent(q)+"&limit=10").then(function(r){return r.json()}).then(function(list){
     if(!Array.isArray(list)||!list.length){$("#pDrop").classList.remove("open");return}
@@ -540,13 +547,26 @@ function certList(){return ($("#cCerts").value||"").split(",").map(function(s){r
 function buildBody(){var y=years();
   var b={product:S.product,year:y[1],persist:true,trend_span:S.span<2?2:S.span,agent_prefs:S.prefs};
   if(S.market)b.markets=[S.market.iso3];
+  // بلاغ حي (الموجة ٣ — بوّابة HS العامة): /analyze لم يكن يرسل hs_code
+  // إطلاقاً، فبوّابة التأكيد (preflight_block) كانت تحسم رمزاً من الصفر
+  // في كل مرة بلا أثرٍ لاختيار المستخدم السابق عبر صندوق الحوار.
+  if(S.hs)b.hs_code=S.hs;
+  if(S.hsConfirmed)b.hs_confirmed=true;
   var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value),certs=certList();
   if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
   if(!isNaN(price))b.own_price=price;return b}
 function runAnalysis(then){if(!S.product||S.busy)return;S.busy=true;sync();$("#runBtn").textContent=t("running");
   post("/analyze",buildBody()).then(function(res){S.raw=res;S.view=res.view||null;S.busy=false;$("#runBtn").textContent=t("run");sync();
     pushHist(res&&res.analysis_id||null);renderBoard();if(then)then(res);else nav("board")})
-  .catch(function(e){S.busy=false;$("#runBtn").textContent=t("run");sync();toast("فشل الطلب: "+e.message)})}
+  .catch(function(e){S.busy=false;$("#runBtn").textContent=t("run");sync();
+    var d=e&&e.__detail;
+    // بوّابة تأكيد HS (422، الموجة ٣): صندوقُ حوارٍ حاجبٌ بمرشّحين فعليّين
+    // — لا توصيةٌ صامتة، ولا «✓» أبداً على ردٍّ مرفوض.
+    if(d&&d.error==="hs_confirmation_needed"){return showHsCandidates(d,function(){runAnalysis(then)})}
+    // رمز HS غير محسوم إطلاقاً (بوّابة SILK_REQUIRE_HS6، إن فُعِّلت) — نفس
+    // مسار /research (كان غائباً هنا تماماً قبل الموجة ٣).
+    if(d&&d.error==="unresolved_hs"){S.hs=null;S.hsConfirmed=false;return ensureHs(function(){runAnalysis(then)})}
+    toast("فشل الطلب: "+e.message)})}
 $("#runBtn").addEventListener("click",function(){runAnalysis()});
 
 /* بحث عميق — ١٢ بعثة كلود + محلل شامل + كاتب/مراجع (POST /research، لا
@@ -617,30 +637,55 @@ function modal(inner){
 function ensureHs(cb){
   // المُصنِّف مُطفأ => السلوك كاليوم (يمرّ برمز /resolve؛ الخادم يقرّر ببوّابته).
   if(!(S.cfg&&S.cfg.hs_classifier)){return cb()}
-  // مُفعَّل => اعرض الاقتراح للتأكيد بنقرة **قبل أيّ حجز** (مندوب المالك) — حتى
-  // لو حُسِم الرمز من القائمة (المسار الحتمي يعيده فورًا بلا نداء كلود).
+  // مُفعَّل — الموجة ٣ (المصنّف العام): `/classify_hs` يعيد نفس شكل
+  // `classify_general` (tier/candidates)، لا شكل الاقتراح الفردي القديم.
+  // tier="auto" فقط يُقبَل بلا صندوق حوار (فشل-آمن: الشكّ يعني السؤال لا
+  // التخمين). يغطّي كِلا مساري الإدخال (اسمٌ مكتوب أو صورة — S.intake*
+  // تصل من استخلاص الصورة إن وُجد).
   toast("…جارٍ تصنيف المنتج");
   post("/classify_hs",{product:S.product,ingredients:S.intakeIngredients||null,category:S.intakeCategory||null})
-    .then(function(res){showHsProposal(res,cb)})
-    .catch(function(){showHsManual(cb)})}
+    .then(function(res){
+      if(res&&res.tier==="auto"&&res.hs6){
+        S.hs=res.hs6;S.hsConfirmed=true;
+        $("#pResolved").classList.add("on");
+        $("#pResolved").textContent="✓ صُنّف تلقائياً — "+t("resolvedAs")+res.hs6;sync();
+        return cb()
+      }
+      showHsCandidates(res,cb)})
+    .catch(function(){showHsCandidates(null,cb)})}
 function _pct(c){return Math.round((c||0)*100)}
-function showHsProposal(res,cb){
-  if(!res||res.status!=="ok"||!res.hs6){return showHsManual(cb,res&&res.alternates)}
-  var alts=(res.alternates||[]).filter(function(a){return a&&a.hs6});
-  var altHtml=alts.length?('<div style="font-size:11.5px;color:var(--muted,#8a8175);margin-top:8px">بدائل:</div>'
-    +alts.map(function(a){return '<button type="button" class="hsAlt" data-hs="'+esc(a.hs6)+'" style="display:block;width:100%;text-align:right;margin-top:5px;padding:7px 9px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">HS '+esc(a.hs6)+(a.label?(' — '+esc(a.label)):'')+'</button>'}).join('')):'';
-  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:8px">تأكيد تصنيف المنتج</div>'
-    +'<div>صُنِّف: <b>HS '+esc(res.hs6)+'</b>'+(res.rationale_ar?(' — '+esc(res.rationale_ar)):'')+' <span style="color:var(--muted,#8a8175)">(ثقة '+_pct(res.confidence)+'%)</span></div>'
-    +altHtml
+/* صندوق حوار المرشّحين — نقطة اختناقٍ واجهةٍ واحدة (الموجة ٣): تُستعمَل
+   لكِلا مسارَي /classify_hs (ما قبل التشغيل) و422 hs_confirmation_needed
+   (وقت الإرسال، /analyze و/research معاً) — نفس شكل المرشّح
+   {hs6, description_ar, reason_ar, confidence, verified} في كلا المصدرين.
+   **لا يُعرَض «✓ صُنّف تلقائياً» هنا إطلاقاً** — هذا الصندوق بحكم تعريفه
+   حالة «غير محسوم»؛ الشارة الوحيدة تظهر بعد اختيار المستخدم فعلياً. */
+function showHsCandidates(detail,cb){
+  var cands=((detail&&detail.candidates)||[]).filter(function(c){return c&&c.hs6});
+  var msg=(detail&&detail.message)||"لم يُحسَم رمز HS بثقة — اختر من المرشّحين أدناه أو أدخل رمزاً يدوياً.";
+  if(!cands.length){return showHsManual(cb)}
+  var rows=cands.slice(0,3).map(function(c){
+    var badge=c.verified?'<span style="font-size:10px;color:#2e7d32;margin-inline-start:6px">✓ من مرجعنا</span>'
+      :'<span style="font-size:10px;color:var(--muted,#8a8175);margin-inline-start:6px">اقتراح</span>';
+    return '<button type="button" class="hsCand" data-hs="'+esc(c.hs6)+'" style="display:block;width:100%;text-align:right;margin-top:7px;padding:9px 11px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12.5px">'
+      +'<div style="font-weight:700">HS '+esc(c.hs6)+badge+'</div>'
+      +(c.description_ar?('<div style="margin-top:2px">'+esc(c.description_ar)+'</div>'):'')
+      +(c.reason_ar?('<div style="margin-top:2px;color:var(--muted,#8a8175)">'+esc(c.reason_ar)+'</div>'):'')
+      +'</button>'}).join('');
+  var m=modal('<div style="font-weight:700;font-size:14px;margin-bottom:8px">تأكيد رمز HS</div>'
+    +'<div style="font-size:12px;color:var(--muted,#8a8175)">'+esc(msg)+'</div>'
+    +rows
     +'<div style="display:flex;gap:8px;margin-top:14px">'
-    +'<button type="button" id="hsOk" style="flex:1;padding:8px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;cursor:pointer;font-size:13px">تأكيد ومتابعة</button>'
-    +'<button type="button" id="hsManual" style="padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">اختر يدويًا</button>'
+    +'<button type="button" id="hsCandManual" style="flex:1;padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">إدخال رمز يدوياً</button>'
+    +'<button type="button" id="hsCandCancel" style="padding:8px 12px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:transparent;cursor:pointer;font-size:12px">إلغاء</button>'
     +'</div>');
-  var chosen=res.hs6;
-  m.querySelectorAll(".hsAlt").forEach(function(b){b.addEventListener("click",function(){chosen=this.dataset.hs;
-    m.querySelectorAll(".hsAlt").forEach(function(x){x.style.background="transparent"});this.style.background="var(--bg,#f3efe6)"})});
-  $("#hsOk",m).addEventListener("click",function(){S.hs=chosen;$("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+chosen;sync();m.close();cb()});
-  $("#hsManual",m).addEventListener("click",function(){m.close();showHsManual(cb,alts)})}
+  m.querySelectorAll(".hsCand").forEach(function(b){b.addEventListener("click",function(){
+    var code=this.dataset.hs;S.hs=code;S.hsConfirmed=true;
+    $("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+code;sync();
+    m.close();cb()})});
+  $("#hsCandManual",m).addEventListener("click",function(){m.close();
+    showHsManual(cb,cands.map(function(c){return{hs6:c.hs6,label:c.description_ar}}))});
+  $("#hsCandCancel",m).addEventListener("click",function(){m.close()})}
 function showHsManual(cb,alts){
   alts=(alts||[]).filter(function(a){return a&&a.hs6});
   var altHtml=alts.length?('<div style="font-size:11.5px;color:var(--muted,#8a8175);margin-top:8px">اقتراحات قريبة:</div>'
@@ -650,7 +695,7 @@ function showHsManual(cb,alts){
     +'<input id="hsPick" placeholder="ابحث… أو 190219" style="width:100%;margin-top:8px;padding:8px 9px;border:1px solid var(--line,#e3ddd2);border-radius:9px;background:var(--card,#fff);font-size:13px">'
     +'<div id="hsPickDrop"></div>'+altHtml
     +'<button type="button" id="hsPickGo" style="margin-top:12px;width:100%;padding:8px 12px;border:0;border-radius:9px;background:var(--accent,#6b4e2e);color:#fff;cursor:pointer;font-size:13px">تأكيد الرمز</button>');
-  function commit(code){code=(code||"").replace(/\D/g,"");if(code.length<4)return;S.hs=code;$("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+code;sync();m.close();cb()}
+  function commit(code){code=(code||"").replace(/\D/g,"");if(code.length<4)return;S.hs=code;S.hsConfirmed=true;$("#pResolved").classList.add("on");$("#pResolved").textContent=t("resolvedAs")+code;sync();m.close();cb()}
   m.querySelectorAll(".hsAlt").forEach(function(b){b.addEventListener("click",function(){commit(this.dataset.hs)})});
   var pk=$("#hsPick",m),dp=$("#hsPickDrop",m),tmr;
   pk.addEventListener("input",function(){var q=this.value.trim();clearTimeout(tmr);if(!q||/^\d+$/.test(q)){dp.innerHTML="";return}
@@ -720,6 +765,7 @@ function startResearch(extra){if(S.busy)return;
   if(resuming){b={resume:S.lastFailedResearchId,async_run:true}}
   else{
     b={product:S.product,market:S.market.iso3,hs_code:S.hs||null,persist:true,agent_prefs:S.prefs,async_run:true};
+    if(S.hsConfirmed)b.hs_confirmed=true;
     var cost=parseFloat($("#cCost").value),price=parseFloat($("#cPrice").value),cap=parseFloat($("#cCap").value),certs=certList();
     if(!isNaN(cost))b.product_card={cost_per_unit:cost,tier:$("#cTier").value,monthly_capacity:isNaN(cap)?null:cap,shipping_per_unit:null,certifications:certs.length?certs:null};
     else toast("بدون بطاقة المنتج سيغيب عمود الربحية — أكملها الآن؟ دقيقتان");  // تنبيه لا حجب (الموجة ١٠)
@@ -734,8 +780,12 @@ function startResearch(extra){if(S.busy)return;
     var d=e&&e.__detail;
     // استشارة بلد المنشأ (422): أظهر تأكيدًا وأعد الإرسال بموافقة صريحة.
     if(d&&d.error==="producer_country_advisory"){return showProducerAdvisory(d,function(){startResearch({producer_ack:true})})}
+    // بوّابة تأكيد HS (422، الموجة ٣): صندوقُ حوارٍ حاجبٌ بمرشّحين فعليّين
+    // من التصنيف العام — نفس الصندوق المستعمَل في /analyze (نقطة اختناق
+    // واجهة واحدة، لا نسخة مكرّرة لكل مسار).
+    if(d&&d.error==="hs_confirmation_needed"){return showHsCandidates(d,function(){startResearch({})})}
     // رمز HS غير محسوم (بوّابة صلبة 422): وجّه المستخدم للتصنيف/الاختيار اليدوي.
-    if(d&&d.error==="unresolved_hs"){S.hs=null;return ensureHs(function(){startResearch({})})}
+    if(d&&d.error==="unresolved_hs"){S.hs=null;S.hsConfirmed=false;return ensureHs(function(){startResearch({})})}
     toast("فشل البحث العميق: "+e.message)})}
 $("#researchBtn").addEventListener("click",function(){runDeepResearch()});
 /* بحوثي السابقة (ITEM ١، بلاغ حي التكلفة): كانت localStorage محضة — لكل

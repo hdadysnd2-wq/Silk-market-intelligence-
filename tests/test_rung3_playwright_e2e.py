@@ -35,6 +35,7 @@ pytestmark = pytest.mark.e2e
 _FLOW = os.path.join(_ROOT, "tests", "e2e", "live_shape_flow.cjs")
 _PRERUN_FLOW = os.path.join(_ROOT, "tests", "e2e", "prerun_flow.cjs")
 _READINESS_FLOW = os.path.join(_ROOT, "tests", "e2e", "readiness_flow.cjs")
+_HS_CANDIDATES_FLOW = os.path.join(_ROOT, "tests", "e2e", "hs_candidates_flow.cjs")
 
 
 def _node() -> str | None:
@@ -163,3 +164,38 @@ def test_rung3_readiness_panel_flow_checklist_before_confirm():
             f"Readiness Playwright flow failed (rc={r.returncode}).\n"
             f"STDOUT:\n{out}\nSTDERR:\n{err}")
         assert "READINESS PASS" in out, f"missing PASS marker.\nSTDOUT:\n{out}"
+
+
+def test_rung3_hs_candidates_dialog_blocks_on_flagged_product_and_never_auto_badges():
+    """الموجة ٣ (المصنّف العام، systemic fix): متصفّح حقيقي ينقر صندوق حوار
+    مرشّحي HS لمنتجٍ غائبٍ عمداً عن الفهرس («زبدة الفول السوداني»، نفس
+    عائلة الحادثة الأصلية) — صندوقٌ حاجبٌ بمرشّحين فعليّين، صفر «✓ صُنّف
+    تلقائياً» على منتجٍ غير محسوم، واختيار مرشّحٍ يُتابع التدفّق فعلياً.
+
+    **بلا مفتاح كلود** (يُنزَع عمداً في كل e2e) — المرشّحون هنا حتميّون
+    (بذرة CSV) لا عامّون بمساعدة نموذج؛ إثبات ظهور 200811 تحديداً عبر
+    التصنيف العام الحيّ هو بوّابة المالك المدفوعة (LAW §2)، لا هذا الاختبار."""
+    node = _node()
+    if not node:
+        pytest.skip("node غير متاح في هذه البيئة (أفضل جهد؛ وظيفة CI تثبّته)")
+    node_path = _node_path()
+    if not _playwright_available(node_path):
+        pytest.skip("حزمة playwright غير محلولة عبر NODE_PATH "
+                    "(أفضل جهد؛ وظيفة e2e-live-shape تثبّتها)")
+
+    from live_shape_server import LiveShapeServer
+    with LiveShapeServer(prerun_flags=True) as srv:
+        env = dict(
+            os.environ,
+            NODE_PATH=node_path or "",
+            BASE_URL=srv.base_url,
+            PRERUN_MARKET_ISO3=srv.PRERUN_MARKET_ISO3,
+        )
+        r = subprocess.run([node, _HS_CANDIDATES_FLOW], capture_output=True,
+                           env=env, timeout=180)
+        out = r.stdout.decode("utf-8", "replace")
+        err = r.stderr.decode("utf-8", "replace")
+        assert r.returncode == 0, (
+            f"HS-candidates Playwright flow failed (rc={r.returncode}).\n"
+            f"STDOUT:\n{out}\nSTDERR:\n{err}")
+        assert "HSCAND PASS" in out, f"missing PASS marker.\nSTDOUT:\n{out}"

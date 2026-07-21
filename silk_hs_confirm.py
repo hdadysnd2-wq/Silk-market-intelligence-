@@ -123,6 +123,58 @@ def _find_row(hs_code: str, path: str = "data/hs_codes.csv") -> dict | None:
 CONTEXTUAL_TAG = "بيانات فئة مجاورة — مؤشر سياقي لا مقياس فعلي"
 
 
+def _overlap_stats(p_terms: list[str], desc_terms: list[str]
+                   ) -> tuple[list[str], list[str], float]:
+    """نواةُ حساب التداخل المشتركة — (المُغطّى، الناقص، نسبة التداخل).
+
+    مُستخرَجةٌ (الموجة ٣ — التصنيف العام) كي يستعملها `confirm_hs` (وصفٌ من
+    صفّ CSV) و`confirm_against_description` (وصفٌ حرٌّ — من نموذجٍ أو أيّ
+    مصدر) بمنطقٍ واحدٍ لا نسختين متوازيتين قابلتين للانحراف."""
+    shared = [t for t in p_terms if _covered(t, desc_terms)]
+    missing = [t for t in p_terms if not _covered(t, desc_terms)]
+    overlap = round(len(shared) / len(p_terms), 2) if p_terms else 0.0
+    return shared, missing, overlap
+
+
+def confirm_against_description(product_name: str, hs_code: str,
+                                code_desc: str,
+                                min_overlap: float | None = None) -> dict:
+    """قِس تطابق صفات المنتج مع **وصفٍ حرّ** لرمزٍ ما — نفس شكل/عقد
+    `confirm_hs` بالضبط، لكن بلا اشتراط وجود الرمز في بذرة CSV.
+
+    الاستعمال (الموجة ٣ — التصنيف العام `silk_hs_classifier.classify_general`):
+    مرشّحٌ اقترحه نموذجٌ برمزٍ خارج بذرتنا الجزئية (~٥٦٠٠ من ~٦٩٤٠ رمزاً
+    دولياً) يُصادَق عليه بوصفه **الرسمي الذي قدّمه النموذج نفسه** — عقد
+    عدم الاختلاق لا يزال ساريًا: لا نثق برمزٍ لمجرّد ادّعائه، بل نقيس
+    تداخل الصفات المميّزة مع الوصف المُقدَّم فعليًا، تمامًا كما نفعل مع
+    صفّ CSV. `code_desc` فارغ => `confirmed=None` (لا وصف = لا حكم)."""
+    p_terms = _tokens(product_name)
+    desc = (code_desc or "").strip()
+    if not desc:
+        return {"confirmed": None, "hs_code": str(hs_code or ""),
+                "code_desc": "", "product_terms": p_terms,
+                "shared_terms": [], "missing_terms": [], "overlap": None,
+                "reason": "لا وصفَ متاحاً لهذا الرمز — تعذّر تأكيده"}
+    if not p_terms:
+        return {"confirmed": None, "hs_code": str(hs_code or ""),
+                "code_desc": desc, "product_terms": [],
+                "shared_terms": [], "missing_terms": [], "overlap": None,
+                "reason": "اسم المنتج بلا صفات قابلة للمطابقة"}
+    desc_terms = _tokens(desc)
+    shared, missing, overlap = _overlap_stats(p_terms, desc_terms)
+    threshold = min_overlap if min_overlap is not None else _min_overlap()
+    confirmed = overlap >= threshold
+    if confirmed:
+        reason = "وصف الرمز يشمل صفات المنتج المميّزة"
+    else:
+        reason = ("وصف الرمز «" + desc + "» لا يشمل الصفة/الصفات "
+                  "المميّزة: " + "، ".join(missing))
+    return {"confirmed": confirmed, "hs_code": str(hs_code or ""),
+            "code_desc": desc, "product_terms": p_terms,
+            "shared_terms": shared, "missing_terms": missing,
+            "overlap": overlap, "reason": reason}
+
+
 def confirm_hs(product_name: str, hs_code: str,
                path: str = "data/hs_codes.csv") -> dict:
     """قِس تطابق صفات المنتج المميّزة مع وصف الرمز المُصنَّف — عقد التأكيد.
@@ -131,8 +183,8 @@ def confirm_hs(product_name: str, hs_code: str,
     missing_terms, overlap, reason}. `confirmed=False` حين يقلّ تداخل صفات
     المنتج المغطّاة عن العتبة (`SILK_HS_CONFIRM_MIN_OVERLAP`) — أي أن صفةً
     مميّزةً للمنتج غائبة عن وصف الرمز. لا اختلاق: رمزٌ غير موجود في البذرة =>
-    `confirmed=None` (غير قابل للتأكيد) لا False كاذبة.
-    """
+    `confirmed=None` (غير قابل للتأكيد) لا False كاذبة. مبنيّةٌ الآن فوق
+    `confirm_against_description` (نواةٌ واحدة مشتركة) — راجع تلك للوصف الحرّ."""
     p_terms = _tokens(product_name)
     row = _find_row(hs_code, path)
     if row is None:
@@ -145,18 +197,21 @@ def confirm_hs(product_name: str, hs_code: str,
                 "code_desc": _code_desc(row), "product_terms": [],
                 "shared_terms": [], "missing_terms": [], "overlap": None,
                 "reason": "اسم المنتج بلا صفات قابلة للمطابقة"}
+    # مطابقةٌ ضد **كل** صفات وصف الصفّ (name_ar + name_en + keywords) — نفس
+    # نطاق `_code_terms` الأصلي، لا الاسم المعروض فقط (`_code_desc` وحده
+    # قد يخلو من كلماتٍ مفتاحية تحسم التداخل، كما في العيّنة الأصلية التي
+    # أسّست هذا الحارس أصلاً — راجع الملفّ العلوي).
     c_terms = _code_terms(row)
-    shared = [t for t in p_terms if _covered(t, c_terms)]
-    missing = [t for t in p_terms if not _covered(t, c_terms)]
-    overlap = round(len(shared) / len(p_terms), 2)
+    shared, missing, overlap = _overlap_stats(p_terms, c_terms)
     confirmed = overlap >= _min_overlap()
+    desc = _code_desc(row)
     if confirmed:
         reason = "وصف الرمز يشمل صفات المنتج المميّزة"
     else:
-        reason = ("وصف الرمز «" + _code_desc(row) + "» لا يشمل الصفة/الصفات "
+        reason = ("وصف الرمز «" + desc + "» لا يشمل الصفة/الصفات "
                   "المميّزة: " + "، ".join(missing))
     return {"confirmed": confirmed, "hs_code": str(hs_code or ""),
-            "code_desc": _code_desc(row), "product_terms": p_terms,
+            "code_desc": desc, "product_terms": p_terms,
             "shared_terms": shared, "missing_terms": missing,
             "overlap": overlap, "reason": reason}
 
@@ -171,29 +226,50 @@ def is_flagged(confirmation: object) -> bool:
 
 def preflight_block(product: str, hs_code: str | None,
                     hs_confirmed: bool = False,
-                    path: str = "data/hs_codes.csv") -> dict | None:
+                    path: str = "data/hs_codes.csv",
+                    allow_claude: bool = False,
+                    ingredients: list | None = None,
+                    category: str | None = None,
+                    instruction: str = "") -> dict | None:
     """نقطةُ الاختناق المشتركة الوحيدة للبوّابة — the ONE choke-point both
     `/analyze` و`/research` يستدعيانها قبل أيّ إنفاق (الموجة ٢، تدقيق
     المُشرِف 2026-07-21: الحادثة الأصلية أُصلِحت على `/research` فقط ثم
     عاودت الظهور — «إصلاحٌ على مسارٍ واحد نصفُ إصلاح»). تُعيد `dict` تفاصيل
-    422 (`error`, `message`, `hs_confirmation`) أو `None` إن كان الرمز
-    مؤكَّداً/غير محسوم/الصمّام مُطفأ صراحةً/المستخدم أكّد صراحةً.
+    422 (`error`, `message`, `hs_confirmation`, `candidates`) أو `None` إن
+    كان الرمز مؤكَّداً/غير محسوم/الصمّام مُطفأ صراحةً/المستخدم أكّد صراحةً.
 
     منطقٌ واحدٌ يعيش هنا — لا نسخة مكرّرة داخل كل معالج HTTP؛ المعالجات
     تستدعي هذه الدالة فقط ثم ترفع `HTTPException` بنفسها (هذه الوحدة لا
-    تستورد fastapi عمداً — تبقى مكتبة منطق صرفة بلا إطار HTTP)."""
+    تستورد fastapi عمداً — تبقى مكتبة منطق صرفة بلا إطار HTTP).
+
+    الموجة ٣ (المصنّف العام، systemic fix): رمزٌ مُعلَّم (`confirmed=False`)
+    لا يُعاد بسبب رفضٍ عارٍ بعد الآن — `silk_hs_classifier.classify_general`
+    يُستدعى فوراً (مرشّحون من معرفة النموذج الكاملة بنظام HS، لا بذرتنا
+    الجزئية وحدها) فيحمل ردّ الـ422 **مرشّحين فعليّين** (رمز + وصف + سبب)
+    يختار المستخدم منهم بنقرة — لا مجرّد «حاول مرة أخرى» بلا توجيه.
+    `allow_claude` (يُقرَّره طبقة الـAPI عبر نفس بوّابة القياس التي يستعملها
+    `/classify_hs` — هذه الوحدة لا تستورد `silk_usage`/`fastapi` عمداً)
+    يتحكّم فقط بهل نداء كلود مسموحٌ هذه المرّة؛ المرشّحون الحتميّون (بذرتنا)
+    يظهرون دائماً بلا أي نداء."""
     if not hs_code or hs_confirmed or not gate_enabled():
         return None
     conf = confirm_hs(product or "", hs_code, path)
     if not is_flagged(conf):
         return None
+    from silk_hs_classifier import classify_general
+    general = classify_general(product or "", hs_code=hs_code,
+                               ingredients=ingredients, category=category,
+                               allow_claude=allow_claude, instruction=instruction)
     return {
         "error": "hs_confirmation_needed",
         "message": (f"رمز HS {hs_code} («{conf.get('code_desc')}») "
                     "قد لا يطابق هذا المنتج — الصفة المميّزة غير مشمولة: "
                     f"{'، '.join(conf.get('missing_terms') or [])}. "
-                    "أكّد الرمز أو صنِّفه من جديد قبل بدء التحليل."),
+                    "اختر من المرشّحين أدناه أو أدخل رمزاً يدوياً قبل بدء "
+                    "التحليل."),
         "hs_confirmation": conf,
+        "candidates": general.get("candidates") or [],
+        "candidates_source": general.get("source"),
     }
 
 

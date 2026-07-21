@@ -500,32 +500,31 @@ def create_app():
             req.image_base64, req.media_type, req.kind,
             allow_vision=allow, blocked_reason=reason))
 
-    def _classify_ai_allowed() -> tuple[bool, str]:
-        """هل يُسمح نداءُ تصنيف HS الواحد؟ — (allowed, reason). نظيرُ
-        `_intake_vision_allowed`: نداءُ التصنيف مقيسٌ كأيّ نداء مدفوع (حجز
-        تفعيلة واحدة ذرّيًا من SILK_PAID_DAILY_CAP). الرفض يتدهور بصدق إلى
-        منتقٍ يدوي — لا اختلاق رمز. الدفتر الدولاري يُحجَز/يُصالَح في نقطة
-        النهاية (count + dollar، يُغلق نمط تدقيق #6 لهذا المسار أيضًا)."""
-        if not os.environ.get("ANTHROPIC_API_KEY", "").strip():
-            return False, ("تصنيف كلود يتطلّب ANTHROPIC_API_KEY — "
-                           "اختر الرمز يدوياً.")
-        if _unprotected_paid_keys():
-            return False, ("ANTHROPIC_API_KEY مضبوط بلا SILK_API_KEY — "
-                           "تصنيف كلود محجوب (حارس 503) حتى تُضبط المصادقة.")
-        if not silk_usage.try_reserve_paid_calls(1):
-            return False, ("سقف الاستهلاك اليومي (SILK_PAID_DAILY_CAP) "
-                           "مستنفد — اختر الرمز يدوياً.")
-        return True, ""
+    def _classify_general_allow_claude() -> bool:
+        """هل نداءُ التصنيف العام (`silk_hs_classifier.classify_general`)
+        مسموحٌ نظرياً؟ — فحصٌ رخيصٌ **بلا حجز**: يُستدعى على **كل** طلبٍ ذي
+        رمزٍ مُعلَّم عند `preflight_block`، فحجزٌ هنا يُهدر تفعيلةً حتى حين
+        يكفي المُحلِّل الحتمي (بذرة CSV) أو ذاكرة المنتج بلا أيّ نداء فعلي.
+        الحجزُ الذرّي الحقيقي (count + dollar) يعيش **داخل**
+        `silk_hs_classifier._reserve_llm_call` — نقطة اختناقٍ واحدة يستدعيها
+        `classify_general` سواءً من `/classify_hs` أو من `preflight_block`
+        (كلا مساري `/analyze`/`/research`)، فيُستدعى فقط حين يثبت فعلاً أن
+        نداءً حياً لا مفرّ منه — لا ازدواج حجزٍ بين نقطتَي نهاية."""
+        return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()) \
+            and not _unprotected_paid_keys()
 
     @app.post("/classify_hs")
     def classify_hs(req: ClassifyRequest, request: Request):
-        """صنّف منتجًا إلى HS6 كاقتراحٍ يؤكّده المستخدم — the HS-classifier step.
+        """صنّف منتجًا إلى HS6 — the general-purpose HS classifier step
+        (الموجة ٣، systemic fix). لا يبدأ أيّ تحليل ولا يحجز ميزانيةَ بحث —
+        الاقتراح فقط، لكنه **نفس عقد `classify_general`** الذي تستدعيه بوّابة
+        `preflight_block` وقت الإرسال — نقطة اختناقٍ منطقية واحدة، لا نسخة
+        مسبَقة أضيق تعطي نتيجةً مختلفة عمّا يراه المستخدم لاحقاً عند الحجب.
 
-        مسارٌ رخيصٌ أولًا: مُحلِّلٌ حتمي واثق => اقتراح فوري بلا كلود. ثقةٌ
-        منخفضة/فشل + الصمّام مُفعَّل + مسموح => نداءُ كلود **واحدٌ مقيس** (count
-        + dollar) مُرسًى على المرجع. غير ذلك => منتقٍ يدوي بلا اختلاق. لا يبدأ
-        أيّ تحليل ولا يحجز ميزانيةَ بحث — الاقتراح فقط.
-        """
+        الحجزُ الذرّي (count + dollar) يعيش الآن **داخل** `classify_general`
+        نفسها (`_reserve_llm_call`) — لا حجزٌ استكشافيٌّ هنا؛ يُستدعى فقط حين
+        يثبت فعلاً أن نداءً حياً لا مفرّ منه (لا إصابة ذاكرة ولا مُحلِّل حتمي
+        كافٍ)."""
         _require_key(request)
         _rate_limit(request)
         import silk_hs_classifier as hsc
@@ -533,33 +532,9 @@ def create_app():
         if not product:
             raise HTTPException(status_code=422, detail={
                 "error": "product_required", "reason": "مرّر اسم منتج."})
-        # المسار الحتمي الرخيص (لا نداء كلود إن كفى المُحلِّل).
-        if not hsc.needs_classifier(product):
-            return _json(hsc.classify(product, allow_claude=False))
-        # ثقةٌ منخفضة/فشل — نداءُ كلود إن كان الصمّام مفعّلًا ومسموحًا.
-        if not hsc.enabled():
-            return _json(hsc.manual(product))
-        allow, reason = _classify_ai_allowed()      # يحجز تفعيلةً واحدة (count)
-        if not allow:
-            return _json(hsc.manual(product, note=reason))
-        _expected = float(
-            os.environ.get("SILK_HS_CLASSIFY_EXPECTED_USD", "0.02") or "0.02")
-        if not silk_usage.try_reserve_usd(_expected):   # حجز دولاري ذرّي
-            return _json(hsc.manual(
-                product, note="سقف الميزانية الدولارية اليومي مستنفد — "
-                              "اختر الرمز يدوياً."))
-        import silk_context
-        silk_context.begin_data_counter()
-        try:
-            out = hsc.classify(product, ingredients=req.ingredients,
-                               category=req.category, allow_claude=True)
-        finally:
-            # صالِح الحجز الدولاري بالتكلفة الفعلية من الرموز (لا تقدير معلّق).
-            econ = silk_context.data_counter() or {}
-            from silk_pricing import estimate_cost_usd
-            actual = float(estimate_cost_usd(
-                econ.get("llm_usage") or {}).get("total_usd") or 0.0)
-            silk_usage.reconcile_usd(reserved=_expected, actual=actual)
+        out = hsc.classify_general(
+            product, ingredients=req.ingredients, category=req.category,
+            allow_claude=_classify_general_allow_claude())
         return _json(out)
 
     @app.get("/index")
@@ -841,8 +816,9 @@ def create_app():
             from silk_hs_resolver import resolve as _resolve_hs_preflight
             _analyze_hs_code = _resolve_hs_preflight(req.product).value
         from silk_hs_confirm import preflight_block
-        _blocked = preflight_block(req.product, _analyze_hs_code,
-                                   req.hs_confirmed)
+        _blocked = preflight_block(
+            req.product, _analyze_hs_code, req.hs_confirmed,
+            allow_claude=_classify_general_allow_claude())
         if _blocked is not None:
             import silk_ops_log
             silk_ops_log.record_error(
@@ -1687,7 +1663,8 @@ def create_app():
         if req.resume is None:
             from silk_hs_confirm import preflight_block
             _blocked = preflight_block(
-                product, hs_code, getattr(req, "hs_confirmed", False))
+                product, hs_code, getattr(req, "hs_confirmed", False),
+                allow_claude=_classify_general_allow_claude())
             if _blocked is not None:
                 import silk_ops_log
                 silk_ops_log.record_error(
