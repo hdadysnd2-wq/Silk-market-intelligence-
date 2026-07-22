@@ -67,6 +67,17 @@ def test_agreeing_numbers_across_evidence_and_body_raise_nothing():
     assert _check_evidence_body_numeric_consistency(dr) == []
 
 
+def test_growth_rate_finding_not_conflated_with_absolute_dollar_amount():
+    """مراجعة الشيفرة: حقيقة **نسبة نمو** («نمو الواردات 9% سنوياً»، قيمتها
+    الخام 9 تعني نسبةً لا مبلغاً) تذكر لفظ «واردات» أيضاً — لا يجوز مقارنتها
+    برقمٍ دولاريّ في المتن (62 مليون$) كأنها القيمة المطلقة نفسها؛ نسبة
+    62,000,000/9 زائفة تماماً ولا تعني تناقضاً حقيقياً."""
+    from silk_quality_gate import _check_evidence_body_numeric_consistency
+    dr = _dr("الواردات نحو 62 مليون دولار في آخر سنة مرصودة.",
+             evidence_value=9, note="نمو الواردات 9% سنوياً")
+    assert _check_evidence_body_numeric_consistency(dr) == []
+
+
 def test_explained_contradiction_in_local_window_does_not_fire():
     """تناقضٌ حقيقي لكن مُفسَّرٌ صراحةً ضمن نافذته المحلية (٦٠ محرفاً) —
     عقد عدم الاختلاق يحفظ الرقمين ويُفسِّر لا يُصلِح صامتاً، فلا يُعامَل هذا

@@ -122,3 +122,26 @@ def test_verdict_tone_recognizes_arabic_labels_not_only_english_codes():
     # الرموز الإنجليزية تبقى كما كانت (لا انحدار).
     assert _verdict_tone("CONDITIONAL-GO") == "conditional"
     assert _verdict_tone("WATCH") == "watch"
+
+
+def test_verdict_ar_recognizes_arabic_labels_not_only_english_codes():
+    """مراجعة الشيفرة: `silk_narrative.verdict_ar` (المترجم الشقيق المستهلَك
+    في سطر «المختصر»/فقرات docx الكلاسيكية) كان يمرّر أيّ نصٍّ غير إنجليزي
+    كما ورد بلا ترجمة — الآن يتّفق مع `_verdict_tone` (مصدر تصنيفٍ واحد)."""
+    from silk_narrative import verdict_ar
+    assert verdict_ar("دخول مشروط") == "دخول مشروط"
+    assert verdict_ar("لا يُنصح بالدخول حالياً") == "عدم الدخول حالياً"
+    # الرموز الإنجليزية تبقى كما كانت (لا انحدار).
+    assert verdict_ar("CONDITIONAL-GO") == "دخول مشروط"
+    assert verdict_ar("WATCH") == "مراقبة السوق"
+
+
+def test_verdict_tone_negation_not_inverted_to_go():
+    """مراجعة الشيفرة: «الدخول» المجرّدة (بلا «عدم»/«مشروط»/«مراقبة» حرفياً)
+    كانت تُصنَّف go دوماً — فنفيٌ بصياغةٍ أخرى («لا يُنصح بالدخول»، «تأجيل
+    الدخول») كان يُقلَب زوراً لأخضر. نمط نفيٍ إضافي يلتقط هذه الصيغ."""
+    from silk_render import _verdict_tone
+    assert _verdict_tone("لا يُنصح بالدخول حالياً") == "nogo"
+    assert _verdict_tone("تأجيل الدخول") == "nogo"
+    # الحالة الإيجابية الصريحة تبقى go (لا انحدار).
+    assert _verdict_tone("التوصية بالدخول") == "go"

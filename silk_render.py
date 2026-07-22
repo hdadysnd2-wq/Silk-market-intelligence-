@@ -1120,6 +1120,8 @@ def _reconcile_mission_limits(lines: list[str],
 # JS بمعيارين قد يختلفان لنفس الرمز (سدّ تسريب الطبقة ٦: كانت لوحة الويب
 # تحسب تصنيفها الخاص من رمز الحكم الإنجليزي الخام وتعرض الرمز نفسه كنص
 # ظاهر — silk_reports._verdict_tone/_VERDICT_LABELS_AR كانتا نسخة موازية).
+_NEGATIVE_ENTRY_HINT_RE = re.compile(
+    r"(?:لا|غير|عدم|تأجيل|تجنّب|تجنب)[^\n]{0,15}دخول")
 def _verdict_tone(vtxt: object) -> str:
     """تصنيف لون شارة الحكم — go (أخضر)/conditional (مشروط، أخضر مزرقّ)/
     watch (كهرماني)/nogo (أحمر)/unknown (رمادي).
@@ -1154,6 +1156,12 @@ def _verdict_tone(vtxt: object) -> str:
         return "conditional"
     if "مراقبة" in s:
         return "watch"
+    # مراجعة الشيفرة: «دخول» المجرّدة بلا سياق نفي تُصنَّف go افتراضياً —
+    # لكن نفياً/تأجيلاً بصياغةٍ غير «عدم الدخول» الحرفية («لا يُنصح بالدخول»،
+    # «تأجيل الدخول») كان سيُقلَب زوراً إلى go. نمطٌ إضافي يلتقط ألفاظ النفي
+    # الشائعة قبل «دخول» ضمن نافذة قصيرة قبل الرجوع لـgo.
+    if _NEGATIVE_ENTRY_HINT_RE.search(s):
+        return "nogo"
     if "الدخول" in s or "دخول" in s:
         return "go"
     return "unknown"

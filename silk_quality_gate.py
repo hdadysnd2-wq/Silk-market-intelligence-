@@ -512,6 +512,11 @@ _IMPORTS_KW_RE = re.compile(r"الواردات|واردات")
 _USD_AMOUNT_RE = re.compile(r"(\d[\d,.]*)\s*(مليار|مليون|ألف|الف)?\s*دولار")
 _USD_MAGNITUDE = {"مليار": 1_000_000_000, "مليون": 1_000_000,
                   "ألف": 1_000, "الف": 1_000}
+# مراجعة الشيفرة: مذكِّرٌ نموّ/نسبة («نمو الواردات 9% سنوياً») ليس قيمة
+# استيرادٍ مطلقة بالدولار حتى لو ذُكرت كلمة «واردات» في نفس الملاحظة — قيمته
+# الخام (مثال: 9) تعني نسبة مئوية لا مبلغاً، فمقارنتها برقمٍ دولاريّ في المتن
+# تُنتِج نسبة تناقضٍ زائفة (false positive). يُستبعَد من سجل الأدلة هنا.
+_GROWTH_RATE_NOTE_RE = re.compile(r"نمو|معدّل|معدل|CAGR|%|٪", re.I)
 
 
 def _usd_amount_to_float(num_str: str, mag: str) -> "float | None":
@@ -535,7 +540,8 @@ def _check_evidence_body_numeric_consistency(dr: dict) -> list[dict]:
             v = f.get("value")
             note = str(f.get("note") or "")
             if isinstance(v, (int, float)) and not isinstance(v, bool) \
-                    and _IMPORTS_KW_RE.search(note):
+                    and _IMPORTS_KW_RE.search(note) \
+                    and not _GROWTH_RATE_NOTE_RE.search(note):
                 evidence_values.append(float(v))
     if not evidence_values:
         return []

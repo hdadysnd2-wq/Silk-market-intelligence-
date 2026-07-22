@@ -309,6 +309,16 @@ def verdict_ar(verdict: object) -> str:
     for key in ("CONDITIONAL-GO", "NO-GO", "GO", "WATCH"):
         if key in s:
             return VERDICT_AR[key]
+    # مراجعة الشيفرة (عائلة اللائحتين ٤٤/٤٥): بعض مسارات الحكم تضع التسمية
+    # العربية مباشرةً بدل الرمز الإنجليزي (`verdict = "دخول مشروط"` لا
+    # "CONDITIONAL-GO") — كانت تمرّ من هنا بلا ترجمة (النص الخام كما ورد).
+    # نفس التصنيف الواحد المُستعمَل للشارة (silk_render._verdict_tone) بدل
+    # مسارٍ ثانٍ غير مترجَم قد يتباعد عنه.
+    from silk_render import _verdict_tone
+    _tone_key = {"go": "GO", "conditional": "CONDITIONAL-GO",
+                "nogo": "NO-GO", "watch": "WATCH"}.get(_verdict_tone(verdict))
+    if _tone_key:
+        return VERDICT_AR[_tone_key]
     return str(verdict)
 
 
