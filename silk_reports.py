@@ -2441,8 +2441,11 @@ def _client_readable_fact(value: object, note: object) -> "str | None":
     if isinstance(value, (int, float)):
         num = _readable_number(value)
         return f"{num} — {clean_note}" if clean_note else num
-    txt = _client_sanitize(_clean_report_text(value, max_len=140))
-    if not txt or txt.startswith("بند تقني غير قابل للعرض"):
+    # القالب الأكاديمي أعاد إحياء هذه الدالة لخلايا جداول الشواهد — القصّ
+    # عبر `_client_prose` (حدّ جملة، بلا «…»، يُسقِط الكتل الخام) لا
+    # `_clean_report_text` (كانت تبتر بـ«…» فتُفشِل بوابة نصّ المُنتَج).
+    txt = _client_sanitize(_client_prose(value, 140))
+    if not txt:
         return None  # بند لا يُعرَض — يُسقَط بدل ضجيج للمدقّق
     return txt
 
@@ -2904,6 +2907,343 @@ def docx_to_pdf(docx_path: str, pdf_path: "str | None" = None,
         os.replace(produced, pdf_path)
         return pdf_path
     return produced
+
+
+# ── القالب الأكاديمي (قرار المالك 2026-07-22، النموذج v3 المعتمد) ────────────
+#
+# نفس بيانات الدراسة حرفياً بترتيبٍ ونبرة بحثٍ أكاديمي: ملخّص شامل يفتتح
+# التقرير (التوصية من أول سطر + المنهج + جدول أبرز النتائج + القيد الحاكم +
+# الحدود + خلاصة التوصيات — قراءته وحدها تغني)، ثم مقدمة/منهجية/نتائج/
+# مناقشة/استنتاجات/حدود، و«التوصيات» قسماً ختامياً مستقلاً قبل المراجع.
+# حتمي بالكامل: صفر نداء كلود — إعادة ترتيب سرد الكاتب القائم + حقول
+# النموذج المحسوبة، بنفس مُطهِّرات العميل وبواباته كلها (لا مسار حكمٍ ولا
+# أرقام جديدة — عقد عدم الاختلاق).
+
+# سرد الكاتب (١١ قسماً) → مواضع القالب الأكاديمي.
+_ACADEMIC_RESULTS_MAP = (
+    ("نظرة عامة على السوق وحجمه", "حجم السوق وتدفقات الاستيراد"),
+    ("ديناميكيات السوق", "ديناميكيات السوق واتجاهاته"),
+    ("تحليل المستهلك والطلب", "خصائص الطلب والمستهلك"),
+    ("المشهد التنافسي", "بنية المنافسة ودرجة التركّز"),
+    ("التنظيم والوصول للسوق", "البيئة التنظيمية ومتطلبات الوصول"),
+    ("اللوجستيات وسلسلة الإمداد", "اللوجستيات وسلسلة الإمداد"),
+    ("تقييم المخاطر", "المخاطر المرصودة"),
+)
+
+# طلب المالك (تعقيباً على النموذج المعتمد): الديموغرافيا/حجم السكان،
+# ثقافة المستهلك، والاشتراطات الجمركية تُعرض **دائماً** كشواهد مهيكلة من
+# بيانات البعثات نفسها — جداول أدلة (بند/مصدر/شارة) لا نقاط نصية خام
+# (التزاماً بعقد WP-2)، فتظهر البيانات حتى حين يكون سرد الكاتب لها موجزاً.
+_ACADEMIC_EVIDENCE_TABLES = (
+    ("السياق الديموغرافي وحجم السكان", ("demographics_economy",)),
+    ("ثقافة المستهلك وأنماط الطلب — الشواهد المرصودة",
+     ("consumer_culture", "demand_trends")),
+    ("الاشتراطات الجمركية ومتطلبات الدخول — الشواهد المرصودة",
+     ("customs_requirements", "tariffs_agreements")),
+)
+
+
+def _ar_digits(n: int) -> str:
+    """رقم بالأرقام العربية-الهندية — لاتساق ترقيم العناوين الفرعية."""
+    return str(n).translate(str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩"))
+
+
+def _academic_evidence_rows(dr: dict, mission_keys: tuple) -> list[list[str]]:
+    """صفوف شواهد مهيكلة من بعثات محدَّدة: (البند المرصود، المصدر، قوة
+    الدليل) — عبر `_client_readable_fact` (بند غير قابل للعرض يُسقَط لا
+    يُستبدَل بنائب) وبشارة المنشأ الواعية. سقف ٨ صفوف لكل جدول."""
+    from silk_narrative import evidence_badge_for
+    missions = dr.get("missions") or {}
+    rows: list[list[str]] = []
+    for key in mission_keys:
+        m = missions.get(key)
+        if not isinstance(m, dict) or m.get("failed"):
+            continue
+        for f in (m.get("findings") or []):
+            fact = _client_readable_fact(f.get("value"), f.get("note"))
+            if not fact:
+                continue
+            src = _client_sanitize(_clean_source_label(f.get("source")))
+            if not src or src == "—" or _client_forbidden_hits(src):
+                continue
+            rows.append([fact, src, evidence_badge_for(f)])
+            if len(rows) >= 8:
+                return rows
+    return rows
+
+
+_ACADEMIC_MAIN_REC = {
+    "go": "المضي في دخول السوق وفق الأولويات المفصّلة أدناه.",
+    "conditional": "دخول السوق دخولاً مشروطاً باستيفاء الشروط القابلة "
+                   "للتحقق أدناه قبل أي التزام إنتاجي أو شحني.",
+    "watch": "إرجاء قرار دخول السوق مع إبقائه قيد المراقبة النشطة، "
+             "وإعادة التقييم فور استيفاء الشروط أدناه.",
+    "nogo": "عدم دخول السوق في المرحلة الراهنة، وإعادة التقييم عند "
+            "تغيّر المعطيات المفصّلة أدناه.",
+    "unknown": "استكمال البيانات الناقصة أدناه قبل إصدار توصية نهائية.",
+}
+
+
+def _academic_headline_table_rows(dr: dict) -> list[list[str]]:
+    """صفوف جدول «أبرز النتائج حسب المحور» — أعلى بند لكل تقاطع محلّل مع
+    شارة توثيقه. بنيوي بحت من by_category؛ تقاطع بلا أدلة يُسقَط."""
+    from silk_narrative import evidence_badge_for
+    by_cat = (dr.get("analyst") or {}).get("by_category") or {}
+    rows: list[list[str]] = []
+    for cat, label in _CATEGORY_AR.items():
+        items = by_cat.get(cat) or []
+        if not items:
+            continue
+        top = items[0]
+        fact = _client_sanitize(_client_prose(
+            top.get("value") if isinstance(top, dict)
+            else getattr(top, "value", None), 200))
+        if not fact:
+            continue
+        rows.append([label, fact, evidence_badge_for(top)])
+    return rows
+
+
+def _academic_summary(doc, view: dict, dr: dict, vtxt: str) -> None:
+    """«ملخّص الدراسة» الشامل — طلب المالك: قراءته وحدها تغطي الدراسة كاملة."""
+    from silk_narrative import authoritative_verdict, confidence_phrase
+    doc.add_heading("ملخّص الدراسة", level=1)
+    _, conf = authoritative_verdict(dr.get("verdict"))
+    conf_txt = (f"، بدرجة ثقة {confidence_phrase(conf)} وفق سُلَّم "
+                "المعايرة المعتمد" if conf is not None else "")
+    doc.add_paragraph(
+        f"التوصية الختامية: {_VERDICT_LABELS_AR[_verdict_tone(vtxt)]}"
+        f"{conf_txt}؛ وتفصيلها وشروط إعادة التقييم في قسم «التوصيات» "
+        "ختام الدراسة.")
+    doc.add_paragraph(
+        "سؤال الدراسة ومنهجها: تقييم جدوى دخول السوق المستهدف للمنتج "
+        "المدروس من منظور مصدّر سعودي، بمنهج كمّي وصفي قائم على البيانات "
+        f"الثانوية الرسمية. {_client_methodology_paragraph(dr)}")
+    rows = _academic_headline_table_rows(dr)
+    if rows:
+        doc.add_paragraph("أبرز النتائج حسب محاور التحليل:")
+        _add_table(doc, ["المحور", "أبرز نتيجة مرصودة", "قوة الدليل"], rows)
+    if dr.get("hs_flagged"):
+        hs = dr.get("hs_confirmation") or {}
+        doc.add_paragraph(
+            "القيد المنهجي الحاكم: رمز التصنيف الجمركي المستخدم في جمع "
+            f"بيانات التجارة ({hs.get('hs_code') or view.get('hs_code')}) "
+            "غير مؤكَّد المطابقة لفئة المنتج المدروس؛ لذلك تُقرأ الأرقام "
+            "الجمركية مؤشراً سياقياً لا قياساً مباشراً، وتُقيَّد "
+            "الاستنتاجات المبنية عليها حتى إعادة التصنيف.")
+    critical, informational = _client_gap_inputs(dr)
+    if critical or informational:
+        doc.add_paragraph(
+            "حدود الدراسة (موجز): " + " ".join(
+                _trim_sentence(g, 160) for g in (critical
+                                                 + informational)[:3]))
+    else:
+        doc.add_paragraph(
+            "حدود الدراسة (موجز): اكتملت محاور التحليل الأساسية بأدلة "
+            "موثّقة بمصادرها ضمن نطاق هذه الدراسة.")
+    doc.add_paragraph(
+        "خلاصة التوصيات: "
+        + _ACADEMIC_MAIN_REC[_verdict_tone(vtxt)]
+        + " التفصيل الكامل في القسم الختامي.")
+
+
+def render_academic_docx(view: dict, path: str) -> str:
+    """تقرير العميل بالقالب الأكاديمي — نفس نموذج العرض القانوني ونفس
+    بوابات العميل (تطهير، نقاء، اتساق الحكم، بوابة نصّ المُنتَج النهائي)،
+    ببنية v3 المعتمدة من المالك. يتطلّب نتيجة بحث عميق."""
+    try:
+        from docx import Document
+    except ImportError as exc:
+        raise RuntimeError(_DOCX_HINT) from exc
+
+    _assert_production_clean(view)
+    dr = view.get("deep_research") or {}
+    if not dr:
+        raise RuntimeError("render_academic_docx يتطلّب نتيجة بحث عميق "
+                           "(view['deep_research'])")
+
+    doc = Document()
+    _apply_rtl(doc)
+    h = view.get("header") or {}
+    market = dr.get("market") or {}
+    vtxt = _resolve_vtxt(dr)
+    product = h.get("product") or view.get("product") or ""
+    market_ar = (h.get("target_market") or market.get("name_ar")
+                 or market.get("name_en") or "")
+    branding = _load_branding()
+
+    _add_page_header_footer(doc, f"سِلك — دراسة سوق تصديرية: {product}")
+    _add_cover_wordmark(doc, branding)
+    doc.add_heading(
+        f"دراسة تحليلية لسوق {product} في {market_ar}: تقييم فرص التصدير "
+        "من منظور المصدّر السعودي", 0)
+    doc.add_paragraph("أُعدّت بواسطة منصة سِلك لذكاء الأسواق",
+                      style="Intense Quote")
+    if view.get("test_run"):
+        doc.add_paragraph("⚠ نموذج توضيحي ببيانات موسومة — ليس تقريراً "
+                          "إنتاجياً")
+    _stamp_degraded_banner(doc, view)
+    _add_verdict_badge(doc, vtxt)
+    _add_table(doc, ["البند", "القيمة"], [
+        ["المنتج", product],
+        ["رمز HS", h.get("hs_code") or view.get("hs_code")],
+        ["بلد المنشأ", "المملكة العربية السعودية"],
+        ["السوق المستهدف", market_ar],
+        ["تاريخ الإعداد", h.get("date")]])
+
+    # الملخّص الشامل أولاً (طلب المالك).
+    _academic_summary(doc, view, dr, vtxt)
+
+    # ١) المقدمة وأهداف الدراسة — قالب حتمي معمَّم لأي منتج/سوق.
+    doc.add_heading("١. المقدمة وأهداف الدراسة", level=1)
+    doc.add_paragraph(
+        f"تسعى هذه الدراسة إلى الإجابة عن سؤال بحثي رئيس: ما مدى جاذبية "
+        f"سوق {market_ar} لمنتج {product} سعودي المنشأ؟ وتتفرّع عنه ثلاثة "
+        "أسئلة فرعية: (أ) ما حجم الطلب المرصود واتجاهه؟ (ب) ما بنية "
+        "المنافسة وهيكل الأسعار السائد؟ (ج) ما المتطلبات التنظيمية وقنوات "
+        "الدخول المتاحة؟")
+
+    # ٢) المنهجية ومصادر البيانات.
+    doc.add_heading("٢. المنهجية ومصادر البيانات", level=1)
+    doc.add_paragraph(_client_methodology_paragraph(dr))
+    if dr.get("hs_flagged"):
+        hs = dr.get("hs_confirmation") or {}
+        doc.add_paragraph(
+            "قيد منهجي جوهري: أُجري جمع بيانات التجارة تحت رمزٍ جمركي "
+            f"({hs.get('hs_code') or view.get('hs_code')}) لا يشمل وصفُه "
+            "صفةَ المنتج المميّزة؛ وعليه تُقرأ جميع الأرقام المستمدّة منه "
+            "بوصفها مؤشراً سياقياً لفئة مجاورة لا قياساً مباشراً لسوق "
+            "المنتج، وتُعامَل الاستنتاجات المبنية عليها بيقين مقيَّد إلى "
+            "حين إعادة التصنيف وجمع البيانات تحت الرمز الصحيح.")
+
+    # ٣) النتائج — سرد الكاتب القائم تحت عناوين فرعية أكاديمية.
+    sections = dict(_parse_writer_sections(
+        ((dr.get("report") or {}).get("text") or "")))
+    doc.add_heading("٣. النتائج", level=1)
+    _idx = 0
+    for writer_title, academic_title in _ACADEMIC_RESULTS_MAP:
+        body = sections.get(writer_title)
+        if not body or not any(str(ln).strip() for ln in body):
+            continue
+        _idx += 1
+        doc.add_heading(f"٣.{_ar_digits(_idx)} {academic_title}", level=2)
+        _client_render_body_block(doc, body)
+    # الشواهد المهيكلة الإلزامية (طلب المالك): ديموغرافيا/سكان، ثقافة
+    # المستهلك، والاشتراطات الجمركية — من بيانات البعثات مباشرة.
+    for table_title, mission_keys in _ACADEMIC_EVIDENCE_TABLES:
+        rows = _academic_evidence_rows(dr, mission_keys)
+        if not rows:
+            continue
+        _idx += 1
+        doc.add_heading(f"٣.{_ar_digits(_idx)} {table_title}", level=2)
+        _add_table(doc, ["البند المرصود", "المصدر", "قوة الدليل"], rows)
+    if not _idx:
+        doc.add_paragraph(
+            "لم يتوافر سرد نتائج تفصيلي في هذه التشغيلة؛ الأدلة المرصودة "
+            "مفصّلة في جدول الملخّص وقسم المراجع.")
+
+    # ٤) المناقشة — خلاصة الكاتب التنفيذية + تعليل التوصيات (دون الخارطة).
+    doc.add_heading("٤. المناقشة", level=1)
+    _discussed = False
+    exec_body = sections.get("الخلاصة التنفيذية")
+    if exec_body and any(str(ln).strip() for ln in exec_body):
+        _client_render_body_block(doc, exec_body)
+        _discussed = True
+    strat_body = sections.get("التوصيات الاستراتيجية")
+    roadmap_part: list[str] = []
+    if strat_body:
+        decision_part, roadmap_part = _split_at_roadmap(strat_body)
+        if decision_part and any(str(ln).strip() for ln in decision_part):
+            _client_render_body_block(doc, decision_part)
+            _discussed = True
+    if not _discussed:
+        doc.add_paragraph(
+            "تُناقَش دلالات النتائج ضمن قسمي الاستنتاجات والتوصيات أدناه "
+            "استناداً إلى الأدلة الموثّقة في الملخّص والمراجع.")
+
+    # ٥) الاستنتاجات — الحكم القانوني بأساسه (نفس منطق قسم القرار).
+    doc.add_heading("٥. الاستنتاجات", level=1)
+    verdict = dr.get("verdict") or {}
+    ai = verdict.get("ai") or {}
+    doc.add_paragraph(
+        f"تخلص الدراسة إلى التوصية التالية: "
+        f"{_VERDICT_LABELS_AR[_verdict_tone(vtxt)]}.")
+    _ai_agrees = (not ai.get("verdict")
+                  or _verdict_tone(ai.get("verdict")) == _verdict_tone(vtxt))
+    basis = ((ai.get("reasoning") if _ai_agrees else "")
+             or verdict.get("note") or "")
+    if not basis and verdict.get("confidence") is not None:
+        from silk_narrative import confidence_phrase
+        basis = (f"حكم المحرّك الحتمي بدرجة ثقة "
+                 f"{confidence_phrase(verdict.get('confidence'))} بناءً "
+                 "على الأدلة المرصودة الموثّقة في هذه الدراسة.")
+    _b = _client_sanitize(_client_prose(basis, 2000))
+    if _b:
+        doc.add_paragraph(_b)
+
+    # ٦) حدود الدراسة — نفس المصدر الواحد لمدخلات الفجوات (WP-4).
+    doc.add_heading("٦. حدود الدراسة والبحث المستقبلي", level=1)
+    critical, informational = _client_gap_inputs(dr)
+    if critical or informational:
+        for line in critical + informational:
+            doc.add_paragraph(line, style="List Bullet")
+    else:
+        doc.add_paragraph(
+            "اكتملت محاور التحليل الأساسية بأدلة موثّقة بمصادرها، ولا "
+            "بند حاسم للقرار موسوم بأنه غير محقَّق؛ لا فجوة جوهرية تمنع "
+            "اتخاذ القرار ضمن نطاق هذه الدراسة.")
+
+    # ٧) التوصيات — القسم الختامي المستقل (طلب المالك).
+    doc.add_heading("٧. التوصيات", level=1)
+    doc.add_paragraph("بناءً على النتائج والمناقشة أعلاه، توصي الدراسة "
+                      "بما يلي:")
+    doc.add_paragraph(
+        f"التوصية الرئيسة: {_ACADEMIC_MAIN_REC[_verdict_tone(vtxt)]}",
+        style="List Number")
+    for c in (dr.get("flip_conditions") or []):
+        mark = "✓ محقَّق" if c.get("met") else "○ غير محقَّق"
+        doc.add_paragraph(
+            f"{c.get('condition')} — {mark}؛ يُغلَق عبر: "
+            f"{c.get('closes_via')}.", style="List Number")
+    if roadmap_part and any(str(ln).strip() for ln in roadmap_part):
+        # متن الخارطة يحمل عنوانه الفرعي («### خارطة طريق الدخول…») بنفسه.
+        _client_render_body_block(doc, roadmap_part)
+
+    # المراجع + المسرد — نفس أقسام العميل القائمة.
+    _client_references_section(doc, dr)
+    _docx_glossary(doc, dr, sanitize=_client_sanitize)
+
+    # نفس سلسلة بوابات العميل الختامية حرفياً.
+    if _client_redact_residual(doc):
+        doc.add_paragraph(
+            "ملاحظة: نُقّيت بعض المصطلحات التقنية الداخلية من هذا التقرير "
+            "تلقائياً لتقديمها بلغة تجارية؛ الأرقام ومصادرها لم تُمَسّ.",
+            style="Intense Quote")
+    _client_assert_clean(doc)
+    _assert_verdict_consistency_doc(doc, vtxt, "التقرير الأكاديمي")
+    import silk_quality_gate as _qg
+    _artifact_text = "\n".join(
+        [p.text for p in doc.paragraphs]
+        + [c.text for t in doc.tables for row in t.rows for c in row.cells])
+    _artifact_findings = _qg.run_client_artifact_text_gate(_artifact_text)
+    if _artifact_findings:
+        raise RuntimeError(
+            "رفضت بوابة نصّ المُنتَج النهائي تسليم التقرير الأكاديمي: "
+            + "؛ ".join(f["note"] for f in _artifact_findings[:5]))
+    _finalize_rtl(doc)
+    doc.save(path)
+    return path
+
+
+def render_academic_pdf(view: dict, path: str) -> str:
+    """التقرير الأكاديمي PDF — يُبنى docx (المُطهَّر، RTL) ثم يُحوَّل،
+    ويُسلَّم الـPDF فقط (نفس عقد §3 ومعه فحص الأقواس)."""
+    import os
+    import tempfile
+    tmp_docx = os.path.join(tempfile.mkdtemp(prefix="silk_acad_"),
+                            "academic.docx")
+    render_academic_docx(view, tmp_docx)
+    return docx_to_pdf(tmp_docx, path)
 
 
 def render_client_pdf(view: dict, path: str) -> str:
