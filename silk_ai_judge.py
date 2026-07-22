@@ -802,7 +802,8 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
                 review_notes: list | None = None,
                 trace_id: str | None = None,
                 hs_code: str | None = None,
-                hs_confirmation: dict | None = None) -> str | None:
+                hs_confirmation: dict | None = None,
+                style: str | None = None) -> str | None:
     """اكتب تقرير البحث العميق — the 11-section international-structure report
     (وكيل الكتابة، الموجة ١٠ — أسلوب Euromonitor/ESOMAR).
 
@@ -816,12 +817,20 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
     """
     if not available():
         return None
-    from silk_style_contract import WRITER_STYLE_CONTRACT  # B1: عقد لغة التاجر
+    # قرار المالك (متابعة القالب الأكاديمي): style="academic" يبدّل عقد
+    # السجل اللغوي وحده — نفس الأقسام الأحد عشر، نفس الحكم المعتمد، نفس
+    # قواعد الصدق/العملة؛ النثر يخرج بنبرة البحث العلمي وخاتمة كل قسم
+    # «دلالة هذه النتيجة:» بدل «ماذا يعني هذا لقرارك».
+    from silk_style_contract import (ACADEMIC_SECTION_CLOSER,
+                                     ACADEMIC_WRITER_CONTRACT,
+                                     WRITER_STYLE_CONTRACT)
+    academic = (str(style or "").lower() == "academic")
+    contract = ACADEMIC_WRITER_CONTRACT if academic else WRITER_STYLE_CONTRACT
     facts = _isolate(_facts(list(mission_reports.values())))
     sections = "\n".join(f"{i}. {s}" for i, s in enumerate(_REPORT_SECTIONS, 1))
     parts = [
         f"المنتج: {_isolate(product)}. السوق: {_isolate(market_name)}.",
-        WRITER_STYLE_CONTRACT,
+        contract,
         # WP-1 §3: الحكم المعتمد قيد صلب — لا يجوز للكاتب إصدار توصية مختلفة
         # ولا «توصية أولية» موازية؛ دوره الشرح والتقييد فقط. درجة الثقة
         # المعروضة هي ثقة المحرّك الحتمي المرفقة حصراً — يُمنَع اختراع نسبة
@@ -1138,6 +1147,16 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "التقرير كله** — واحدة تختم الخلاصة التنفيذية، وواحدة تختم خارطة "
         "طريق الدخول؛ ما عدا ذلك انسِج الأثر في السرد دون تذييل معنون "
         "ولا تكرار للسرد أعلاه.")
+    if academic:
+        # السجل الأكاديمي يتقدّم عند التعارض الصياغي فقط — البنية والحكم
+        # وقواعد الصدق أعلاه كلها تبقى كما هي حرفياً.
+        parts.append(
+            "تعليمة السجل الأكاديمي (تتقدّم عند التعارض الصياغي فقط): "
+            "حيثما سمحت التعليمات أعلاه بعبارة «ماذا يعني هذا لقرارك» "
+            f"استعمل بدلها «**{ACADEMIC_SECTION_CLOSER}**» بنفس القيود "
+            "(مرّتين على الأكثر في التقرير كله)، وانسِج بقية الآثار في "
+            "النثر بصيغة الدراسة («وتشير هذه النتيجة إلى…») لا بخطاب "
+            "القارئ المباشر.")
     # تصعيد سقف الإخراج عند الاقتطاع — كل محاولة نداءٌ مُتتبَّع مستقل
     # (report_call + عدّ + قياس رموز)، لا حلقة صامتة داخل المزوّد. يُعاد أوفى
     # نص أُنتِج (نص مقتطع مفيد خير من None)؛ التصعيد يقتصر على الاقتطاع
@@ -1392,7 +1411,8 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
                           trace_id: str | None = None,
                           hs_code: str | None = None,
                           on_stage: Callable[[str], None] | None = None,
-                          hs_confirmation: dict | None = None) -> dict:
+                          hs_confirmation: dict | None = None,
+                          style: str | None = None) -> dict:
     """حلقة الكتابة والمراجعة — Writer → Reviewer.
 
     `max_cycles=None` (الافتراضي) يقرأ SILK_MAX_REVIEW_CYCLES (افتراضياً ١،
@@ -1426,7 +1446,7 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
     _stage("writer")
     draft = deep_report(mission_reports, analyst_summary, verdict, product,
                         market_name, trace_id=trace_id, hs_code=hs_code,
-                        hs_confirmation=hs_confirmation)
+                        hs_confirmation=hs_confirmation, style=style)
     if not draft:
         return {"report": None, "review_cycles": 0, "unresolved_notes": [],
                 "failure_reason": failure_reason()}
@@ -1450,7 +1470,7 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
         fixed = deep_report(mission_reports, analyst_summary, verdict,
                             product, market_name, review_notes=notes,
                             trace_id=trace_id, hs_code=hs_code,
-                            hs_confirmation=hs_confirmation)
+                            hs_confirmation=hs_confirmation, style=style)
         if fixed:
             draft = fixed
     return {"report": draft, "review_cycles": cycles, "unresolved_notes": notes}

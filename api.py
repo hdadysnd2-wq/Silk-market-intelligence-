@@ -2375,7 +2375,10 @@ def create_app():
         # القالب الأكاديمي (قرار المالك 2026-07-22): ?style=academic يبدّل
         # ترتيب/نبرة تقرير العميل فقط — نفس النموذج القانوني ونفس بوابة
         # التسليم أعلاه ونفس مُطهِّرات العميل؛ صفر نداء كلود إضافي.
-        style = str(request.query_params.get("style") or "").lower()
+        # أسلوب مخزَّن مع السجل (إعادة توليد أكاديمية سابقة) = الافتراضي.
+        style = (str(request.query_params.get("style") or "").lower()
+                 or str((view.get("deep_research") or {})
+                        .get("report_style") or "").lower())
         try:
             if is_research and not internal and style == "academic":
                 from silk_reports import render_academic_docx
@@ -2438,7 +2441,9 @@ def create_app():
         if is_research and internal:
             _attach_override_history(view, analysis_id)
         out = os.path.join(tempfile.mkdtemp(), "report.pdf")
-        style = str(request.query_params.get("style") or "").lower()
+        style = (str(request.query_params.get("style") or "").lower()
+                 or str((view.get("deep_research") or {})
+                        .get("report_style") or "").lower())
         try:
             if is_research and not internal and style == "academic":
                 from silk_reports import render_academic_pdf
@@ -2533,10 +2538,15 @@ def create_app():
         verdict = dr.get("verdict") or {}
         market_name = (found.get("market") or {}).get("name_en", "")
         trace_id = dr.get("trace_id")
+        # قرار المالك (متابعة القالب الأكاديمي): ?style=academic يعيد كتابة
+        # النثر نفسه بالسجل الأكاديمي (نداء كاتب واحد — قروش لا دولارات)؛
+        # الأسلوب يُخزَّن مع السجل فتتبعه التصديرات افتراضياً.
+        regen_style = str(request.query_params.get("style") or "").lower() \
+            or None
         report_out = write_reviewed_report(
             mission_reports, analyst_summary, verdict,
             found.get("product", ""), market_name, trace_id=trace_id,
-            hs_code=found.get("hs_code"))
+            hs_code=found.get("hs_code"), style=regen_style)
         # H1 (تدقيق): إعادة التوليد كانت تطمس التقرير المخزَّن بـreport_out حتى
         # لو فشل الكاتب هذه المرة (report=None) — فيُفقَد تقرير سابق ناجح كلّفت
         # تشغيلته الكاملة، وهو بالضبط ما تُنقِذه هذه النقطة. الآن: لا نحفظ null
@@ -2560,6 +2570,8 @@ def create_app():
                           "failure_reason": _strip_internal_plumbing(
                               report_out.get("failure_reason") or "")})
         found["deep_research"]["report"] = report_out
+        if regen_style:
+            found["deep_research"]["report_style"] = regen_style
         found["analysis_id"] = analysis_id
         found["view"] = _view(found)
         _attach_quality_gate(found, trace_id)
