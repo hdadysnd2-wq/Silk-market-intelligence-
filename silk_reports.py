@@ -2182,60 +2182,95 @@ def _client_confidence_section(doc, dr: dict) -> None:
         ["○ غير متحقق", str(counts["unverified"])]])
 
 
-def _client_gaps_section(doc, dr: dict) -> None:
-    """قسم "ما لم يكتمل للقرار والخطوة التالية" — يحوّل كل تقاطع بلا أدلة
-    كافية لصياغة تجارية موحّدة (بلاغ المالك النقطة ٣)، ثم الخطوة التالية.
-    لا عناوين فارغة متتالية: إن اكتمل كل شيء، سطر إيجابي واحد."""
-    doc.add_heading("ما لم يكتمل للقرار، والخطوة التالية", level=1)
+def _client_gap_inputs(dr: dict) -> "tuple[list[str], list[str]]":
+    """(الفجوات الحرجة للقرار، الفجوات المعلنة غير الحاجبة) — WP-4: المصدر
+    الواحد الذي يقرأه قسم «ما لم يكتمل للقرار» **وحارس تناقض الختام** في
+    بوابة الجودة معاً، فلا يوجد مساران للحقيقة (كان الختام يطبع «لا فجوة
+    جوهرية» بينما قسم المخاطر يعلن ثلاث فجوات بيانات حقيقية — فجوات
+    البعثات المعلنة لم تكن مدخلاً لهذا القسم إطلاقاً).
+
+    الحرجة (تمنع اكتمال القرار): تقاطعات المحلل الغائبة، باب الدخول الأول
+    غير المحقَّق، شروط قلب الحكم غير المحقَّقة. غير الحاجبة (تقيّد اليقين):
+    فجوات البعثات المعلنة (missions[*] «فجوات: …» — مطهَّرة، مقصوصة عند حدّ
+    جملة، بلا تكرار، بسقف بندين لكل بعثة)."""
     analyst = dr.get("analyst") or {}
     missing = analyst.get("missing_categories") or []
     by_cat = analyst.get("by_category") or {}
 
-    gap_lines: list[str] = []
+    critical: list[str] = []
     for cat in missing:
         what, how = _CLIENT_GAP_WHAT.get(
             cat, ("بند تحليلي إضافي", "بحثاً تكميلياً موجّهاً"))
-        gap_lines.append(_CLIENT_GAP_TEMPLATE.format(what=what, how=how))
-    # بلاغ مراجعة المالك (منطق قسم الفجوات): بند حاسم للقرار موسوم ○ غير
-    # متحقق (قناة الدخول الأولى) يجب أن يظهر هنا حتى لو اكتملت التقاطعات —
-    # لا يُقال «لا فجوة جوهرية» بينما الموزّع الأول غير مؤكَّد. باب الدخول
-    # المرصود بثقة دون عتبة «الثانوي» (0.5) = مرشّح غير محقَّق، لا حقيقة.
+        critical.append(_CLIENT_GAP_TEMPLATE.format(what=what, how=how))
     if "entry_door" not in missing:
         from silk_narrative import EVIDENCE_SECONDARY_MIN
         unverified_doors = [
             f for f in (by_cat.get("entry_door") or [])
             if _dp_conf(f) is not None and _dp_conf(f) < EVIDENCE_SECONDARY_MIN]
         if unverified_doors:
-            # WP-2 §1: `_client_prose` لا `_clean_report_text` — لا نصّ نائب
-            # («بند تقني…») يصل متن العميل حتى في أسماء الأبواب.
             names = "، ".join(
                 n for n in (_client_sanitize(_client_prose(f.get("value"), 80))
                             for f in unverified_doors[:2]) if n)
             _named = f" ({names})" if names else ""
-            gap_lines.append(
+            critical.append(
                 f"لم نتمكّن من تأكيد قناة الدخول الأولى{_named} من مصدر "
                 "موثّق — إغلاق هذه الفجوة يتطلّب خدمة تحقّق جهات اتصال مدفوعة "
                 "(قواعد بيانات تجارية) قبل الالتزام بالموزّع.")
-
-    # §H-1 (حزمة الفكس v2.1): بلاغ حي — «لا فجوة جوهرية تمنع اتخاذ القرار»
-    # نُشرت بينما شروط قلب الحكم المهيكلة («شرطا قلب الحكم»، silk_render.
-    # _flip_conditions) نفسها غير محقَّقة (بطاقة تكلفة، بيانات HS صحيحة،
-    # موزّع متعاقَد). القسم الآن يقرأ من نفس القائمة الآلية التي يبنيها
-    # المحرّك — لا صياغة حرّة منفصلة قد تتباعد عنها.
     for c in (dr.get("flip_conditions") or []):
         if not c.get("met"):
-            gap_lines.append(
+            critical.append(
                 f"لم يتحقّق بعد: {c.get('condition')} — إغلاق هذا الشرط "
                 f"يتطلّب {c.get('closes_via')}.")
+
+    # WP-4 §1: المدخل الرابع — فجوات البعثات المعلنة داخل ملخّصاتها.
+    from silk_render import _mission_gap_lines
+    informational: list[str] = []
+    seen: set[str] = set()
+    for k, m in (dr.get("missions") or {}).items():
+        if not isinstance(m, dict):
+            continue
+        label = m.get("label") or str(k)
+        per_mission = 0
+        for line in _mission_gap_lines(label, m.get("summary") or ""):
+            g = _client_sanitize(_trim_sentence(line, 200)).rstrip(".؛،")
+            if not g or g in seen or per_mission >= 2:
+                continue
+            seen.add(g)
+            per_mission += 1
+            informational.append(
+                f"فجوة بيانات معلنة — {g}؛ لا تمنع القرار الحالي لكنها "
+                "تقيّد يقين الاستنتاجات المتصلة بها.")
+    return critical, informational
+
+
+def _client_gaps_section(doc, dr: dict) -> None:
+    """قسم "ما لم يكتمل للقرار والخطوة التالية" — يحوّل كل تقاطع بلا أدلة
+    كافية لصياغة تجارية موحّدة (بلاغ المالك النقطة ٣)، ثم الخطوة التالية.
+    لا عناوين فارغة متتالية: إن اكتمل كل شيء، سطر إيجابي واحد. WP-4: يقرأ
+    كل المدخلات الأربعة من `_client_gap_inputs` (المصدر الواحد المشترك مع
+    حارس البوابة) — السطر الإيجابي يُطبَع فقط حين تخلو القوائم الأربع معاً."""
+    doc.add_heading("ما لم يكتمل للقرار، والخطوة التالية", level=1)
+    gap_lines, mission_gap_lines = _client_gap_inputs(dr)
 
     if gap_lines:
         doc.add_paragraph(
             "النقاط التالية لم تكتمل توثيقاً ضمن هذا التقرير؛ هي ما يفصل "
             "التوصية الحالية عن قرار نهائي كامل، وكلٌّ منها قابل للإغلاق "
             "بخطوة محدّدة:")
-        for line in gap_lines:
+        for line in gap_lines + mission_gap_lines:
+            doc.add_paragraph(line, style="List Bullet")
+    elif mission_gap_lines:
+        # WP-4 §2: فجوات معلنة غير حاجبة — لا سطر «لا فجوة جوهرية» بجانبها.
+        n = len(mission_gap_lines)
+        count_txt = ("فجوة معلنة واحدة لا تمنع" if n == 1
+                     else f"{n} فجوات معلنة لا تمنع")
+        doc.add_paragraph(
+            f"توجد {count_txt} القرار الحالي لكنها تقيّد يقينه — مفصّلة "
+            "أدناه:")
+        for line in mission_gap_lines:
             doc.add_paragraph(line, style="List Bullet")
     else:
+        # WP-4 §2: السطر الإيجابي فقط حين تخلو القوائم الأربع معاً.
         doc.add_paragraph(
             "اكتملت التقاطعات التحليلية الأساسية بأدلة موثّقة بمصادرها، ولا "
             "بند حاسم للقرار موسوم بأنه غير محقَّق؛ لا فجوة جوهرية تمنع "

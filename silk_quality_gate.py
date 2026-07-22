@@ -183,6 +183,31 @@ _PLACEHOLDER_STRINGS = (
 )
 
 
+def _check_gaps_closing_contradiction(dr: dict) -> list[dict]:
+    """WP-4 §3 — تناقض الختام مع المتن: القسم الختامي سيطبع «لا فجوة
+    جوهرية…» (كل مدخلات الفجوات الأربعة خالية — نفس المصدر الواحد
+    `silk_reports._client_gap_inputs`) بينما نص التقرير يعلن «فجوة بيانات»
+    صراحةً. الحالة المُسلَّمة فعلاً (2026-07-22): الختام نفى الفجوات بينما
+    قسم المخاطر عدّد ثلاثاً (حوكمة البنك الدولي/الموسمية/سعر الصرف)."""
+    text = ((dr.get("report") or {}).get("text") or "")
+    summaries = " ".join(str((m or {}).get("summary") or "")
+                         for m in (dr.get("missions") or {}).values())
+    combined = text + "\n" + summaries
+    if "فجوة بيانات" not in combined and "فجوات:" not in combined:
+        return []
+    try:
+        from silk_reports import _client_gap_inputs
+        critical, informational = _client_gap_inputs(dr)
+    except Exception:  # noqa: BLE001 — فحص إضافي لا يكسر البوابة
+        return []
+    if critical or informational:
+        return []   # الختام لن يطبع النفي — لا تناقض
+    return [{"check": "gaps_closing_contradiction", "repairable": False,
+             "note": "التقرير يعلن «فجوة بيانات» في متنه بينما القسم "
+                    "الختامي سيطبع «لا فجوة جوهرية تمنع اتخاذ القرار» — "
+                    "تناقض فجوات حاجب للتسليم"}]
+
+
 def _check_client_scaffold_leak(text: str) -> list[dict]:
     """WP-2 §6(أ) — العبارة السقالية الحرفية «إذن ماذا»/"So what" في نص
     يواجه العميل: أثر تعليمة المحلل القديمة، نُزِعت في المصدر والمُنظِّف —
@@ -1037,6 +1062,7 @@ def run_quality_gate(view: dict) -> dict:
     findings += _check_client_section_would_be_placeholder(dr)
     findings += _check_client_scaffold_leak(combined_text)
     findings += _check_placeholder_leak(combined_text)
+    findings += _check_gaps_closing_contradiction(dr)
     findings += _check_internal_plumbing_leak(text)
     findings += _check_english_field_and_mission_key_leak(text)
     findings += _check_confidentiality_leaks(combined_text)
@@ -1072,7 +1098,9 @@ def run_quality_gate(view: dict) -> dict:
                             # WP-2 §6: سقالة «إذن ماذا»/نصّ نائب تقني/بتر
                             # «…» غير اقتباسي — كلها وصلت عملاء فعلاً.
                             "client_scaffold_leak", "placeholder_leak",
-                            "trailing_ellipsis")
+                            "trailing_ellipsis",
+                            # WP-4 §3: ختامٌ ينفي الفجوات بينما المتن يعلنها.
+                            "gaps_closing_contradiction")
             for f in non_repairable) \
             or guard_fired:
         verdict = FAIL
