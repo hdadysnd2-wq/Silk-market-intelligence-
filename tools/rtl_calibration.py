@@ -85,6 +85,60 @@ def build_fixture(jc: str) -> str:
     return path
 
 
+# WP-5 — معايرة فحص انعكاس الأقواس: أسطر عربية بمقاطع لاتينية/رقمية بين
+# قوسين — C (بعزل RLM عبر silk_reports._bidi_isolate_brackets، الوصفة
+# الصحيحة) مقابل D (بلا عزل — البناء الخام الذي أنتج «) ... (» المُسلَّم).
+_BRACKET_LINES = [
+    "الواردات (UN Comtrade) في نمو مستمر",
+    "متوسط السعر (6 USD/kg) مؤشر سياقي",
+    "مؤشر التركز (HHI 2500) مرتفع نسبيا",
+    "النمو السنوي (CAGR 5%) خلال ثلاث سنوات",
+    "التقييم وفق (World Bank LPI) مستقر",
+]
+
+
+def build_bracket_fixture(isolate: bool) -> str:
+    """ابنِ docx أسطره العربية تحوي أقواساً لاتينية — بعزل RLM أو بدونه."""
+    from docx import Document
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    import silk_reports
+    doc = Document()
+    for ln in _BRACKET_LINES:
+        text = silk_reports._bidi_isolate_brackets(ln) if isolate else ln
+        p = doc.add_paragraph()
+        r = p.add_run(text)
+        r.font.name = "Amiri"
+        ppr = p._p.get_or_add_pPr()
+        if ppr.find(qn("w:bidi")) is None:
+            ppr.append(OxmlElement("w:bidi"))
+        el = OxmlElement("w:jc")
+        el.set(qn("w:val"), "start")
+        ppr.append(el)
+        rpr = r._r.get_or_add_rPr()
+        if rpr.find(qn("w:rtl")) is None:
+            rpr.append(OxmlElement("w:rtl"))
+    tag = "iso" if isolate else "raw"
+    path = os.path.join(tempfile.mkdtemp(prefix=f"rtlcal_br_{tag}_"), "f.docx")
+    doc.save(path)
+    return path
+
+
+def bracket_suspicious_count(pdf_path: str) -> "int | None":
+    """عدد الأقواس الافتتاحية المعلّقة في نص الـPDF المستخرَج — None بلا fitz."""
+    try:
+        import fitz  # pymupdf
+    except Exception:  # noqa: BLE001
+        return None
+    import silk_reports
+    try:
+        with fitz.open(pdf_path) as pdf:
+            text = "\n".join(page.get_text() for page in pdf)
+    except Exception:  # noqa: BLE001
+        return None
+    return silk_reports.count_suspicious_brackets(text)
+
+
 def to_pdf(docx_path: str) -> str:
     import silk_reports
     return silk_reports.docx_to_pdf(
@@ -246,6 +300,21 @@ def main() -> int:
             print(format_digest(label, d))
         except Exception as e:  # noqa: BLE001
             print(f"{label}: ERROR {e}")
+    # WP-5: معايرة فحص انعكاس الأقواس — C (بعزل RLM) مقابل D (خام).
+    # تشخيصية هنا؛ الفحص الصلب يعيش في silk_reports.docx_to_pdf نفسه —
+    # نرفع عتبته مؤقتاً كي تُقاس عيّنة D بلا رفع استثناء.
+    os.environ["SILK_PDF_BRACKET_FAIL_MAX"] = "9999"
+    try:
+        for label, iso in (("C(bracket,RLM-isolated)", True),
+                           ("D(bracket,raw)", False)):
+            try:
+                n = bracket_suspicious_count(to_pdf(build_bracket_fixture(iso)))
+                print(f"{label}: suspicious_open_brackets={n}")
+            except Exception as e:  # noqa: BLE001
+                print(f"{label}: ERROR {e}")
+    finally:
+        os.environ.pop("SILK_PDF_BRACKET_FAIL_MAX", None)
+
     # عقدُ الصلاحية الدائم: A بلا يسارٍ عربيّ (تمرّ)؛ B بيسارٍ عربيّ (تفشل).
     a = digests.get("A(jc=start,correct)")
     b = digests.get("B(jc=right,inverted)")

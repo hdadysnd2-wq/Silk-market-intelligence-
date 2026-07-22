@@ -474,6 +474,69 @@ def _apply_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
             continue
 
 
+# WP-5 — انعكاس الأقواس في PDF: فقرة عربية bidi تحوي مقطعاً لاتينياً/رقمياً
+# بين قوسين كانت تُصيَّر «) ... (» بعد تحويل LibreOffice headless — خط
+# الأنابيب لم يكن يحقن أي عزل اتجاه حول المقاطع مختلطة الاتجاه. الفكس:
+# علامة RLM (U+200F) بعد القوس الافتتاحي وقبل الختامي حين يحوي المقطع
+# لاتينية/أرقاماً في سياق عربي — فيلتصق القوسان بجارٍ قويّ الاتجاه RTL
+# ويُصيَّران باتجاههما الصحيح. لا تغيير في أي محتوى مرئي (RLM غير مرئية).
+_RLM = "\u200f"
+_BRACKET_SPAN_RE = re.compile(r"([(\[])([^()\[\]\n]*[A-Za-z0-9][^()\[\]\n]*)([)\]])")
+_ARABIC_CHAR_RE = re.compile("[\\u0600-\\u06ff]")
+
+
+def _bidi_isolate_brackets(text: str) -> str:
+    """احقن RLM داخل أقواس المقاطع اللاتينية/الرقمية في نصٍّ عربي السياق —
+    تُطبَّق قبل `_finalize_rtl` على كل run. نص بلا عربية يمرّ كما هو."""
+    if not text or not _ARABIC_CHAR_RE.search(text):
+        return text
+
+    def _wrap(m: "re.Match") -> str:
+        inner = m.group(2)
+        if inner.startswith(_RLM) and inner.endswith(_RLM):
+            return m.group(0)   # مُعالَج سلفاً — لا ازدواج
+        return f"{m.group(1)}{_RLM}{inner}{_RLM}{m.group(3)}"
+
+    return _BRACKET_SPAN_RE.sub(_wrap, text)
+
+
+# WP-5 §2 — الفحص الآلي على نصّ الـPDF المستخرَج: قوس افتتاحي يتبعه فراغ/
+# نهاية سطر أثرُ انعكاسٍ نموذجي («) ... (» تُستخرَج "(" معلّقةً قبل فراغ).
+_SUSPICIOUS_OPEN_BRACKET_RE = re.compile(r"\((?=\s|$)", re.M)
+
+
+def count_suspicious_brackets(text: str) -> int:
+    """عدد الأقواس الافتتاحية المعلّقة (يتبعها فراغ/نهاية سطر) في نصٍّ
+    مستخرج من PDF — مقياس انعكاس الأقواس، صفر على مستند سليم تقريباً."""
+    return len(_SUSPICIOUS_OPEN_BRACKET_RE.findall(text or ""))
+
+
+def _pdf_bracket_check(pdf_path: str) -> None:
+    """WP-5: افحص الـPDF النهائي — فوق العتبة (SILK_PDF_BRACKET_FAIL_MAX،
+    افتراضياً 3) يفشل التصدير بصوت عالٍ بدل تسليم مستند بأقواس معكوسة.
+    بلا pymupdf (بيئة بلا أداة استخراج) يُتخطّى الفحص — لا ادعاء فحصٍ
+    لم يحدث (يُسجَّل سطر تشخيص فقط)."""
+    try:
+        import fitz  # pymupdf — حاضرة على بيئة e2e/الإنتاج
+    except ImportError:
+        log.info("pdf bracket check skipped: pymupdf غير مثبّتة")
+        return
+    try:
+        with fitz.open(pdf_path) as pdf:
+            text = "\n".join(page.get_text() for page in pdf)
+    except Exception as e:  # noqa: BLE001 — تعذّر الاستخراج ≠ مستند معكوس
+        log.warning("pdf bracket check extraction failed: %s", e)
+        return
+    import os
+    n = count_suspicious_brackets(text)
+    limit = int(os.environ.get("SILK_PDF_BRACKET_FAIL_MAX", "3"))
+    if n > limit:
+        raise RuntimeError(
+            f"فشل فحص اتجاه الأقواس في الـPDF النهائي: {n} قوساً افتتاحياً "
+            f"معلّقاً (العتبة {limit}) — مؤشر انعكاس أقواس RTL؛ لا يُسلَّم "
+            "مستند معكوس الأقواس")
+
+
 def _finalize_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
     """§4: تمريرة ختامية تضمن أن **كل** فقرة (bidi+محاذاة يمين) و**كل** run
     (<w:rtl/> + خطّ عربي ascii+cs) تحمل الاتجاه صراحةً — لا اعتماداً على وراثة
@@ -482,6 +545,12 @@ def _finalize_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
     def _do_paragraph(p):
         _set_rtl_paragraph(p._p.get_or_add_pPr())
         for run in p.runs:
+            # WP-5: عزل اتجاه أقواس المقاطع اللاتينية/الرقمية (RLM) قبل
+            # ضبط rtl — يمنع انعكاس «) ... (» في تحويل PDF.
+            if run.text:
+                isolated = _bidi_isolate_brackets(run.text)
+                if isolated != run.text:
+                    run.text = isolated
             _set_rtl_run_fonts(run._r.get_or_add_rPr(), font)
             # Wave 2 (البند ٨): العلامة «سِلك» => «سلك» متّصلة في **الوورد**
             # (وثيقة المشغّل القابلة للتحرير). أمّا التجريد الكامل لكلّ الحركات
@@ -2793,6 +2862,9 @@ def docx_to_pdf(docx_path: str, pdf_path: "str | None" = None,
         out_dir, os.path.splitext(os.path.basename(docx_path))[0] + ".pdf")
     if proc.returncode != 0 or not os.path.exists(produced):
         raise RuntimeError(_PDF_FAILED)
+    # WP-5 §2: الفحص الآلي لاتجاه الأقواس على الـPDF النهائي — فوق العتبة
+    # يفشل التصدير بصوت عالٍ بدل تسليم مستند معكوس الأقواس.
+    _pdf_bracket_check(produced)
     if pdf_path and os.path.abspath(pdf_path) != os.path.abspath(produced):
         os.replace(produced, pdf_path)
         return pdf_path
