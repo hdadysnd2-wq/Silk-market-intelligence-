@@ -1131,15 +1131,41 @@ def create_app():
         # dr["client_fallback_prose"] فيمرّ القسم من البوابة ويعرضه
         # `_client_body_or_fallback`؛ فشله يترك القسم خاوياً فتُفشِله
         # البوابة (409) — لا بنود `dp.value` خام تصل العميل بعد الآن.
+        #
+        # مراجعة شيفرة PR #147: (أ) هذا نداء كلود على مسارٍ مجاني — يمرّ
+        # عبر بوابة إضافات كلود نفسها (`_free_ai_extras_allowed`: حجب النشر
+        # غير المحمي + حجز ذرّي واحد من SILK_PAID_DAILY_CAP) كأي إضافة
+        # مسار مجاني، لا نداء غير محكوم؛ (ب) النثر الناجح **يُخزَّن على
+        # السجل** (save_analysis بمعرّفه = تحديث في المكان) فلا يُعاد دفع
+        # نفس النداءات مع كل تصدير docx/pdf — build_view يعيد حمله من
+        # المدوّنة عبر view["deep_research"]["client_fallback_prose"].
         dr = view.get("deep_research") or {}
         if dr and not dr.get("client_fallback_prose"):
             try:
-                from silk_ai_judge import rephrase_client_sections
-                prose = rephrase_client_sections(dr)
-                if prose:
-                    dr["client_fallback_prose"] = prose
-            except Exception as e:  # noqa: BLE001 — فشل التحضير تحكمه البوابة
-                log.warning("client fallback rephrase failed: %s", e)
+                from silk_reports import _client_missing_narrative_heads
+                needs = {h: items for h, items in
+                         _client_missing_narrative_heads(dr).items() if items}
+            except Exception:  # noqa: BLE001 — تعذّر الفحص = لا نداء
+                needs = {}
+            ai_ok = False
+            if needs:
+                ai_ok, _rephrase_note = _free_ai_extras_allowed()
+            if needs and ai_ok:
+                try:
+                    from silk_ai_judge import rephrase_client_sections
+                    prose = rephrase_client_sections(dr)
+                    if prose:
+                        dr["client_fallback_prose"] = prose
+                        try:
+                            stored_dr = (found or {}).get("deep_research")
+                            if isinstance(stored_dr, dict) and analysis_id:
+                                stored_dr["client_fallback_prose"] = prose
+                                silk_storage.save_analysis(
+                                    found, analysis_id=analysis_id)
+                        except Exception as e:  # noqa: BLE001 — تخزين اختياري
+                            log.warning("prose cache persist failed: %s", e)
+                except Exception as e:  # noqa: BLE001 — فشل التحضير تحكمه البوابة
+                    log.warning("client fallback rephrase failed: %s", e)
         verdict, gate_out = _gate_verdict_for_client_export(view)
         if verdict != "FAIL":
             return

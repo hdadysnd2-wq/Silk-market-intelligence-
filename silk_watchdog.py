@@ -278,10 +278,13 @@ def _check_badge_body(dr: dict) -> tuple[dict, list[dict]]:
         return {"status": "n/a", "detail": ""}, []
     badge = dr.get("verdict_label") or ""
     verdict = dr.get("verdict") or {}
-    v_raw = ((verdict.get("ai") or {}).get("verdict") or verdict.get("verdict") or "")
     try:
-        from silk_narrative import verdict_ar
-        body = verdict_ar(v_raw)
+        # مراجعة شيفرة PR #147: نفس المصدر الواحد للحكم (الحتمي أولاً) الذي
+        # تُشتقّ منه الشارة — القراءة القديمة (ai أولاً) كانت ستُطلق
+        # badge_body_mismatch كاذباً كلما خالفت قراءةُ كلود الحكمَ الحتمي.
+        from silk_narrative import authoritative_verdict, verdict_ar
+        v_raw, _ = authoritative_verdict(verdict)
+        body = verdict_ar(v_raw or "")
     except Exception:  # noqa: BLE001 — فحصٌ إضافي، لا يكسر الحارس
         return {"status": "n/a", "detail": ""}, []
     bc, tc = _badge_class(badge), _badge_class(body)

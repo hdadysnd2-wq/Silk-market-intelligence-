@@ -529,7 +529,12 @@ def _pdf_bracket_check(pdf_path: str) -> None:
         return
     import os
     n = count_suspicious_brackets(text)
-    limit = int(os.environ.get("SILK_PDF_BRACKET_FAIL_MAX", "3"))
+    # مراجعة شيفرة PR #147: قيمة بيئة مشوَّهة كانت تُفجِّر ValueError خاماً
+    # فتقتل كل تصدير PDF — تراجُع آمن للافتراضي بدل الانهيار.
+    try:
+        limit = int(os.environ.get("SILK_PDF_BRACKET_FAIL_MAX", "3"))
+    except (TypeError, ValueError):
+        limit = 3
     if n > limit:
         raise RuntimeError(
             f"فشل فحص اتجاه الأقواس في الـPDF النهائي: {n} قوساً افتتاحياً "
@@ -2595,6 +2600,15 @@ def render_client_docx(view: dict, path: str) -> str:
                   or _verdict_tone(ai.get("verdict")) == _verdict_tone(vtxt))
     reasoning = ((ai.get("reasoning") if _ai_agrees else "")
                  or verdict.get("note") or "")
+    if not reasoning and verdict.get("confidence") is not None:
+        # مراجعة شيفرة PR #147: مدوّنة مخزَّنة بلا «note» وقراءةُ كلود
+        # مخالفة كانت تُخرج قسم القرار بلا أي فقرة أساس — سطر أساسٍ حتمي
+        # من الحقول المحسوبة فقط (لا اختلاق) بدل الغياب الصامت.
+        from silk_narrative import confidence_phrase
+        reasoning = (
+            f"حكم المحرّك الحتمي بدرجة ثقة "
+            f"{confidence_phrase(verdict.get('confidence'))} بناءً على "
+            "الأدلة المرصودة — تفصيل الأساس في هذا القسم والأقسام التالية.")
     if reasoning:
         # §B-1 (حزمة الفكس v2.1) + WP-2 §1: متن العميل لا يُقصّ بـ«…» ولا
         # يستقبل نصّاً نائباً أبداً — `_client_prose` تستخلص من الكتلة الخام

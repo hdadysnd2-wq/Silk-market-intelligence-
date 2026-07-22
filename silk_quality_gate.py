@@ -176,11 +176,27 @@ def _check_dangling_cross_reference(text: str) -> list[dict]:
 # WP-2 §6 — سقالة «إذن ماذا؟»/"So what" الحرفية والنصوص النائبة التقنية:
 # كلتاهما وصلت تقارير عملاء مُسلَّمة فعلاً (تدقيق 2026-07-22). FAIL لا تحذير.
 _SO_WHAT_LEAK_RE = re.compile(r"إذن\s*،?\s*ماذا|So\s+what", re.I)
+# مراجعة شيفرة PR #147: الإبرة العارية «أثر التتبع» كانت (أ) تُطابِق نثراً
+# مشروعاً («أثر التتبع الرقمي…») و(ب) **تفوّت هدفها الفعلي** — النص النائب
+# الحقيقي مُشكَّل («أثر التتبّع» بالشدّة) فلا يطابق الإبرة غير المشكَّلة.
+# الفكس: عبارات مميِّزة كاملة + مقارنة بعد تجريد التشكيل من الطرفين.
+_AR_DIACRITICS_STRIP_RE = re.compile("[ً-ْٰ]")
+
+
+def _strip_ar_diacritics(s: str) -> str:
+    """جرّد التشكيل العربي للمقارنة النصية فقط — لا يغيّر نصاً معروضاً."""
+    return _AR_DIACRITICS_STRIP_RE.sub("", s or "")
+
+
 _PLACEHOLDER_STRINGS = (
     "بند تقني غير قابل للعرض المباشر",
-    "أثر التتبع",
+    "التفاصيل في أثر التتبع",
+    "التفاصيل الكاملة في أثر التتبع",
     "التحليل السردي التفصيلي لهذا القسم غير متاح",
 )
+
+
+_GAPS_TRIGGER_RE = re.compile(r"فجوة بيانات|(?<![ء-ي])فجوات\s*:")
 
 
 def _check_gaps_closing_contradiction(dr: dict) -> list[dict]:
@@ -193,7 +209,10 @@ def _check_gaps_closing_contradiction(dr: dict) -> list[dict]:
     summaries = " ".join(str((m or {}).get("summary") or "")
                          for m in (dr.get("missions") or {}).values())
     combined = text + "\n" + summaries
-    if "فجوة بيانات" not in combined and "فجوات:" not in combined:
+    # مراجعة شيفرة PR #147: «فجوات:» العارية كانت تطابق «الفجوات:» داخل
+    # سردٍ سليم («الفجوات: لا توجد فجوات جوهرية») فتُفشِل تقريراً صحيحاً —
+    # المُشغِّل الآن كلمة مستقلة (لا يسبقها حرف عربي) أو «فجوة بيانات».
+    if not _GAPS_TRIGGER_RE.search(combined):
         return []
     try:
         from silk_reports import _client_gap_inputs
@@ -225,8 +244,9 @@ def _check_placeholder_leak(text: str) -> list[dict]:
     التتبع»/سطر عدم التوفّر العام) في نص يواجه العميل = فشل توليد سُلِّم
     بدل أن يُعاد أو يُحجَب — FAIL."""
     findings = []
+    plain = _strip_ar_diacritics(text or "")
     for ph in _PLACEHOLDER_STRINGS:
-        if text and ph in text:
+        if plain and _strip_ar_diacritics(ph) in plain:
             findings.append({
                 "check": "placeholder_leak", "repairable": False,
                 "note": f"نصّ نائب تقني وصل نص التقرير: «{ph}» — فشل "
@@ -414,9 +434,12 @@ def _check_recommendation_tier_label_consistency(dr: dict) -> list[dict]:
     except Exception:  # noqa: BLE001 — فحص إضافي، لا يكسر البوابة
         return []
     verdict = dr.get("verdict") or {}
-    v_raw = ((verdict.get("ai") or {}).get("verdict")
-            or verdict.get("verdict") or "")
-    if _verdict_tone(v_raw) != "conditional":
+    # مراجعة شيفرة PR #147: الحكم من المصدر الواحد (الحتمي أولاً) — القراءة
+    # القديمة (ai أولاً) كانت تُفشِل تقريراً صحيحاً أو تتخطّى خطأً حقيقياً
+    # كلما اختلفت قراءة كلود عن الحكم الحتمي المعروض.
+    from silk_narrative import authoritative_verdict
+    v_raw, _ = authoritative_verdict(verdict)
+    if _verdict_tone(v_raw or "") != "conditional":
         return []
     if "التوصية بالدخول" in text:
         return [{
@@ -1029,7 +1052,8 @@ _REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
 # للاستدعاء المباشر؛ تسليمه عبر API محكوم بفحص القالب client_section_placeholder).
 _ARTIFACT_HARD_PLACEHOLDERS = (
     "بند تقني غير قابل للعرض المباشر",
-    "أثر التتبع",
+    "التفاصيل في أثر التتبع",
+    "التفاصيل الكاملة في أثر التتبع",
 )
 
 
@@ -1043,8 +1067,9 @@ def run_client_artifact_text_gate(text: str) -> list[dict]:
     if not text:
         return findings
     findings += _check_client_scaffold_leak(text)
+    _plain = _strip_ar_diacritics(text)
     for ph in _ARTIFACT_HARD_PLACEHOLDERS:
-        if ph in text:
+        if _strip_ar_diacritics(ph) in _plain:
             findings.append({
                 "check": "placeholder_leak", "repairable": False,
                 "note": f"نصّ نائب تقني في المستند النهائي: «{ph}»"})

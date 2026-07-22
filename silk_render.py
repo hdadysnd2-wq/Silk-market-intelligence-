@@ -1043,9 +1043,36 @@ def _reconcile_numeric_conflicts(missions: dict, hs_flagged: bool) -> list[dict]
             if any(abs(fv - ov) <= max(abs(ov), 1.0) * 0.005
                    for ov in official_vals):
                 f["corroborated"] = True
-    big = sorted((f for f in entries if abs(float(f["value"])) >= 10000),
-                 key=lambda f: float(f["value"]))
+    # مراجعة شيفرة PR #147: التقارب الرقمي وحده كان يخاطر بضمّ رقمين لا
+    # علاقة بينهما (واردات 6.70م$ وعدد سكان 6.72م مثلاً) فيُستبعَد رقم
+    # صحيح بإفصاح تعارضٍ كاذب. تُشترط الآن **هوية سنة معلومة ومتطابقة**
+    # (data_year البنيوي أو سنة صريحة في الملاحظة) — بند بلا سنة قابلة
+    # للاشتقاق لا يدخل المصالحة أصلاً (تحفّظ: لا حسم بلا هوية).
+    def _entry_year(f: dict) -> "int | None":
+        dy = f.get("data_year")
+        if isinstance(dy, int):
+            return dy
+        m = re.search(r"(?<!\d)(19\d\d|20\d\d)(?!\d)",
+                      f"{f.get('note') or ''}")
+        return int(m.group(1)) if m else None
+
+    by_year: dict[int, list[dict]] = {}
+    for f in entries:
+        if abs(float(f["value"])) < 10000:
+            continue
+        yr = _entry_year(f)
+        if yr is not None:
+            by_year.setdefault(yr, []).append(f)
     conflicts: list[dict] = []
+    for _yr in sorted(by_year):
+        _cluster_year_group(by_year[_yr], conflicts)
+    return conflicts
+
+
+def _cluster_year_group(group: "list[dict]", conflicts: "list[dict]") -> None:
+    """عنقدة قيم سنةٍ واحدة بالتقارب النسبي (≤0.5%) — جزء ممرّ المصالحة."""
+    from silk_narrative import RECONCILED_OUT_TAG
+    big = sorted(group, key=lambda f: float(f["value"]))
     i = 0
     while i < len(big):
         base = float(big[i]["value"])
@@ -1074,7 +1101,6 @@ def _reconcile_numeric_conflicts(missions: dict, hs_flagged: bool) -> list[dict]
                          "(الأعلى ثقة) واستُبعد الباقي موسوماً "
                          f"«{RECONCILED_OUT_TAG}».")})
         i = j
-    return conflicts
 
 
 def _mission_gap_lines(name: str, summary: str) -> list[str]:
@@ -1561,7 +1587,12 @@ def _deep_research_view(result: dict) -> dict | None:
             # (بلاغ مالك: "pricing_scout"/"risk_news" ظهرت حرفياً للعميل).
             "label": _mission_label(key),
             "summary": clean_summary,
-            "findings": [_dp(x) for x in f["findings"]],
+            # مراجعة شيفرة PR #147: نسخة سطحية لكل بند — `_dp` تعيد dict
+            # المدوّنة **بالمرجع**، وممرّ المصالحة (WP-3) يكتب وسوم عرضٍ
+            # (evidence_tag/corroborated) على بنود العرض؛ بلا النسخ كانت
+            # الوسوم تتسرّب إلى بنود السجل الخام وتُحفَظ مع أي save_analysis
+            # لاحق (مسار regenerate/enrich) — طبقة العرض لا تلمس المخزون.
+            "findings": [dict(_dp(x)) for x in f["findings"]],
             "trace": _mission_trace_summary(f["failed"], clean_summary),
         }
     analyst = dr.get("analyst") or {}
@@ -1774,6 +1805,13 @@ def _deep_research_view(result: dict) -> dict | None:
         "hs_flagged": bool(hs_flagged),
         # WP-3 §2: تعارضات رقمية حُسمت — تُفصَح مرة واحدة في سجل الأدلة.
         "reconciliation": {"conflicts": _conflicts},
+        # مراجعة شيفرة PR #147: نثر الصياغة التجارية المُخزَّن (WP-2 §3،
+        # يكتبه مسار التصدير مرة واحدة عبر save_analysis) يُعاد حمله هنا
+        # فلا يُعاد دفع نداءاته مع كل تصدير — مُطهَّراً كأي نص معروض.
+        "client_fallback_prose": {
+            str(k): _strip_internal_plumbing(str(v))
+            for k, v in (dr.get("client_fallback_prose") or {}).items()
+            if str(v or "").strip()},
         # Wave 3.1: سبب غياب السعر/كجم لكل صفّ سعر مرصود + سطر الفتح الوحيد.
         "price_rows": [
             {"value": (_dp(x).get("value")),
