@@ -295,7 +295,9 @@ def _check_confidence_band_label(text: str) -> list[dict]:
             pct = int(pct_s)
         except ValueError:
             continue
-        expected = "عالية" if pct >= 80 else ("متوسطة" if pct >= 60 else "منخفضة")
+        # WP-1 §4: العتبات من سُلَّم المعايرة الواحد — لا نسخة محلية.
+        from silk_style_contract import confidence_band_label
+        expected = confidence_band_label(pct)
         if label != expected:
             findings.append({
                 "check": "confidence_band_mismatch", "repairable": False,
@@ -1024,7 +1026,10 @@ def run_quality_gate(view: dict) -> dict:
                             # عميل بلا محتوى فعلي — كل هذه تصل العميل
                             # كأخطاء بنيوية، لا ملاحظات أسلوبية.
                             "orphan_short_token", "dangling_cross_reference",
-                            "client_section_placeholder")
+                            "client_section_placeholder",
+                            # WP-1 §4: تسمية نطاق ثقة لا تطابق رقمها = خطأ
+                            # يصل وجه التقرير — FAIL لا تحذير.
+                            "confidence_band_mismatch")
             for f in non_repairable) \
             or guard_fired:
         verdict = FAIL

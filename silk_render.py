@@ -44,9 +44,10 @@ def _decision(top: dict | None) -> dict:
                 "why": "لا أسواق مرتّبة — لا بيانات كافية"}
     jury = top.get("jury") or {}
     ai = jury.get("ai") or {}
-    verdict = ai.get("verdict") or jury.get("verdict")
-    confidence = (ai.get("confidence") if ai.get("confidence") is not None
-                  else jury.get("confidence"))
+    # WP-1: الحكم المعروض من المرحلة الحتمية حصراً (authoritative_verdict) —
+    # ai.verdict قراءة استشارية داخلية، لم يعد يتقدّم على الحكم الحتمي.
+    from silk_narrative import authoritative_verdict
+    verdict, confidence = authoritative_verdict(jury)
     # أسماء أصناف الوكلاء الداخلية (TradeFlowAgent...) لا تصل وجه المستخدم —
     # تُعرَّب في المصدر هنا كي يرث كل مستهلك (نص/docx/markdown) الترجمة
     # نفسها، بدل ترقيعها في مستهلك واحد فقط (كانت docx وحدها تُعرِّبها).
@@ -121,10 +122,9 @@ def _deep_research_brief(dr_view: dict) -> list[str]:
 
     نفس فلسفة `_brief` (§10.4: سطر جوال) لكن على شكل view["deep_research"]
     (١٢ بعثة + محلل، لا قائمة أسواق مرتّبة)."""
-    from silk_narrative import verdict_ar
+    from silk_narrative import authoritative_verdict, verdict_ar
     verdict = dr_view.get("verdict") or {}
-    ai = verdict.get("ai") or {}
-    v_raw = ai.get("verdict") or verdict.get("verdict")
+    v_raw, _ = authoritative_verdict(verdict)   # WP-1: الحتمي أولاً
     v = verdict_ar(v_raw) if v_raw else "تعذّر إصدار توصية"
     market = ((dr_view.get("market") or {}).get("name_ar")
              or (dr_view.get("market") or {}).get("name_en") or "؟")
@@ -1584,7 +1584,9 @@ def _deep_research_view(result: dict) -> dict | None:
             "الموسمية" in l for l in limits):
         from silk_trends_agent import SEASONALITY_GAP_CLOSURE
         limits.append(SEASONALITY_GAP_CLOSURE)
-    v_raw = (verdict.get("ai") or {}).get("verdict") or verdict.get("verdict") or ""
+    # WP-1: الحكم المعروض (الشارة/التسمية) من المرحلة الحتمية حصراً.
+    from silk_narrative import authoritative_verdict
+    v_raw, _ = authoritative_verdict(verdict)
     verdict_tone = _verdict_tone(v_raw)
     # Wave 1.3/3.2/4.1 (تدقيق زبدة الفول السوداني/اليمن): حين يُعلَّم رمز HS
     # غير مؤكَّد (صفة المنتج المميّزة غائبة عن وصف الرمز، silk_hs_confirm)،

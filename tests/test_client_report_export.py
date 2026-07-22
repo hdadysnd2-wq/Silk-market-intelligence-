@@ -78,7 +78,10 @@ def _mock_view(missing_categories=None, report_text=None):
                 "report": AgentReport("LLMAgent:market_analyst",
                                       demand + price, False, "تحليل مكتمل"),
                 "by_category": by_cat, "missing_categories": missing},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحكم المعروض من الحقل الحتمي حصراً — المدوّنة تحاكي
+            # تشغيلة النظام الجديد (الكاتب مقيَّد بالحكم الحتمي فيطابقه السرد)؛
+            # قراءة كلود (ai) استشارية متوافقة، لا مصدر الحكم.
+            "verdict": {"verdict": "CONDITIONAL-GO", "confidence": 0.66,
                        "ai": {"verdict": "دخول مشروط", "confidence": 0.66,
                              "reasoning": "دخول مشروط بتأمين الأهلية أولاً."}},
             "report": {"report": report_text or default_report,
@@ -321,7 +324,8 @@ def _store_deep_research(db, report_text=None, full_sections=True):
                        "missing_categories": ["entry_cost",
                                              "price_competitiveness",
                                              "entry_door", "swot"]},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحقل الحتمي هو الحكم المعروض — المدوّنة بنظام ما بعد WP-1.
+            "verdict": {"verdict": "CONDITIONAL-GO", "confidence": 0.6,
                        "ai": {"verdict": "دخول مشروط", "confidence": 0.6,
                              "reasoning": "دخول مشروط بالأهلية."}},
             "report": {"report": report_text,

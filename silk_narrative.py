@@ -297,6 +297,24 @@ def country_ar(code_or_name: object, fallback: str | None = None) -> str:
             or fallback or s or GAP)
 
 
+def authoritative_verdict(verdict: "dict | None") -> "tuple[object, object]":
+    """(الحكم المعروض، ثقته) من قاموس التوليف — WP-1 (برنامج إصلاح جودة
+    التقارير): **الحكم الحتمي أولاً**. المرحلة الحتمية
+    (`verdict["verdict"]`/`["confidence"]` — لجنة التحكيم/المحرّك الموزون)
+    هي المصدر الوحيد للحكم المعروض على أي سطح؛ قراءة كلود (`ai.verdict`)
+    حقل استشاري داخلي («قراءة تحليلية للذكاء الاصطناعي») لا يُعرَض توصيةً
+    أبداً — يُستعمَل احتياطاً فقط حين يغيب الحكم الحتمي كلياً (مدوّنات
+    قديمة خُزِّنت بلا مرحلة حتمية). كان الترتيب معكوساً (ai أولاً) فأنتج
+    تشغيلتان بنفس المدخلات حكمين مختلفين (WATCH ثم GO) في يومٍ واحد."""
+    v = verdict if isinstance(verdict, dict) else {}
+    ai = v.get("ai") if isinstance(v.get("ai"), dict) else {}
+    raw = v.get("verdict") or ai.get("verdict") or ""
+    conf = v.get("confidence")
+    if conf is None:
+        conf = ai.get("confidence")
+    return raw, conf
+
+
 def verdict_ar(verdict: object) -> str:
     """الحكم بالعربية — رمز الآلة (GO/CONDITIONAL-GO/NO-GO) لا يصل المستخدم."""
     s = str(verdict or "").strip().upper()
@@ -371,12 +389,11 @@ def confidence_phrase(c: object) -> str:
     except (TypeError, ValueError):
         return str(c)
     pct = round(n * 100)
-    # §F-3 (حزمة الفكس v2.1): نطاقات الثقة الموحّدة — عالية ≥80% / متوسطة
-    # 60-79% / منخفضة <60% (كانت 66%/40% — بلاغ حي: «ثقة عالية (68%)» ظهرت
-    # بجانب 90%/75% بلا مقياس متّسق؛ تحت العتبة القديمة كان 68% يُصنَّف
-    # «عالية» رغم وقوعه فعلياً ضمن مدى «متوسطة» بالمقياس المعتمد الآن).
-    band = "عالية" if pct >= 80 else ("متوسطة" if pct >= 60 else "منخفضة")
-    return f"{band} ({pct}%)"
+    # §F-3 (حزمة الفكس v2.1) + WP-1 §4: نطاقات الثقة الموحّدة — عالية ≥80% /
+    # متوسطة 60-79% / منخفضة <60%. العتبات والمشتقّ في سُلَّم المعايرة الواحد
+    # (silk_style_contract.confidence_band_label) — لا نسخة محلية قد تتباعد.
+    from silk_style_contract import confidence_band_label
+    return f"{confidence_band_label(pct)} ({pct}%)"
 
 
 # عتبات شارة الأدلة — ثابت واحد (P0-B، الموجة ٩): بلاغ حي "درجات ثقة تبدو

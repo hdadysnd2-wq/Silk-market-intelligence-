@@ -702,11 +702,13 @@ def _summarize_verdict(verdict: dict) -> str:
     فئات الوكلاء (data_gaps) بالإنجليزية. هنا نلخّص بعربية بشرية فقط —
     الحكم المُعرَّب، الثقة كعبارة، عدد المؤشرات المساهمة (رقم لا كائنات)،
     والفجوات مُعرَّبة."""
-    from silk_narrative import confidence_phrase, internal_ar, verdict_ar
+    from silk_narrative import (authoritative_verdict, confidence_phrase,
+                                internal_ar, verdict_ar)
     v = verdict or {}
     ai = v.get("ai") or {}
-    verdict_token = ai.get("verdict") or v.get("verdict")
-    confidence = ai.get("confidence", v.get("confidence"))
+    # WP-1: الكاتب يستلم الحكم الحتمي المعتمد نفسه المعروض على كل سطح —
+    # لا حكم كلود الاستشاري (كانا قد يختلفان فيعيد الكاتب الحكم بنفسه).
+    verdict_token, confidence = authoritative_verdict(v)
     gaps = ", ".join(internal_ar(g) for g in v.get("data_gaps", [])) or "لا شيء"
     parts = [
         f"الحكم: {verdict_ar(verdict_token)}",
@@ -786,8 +788,16 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
     parts = [
         f"المنتج: {_isolate(product)}. السوق: {_isolate(market_name)}.",
         WRITER_STYLE_CONTRACT,
-        f"الحكم الجاهز (من طبقة التوليف — لا تُصدر حكماً مختلفاً، اشرحه): "
-        f"{_isolate(_summarize_verdict(verdict))}",
+        # WP-1 §3: الحكم المعتمد قيد صلب — لا يجوز للكاتب إصدار توصية مختلفة
+        # ولا «توصية أولية» موازية؛ دوره الشرح والتقييد فقط. درجة الثقة
+        # المعروضة هي ثقة المحرّك الحتمي المرفقة حصراً — يُمنَع اختراع نسبة
+        # أو تسمية نطاق («عالية/متوسطة/منخفضة») غير المشتقّة منها.
+        f"الحكم المعتمد (قيد إلزامي — يُمنَع إصدار أي توصية مختلفة أو "
+        f"«توصية أولية» موازية؛ اشرح هذا الحكم وقيّده فقط، وأي سيناريو "
+        f"بديل يُصاغ كشرط قلبٍ افتراضي لا كتوصية): "
+        f"{_isolate(_summarize_verdict(verdict))}. "
+        "درجة الثقة الوحيدة المسموح ذكرها هي المذكورة أعلاه حرفياً — لا "
+        "تخترع نسبة ثقة أو تسمية نطاق أخرى.",
         f"مسوّدة المحلل الشامل (خمس تقاطعات + SWOT):\n{_isolate(analyst_summary)}",
         f"حقائق البعثات الاثنتي عشرة (لا تتجاوزها، كل رقم من هنا فقط):\n{facts}",
     ]

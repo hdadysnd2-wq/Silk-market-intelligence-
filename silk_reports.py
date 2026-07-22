@@ -626,13 +626,14 @@ def _match_known_verdict_label(s: str) -> "str | None":
 
 
 def _resolve_vtxt(dr: dict) -> str:
-    """سلسلة الحكم الخام الواحدة (GO/WATCH/...) — نقطة اشتقاقٍ مشتركة بدل
-    تكرار `ai.get("verdict") or verdict.get("verdict") or ""` في كل مُصيّر
+    """سلسلة الحكم الخام الواحدة (GO/WATCH/...) — نقطة اشتقاقٍ مشتركة
     (Master Prompt Part 2 §B، البند ٤: لا يُشتقّ الحكم من نصٍّ منفصل في أكثر
-    من موضع)."""
-    verdict = (dr or {}).get("verdict") or {}
-    ai = verdict.get("ai") or {}
-    return ai.get("verdict") or verdict.get("verdict") or ""
+    من موضع). WP-1: **الحكم الحتمي أولاً** عبر المصدر الواحد
+    `silk_narrative.authoritative_verdict` — `ai.verdict` قراءة استشارية
+    داخلية لا توصية معروضة (كان الترتيب معكوساً فتناقضت الشارة مع المتن)."""
+    from silk_narrative import authoritative_verdict
+    raw, _ = authoritative_verdict((dr or {}).get("verdict"))
+    return raw or ""
 
 
 def _declared_verdict_labels(doc) -> list[str]:
@@ -1479,6 +1480,13 @@ def _docx_deep_research(doc, view: dict) -> None:
         f"السوق: {market.get('name_ar') or market.get('name_en')} "
         f"({market.get('iso3')}) — الحكم: "
         f"{_VERDICT_LABELS_AR[_verdict_tone(v_raw)]}")
+    # WP-1 §2: قراءة كلود حقل استشاري في التصدير الداخلي فقط — تُعرَض
+    # موسومة «قراءة تحليلية للذكاء الاصطناعي»، لا توصيةً ثانية.
+    if ai.get("verdict"):
+        from silk_narrative import verdict_ar as _var
+        doc.add_paragraph(
+            f"قراءة تحليلية للذكاء الاصطناعي (استشارية — ليست التوصية): "
+            f"{_var(ai.get('verdict'))}", style="Intense Quote")
     if ai.get("reasoning"):
         doc.add_paragraph(str(ai["reasoning"]), style="Intense Quote")
 
@@ -2407,7 +2415,13 @@ def render_client_docx(view: dict, path: str) -> str:
     # ثم سرد الكاتب (الخلاصة + التوصيات) إن توفّر.
     doc.add_heading("القرار وأساسه", level=1)
     doc.add_paragraph(f"التوصية: {_VERDICT_LABELS_AR[_verdict_tone(vtxt)]}")
-    reasoning = ai.get("reasoning") or verdict.get("note") or ""
+    # WP-1 §2: تعليل كلود يُعرَض للعميل فقط حين تتطابق قراءته مع الحكم
+    # الحتمي المعروض (وإلا لعرضنا تعليلَ توصيةٍ أخرى تحت توصية مختلفة) —
+    # القراءة المخالفة تبقى في التصدير الداخلي (?internal=1) موسومة استشارية.
+    _ai_agrees = (not ai.get("verdict")
+                  or _verdict_tone(ai.get("verdict")) == _verdict_tone(vtxt))
+    reasoning = ((ai.get("reasoning") if _ai_agrees else "")
+                 or verdict.get("note") or "")
     if reasoning:
         # §B-1 (حزمة الفكس v2.1): متن العميل لا يُقصّ بـ«…» أبداً — القصّ
         # النظيف عند حدّ جملة (`_trim_sentence`، بلا نقاط حذف) بحدٍّ كبيرٍ
