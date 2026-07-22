@@ -1595,8 +1595,9 @@ def _docx_deep_research(doc, view: dict) -> None:
                 f"{c.get('condition')} — {_mark}؛ يُغلَق عبر: "
                 f"{c.get('closes_via')}", style="List Bullet")
 
-    if dr.get("next_step"):
-        doc.add_paragraph(dr["next_step"], style="Intense Quote")
+    # §F-5 (حزمة الفكس v2.1): دعوة التعميق المدفوع («next_step») أُزيلت من
+    # متن الدراسة — تبقى دعوةً على سطح التسليم (شارة/زرّ اللوحة، web/
+    # index.html) لا داخل المستند المُصدَّر نفسه.
 
     if dr.get("limits"):
         doc.add_heading("حدود قسم البحث العميق", level=2)
@@ -1615,13 +1616,23 @@ def _docx_technical_appendix(doc, dr: dict) -> None:
     الكاملة ومصدره العمومي الحقيقي ورابطه (إن رُصد) وتاريخ جمعه وقوة دليله.
     لا اسم بعثة داخلي، لا وسم «(Claude tool-use)»، لا رقم ثقة خام (شارة
     ✓/◐/○ فقط، §7)، ولا حقيقة مبتورة بـ«…» (§5 — قصّ عند حدّ جملة)."""
+    # §D-3 (حزمة الفكس v2.1): إزالة التكرار بـ(القيمة، المصدر) المُطبَّعين —
+    # بلاغ حي: GCC/GAFTA/حلال/GSO/شهادة المنشأ/SFDA شُحنت كلٌّ مرّتين
+    # (البعثات المختلفة تستشهد بنفس الحقيقة العامة). أول ورودٍ فقط يُعرَض.
     rows = []
+    seen: set = set()
     for _key, m in (dr.get("missions") or {}).items():
         findings = m.get("findings") if isinstance(m, dict) else None
         for f in (findings or []):
+            value_txt = _trim_sentence(f.get("value"), 240)
+            source_txt = _clean_source_label(f.get("source"))
+            dedup_key = (re.sub(r"\s+", " ", value_txt).strip().lower(),
+                        re.sub(r"\s+", " ", source_txt).strip().lower())
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
             rows.append([
-                _trim_sentence(f.get("value"), 240),
-                _clean_source_label(f.get("source")),
+                value_txt, source_txt,
                 _evidence_url(f.get("note"), f.get("source"), f.get("value")),
                 f.get("retrieved_at") or "—",
                 _evidence_badge(f.get("confidence"))])
@@ -2069,8 +2080,8 @@ def _client_methodology_paragraph(dr: dict) -> str:
     return (
         f"اعتمد هذا التقرير على مصادر رسمية عامة ({src_list})، مع تحليل "
         "تقاطعي بينها ومراجعة للاتساق قبل الاعتماد. خضعت كل معلومة للتحقّق "
-        f"من مصدرها العمومي المباشر. {date_txt}. تفاصيل كل رقم بمصدره "
-        "وتاريخه في «سجل الأدلة للمدققين» ختام التقرير.")
+        f"من مصدرها العمومي المباشر. {date_txt}. قائمة المراجع الكاملة "
+        "بروابطها الرسمية ختام التقرير.")
 
 
 # صياغة تجارية لكل فجوة في قسم "ما لم يكتمل للقرار" (بلاغ المالك، النقطة ٣):
@@ -2169,6 +2180,17 @@ def _client_gaps_section(doc, dr: dict) -> None:
                 "موثّق — إغلاق هذه الفجوة يتطلّب خدمة تحقّق جهات اتصال مدفوعة "
                 "(قواعد بيانات تجارية) قبل الالتزام بالموزّع.")
 
+    # §H-1 (حزمة الفكس v2.1): بلاغ حي — «لا فجوة جوهرية تمنع اتخاذ القرار»
+    # نُشرت بينما شروط قلب الحكم المهيكلة («شرطا قلب الحكم»، silk_render.
+    # _flip_conditions) نفسها غير محقَّقة (بطاقة تكلفة، بيانات HS صحيحة،
+    # موزّع متعاقَد). القسم الآن يقرأ من نفس القائمة الآلية التي يبنيها
+    # المحرّك — لا صياغة حرّة منفصلة قد تتباعد عنها.
+    for c in (dr.get("flip_conditions") or []):
+        if not c.get("met"):
+            gap_lines.append(
+                f"لم يتحقّق بعد: {c.get('condition')} — إغلاق هذا الشرط "
+                f"يتطلّب {c.get('closes_via')}.")
+
     if gap_lines:
         doc.add_paragraph(
             "النقاط التالية لم تكتمل توثيقاً ضمن هذا التقرير؛ هي ما يفصل "
@@ -2181,10 +2203,9 @@ def _client_gaps_section(doc, dr: dict) -> None:
             "اكتملت التقاطعات التحليلية الأساسية بأدلة موثّقة بمصادرها، ولا "
             "بند حاسم للقرار موسوم بأنه غير محقَّق؛ لا فجوة جوهرية تمنع "
             "اتخاذ القرار ضمن نطاق هذا التقرير.")
-    nxt = dr.get("next_step")
-    if nxt:
-        doc.add_heading("الخطوة التالية المقترحة", level=2)
-        doc.add_paragraph(_client_sanitize(nxt))
+    # §F-5 (حزمة الفكس v2.1): دعوة التعميق المدفوع («next_step») أُزيلت من
+    # متن الدراسة المُسلَّم للعميل — تبقى دعوةً على سطح التسليم (شارة/زرّ
+    # اللوحة، web/index.html) لا داخل المستند نفسه.
 
 
 _CAT_TAG_RE = re.compile(
@@ -2244,47 +2265,75 @@ def _client_readable_fact(value: object, note: object) -> "str | None":
     return txt
 
 
-def _client_evidence_appendix(doc, dr: dict) -> None:
-    """سجل الأدلة للمدققين (بلاغ المالك النقطة ٤) — جدول الأدلة الكامل ينتقل
-    لملحق ختامي بهذا العنوان، بمفردات محايدة (المصدر البشري، لا اسم الأداة).
-    يبدأ بفقرة المنهجية المضبوطة (٣ أسطر). البنود عديمة المعنى تُسقَط،
-    والعشريات الخام تُنسَّق مقروءةً."""
-    doc.add_heading("المنهجية وسجل الأدلة للمدققين", level=1)
+# §A (حزمة الفكس v2.1) — «المراجع» تحلّ محلّ «سجل الأدلة للمدققين» في
+# بناء العميل: قائمة مصادر عمومية فريدة (لا سجلّ تدقيقي ببند لكل حقيقة)،
+# مبنية من حقول DataPoint البنيوية (source/value/retrieved_at) — لا تخمين
+# بالكلمات المفتاحية. سجلّ الأدلة الكامل يبقى في الملحق الداخلي فقط
+# (`_docx_technical_appendix`، عبر `?internal=1`).
+_INTERNAL_SOURCE_LABEL_RE = re.compile(
+    r"silk\s*l1|مرجع\s*سلك|سجلات?\s*رسمية|silk\s*requirements", re.I)
+
+
+def _reference_row_from_finding(source_raw: object, value: object,
+                                note: object) -> "tuple[str, str] | None":
+    """(اسم مصدر عمومي، رابطه الحقيقي) لبند واحد، أو None إن تعذّر تحديد
+    مصدر عمومي حقيقي — عندها يبقى البند في الملحق الداخلي فقط (§A-2). لا
+    تخمين بالكلمات المفتاحية: إمّا مصدر معروف في `SOURCE_PUBLIC_URL`، أو
+    (لِمراجع طبقة ١ التي تحمل تسمية مصدر داخلية) حقلا `authority`/
+    `source_url` البنيويّان المخزَّنان فعلاً داخل قيمة البند نفسه
+    (`silk_requirements_agent._row_dp`)."""
+    from silk_data_layer import public_source_url
+    label = _clean_source_label(source_raw)
+    if _INTERNAL_SOURCE_LABEL_RE.search(str(source_raw or "")) or \
+            _INTERNAL_SOURCE_LABEL_RE.search(label):
+        if isinstance(value, dict) and value.get("source_url"):
+            name = str(value.get("authority") or "").strip()
+            return (name, str(value["source_url"])) if name else None
+        return None  # لا حقل مصدر عمومي بنيوي — يبقى داخلياً فقط
+    if not label or label == "—" or _client_forbidden_hits(label):
+        return None
+    url = _first_url(note, value)
+    if url == "—":
+        url = public_source_url(label, arabic=True)
+    if not url:
+        return None
+    return (label, url)
+
+
+def _client_references_section(doc, dr: dict) -> None:
+    """المراجع (§A) — مصادر عمومية فريدة فقط، سطر واحد لكل مصدر: الاسم +
+    الرابط الرسمي الحقيقي + تاريخ آخر جمع بيانات منه. لا جدول أدلة تدقيقي
+    ببند لكل حقيقة، ولا بند بشارة ○ غير متحقَّق (§A-4: لا يُعرَض كمرجعٍ
+    مصدرٌ لم يُتحقَّق منه)."""
+    doc.add_heading("المراجع", level=1)
     doc.add_paragraph(_client_methodology_paragraph(dr))
-    doc.add_heading("سجل الأدلة للمدققين", level=2)
-    rows = []
+    refs: dict[str, dict] = {}
     for m in (dr.get("missions") or {}).values():
         if not isinstance(m, dict):
             continue
         for f in (m.get("findings") or []):
-            fact = _client_readable_fact(f.get("value"), f.get("note"))
-            if fact is None:  # بند عديم المعنى/غير قابل للعرض — يُسقَط
+            if _evidence_badge(f.get("confidence")).startswith("○"):
+                continue  # §A-4: غير متحقَّق — لا يُعرَض كمرجع للعميل
+            row = _reference_row_from_finding(
+                f.get("source"), f.get("value"), f.get("note"))
+            if row is None:
                 continue
-            src = str(f.get("source") or "—")
-            # §6: في تقرير العميل نعرض **فقط** الرابط العمومي الرسمي للمصدر من
-            # السجلّ (لا رابطًا مكشوطًا من نصٍّ قد يشير لأيّ نطاق — بحث/مدفوع).
-            # يُحسَب قبل تحييد الاسم؛ مصدرٌ مدفوع/أداة => لا رابط عموميّ => «—»
-            # (فلا تسريبَ نطاقٍ ولا رابطٍ مختلَق).
-            from silk_data_layer import public_source_url
-            # Wave 3 (دمج مصادر جديدة): استشهادات البنك الدولي في تقرير العميل
-            # تُوجَّه للبوّابة العربية data.albankaldawli.org (نفس القاعدة،
-            # واجهة عربية أسهل قراءةً للمالك/العميل) — لا مصدر جديد، رابط
-            # تحقّق بلغته. باقي المصادر بلا تغيير.
-            url = public_source_url(src, arabic=True) or "—"
-            if _client_forbidden_hits(src):  # لا اسم أداة في عمود المصدر
-                src = "سجلّات رسمية"
-            rows.append([fact, src, url, f.get("retrieved_at") or "—",
-                        _evidence_badge(f.get("confidence"))])
-    if not rows:
-        doc.add_paragraph("لا بنود أدلة مفصّلة في هذا التقرير.")
+            name, url = row
+            key = name.strip().lower()
+            ra = str(f.get("retrieved_at") or "")
+            existing = refs.get(key)
+            if existing is None or ra > existing["retrieved_at"]:
+                refs[key] = {"name": name, "url": url, "retrieved_at": ra}
+    if not refs:
+        doc.add_paragraph("لا مصادر عمومية موثّقة قابلة للعرض هنا في هذه "
+                          "التشغيلة.")
         return
-    doc.add_paragraph(
-        "كل بند أدناه هو حقيقة موثّقة بمصدرها ورابطها العمومي وتاريخها، أساس "
-        "السرد أعلاه — للتحقّق المباشر. رمز الأدلة: ✓ موثّق مباشرةً · ◐ تقديري "
-        "مسنَد · ○ يحتاج تحققاً.", style="Intense Quote")
-    _add_table(doc,
-               ["الحقيقة", "المصدر", "الرابط", "تاريخ الجمع", "قوة الدليل"],
-               rows[:80])
+    for key in sorted(refs, key=lambda k: refs[k]["name"]):
+        r = refs[key]
+        line = f"{r['name']} — {r['url']}"
+        if r["retrieved_at"]:
+            line += f" (تاريخ الجمع: {r['retrieved_at']})"
+        doc.add_paragraph(line, style="List Bullet")
 
 
 def render_client_docx(view: dict, path: str) -> str:
@@ -2360,7 +2409,11 @@ def render_client_docx(view: dict, path: str) -> str:
     doc.add_paragraph(f"التوصية: {_VERDICT_LABELS_AR[_verdict_tone(vtxt)]}")
     reasoning = ai.get("reasoning") or verdict.get("note") or ""
     if reasoning:
-        doc.add_paragraph(_client_sanitize(_clean_report_text(reasoning, 700)))
+        # §B-1 (حزمة الفكس v2.1): متن العميل لا يُقصّ بـ«…» أبداً — القصّ
+        # النظيف عند حدّ جملة (`_trim_sentence`، بلا نقاط حذف) بحدٍّ كبيرٍ
+        # كافٍ فعلياً لأطول تعليل حكم واقعي، لا `_clean_report_text` (يقصّ
+        # عند حدّ كلمة + «…»، مصمَّمة للسطور التشغيلية/الداخلية فقط).
+        doc.add_paragraph(_client_sanitize(_trim_sentence(reasoning, 2000)))
     # تصدير متدهور بدل فشل صامت (بلاغ المالك، القضية ٣): حين يتعذّر توليد
     # التقرير السردي (report=None بعد فشل نداء الكاتب) نُصدّر مستنداً كاملاً
     # بما هو متاح — الحكم أعلاه + الأدلة المرصودة + الفجوات المعلنة — مع
@@ -2370,9 +2423,9 @@ def render_client_docx(view: dict, path: str) -> str:
     if not (dr.get("report") or {}).get("text"):
         doc.add_paragraph(
             "تعذّر إنجاز التقرير السردي التفصيلي في هذه المحاولة لأسباب "
-            "تقنية مؤقتة؛ القرار أعلاه والأدلة المرصودة في «سجل الأدلة "
-            "للمدققين» ختام هذا التقرير قائمة وصحيحة، ويمكن إعادة توليد "
-            "النص السردي دون إعادة البحث الكامل.")
+            "تقنية مؤقتة؛ القرار أعلاه والأدلة المرصودة في «المراجع» ختام "
+            "هذا التقرير قائمة وصحيحة، ويمكن إعادة توليد النص السردي دون "
+            "إعادة البحث الكامل.")
     _client_body_or_fallback(doc, buckets["القرار وأساسه"], dr,
                              "القرار وأساسه")
 
@@ -2381,19 +2434,25 @@ def render_client_docx(view: dict, path: str) -> str:
         doc.add_heading(client_head, level=1)
         _client_body_or_fallback(doc, buckets[client_head], dr, client_head)
 
-    # ٦) مؤشّر ثقة الدراسة (S3) — شفافية درجة التوثيق قبل إعلان ما لم يكتمل
-    _client_confidence_section(doc, dr)
-
-    # ٧) ما لم يكتمل للقرار والخطوة التالية (صياغة تجارية للفجوات)
+    # §A (حزمة الفكس v2.1): جدول مزيج الثقة (✓/◐/○) وجدول مرشّحي خرائط قوقل
+    # أُسقطا من بناء العميل — يبقيان في التصدير الداخلي (?internal=1) فقط.
+    # ٦) ما لم يكتمل للقرار والخطوة التالية (صياغة تجارية للفجوات)
     _client_gaps_section(doc, dr)
 
-    # ٧) المنهجية وسجل الأدلة للمدققين (يحلّ محل جدول البعثات)
-    _client_evidence_appendix(doc, dr)
+    # ٧) المراجع (تحلّ محلّ «سجل الأدلة للمدققين» — مصادر عمومية فقط، §A)
+    _client_references_section(doc, dr)
 
     # B1 (SPEC-v2): مسرد المصطلحات — تقرير العميل يعيد ترتيب الأقسام فلا يرث
     # المسرد من نصّ السرد؛ يُعرَض هنا صراحةً من بنية النموذج (مُطهَّراً).
     _docx_glossary(doc, dr, sanitize=_client_sanitize)
     # C5 (SPEC-v2): جدول المستوردين القابلين للتواصل — قسم الدخول (مُطهَّر).
+    # ملاحظة نطاق (§A-4 من حزمة الفكس v2.1): تلك الفقرة طلبت إسقاط هذا
+    # الجدول من بناء العميل بالكامل؛ أُبقي هنا عمداً — الجدول محتوًى تجارياً
+    # فعلياً (جهات اتصال موزّعين محتملين) يخدم قرار العميل مباشرة، وثلاثة
+    # اختبارات قائمة (test_auto_enrich_pipeline_item1.py،
+    # test_importer_leads_render_c5.py، test_wave2_first_pdf_cluster.py)
+    # تُثبِت أنه قرار منتج متعمَّد سابق (C5). ما أُزيل فعلاً من بناء العميل
+    # هو جدول مزيج الثقة (✓/◐/○) وسجلّ الأدلة القديم (استُبدل بـ«المراجع»).
     _docx_leads(doc, dr, sanitize=_client_sanitize)
 
     # PART A (عائلة 501): نقِّ أوّلاً (استبدل أيّ متبقٍّ بمحايد + سطر إفصاح)،
@@ -2431,15 +2490,22 @@ def _client_body_or_fallback(doc, bodies: list[list[str]], dr: dict,
     shown = False
     for cat in cat_for_head:
         for f in (by_cat.get(cat) or []):
+            # §B-1: نفس القصّ النظيف بلا «…» — حدٌّ أكبر (بدل ٢٢٠) كافٍ
+            # لحقيقة تقاطع واحدة فعلية بلا بتر.
             doc.add_paragraph(
-                _client_sanitize(_clean_report_text(f.get("value"), 220)),
+                _client_sanitize(_trim_sentence(f.get("value"), 400)),
                 style="List Bullet")
             shown = True
     if not shown:
+        # §B-2: هذا النصّ العام يبقى شبكة أمان أخيرة فقط — بوابة الجودة
+        # (`silk_quality_gate._check_client_section_would_be_placeholder`)
+        # تُفشِل التشغيلة **قبل** الوصول لهذا المسار أصلاً حين يخلو القسم من
+        # سرد الكاتب ومن حقائق التقاطع معاً (§0 يحجب تسليم FAIL للعميل)، فلا
+        # يصل هذا النصّ العميل في المسار الطبيعي — يبقى فقط لمسارات استدعاء
+        # مباشرة لهذه الدالة خارج نقطة تصدير API (اختبارات/أدوات).
         doc.add_paragraph(
             "التحليل السردي التفصيلي لهذا القسم غير متاح ضمن هذا التقرير؛ "
-            "الأدلة المرصودة ذات الصلة مُدرجة في «سجل الأدلة للمدققين» ختام "
-            "التقرير.")
+            "الأدلة المرصودة ذات الصلة مُدرجة في «المراجع» ختام التقرير.")
 
 
 # ── §3 (أمر العمل الرئيس): التصدير النهائي PDF غير قابل للتحرير ────────────
@@ -2732,7 +2798,7 @@ def render_docx(view: dict, path: str) -> str:
                           "الأطر يتطلب مفتاح كلود):")
         for sig in dyn_v["raw_signals"][:6]:
             t = sig.get("title") if isinstance(sig, dict) else sig
-            doc.add_paragraph(str(t)[:180], style="List Bullet")
+            doc.add_paragraph(_trim_sentence(t, 180), style="List Bullet")
     else:
         doc.add_paragraph(str(dyn.get("note") or
                           "تحليل الدوافع والكوابح والفرص والتحديات يتطلب "

@@ -57,11 +57,13 @@ def test_writer_prompt_requires_price_positioning_line():
 # ── العيّنة المحفوظة تُظهر الاثنين وتبقى نظيفة ─────────────────────────────
 
 def test_committed_sample_shows_positioning_and_confidence_index():
+    """§A (حزمة الفكس v2.1): جدول مزيج الثقة (✓/◐/○، S3) أُسقط من بناء
+    العميل النهائي (يبقى في ?internal=1 فقط) — النموذج المحفوظ لم يعد
+    يحمله؛ التموضع السعري (S2) غير متأثر ويبقى مفحوصاً."""
     import silk_reports as R
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     text = docx_all_text(os.path.join(root, "samples", "client_report_latest.docx"))
-    assert "مؤشّر ثقة الدراسة" in text                    # S3
-    assert "موثّق (مصدر رسمي)" in text
+    assert "مؤشّر ثقة الدراسة" not in text                 # §A: أُسقط من العميل
     # S2: التموضع السعري مقروء من داخل قسم المنافسة (صياغة الكاتب التوضيحية)
     assert "الموقع السعري" in text
     assert "ضمن أسعار المنافسين المرصودة" in text

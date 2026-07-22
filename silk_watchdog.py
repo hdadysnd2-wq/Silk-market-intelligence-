@@ -136,6 +136,29 @@ def get_record(watchdog_id: int, path: str | None = None) -> dict | None:
         return None
 
 
+def record_blocked_export(analysis_id: int | None, product: str | None,
+                          market: str | None, gate_findings: list[dict],
+                          fmt: str) -> dict | None:
+    """سجلّ حدثاً مستقلاً حين تُحجَب تصدير عميل بسبب FAIL في بوابة الجودة
+    (§0 — الفكس الجذري: البوابة كانت «تحسين لا شرط تسليم»). سجلٌّ منفصلٌ
+    عن `observe()` الخاص بالتشغيلة نفسها (`kind="export_blocked"` لا
+    `"research"`) كي يميّز الحارس بين «شُحن» و«حُجب» بدل خلطهما."""
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    record = {
+        "analysis_id": analysis_id, "kind": "export_blocked",
+        "product": product, "market": market, "overall": RED,
+        "created_at": now, "contracts": {}, "economics": {},
+        "services": [], "failures": {},
+        "findings": [_finding(
+            "client_export_blocked", RED,
+            f"تصدير العميل ({fmt}) حُجب: بوابة الجودة FAIL "
+            f"({len(gate_findings or [])} ملاحظة).", "export_gate")],
+        "self_error": None,
+    }
+    _store(record)
+    return record
+
+
 # ── PART 1 — طبقة الاستشعار: حساب حتمي، صفر نداء كلود ───────────────────────
 
 _VENDOR_PLACEHOLDER_RE = re.compile(r"\[شعار[^\]]*\]|\[LOGO[^\]]*\]", re.I)
