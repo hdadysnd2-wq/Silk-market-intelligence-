@@ -419,6 +419,48 @@ def evidence_badge(confidence: object) -> str:
     return "○ غير متحقق"
 
 
+# WP-3 §1 — وسم المنشأ «(Claude tool-use)» يبقى داخلياً على DataPoint
+# ويُجرَّد للعرض فقط؛ هنا يُقرأ لسقف تصنيف الشارة، لا للعرض.
+TOOLUSE_MARK_RE = re.compile(r"\(\s*(?:Claude\s*)?tool[-\s]?use\s*\)", re.I)
+
+# وسم سجل الأدلة لبندٍ رفضته المصالحة الرقمية (WP-3 §2).
+RECONCILED_OUT_TAG = "متعارض — مستبعد"
+
+
+def is_agent_gathered(source: object) -> bool:
+    """هل جُمِع البند بوكيل بحث (وسم tool-use في مصدره الخام)؟"""
+    return bool(TOOLUSE_MARK_RE.search(str(source or "")))
+
+
+def evidence_badge_for(finding: object) -> str:
+    """WP-3 — شارة الأدلة الواعية بالمنشأ والمصالحة، لسجلّ الأدلة وكل عدّاد:
+
+    1. بند أسقطته المصالحة الرقمية (`evidence_tag` = «متعارض — مستبعد»)
+       يعرض وسمه بدل أي شارة — لا «✓ موثّق» لرقمٍ رفضه السرد/المصالحة.
+    2. بند مُعاد تأطيره «مؤشر سياقي» (رمز HS غير مؤكَّد) يُسقَف عند ◐.
+    3. بند جمعه وكيل بحث (وسم tool-use) يُسقَف درجةً واحدة تحت شارة مصدره
+       المسمّى (✓→◐، ◐→○) ما لم يُسانده رصدٌ مباشر من جامعٍ رسمي
+       (`corroborated=True` يضبطها ممرّ المصالحة في نموذج العرض).
+    القيم لا تتغيّر أبداً — التصنيف فقط (عقد عدم الاختلاق)."""
+    if isinstance(finding, dict):
+        f = finding
+    else:
+        f = {"confidence": getattr(finding, "confidence", None),
+             "source": getattr(finding, "source", None)}
+    tag = str(f.get("evidence_tag") or "")
+    if tag.startswith(RECONCILED_OUT_TAG):
+        return RECONCILED_OUT_TAG
+    badge = evidence_badge(f.get("confidence"))
+    if tag.startswith("مؤشر سياقي") and badge.startswith("✓"):
+        badge = "◐ ثانوي"
+    if is_agent_gathered(f.get("source")) and not f.get("corroborated"):
+        if badge.startswith("✓"):
+            return "◐ ثانوي"
+        if badge.startswith("◐"):
+            return "○ غير متحقق"
+    return badge
+
+
 def competition_phrase(hhi: object, top_share_pct: object = None,
                        n_suppliers: object = None) -> str:
     """حالة المنافسة بالعربية — مؤشر HHI الخام لا يصل المستخدم أبداً.

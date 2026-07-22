@@ -1603,9 +1603,10 @@ def _docx_deep_research(doc, view: dict) -> None:
                               "فجوة معلنة")
             continue
         for f in items:
+            from silk_narrative import evidence_badge_for
             doc.add_paragraph(str(f.get("value")), style="List Bullet")
             doc.add_paragraph(f"[{_clean_source_label(f.get('source'))} — "
-                              f"{_evidence_badge(f.get('confidence'))}] "
+                              f"{evidence_badge_for(f)}] "
                               f"{f.get('note') or ''}", style="Intense Quote")
 
     # سدّ خلل (الطبقة ٨): كان هذا الشرط متداخلاً داخل حلقة التقاطعات
@@ -1665,11 +1666,14 @@ def _docx_technical_appendix(doc, dr: dict) -> None:
             if dedup_key in seen:
                 continue
             seen.add(dedup_key)
+            # WP-3: شارة واعية بالمنشأ والمصالحة — بند رفضته المصالحة يعرض
+            # «متعارض — مستبعد» لا «✓ موثّق»؛ بند وكيل بحث غير مسانَد يُسقَف.
+            from silk_narrative import evidence_badge_for
             rows.append([
                 value_txt, source_txt,
                 _evidence_url(f.get("note"), f.get("source"), f.get("value")),
                 f.get("retrieved_at") or "—",
-                _evidence_badge(f.get("confidence"))])
+                evidence_badge_for(f)])
     if not rows:
         return
     doc.add_heading("سجل الأدلة للمدققين", level=2)
@@ -1679,6 +1683,9 @@ def _docx_technical_appendix(doc, dr: dict) -> None:
     _add_table(doc,
                ["الحقيقة", "المصدر", "الرابط", "تاريخ الجمع", "قوة الدليل"],
                rows[:80])
+    # WP-3 §2: الإفصاح الواحد عن كل تعارض رقمي حُسم في ممرّ المصالحة.
+    for c in ((dr.get("reconciliation") or {}).get("conflicts") or []):
+        doc.add_paragraph(str(c.get("note") or ""), style="Intense Quote")
 
 
 def _render_research_docx(doc, view: dict) -> None:
@@ -2095,15 +2102,32 @@ def _client_methodology_paragraph(dr: dict) -> str:
     فعلاً (المصادر العمومية وتواريخها) لا اختلاق."""
     missions = dr.get("missions") or {}
     # المصادر البشرية الفريدة الظاهرة فعلاً في النتائج (لا أسماء أدوات).
-    sources = set()
+    # WP-3 §3: (أ) مفتاح التفريد مُطبَّع (casefold + إسقاط المحارف غير
+    # المرئية + طيّ الفراغات) — «GAFTA secretariat» لا تتكرّر بصيغتين؛
+    # (ب) مصدرٌ كل بنوده أخطاء (value=None — خدمة فشلت في هذه التشغيلة)
+    # يُستبعَد من سطر «اعتمد هذا التقرير…» ويُذكَر في الحدود فقط
+    # (silk_render._deep_research_view).
+    contributed: dict[str, bool] = {}
+    display: dict[str, str] = {}
     for m in missions.values():
         for f in (m.get("findings") or []) if isinstance(m, dict) else []:
             src = _client_sanitize(_clean_source_label(f.get("source")))
             src = str(src or "").strip()
-            if src and src != "—" and not _client_forbidden_hits(src):
-                # اسم مصدر بشري فقط (قبل أيّ شرطة توضيحية).
-                sources.add(re.split(r"\s+[—\-(]", src)[0].strip())
-    src_list = "، ".join(sorted(s for s in sources if s)[:6]) or "مصادر رسمية عامة"
+            if not src or src == "—" or _client_forbidden_hits(src):
+                continue
+            # اسم مصدر بشري فقط (قبل أيّ شرطة توضيحية).
+            name = re.split(r"\s+[—\-(]", src)[0].strip()
+            norm = re.sub(r"\s+", " ",
+                          re.sub("[\\u200b-\\u200f\\ufeff]", "", name)
+                          ).strip().casefold()
+            if not norm:
+                continue
+            display.setdefault(norm, name)
+            contributed[norm] = contributed.get(norm, False) or (
+                f.get("value") is not None)
+    src_list = "، ".join(sorted(
+        display[n] for n, ok in contributed.items() if ok)[:6]) \
+        or "مصادر رسمية عامة"
     dates = sorted({str(f.get("retrieved_at"))
                     for m in missions.values()
                     if isinstance(m, dict)
@@ -2142,11 +2166,13 @@ def _client_confidence_section(doc, dr: dict) -> None:
     عبر بعثات الدراسة وتقاطعات المحلل، فيرى العميل شفافياً كم من الدراسة
     مرصود بمصدر رسمي مقابل مُقدَّر أو فجوة. تجميع بحت من درجات ثقة قائمة —
     لا رقم جديد ولا حكم، ويمرّ بحارس المصطلحات كأيّ قسم عميل."""
-    from silk_narrative import evidence_badge
+    # WP-3: العدّ بنفس الشارة الواعية بالمنشأ والمصالحة المعروضة في سجلّ
+    # الأدلة — «متعارض — مستبعد» يُحسَب غير متحقق، لا موثّقاً.
+    from silk_narrative import evidence_badge_for
     counts = {"verified": 0, "secondary": 0, "unverified": 0}
 
-    def _tally(conf) -> None:
-        badge = evidence_badge(conf)
+    def _tally(f) -> None:
+        badge = evidence_badge_for(f)
         if badge.startswith("✓"):
             counts["verified"] += 1
         elif badge.startswith("◐"):
@@ -2159,11 +2185,11 @@ def _client_confidence_section(doc, dr: dict) -> None:
             continue
         for f in (m.get("findings") or []):
             if _dp_conf(f) is not None:
-                _tally(_dp_conf(f))
+                _tally(f)
     for dps in ((dr.get("analyst") or {}).get("by_category") or {}).values():
         for f in (dps or []):
             if _dp_conf(f) is not None:
-                _tally(_dp_conf(f))
+                _tally(f)
 
     total = sum(counts.values())
     if not total:
@@ -2384,8 +2410,12 @@ def _client_references_section(doc, dr: dict) -> None:
         if not isinstance(m, dict):
             continue
         for f in (m.get("findings") or []):
-            if _evidence_badge(f.get("confidence")).startswith("○"):
-                continue  # §A-4: غير متحقَّق — لا يُعرَض كمرجع للعميل
+            from silk_narrative import RECONCILED_OUT_TAG, evidence_badge_for
+            badge = evidence_badge_for(f)
+            # WP-3: بند مستبعد بالمصالحة أو غير متحقَّق (بعد سقف المنشأ) —
+            # لا يُعرَض كمرجع للعميل (§A-4).
+            if badge.startswith("○") or badge.startswith(RECONCILED_OUT_TAG):
+                continue
             row = _reference_row_from_finding(
                 f.get("source"), f.get("value"), f.get("note"))
             if row is None:

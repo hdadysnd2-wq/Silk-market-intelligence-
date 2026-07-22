@@ -1010,6 +1010,73 @@ def _mission_trace_summary(failed: bool, summary: str) -> dict:
            "gaps": gaps_n}
 
 
+def _reconcile_numeric_conflicts(missions: dict, hs_flagged: bool) -> list[dict]:
+    """WP-3 §2 — ممرّ مصالحة رقمية قبل العرض، يعمل على بنود نموذج العرض
+    (يُعدِّل الوسوم فقط — القيم لا تُمَسّ أبداً، عقد عدم الاختلاق):
+
+    (أ) **قيمة قانونية واحدة لكل رقم**: قيمتان رقميتان كبيرتان (≥ 10000)
+        متقاربتان جداً (فرق نسبي ≤ 0.5%) وغير متطابقتين — بلاغ التدقيق:
+        6,733,369 مقابل 6,733,376 لواردات 2023 معاً في تقرير واحد — تُحسمان
+        لقيمة قانونية (الأعلى ثقةً، فالأولى وروداً)؛ الباقي يُوسَم
+        «متعارض — مستبعد» في سجلّ الأدلة، والتعارض يُفصَح عنه مرة واحدة
+        (قائمة conflicts المعادة). التقارب الرقمي تقريبٌ مُعلَن لهوية
+        (المؤشر، السنة) — لا مطابقة مواضيع بنيوية متاحة عبر البعثات.
+    (ب) عند تعليم رمز HS (غير مؤكَّد): بند كومتريد الرقمي يُوسَم «مؤشر
+        سياقي» فلا يعرض «✓ موثّق» بينما السرد نفسه يرفضه/يعيد تأطيره.
+    (ج) بند جمعه وكيل بحث (وسم tool-use) تسانده قيمة مطابقة من جامعٍ رسمي
+        مباشر => `corroborated` (يرفع سقف شارته — silk_narrative)."""
+    from silk_narrative import RECONCILED_OUT_TAG, is_agent_gathered
+    entries: list[dict] = []
+    for m in missions.values():
+        for f in (m.get("findings") or []):
+            v = f.get("value")
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                continue
+            entries.append(f)
+            if hs_flagged and "comtrade" in str(f.get("source") or "").lower():
+                f.setdefault("evidence_tag", "مؤشر سياقي — رمز غير مؤكَّد")
+    official_vals = [float(f["value"]) for f in entries
+                     if not is_agent_gathered(f.get("source"))]
+    for f in entries:
+        if is_agent_gathered(f.get("source")):
+            fv = float(f["value"])
+            if any(abs(fv - ov) <= max(abs(ov), 1.0) * 0.005
+                   for ov in official_vals):
+                f["corroborated"] = True
+    big = sorted((f for f in entries if abs(float(f["value"])) >= 10000),
+                 key=lambda f: float(f["value"]))
+    conflicts: list[dict] = []
+    i = 0
+    while i < len(big):
+        base = float(big[i]["value"])
+        cluster = [big[i]]
+        j = i + 1
+        while j < len(big) and \
+                abs(float(big[j]["value"]) - base) <= abs(base) * 0.005:
+            cluster.append(big[j])
+            j += 1
+        distinct = sorted({float(f["value"]) for f in cluster})
+        if len(distinct) > 1:
+            canonical = max(
+                cluster, key=lambda f: float(f.get("confidence") or 0.0))
+            cv = float(canonical["value"])
+            for f in cluster:
+                if float(f["value"]) != cv:
+                    f["evidence_tag"] = (
+                        f"{RECONCILED_OUT_TAG} — القيمة القانونية المعتمدة "
+                        f"{canonical['value']}")
+            conflicts.append({
+                "canonical_value": canonical["value"],
+                "canonical_source": canonical.get("source"),
+                "rejected_values": [v for v in distinct if v != cv],
+                "note": ("رُصدت قيمتان متقاربتان غير متطابقتين لما يبدو "
+                         f"المؤشر نفسه؛ اعتُمدت {canonical['value']} "
+                         "(الأعلى ثقة) واستُبعد الباقي موسوماً "
+                         f"«{RECONCILED_OUT_TAG}».")})
+        i = j
+    return conflicts
+
+
 def _mission_gap_lines(name: str, summary: str) -> list[str]:
     """فجوات بعثة معلنة داخل ملخّصها — كل بعثة، لا الفاشلة (صفر نتائج) فقط.
 
@@ -1526,7 +1593,9 @@ def _deep_research_view(result: dict) -> dict | None:
         d = {**d,
              "value": _strip_internal_plumbing(val) if isinstance(val, str) else val,
              "note": _strip_internal_plumbing(note) if isinstance(note, str) else note}
-        return {**d, "confidence_badge": evidence_badge(d.get("confidence"))}
+        # WP-3: الشارة الواعية بالمنشأ — بند جمعه وكيل بحث يُسقَف درجةً.
+        from silk_narrative import evidence_badge_for
+        return {**d, "confidence_badge": evidence_badge_for(d)}
     by_category = {cat: [_with_badge(x) for x in (dps or [])]
                   for cat, dps in (analyst.get("by_category") or {}).items()}
     report_out = dr.get("report") or {}
@@ -1636,6 +1705,25 @@ def _deep_research_view(result: dict) -> dict | None:
                       + (f" ({_missing})" if _missing else "")
                       + " — تُقرأ أرقام الاستيراد والتركّز والحصص كمؤشر سياقي "
                       "حتى تأكيد الرمز الصحيح.")
+    # WP-3 §2/§3: ممرّ المصالحة الرقمية (يوسم البنود المستبعدة/السياقية/
+    # المسانَدة) + إعلان المصادر التي فشل جمعها كلياً — مصدرٌ كل بنوده
+    # أخطاء (value=None) يُستبعَد من سطر «اعتمد هذا التقرير على مصادر…»
+    # (silk_reports._client_methodology_paragraph) ويُذكَر هنا في الحدود فقط.
+    _conflicts = _reconcile_numeric_conflicts(missions, bool(hs_flagged))
+    _src_ok: dict[str, bool] = {}
+    from silk_narrative import TOOLUSE_MARK_RE as _TUM
+    for _m in missions.values():
+        for _f in (_m.get("findings") or []):
+            _lbl = _TUM.sub("", str(_f.get("source") or "")).strip(" ،-—")
+            if not _lbl:
+                continue
+            _src_ok[_lbl] = _src_ok.get(_lbl, False) or (
+                _f.get("value") is not None)
+    for _lbl, _ok in sorted(_src_ok.items()):
+        if not _ok and not any(_lbl in l for l in limits):
+            limits.append(f"المصدر «{_lbl}» تعذّر جلب بياناته في هذه "
+                          "التشغيلة — لم يُعتمد عليه ولا يُدرَج ضمن مصادر "
+                          "التقرير.")
     _report_text_glossed, _glossary = _apply_merchant_language(
         _strip_internal_plumbing(report_out.get("report")))
     # البند ٥ (تدقيق «تحليل #1» DZA): عنوِن عمود السعر بالعملة المرصودة
@@ -1684,6 +1772,8 @@ def _deep_research_view(result: dict) -> dict | None:
         # أرقام كومتريد «مؤشر سياقي» عند التعليم. None/غير مؤكَّد لا يُطأطئ شيئاً.
         "hs_confirmation": hs_conf or {},
         "hs_flagged": bool(hs_flagged),
+        # WP-3 §2: تعارضات رقمية حُسمت — تُفصَح مرة واحدة في سجل الأدلة.
+        "reconciliation": {"conflicts": _conflicts},
         # Wave 3.1: سبب غياب السعر/كجم لكل صفّ سعر مرصود + سطر الفتح الوحيد.
         "price_rows": [
             {"value": (_dp(x).get("value")),
