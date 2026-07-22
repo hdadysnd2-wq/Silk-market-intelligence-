@@ -101,8 +101,12 @@ def _check_trailing_ellipsis(text: str) -> list[dict]:
     findings = []
     for block in re.split(r"\n\s*\n", text):
         s = block.strip()
+        # WP-2 §6(ب): الاقتباس الحرفي (كتلة > أو نصّ داخل «») يُستثنى — فقرة
+        # غير اقتباسية تنتهي بنقاط حذف = بتر يصل العميل => FAIL لا تحذير.
+        if s.startswith(">"):
+            continue
         if s.endswith("…") or s.endswith("..."):
-            findings.append({"check": "trailing_ellipsis", "repairable": True,
+            findings.append({"check": "trailing_ellipsis", "repairable": False,
                              "note": "نصّ ينتهي بنقاط حذف «…» — بتر غير نظيف "
                                      "(§5): يجب القصّ عند حدّ جملة أو العرض كاملاً"})
     return findings
@@ -169,16 +173,93 @@ def _check_dangling_cross_reference(text: str) -> list[dict]:
     return findings
 
 
+# WP-2 §6 — سقالة «إذن ماذا؟»/"So what" الحرفية والنصوص النائبة التقنية:
+# كلتاهما وصلت تقارير عملاء مُسلَّمة فعلاً (تدقيق 2026-07-22). FAIL لا تحذير.
+_SO_WHAT_LEAK_RE = re.compile(r"إذن\s*،?\s*ماذا|So\s+what", re.I)
+# مراجعة شيفرة PR #147: الإبرة العارية «أثر التتبع» كانت (أ) تُطابِق نثراً
+# مشروعاً («أثر التتبع الرقمي…») و(ب) **تفوّت هدفها الفعلي** — النص النائب
+# الحقيقي مُشكَّل («أثر التتبّع» بالشدّة) فلا يطابق الإبرة غير المشكَّلة.
+# الفكس: عبارات مميِّزة كاملة + مقارنة بعد تجريد التشكيل من الطرفين.
+_AR_DIACRITICS_STRIP_RE = re.compile("[ً-ْٰ]")
+
+
+def _strip_ar_diacritics(s: str) -> str:
+    """جرّد التشكيل العربي للمقارنة النصية فقط — لا يغيّر نصاً معروضاً."""
+    return _AR_DIACRITICS_STRIP_RE.sub("", s or "")
+
+
+_PLACEHOLDER_STRINGS = (
+    "بند تقني غير قابل للعرض المباشر",
+    "التفاصيل في أثر التتبع",
+    "التفاصيل الكاملة في أثر التتبع",
+    "التحليل السردي التفصيلي لهذا القسم غير متاح",
+)
+
+
+_GAPS_TRIGGER_RE = re.compile(r"فجوة بيانات|(?<![ء-ي])فجوات\s*:")
+
+
+def _check_gaps_closing_contradiction(dr: dict) -> list[dict]:
+    """WP-4 §3 — تناقض الختام مع المتن: القسم الختامي سيطبع «لا فجوة
+    جوهرية…» (كل مدخلات الفجوات الأربعة خالية — نفس المصدر الواحد
+    `silk_reports._client_gap_inputs`) بينما نص التقرير يعلن «فجوة بيانات»
+    صراحةً. الحالة المُسلَّمة فعلاً (2026-07-22): الختام نفى الفجوات بينما
+    قسم المخاطر عدّد ثلاثاً (حوكمة البنك الدولي/الموسمية/سعر الصرف)."""
+    text = ((dr.get("report") or {}).get("text") or "")
+    summaries = " ".join(str((m or {}).get("summary") or "")
+                         for m in (dr.get("missions") or {}).values())
+    combined = text + "\n" + summaries
+    # مراجعة شيفرة PR #147: «فجوات:» العارية كانت تطابق «الفجوات:» داخل
+    # سردٍ سليم («الفجوات: لا توجد فجوات جوهرية») فتُفشِل تقريراً صحيحاً —
+    # المُشغِّل الآن كلمة مستقلة (لا يسبقها حرف عربي) أو «فجوة بيانات».
+    if not _GAPS_TRIGGER_RE.search(combined):
+        return []
+    try:
+        from silk_reports import _client_gap_inputs
+        critical, informational = _client_gap_inputs(dr)
+    except Exception:  # noqa: BLE001 — فحص إضافي لا يكسر البوابة
+        return []
+    if critical or informational:
+        return []   # الختام لن يطبع النفي — لا تناقض
+    return [{"check": "gaps_closing_contradiction", "repairable": False,
+             "note": "التقرير يعلن «فجوة بيانات» في متنه بينما القسم "
+                    "الختامي سيطبع «لا فجوة جوهرية تمنع اتخاذ القرار» — "
+                    "تناقض فجوات حاجب للتسليم"}]
+
+
+def _check_client_scaffold_leak(text: str) -> list[dict]:
+    """WP-2 §6(أ) — العبارة السقالية الحرفية «إذن ماذا»/"So what" في نص
+    يواجه العميل: أثر تعليمة المحلل القديمة، نُزِعت في المصدر والمُنظِّف —
+    ظهورها هنا انحدار حاجب."""
+    if text and _SO_WHAT_LEAK_RE.search(text):
+        return [{"check": "client_scaffold_leak", "repairable": False,
+                 "note": "العبارة السقالية الحرفية «إذن ماذا»/So what "
+                        "ظهرت في نص التقرير — تُصاغ الآثار نثراً مدمجاً، "
+                        "لا سقالة تعليمات تصل العميل"}]
+    return []
+
+
+def _check_placeholder_leak(text: str) -> list[dict]:
+    """WP-2 §6(ج) — نصّ نائب تقني («بند تقني غير قابل للعرض المباشر»/«أثر
+    التتبع»/سطر عدم التوفّر العام) في نص يواجه العميل = فشل توليد سُلِّم
+    بدل أن يُعاد أو يُحجَب — FAIL."""
+    findings = []
+    plain = _strip_ar_diacritics(text or "")
+    for ph in _PLACEHOLDER_STRINGS:
+        if plain and _strip_ar_diacritics(ph) in plain:
+            findings.append({
+                "check": "placeholder_leak", "repairable": False,
+                "note": f"نصّ نائب تقني وصل نص التقرير: «{ph}» — فشل "
+                       "التوليد يُعاد أو يُحجَب التسليم، لا يُسلَّم نائب"})
+    return findings
+
+
 # §B-2 — بدل نصّ عام ثابت («التحليل السردي التفصيلي لهذا القسم غير متاح…»)
-# حين يخلو قسم عميل من سرد الكاتب ومن حقائق تقاطع معاً: FAIL يمنع التسليم
-# (§0) بدل نصّ عام دائم يوهم بتحليل لم يحدث فعلياً.
-_CLIENT_SECTION_FACT_CATEGORIES = {
-    "القرار وأساسه": ("swot",),
-    "السوق بالأرقام": ("demand",),
-    "المنافسة والتسعير والهامش": ("price_competitiveness",),
-    "مسار الدخول والمتطلبات": ("entry_cost", "entry_door"),
-    "المخاطر": (),
-}
+# حين يخلو قسم عميل من سرد الكاتب: FAIL يمنع التسليم (§0) بدل نصّ عام دائم
+# يوهم بتحليل لم يحدث فعلياً. WP-2 §3: حقائق التقاطع الخام لم تعد تكفي
+# وحدها (كانت تُسرَد نقاطاً حرفية بسقالة «إذن ماذا» وبتر) — القسم بلا سرد
+# كاتب يمرّ فقط إن حمل نثر الصياغة التجارية المُحضَّر
+# (`dr["client_fallback_prose"]`، نداء كاتب مصغّر قبل البوابة).
 
 
 def _check_client_section_would_be_placeholder(dr: dict) -> list[dict]:
@@ -206,21 +287,22 @@ def _check_client_section_would_be_placeholder(dr: dict) -> list[dict]:
         head = _CLIENT_SECTION_MAP.get(title)
         if head:
             buckets[head].append(body)
-    by_cat = (dr.get("analyst") or {}).get("by_category") or {}
+    prose_map = dr.get("client_fallback_prose") or {}
     findings = []
     for head in _CLIENT_SECTION_ORDER:
         has_body = any(any(str(ln).strip() for ln in body)
                       for body in buckets[head])
         if has_body:
             continue
-        cats = _CLIENT_SECTION_FACT_CATEGORIES.get(head, ())
-        has_facts = any((by_cat.get(cat) or []) for cat in cats)
-        if not has_facts:
-            findings.append({
-                "check": "client_section_placeholder", "repairable": False,
-                "note": f"قسم «{head}» سيُعرَض للعميل بنصٍّ عام ثابت بدل "
-                       "تحليل حقيقي — لا سرد كاتب ولا حقائق تقاطع مهيكلة "
-                       "له في هذه التشغيلة"})
+        # WP-2 §3: القسم بلا سرد كاتب يمرّ فقط بنثر الصياغة التجارية
+        # المُحضَّر — لا تكفي حقائق التقاطع الخام (كانت تُسرَد نقاطاً حرفية).
+        if str(prose_map.get(head) or "").strip():
+            continue
+        findings.append({
+            "check": "client_section_placeholder", "repairable": False,
+            "note": f"قسم «{head}» سيُعرَض للعميل بنصٍّ عام ثابت بدل "
+                   "تحليل حقيقي — لا سرد كاتب ولا نثر صياغة تجارية "
+                   "مُحضَّر له في هذه التشغيلة"})
     return findings
 
 
@@ -295,7 +377,9 @@ def _check_confidence_band_label(text: str) -> list[dict]:
             pct = int(pct_s)
         except ValueError:
             continue
-        expected = "عالية" if pct >= 80 else ("متوسطة" if pct >= 60 else "منخفضة")
+        # WP-1 §4: العتبات من سُلَّم المعايرة الواحد — لا نسخة محلية.
+        from silk_style_contract import confidence_band_label
+        expected = confidence_band_label(pct)
         if label != expected:
             findings.append({
                 "check": "confidence_band_mismatch", "repairable": False,
@@ -350,9 +434,12 @@ def _check_recommendation_tier_label_consistency(dr: dict) -> list[dict]:
     except Exception:  # noqa: BLE001 — فحص إضافي، لا يكسر البوابة
         return []
     verdict = dr.get("verdict") or {}
-    v_raw = ((verdict.get("ai") or {}).get("verdict")
-            or verdict.get("verdict") or "")
-    if _verdict_tone(v_raw) != "conditional":
+    # مراجعة شيفرة PR #147: الحكم من المصدر الواحد (الحتمي أولاً) — القراءة
+    # القديمة (ai أولاً) كانت تُفشِل تقريراً صحيحاً أو تتخطّى خطأً حقيقياً
+    # كلما اختلفت قراءة كلود عن الحكم الحتمي المعروض.
+    from silk_narrative import authoritative_verdict
+    v_raw, _ = authoritative_verdict(verdict)
+    if _verdict_tone(v_raw or "") != "conditional":
         return []
     if "التوصية بالدخول" in text:
         return [{
@@ -960,6 +1047,52 @@ _REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
                            "currency_label_mismatch"}
 
 
+# WP-7 §3 — النصوص النائبة الصلبة التي لا يجوز أن تبلغ **المستند النهائي
+# المبني** أبداً (سطر عدم التوفّر العام مستثنى هنا: مسار التدهور المتعمَّد
+# للاستدعاء المباشر؛ تسليمه عبر API محكوم بفحص القالب client_section_placeholder).
+_ARTIFACT_HARD_PLACEHOLDERS = (
+    "بند تقني غير قابل للعرض المباشر",
+    "التفاصيل في أثر التتبع",
+    "التفاصيل الكاملة في أثر التتبع",
+)
+
+
+def run_client_artifact_text_gate(text: str) -> list[dict]:
+    """WP-7 §3 — بوابة نصّ المُنتَج النهائي: تُشغَّل على النص الكامل
+    المستخرَج من مستند العميل **بعد** بنائه (docx — ومنه يُشتق الـPDF)، لا
+    على القالب فقط: طبقة العرض نفسها قد تُدخِل نصاً لم يمرّ على فحوصات
+    القالب. تعيد قائمة بنود؛ أي بند = رفض التسليم (RuntimeError في
+    `render_client_docx`)."""
+    findings: list[dict] = []
+    if not text:
+        return findings
+    findings += _check_client_scaffold_leak(text)
+    _plain = _strip_ar_diacritics(text)
+    for ph in _ARTIFACT_HARD_PLACEHOLDERS:
+        if _strip_ar_diacritics(ph) in _plain:
+            findings.append({
+                "check": "placeholder_leak", "repairable": False,
+                "note": f"نصّ نائب تقني في المستند النهائي: «{ph}»"})
+    # بتر «…» على مستوى السطر (نص docx المستخرَج سطرٌ لكل فقرة، لا كتل
+    # منفصلة بأسطر فارغة) — الاقتباسات (»/") الخاتمة مستثناة بنيوياً لأن
+    # السطر حينها لا ينتهي بالنقاط نفسها.
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith(">"):
+            continue
+        if len(s) > 25 and (s.endswith("…") or s.endswith("...")):
+            findings.append({
+                "check": "trailing_ellipsis", "repairable": False,
+                "note": f"سطر في المستند النهائي ينتهي بنقاط حذف: "
+                       f"'...{s[-40:]}'"})
+    if "لا فجوة جوهرية" in text and "فجوة بيانات" in text:
+        findings.append({
+            "check": "gaps_closing_contradiction", "repairable": False,
+            "note": "المستند النهائي يعلن «فجوة بيانات» ويطبع «لا فجوة "
+                   "جوهرية» معاً — تناقض فجوات في المُنتَج المبني"})
+    return findings
+
+
 def run_quality_gate(view: dict) -> dict:
     """شغّل بوابة الجودة على `view["deep_research"]` — يعيد
     {"verdict": PASS|WARN|FAIL, "findings": [...], "methodology_notes": [...]}.
@@ -996,6 +1129,9 @@ def run_quality_gate(view: dict) -> dict:
     findings += _check_hhi_false_precision(text)
     findings += _check_supplier_rank_contiguity(text)
     findings += _check_client_section_would_be_placeholder(dr)
+    findings += _check_client_scaffold_leak(combined_text)
+    findings += _check_placeholder_leak(combined_text)
+    findings += _check_gaps_closing_contradiction(dr)
     findings += _check_internal_plumbing_leak(text)
     findings += _check_english_field_and_mission_key_leak(text)
     findings += _check_confidentiality_leaks(combined_text)
@@ -1024,7 +1160,16 @@ def run_quality_gate(view: dict) -> dict:
                             # عميل بلا محتوى فعلي — كل هذه تصل العميل
                             # كأخطاء بنيوية، لا ملاحظات أسلوبية.
                             "orphan_short_token", "dangling_cross_reference",
-                            "client_section_placeholder")
+                            "client_section_placeholder",
+                            # WP-1 §4: تسمية نطاق ثقة لا تطابق رقمها = خطأ
+                            # يصل وجه التقرير — FAIL لا تحذير.
+                            "confidence_band_mismatch",
+                            # WP-2 §6: سقالة «إذن ماذا»/نصّ نائب تقني/بتر
+                            # «…» غير اقتباسي — كلها وصلت عملاء فعلاً.
+                            "client_scaffold_leak", "placeholder_leak",
+                            "trailing_ellipsis",
+                            # WP-4 §3: ختامٌ ينفي الفجوات بينما المتن يعلنها.
+                            "gaps_closing_contradiction")
             for f in non_repairable) \
             or guard_fired:
         verdict = FAIL

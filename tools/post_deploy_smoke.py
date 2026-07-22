@@ -87,8 +87,16 @@ def _check_exports(base: str, aid: int, key: str | None,
     else:
         print(f"  ✓ report.md 200 — {len(body)} بايت")
 
-    # report.docx — عائلة 501: هنا يُلتقَط الفشل الحيّ
+    # report.docx — عائلة 501: هنا يُلتقَط الفشل الحيّ.
+    # مراجعة شيفرة PR #147: بوابة الجودة صارت **شرط تسليم** — 409 بجسم
+    # quality_gate_fail على قالب العميل نتيجةٌ مشروعة (حجب تسليم متعمَّد)
+    # لا عطل نشر؛ عندها تُفحَص آلية التصدير نفسها عبر النسخة الداخلية
+    # (?internal=1) التي لا تمرّ بالبوابة. أي حالة أخرى غير 200 تبقى فشلاً.
     st, body = _get(base, f"/analyses/{aid}/report.docx", key)
+    if st == 409 and b"quality_gate_fail" in (body or b""):
+        print(f"  ~ report.docx 409 — بوابة الجودة حجبت تسليم العميل "
+              "(سلوك مقصود)؛ نفحص الآلية عبر النسخة الداخلية")
+        st, body = _get(base, f"/analyses/{aid}/report.docx?internal=1", key)
     if st != 200:
         fails.append(f"report.docx id={aid}: HTTP {st} — {(body or b'')[:200]!r}")
     elif not (body[:2] == b"PK"):     # docx = حاوية ZIP
@@ -107,8 +115,13 @@ def _check_exports(base: str, aid: int, key: str | None,
             opened = "فشل الفتح"
         print(f"  ✓ report.docx 200 — {len(body)} بايت، {opened}")
 
-    # report.pdf — §3: المُسلَّم النهائي؛ يُثبِت أن soffice يعمل حياً
+    # report.pdf — §3: المُسلَّم النهائي؛ يُثبِت أن soffice يعمل حياً.
+    # نفس معاملة 409 البوابة (حجب مقصود => النسخة الداخلية تثبت الآلية).
     st, body = _get(base, f"/analyses/{aid}/report.pdf", key)
+    if st == 409 and b"quality_gate_fail" in (body or b""):
+        print(f"  ~ report.pdf 409 — بوابة الجودة حجبت تسليم العميل "
+              "(سلوك مقصود)؛ نفحص الآلية عبر النسخة الداخلية")
+        st, body = _get(base, f"/analyses/{aid}/report.pdf?internal=1", key)
     if st != 200:
         fails.append(f"report.pdf id={aid}: HTTP {st} — {(body or b'')[:200]!r} "
                      "(503 = محرّك تحويل PDF غائب على النشر)")

@@ -163,6 +163,32 @@ def _trim_sentence(s: object, max_len: int = 240) -> str:
     return (cut[:sp] if sp > 0 else cut).rstrip()
 
 
+# WP-2 §1 — النصّ النائب التقني (يبقى في المسارات الداخلية/?internal=1 فقط).
+_UNRENDERABLE_NOTE = "بند تقني غير قابل للعرض المباشر"
+
+
+def _client_prose(s: object, max_len: int = 400) -> str:
+    """نص آمن لمتن **العميل** — WP-2 §1: لا نصّ نائب يصل العميل أبداً.
+    كتلة JSON/سياج من ردٍّ خام: يُحاوَل استخلاص المضمون (نفس مستخلص
+    `silk_render._strip_raw_json_leak`)، وإن تعذّر تُسقَط الكتلة ("") —
+    فيخلو القسم وتلتقطه بوابة الجودة (FAIL يمنع التسليم) بدل تسليم نائبٍ
+    مثل «بند تقني غير قابل للعرض المباشر — التفاصيل في أثر التتبع»."""
+    text = str(s or "").strip()
+    if not text:
+        return ""
+    if text.lstrip().startswith(("{", "```")):
+        try:
+            from silk_render import _strip_raw_json_leak
+            extracted = str(_strip_raw_json_leak(text) or "").strip()
+        except Exception:  # noqa: BLE001 — تعذّر الاستخلاص = إسقاط
+            extracted = ""
+        if (not extracted or extracted.lstrip().startswith(("{", "```"))
+                or "تعذّر تفسير" in extracted):
+            return ""
+        text = extracted
+    return _trim_sentence(text, max_len)
+
+
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 _ITALIC_RE = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
 _CODE_SPAN_RE = re.compile(r"`([^`]*)`")
@@ -448,6 +474,74 @@ def _apply_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
             continue
 
 
+# WP-5 — انعكاس الأقواس في PDF: فقرة عربية bidi تحوي مقطعاً لاتينياً/رقمياً
+# بين قوسين كانت تُصيَّر «) ... (» بعد تحويل LibreOffice headless — خط
+# الأنابيب لم يكن يحقن أي عزل اتجاه حول المقاطع مختلطة الاتجاه. الفكس:
+# علامة RLM (U+200F) بعد القوس الافتتاحي وقبل الختامي حين يحوي المقطع
+# لاتينية/أرقاماً في سياق عربي — فيلتصق القوسان بجارٍ قويّ الاتجاه RTL
+# ويُصيَّران باتجاههما الصحيح. لا تغيير في أي محتوى مرئي (RLM غير مرئية).
+_RLM = "\u200f"
+_BRACKET_SPAN_RE = re.compile(r"([(\[])([^()\[\]\n]*[A-Za-z0-9][^()\[\]\n]*)([)\]])")
+_ARABIC_CHAR_RE = re.compile("[\\u0600-\\u06ff]")
+
+
+def _bidi_isolate_brackets(text: str) -> str:
+    """احقن RLM داخل أقواس المقاطع اللاتينية/الرقمية في نصٍّ عربي السياق —
+    تُطبَّق قبل `_finalize_rtl` على كل run. نص بلا عربية يمرّ كما هو."""
+    if not text or not _ARABIC_CHAR_RE.search(text):
+        return text
+
+    def _wrap(m: "re.Match") -> str:
+        inner = m.group(2)
+        if inner.startswith(_RLM) and inner.endswith(_RLM):
+            return m.group(0)   # مُعالَج سلفاً — لا ازدواج
+        return f"{m.group(1)}{_RLM}{inner}{_RLM}{m.group(3)}"
+
+    return _BRACKET_SPAN_RE.sub(_wrap, text)
+
+
+# WP-5 §2 — الفحص الآلي على نصّ الـPDF المستخرَج: قوس افتتاحي يتبعه فراغ/
+# نهاية سطر أثرُ انعكاسٍ نموذجي («) ... (» تُستخرَج "(" معلّقةً قبل فراغ).
+_SUSPICIOUS_OPEN_BRACKET_RE = re.compile(r"\((?=\s|$)", re.M)
+
+
+def count_suspicious_brackets(text: str) -> int:
+    """عدد الأقواس الافتتاحية المعلّقة (يتبعها فراغ/نهاية سطر) في نصٍّ
+    مستخرج من PDF — مقياس انعكاس الأقواس، صفر على مستند سليم تقريباً."""
+    return len(_SUSPICIOUS_OPEN_BRACKET_RE.findall(text or ""))
+
+
+def _pdf_bracket_check(pdf_path: str) -> None:
+    """WP-5: افحص الـPDF النهائي — فوق العتبة (SILK_PDF_BRACKET_FAIL_MAX،
+    افتراضياً 3) يفشل التصدير بصوت عالٍ بدل تسليم مستند بأقواس معكوسة.
+    بلا pymupdf (بيئة بلا أداة استخراج) يُتخطّى الفحص — لا ادعاء فحصٍ
+    لم يحدث (يُسجَّل سطر تشخيص فقط)."""
+    try:
+        import fitz  # pymupdf — حاضرة على بيئة e2e/الإنتاج
+    except ImportError:
+        log.info("pdf bracket check skipped: pymupdf غير مثبّتة")
+        return
+    try:
+        with fitz.open(pdf_path) as pdf:
+            text = "\n".join(page.get_text() for page in pdf)
+    except Exception as e:  # noqa: BLE001 — تعذّر الاستخراج ≠ مستند معكوس
+        log.warning("pdf bracket check extraction failed: %s", e)
+        return
+    import os
+    n = count_suspicious_brackets(text)
+    # مراجعة شيفرة PR #147: قيمة بيئة مشوَّهة كانت تُفجِّر ValueError خاماً
+    # فتقتل كل تصدير PDF — تراجُع آمن للافتراضي بدل الانهيار.
+    try:
+        limit = int(os.environ.get("SILK_PDF_BRACKET_FAIL_MAX", "3"))
+    except (TypeError, ValueError):
+        limit = 3
+    if n > limit:
+        raise RuntimeError(
+            f"فشل فحص اتجاه الأقواس في الـPDF النهائي: {n} قوساً افتتاحياً "
+            f"معلّقاً (العتبة {limit}) — مؤشر انعكاس أقواس RTL؛ لا يُسلَّم "
+            "مستند معكوس الأقواس")
+
+
 def _finalize_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
     """§4: تمريرة ختامية تضمن أن **كل** فقرة (bidi+محاذاة يمين) و**كل** run
     (<w:rtl/> + خطّ عربي ascii+cs) تحمل الاتجاه صراحةً — لا اعتماداً على وراثة
@@ -456,6 +550,12 @@ def _finalize_rtl(doc, font: str = _RTL_BODY_FONT) -> None:
     def _do_paragraph(p):
         _set_rtl_paragraph(p._p.get_or_add_pPr())
         for run in p.runs:
+            # WP-5: عزل اتجاه أقواس المقاطع اللاتينية/الرقمية (RLM) قبل
+            # ضبط rtl — يمنع انعكاس «) ... (» في تحويل PDF.
+            if run.text:
+                isolated = _bidi_isolate_brackets(run.text)
+                if isolated != run.text:
+                    run.text = isolated
             _set_rtl_run_fonts(run._r.get_or_add_rPr(), font)
             # Wave 2 (البند ٨): العلامة «سِلك» => «سلك» متّصلة في **الوورد**
             # (وثيقة المشغّل القابلة للتحرير). أمّا التجريد الكامل لكلّ الحركات
@@ -626,13 +726,14 @@ def _match_known_verdict_label(s: str) -> "str | None":
 
 
 def _resolve_vtxt(dr: dict) -> str:
-    """سلسلة الحكم الخام الواحدة (GO/WATCH/...) — نقطة اشتقاقٍ مشتركة بدل
-    تكرار `ai.get("verdict") or verdict.get("verdict") or ""` في كل مُصيّر
+    """سلسلة الحكم الخام الواحدة (GO/WATCH/...) — نقطة اشتقاقٍ مشتركة
     (Master Prompt Part 2 §B، البند ٤: لا يُشتقّ الحكم من نصٍّ منفصل في أكثر
-    من موضع)."""
-    verdict = (dr or {}).get("verdict") or {}
-    ai = verdict.get("ai") or {}
-    return ai.get("verdict") or verdict.get("verdict") or ""
+    من موضع). WP-1: **الحكم الحتمي أولاً** عبر المصدر الواحد
+    `silk_narrative.authoritative_verdict` — `ai.verdict` قراءة استشارية
+    داخلية لا توصية معروضة (كان الترتيب معكوساً فتناقضت الشارة مع المتن)."""
+    from silk_narrative import authoritative_verdict
+    raw, _ = authoritative_verdict((dr or {}).get("verdict"))
+    return raw or ""
 
 
 def _declared_verdict_labels(doc) -> list[str]:
@@ -1467,6 +1568,16 @@ def _docx_deep_research(doc, view: dict) -> None:
     doc.add_heading("قسم البحث العميق — التقاطعات الخمسة والمحلل الشامل",
                     level=1)
     _stamp_degraded_banner(doc, view)
+    # WP-7 §1: ختم التجاوز على النسخ الداخلية — نسخة عميل سُلِّمت بتجاوز
+    # مالكٍ لبوابة الجودة تُوثَّق هنا مع ملاحظات البوابة المرفقة.
+    for ov in (view.get("owner_override_history") or []):
+        doc.add_paragraph(
+            f"⚠ سُلِّمت نسخة عميل من هذا التقرير بتجاوز مالكٍ لبوابة "
+            f"الجودة بتاريخ {ov.get('created_at')} — ملاحظات البوابة مرفقة:",
+            style="Intense Quote")
+        for gf in (ov.get("gate_findings") or [])[:6]:
+            doc.add_paragraph(f"• {gf.get('check')}: {gf.get('note')}",
+                              style="Intense Quote")
 
     # نفس تصنيف/تعريب الحكم المستعمَل في الغلاف (_VERDICT_LABELS_AR عبر
     # _verdict_tone) — لا مصدر عرض ثانٍ قد يختلف نصّه عن الأول لنفس الرمز
@@ -1479,6 +1590,13 @@ def _docx_deep_research(doc, view: dict) -> None:
         f"السوق: {market.get('name_ar') or market.get('name_en')} "
         f"({market.get('iso3')}) — الحكم: "
         f"{_VERDICT_LABELS_AR[_verdict_tone(v_raw)]}")
+    # WP-1 §2: قراءة كلود حقل استشاري في التصدير الداخلي فقط — تُعرَض
+    # موسومة «قراءة تحليلية للذكاء الاصطناعي»، لا توصيةً ثانية.
+    if ai.get("verdict"):
+        from silk_narrative import verdict_ar as _var
+        doc.add_paragraph(
+            f"قراءة تحليلية للذكاء الاصطناعي (استشارية — ليست التوصية): "
+            f"{_var(ai.get('verdict'))}", style="Intense Quote")
     if ai.get("reasoning"):
         doc.add_paragraph(str(ai["reasoning"]), style="Intense Quote")
 
@@ -1569,9 +1687,10 @@ def _docx_deep_research(doc, view: dict) -> None:
                               "فجوة معلنة")
             continue
         for f in items:
+            from silk_narrative import evidence_badge_for
             doc.add_paragraph(str(f.get("value")), style="List Bullet")
             doc.add_paragraph(f"[{_clean_source_label(f.get('source'))} — "
-                              f"{_evidence_badge(f.get('confidence'))}] "
+                              f"{evidence_badge_for(f)}] "
                               f"{f.get('note') or ''}", style="Intense Quote")
 
     # سدّ خلل (الطبقة ٨): كان هذا الشرط متداخلاً داخل حلقة التقاطعات
@@ -1631,11 +1750,14 @@ def _docx_technical_appendix(doc, dr: dict) -> None:
             if dedup_key in seen:
                 continue
             seen.add(dedup_key)
+            # WP-3: شارة واعية بالمنشأ والمصالحة — بند رفضته المصالحة يعرض
+            # «متعارض — مستبعد» لا «✓ موثّق»؛ بند وكيل بحث غير مسانَد يُسقَف.
+            from silk_narrative import evidence_badge_for
             rows.append([
                 value_txt, source_txt,
                 _evidence_url(f.get("note"), f.get("source"), f.get("value")),
                 f.get("retrieved_at") or "—",
-                _evidence_badge(f.get("confidence"))])
+                evidence_badge_for(f)])
     if not rows:
         return
     doc.add_heading("سجل الأدلة للمدققين", level=2)
@@ -1645,6 +1767,9 @@ def _docx_technical_appendix(doc, dr: dict) -> None:
     _add_table(doc,
                ["الحقيقة", "المصدر", "الرابط", "تاريخ الجمع", "قوة الدليل"],
                rows[:80])
+    # WP-3 §2: الإفصاح الواحد عن كل تعارض رقمي حُسم في ممرّ المصالحة.
+    for c in ((dr.get("reconciliation") or {}).get("conflicts") or []):
+        doc.add_paragraph(str(c.get("note") or ""), style="Intense Quote")
 
 
 def _render_research_docx(doc, view: dict) -> None:
@@ -2061,15 +2186,32 @@ def _client_methodology_paragraph(dr: dict) -> str:
     فعلاً (المصادر العمومية وتواريخها) لا اختلاق."""
     missions = dr.get("missions") or {}
     # المصادر البشرية الفريدة الظاهرة فعلاً في النتائج (لا أسماء أدوات).
-    sources = set()
+    # WP-3 §3: (أ) مفتاح التفريد مُطبَّع (casefold + إسقاط المحارف غير
+    # المرئية + طيّ الفراغات) — «GAFTA secretariat» لا تتكرّر بصيغتين؛
+    # (ب) مصدرٌ كل بنوده أخطاء (value=None — خدمة فشلت في هذه التشغيلة)
+    # يُستبعَد من سطر «اعتمد هذا التقرير…» ويُذكَر في الحدود فقط
+    # (silk_render._deep_research_view).
+    contributed: dict[str, bool] = {}
+    display: dict[str, str] = {}
     for m in missions.values():
         for f in (m.get("findings") or []) if isinstance(m, dict) else []:
             src = _client_sanitize(_clean_source_label(f.get("source")))
             src = str(src or "").strip()
-            if src and src != "—" and not _client_forbidden_hits(src):
-                # اسم مصدر بشري فقط (قبل أيّ شرطة توضيحية).
-                sources.add(re.split(r"\s+[—\-(]", src)[0].strip())
-    src_list = "، ".join(sorted(s for s in sources if s)[:6]) or "مصادر رسمية عامة"
+            if not src or src == "—" or _client_forbidden_hits(src):
+                continue
+            # اسم مصدر بشري فقط (قبل أيّ شرطة توضيحية).
+            name = re.split(r"\s+[—\-(]", src)[0].strip()
+            norm = re.sub(r"\s+", " ",
+                          re.sub("[\\u200b-\\u200f\\ufeff]", "", name)
+                          ).strip().casefold()
+            if not norm:
+                continue
+            display.setdefault(norm, name)
+            contributed[norm] = contributed.get(norm, False) or (
+                f.get("value") is not None)
+    src_list = "، ".join(sorted(
+        display[n] for n, ok in contributed.items() if ok)[:6]) \
+        or "مصادر رسمية عامة"
     dates = sorted({str(f.get("retrieved_at"))
                     for m in missions.values()
                     if isinstance(m, dict)
@@ -2108,11 +2250,13 @@ def _client_confidence_section(doc, dr: dict) -> None:
     عبر بعثات الدراسة وتقاطعات المحلل، فيرى العميل شفافياً كم من الدراسة
     مرصود بمصدر رسمي مقابل مُقدَّر أو فجوة. تجميع بحت من درجات ثقة قائمة —
     لا رقم جديد ولا حكم، ويمرّ بحارس المصطلحات كأيّ قسم عميل."""
-    from silk_narrative import evidence_badge
+    # WP-3: العدّ بنفس الشارة الواعية بالمنشأ والمصالحة المعروضة في سجلّ
+    # الأدلة — «متعارض — مستبعد» يُحسَب غير متحقق، لا موثّقاً.
+    from silk_narrative import evidence_badge_for
     counts = {"verified": 0, "secondary": 0, "unverified": 0}
 
-    def _tally(conf) -> None:
-        badge = evidence_badge(conf)
+    def _tally(f) -> None:
+        badge = evidence_badge_for(f)
         if badge.startswith("✓"):
             counts["verified"] += 1
         elif badge.startswith("◐"):
@@ -2125,11 +2269,11 @@ def _client_confidence_section(doc, dr: dict) -> None:
             continue
         for f in (m.get("findings") or []):
             if _dp_conf(f) is not None:
-                _tally(_dp_conf(f))
+                _tally(f)
     for dps in ((dr.get("analyst") or {}).get("by_category") or {}).values():
         for f in (dps or []):
             if _dp_conf(f) is not None:
-                _tally(_dp_conf(f))
+                _tally(f)
 
     total = sum(counts.values())
     if not total:
@@ -2148,24 +2292,26 @@ def _client_confidence_section(doc, dr: dict) -> None:
         ["○ غير متحقق", str(counts["unverified"])]])
 
 
-def _client_gaps_section(doc, dr: dict) -> None:
-    """قسم "ما لم يكتمل للقرار والخطوة التالية" — يحوّل كل تقاطع بلا أدلة
-    كافية لصياغة تجارية موحّدة (بلاغ المالك النقطة ٣)، ثم الخطوة التالية.
-    لا عناوين فارغة متتالية: إن اكتمل كل شيء، سطر إيجابي واحد."""
-    doc.add_heading("ما لم يكتمل للقرار، والخطوة التالية", level=1)
+def _client_gap_inputs(dr: dict) -> "tuple[list[str], list[str]]":
+    """(الفجوات الحرجة للقرار، الفجوات المعلنة غير الحاجبة) — WP-4: المصدر
+    الواحد الذي يقرأه قسم «ما لم يكتمل للقرار» **وحارس تناقض الختام** في
+    بوابة الجودة معاً، فلا يوجد مساران للحقيقة (كان الختام يطبع «لا فجوة
+    جوهرية» بينما قسم المخاطر يعلن ثلاث فجوات بيانات حقيقية — فجوات
+    البعثات المعلنة لم تكن مدخلاً لهذا القسم إطلاقاً).
+
+    الحرجة (تمنع اكتمال القرار): تقاطعات المحلل الغائبة، باب الدخول الأول
+    غير المحقَّق، شروط قلب الحكم غير المحقَّقة. غير الحاجبة (تقيّد اليقين):
+    فجوات البعثات المعلنة (missions[*] «فجوات: …» — مطهَّرة، مقصوصة عند حدّ
+    جملة، بلا تكرار، بسقف بندين لكل بعثة)."""
     analyst = dr.get("analyst") or {}
     missing = analyst.get("missing_categories") or []
     by_cat = analyst.get("by_category") or {}
 
-    gap_lines: list[str] = []
+    critical: list[str] = []
     for cat in missing:
         what, how = _CLIENT_GAP_WHAT.get(
             cat, ("بند تحليلي إضافي", "بحثاً تكميلياً موجّهاً"))
-        gap_lines.append(_CLIENT_GAP_TEMPLATE.format(what=what, how=how))
-    # بلاغ مراجعة المالك (منطق قسم الفجوات): بند حاسم للقرار موسوم ○ غير
-    # متحقق (قناة الدخول الأولى) يجب أن يظهر هنا حتى لو اكتملت التقاطعات —
-    # لا يُقال «لا فجوة جوهرية» بينما الموزّع الأول غير مؤكَّد. باب الدخول
-    # المرصود بثقة دون عتبة «الثانوي» (0.5) = مرشّح غير محقَّق، لا حقيقة.
+        critical.append(_CLIENT_GAP_TEMPLATE.format(what=what, how=how))
     if "entry_door" not in missing:
         from silk_narrative import EVIDENCE_SECONDARY_MIN
         unverified_doors = [
@@ -2173,32 +2319,68 @@ def _client_gaps_section(doc, dr: dict) -> None:
             if _dp_conf(f) is not None and _dp_conf(f) < EVIDENCE_SECONDARY_MIN]
         if unverified_doors:
             names = "، ".join(
-                _client_sanitize(_clean_report_text(f.get("value"), 80))
-                for f in unverified_doors[:2])
-            gap_lines.append(
-                f"لم نتمكّن من تأكيد قناة الدخول الأولى ({names}) من مصدر "
+                n for n in (_client_sanitize(_client_prose(f.get("value"), 80))
+                            for f in unverified_doors[:2]) if n)
+            _named = f" ({names})" if names else ""
+            critical.append(
+                f"لم نتمكّن من تأكيد قناة الدخول الأولى{_named} من مصدر "
                 "موثّق — إغلاق هذه الفجوة يتطلّب خدمة تحقّق جهات اتصال مدفوعة "
                 "(قواعد بيانات تجارية) قبل الالتزام بالموزّع.")
-
-    # §H-1 (حزمة الفكس v2.1): بلاغ حي — «لا فجوة جوهرية تمنع اتخاذ القرار»
-    # نُشرت بينما شروط قلب الحكم المهيكلة («شرطا قلب الحكم»، silk_render.
-    # _flip_conditions) نفسها غير محقَّقة (بطاقة تكلفة، بيانات HS صحيحة،
-    # موزّع متعاقَد). القسم الآن يقرأ من نفس القائمة الآلية التي يبنيها
-    # المحرّك — لا صياغة حرّة منفصلة قد تتباعد عنها.
     for c in (dr.get("flip_conditions") or []):
         if not c.get("met"):
-            gap_lines.append(
+            critical.append(
                 f"لم يتحقّق بعد: {c.get('condition')} — إغلاق هذا الشرط "
                 f"يتطلّب {c.get('closes_via')}.")
+
+    # WP-4 §1: المدخل الرابع — فجوات البعثات المعلنة داخل ملخّصاتها.
+    from silk_render import _mission_gap_lines
+    informational: list[str] = []
+    seen: set[str] = set()
+    for k, m in (dr.get("missions") or {}).items():
+        if not isinstance(m, dict):
+            continue
+        label = m.get("label") or str(k)
+        per_mission = 0
+        for line in _mission_gap_lines(label, m.get("summary") or ""):
+            g = _client_sanitize(_trim_sentence(line, 200)).rstrip(".؛،")
+            if not g or g in seen or per_mission >= 2:
+                continue
+            seen.add(g)
+            per_mission += 1
+            informational.append(
+                f"فجوة بيانات معلنة — {g}؛ لا تمنع القرار الحالي لكنها "
+                "تقيّد يقين الاستنتاجات المتصلة بها.")
+    return critical, informational
+
+
+def _client_gaps_section(doc, dr: dict) -> None:
+    """قسم "ما لم يكتمل للقرار والخطوة التالية" — يحوّل كل تقاطع بلا أدلة
+    كافية لصياغة تجارية موحّدة (بلاغ المالك النقطة ٣)، ثم الخطوة التالية.
+    لا عناوين فارغة متتالية: إن اكتمل كل شيء، سطر إيجابي واحد. WP-4: يقرأ
+    كل المدخلات الأربعة من `_client_gap_inputs` (المصدر الواحد المشترك مع
+    حارس البوابة) — السطر الإيجابي يُطبَع فقط حين تخلو القوائم الأربع معاً."""
+    doc.add_heading("ما لم يكتمل للقرار، والخطوة التالية", level=1)
+    gap_lines, mission_gap_lines = _client_gap_inputs(dr)
 
     if gap_lines:
         doc.add_paragraph(
             "النقاط التالية لم تكتمل توثيقاً ضمن هذا التقرير؛ هي ما يفصل "
             "التوصية الحالية عن قرار نهائي كامل، وكلٌّ منها قابل للإغلاق "
             "بخطوة محدّدة:")
-        for line in gap_lines:
+        for line in gap_lines + mission_gap_lines:
+            doc.add_paragraph(line, style="List Bullet")
+    elif mission_gap_lines:
+        # WP-4 §2: فجوات معلنة غير حاجبة — لا سطر «لا فجوة جوهرية» بجانبها.
+        n = len(mission_gap_lines)
+        count_txt = ("فجوة معلنة واحدة لا تمنع" if n == 1
+                     else f"{n} فجوات معلنة لا تمنع")
+        doc.add_paragraph(
+            f"توجد {count_txt} القرار الحالي لكنها تقيّد يقينه — مفصّلة "
+            "أدناه:")
+        for line in mission_gap_lines:
             doc.add_paragraph(line, style="List Bullet")
     else:
+        # WP-4 §2: السطر الإيجابي فقط حين تخلو القوائم الأربع معاً.
         doc.add_paragraph(
             "اكتملت التقاطعات التحليلية الأساسية بأدلة موثّقة بمصادرها، ولا "
             "بند حاسم للقرار موسوم بأنه غير محقَّق؛ لا فجوة جوهرية تمنع "
@@ -2312,8 +2494,12 @@ def _client_references_section(doc, dr: dict) -> None:
         if not isinstance(m, dict):
             continue
         for f in (m.get("findings") or []):
-            if _evidence_badge(f.get("confidence")).startswith("○"):
-                continue  # §A-4: غير متحقَّق — لا يُعرَض كمرجع للعميل
+            from silk_narrative import RECONCILED_OUT_TAG, evidence_badge_for
+            badge = evidence_badge_for(f)
+            # WP-3: بند مستبعد بالمصالحة أو غير متحقَّق (بعد سقف المنشأ) —
+            # لا يُعرَض كمرجع للعميل (§A-4).
+            if badge.startswith("○") or badge.startswith(RECONCILED_OUT_TAG):
+                continue
             row = _reference_row_from_finding(
                 f.get("source"), f.get("value"), f.get("note"))
             if row is None:
@@ -2407,13 +2593,29 @@ def render_client_docx(view: dict, path: str) -> str:
     # ثم سرد الكاتب (الخلاصة + التوصيات) إن توفّر.
     doc.add_heading("القرار وأساسه", level=1)
     doc.add_paragraph(f"التوصية: {_VERDICT_LABELS_AR[_verdict_tone(vtxt)]}")
-    reasoning = ai.get("reasoning") or verdict.get("note") or ""
+    # WP-1 §2: تعليل كلود يُعرَض للعميل فقط حين تتطابق قراءته مع الحكم
+    # الحتمي المعروض (وإلا لعرضنا تعليلَ توصيةٍ أخرى تحت توصية مختلفة) —
+    # القراءة المخالفة تبقى في التصدير الداخلي (?internal=1) موسومة استشارية.
+    _ai_agrees = (not ai.get("verdict")
+                  or _verdict_tone(ai.get("verdict")) == _verdict_tone(vtxt))
+    reasoning = ((ai.get("reasoning") if _ai_agrees else "")
+                 or verdict.get("note") or "")
+    if not reasoning and verdict.get("confidence") is not None:
+        # مراجعة شيفرة PR #147: مدوّنة مخزَّنة بلا «note» وقراءةُ كلود
+        # مخالفة كانت تُخرج قسم القرار بلا أي فقرة أساس — سطر أساسٍ حتمي
+        # من الحقول المحسوبة فقط (لا اختلاق) بدل الغياب الصامت.
+        from silk_narrative import confidence_phrase
+        reasoning = (
+            f"حكم المحرّك الحتمي بدرجة ثقة "
+            f"{confidence_phrase(verdict.get('confidence'))} بناءً على "
+            "الأدلة المرصودة — تفصيل الأساس في هذا القسم والأقسام التالية.")
     if reasoning:
-        # §B-1 (حزمة الفكس v2.1): متن العميل لا يُقصّ بـ«…» أبداً — القصّ
-        # النظيف عند حدّ جملة (`_trim_sentence`، بلا نقاط حذف) بحدٍّ كبيرٍ
-        # كافٍ فعلياً لأطول تعليل حكم واقعي، لا `_clean_report_text` (يقصّ
-        # عند حدّ كلمة + «…»، مصمَّمة للسطور التشغيلية/الداخلية فقط).
-        doc.add_paragraph(_client_sanitize(_trim_sentence(reasoning, 2000)))
+        # §B-1 (حزمة الفكس v2.1) + WP-2 §1: متن العميل لا يُقصّ بـ«…» ولا
+        # يستقبل نصّاً نائباً أبداً — `_client_prose` تستخلص من الكتلة الخام
+        # أو تُسقِطها (فتلتقطها البوابة)، بدل «بند تقني غير قابل للعرض».
+        _r = _client_sanitize(_client_prose(reasoning, 2000))
+        if _r:
+            doc.add_paragraph(_r)
     # تصدير متدهور بدل فشل صامت (بلاغ المالك، القضية ٣): حين يتعذّر توليد
     # التقرير السردي (report=None بعد فشل نداء الكاتب) نُصدّر مستنداً كاملاً
     # بما هو متاح — الحكم أعلاه + الأدلة المرصودة + الفجوات المعلنة — مع
@@ -2464,48 +2666,110 @@ def render_client_docx(view: dict, path: str) -> str:
             style="Intense Quote")
     _client_assert_clean(doc)  # شبكة أمان أخيرة — لِما يستحيل تنقيته فقط
     _assert_verdict_consistency_doc(doc, vtxt, "تقرير العميل")  # Master Prompt Part 2 §B
+    # WP-7 §3: بوابة نصّ المُنتَج النهائي — على النص الكامل المبني فعلياً
+    # (فقرات + جداول)، لا على القالب فقط؛ يغطّي مسار PDF أيضاً (يُبنى منه).
+    import silk_quality_gate as _qg
+    _artifact_text = "\n".join(
+        [p.text for p in doc.paragraphs]
+        + [c.text for t in doc.tables for row in t.rows for c in row.cells])
+    _artifact_findings = _qg.run_client_artifact_text_gate(_artifact_text)
+    if _artifact_findings:
+        raise RuntimeError(
+            "رفضت بوابة نصّ المُنتَج النهائي تسليم تقرير العميل: "
+            + "؛ ".join(f["note"] for f in _artifact_findings[:5]))
     _finalize_rtl(doc)         # §4: اتجاه RTL صريح على كل فقرة/run قبل الحفظ
     doc.save(path)
     return path
 
 
+# WP-2 §4 — مصادر البنود الخام لكل قسم عميل حين يغيب سرد الكاتب.
+# «المخاطر» لم تعد مربوطة بمجموعة فارغة () تضمن فقرة الاعتذار العامة —
+# صارت تقرأ من نتائج بعثة المخاطر (risk_news) + بنود SWOT (التهديدات ضمنها).
+_CLIENT_FALLBACK_CATS = {
+    "القرار وأساسه": ("swot",),
+    "السوق بالأرقام": ("demand",),
+    "المنافسة والتسعير والهامش": ("price_competitiveness",),
+    "مسار الدخول والمتطلبات": ("entry_cost", "entry_door"),
+    "المخاطر": ("swot",),
+}
+
+
+def _client_fallback_sources(dr: dict, client_head: str) -> list[str]:
+    """البنود الخام المرشّحة لإعادة الصياغة التجارية لقسم عميل بلا سرد كاتب.
+    نصوص فقط (لا نصّ نائب): كتل JSON غير القابلة للاستخلاص تُسقَط."""
+    by_cat = (dr.get("analyst") or {}).get("by_category") or {}
+    items: list[str] = []
+    for cat in _CLIENT_FALLBACK_CATS.get(client_head, ()):
+        for f in (by_cat.get(cat) or []):
+            t = _client_prose(_dp_value(f), 400)
+            if t:
+                items.append(t)
+    if client_head == "المخاطر":
+        risk = (dr.get("missions") or {}).get("risk_news") or {}
+        if isinstance(risk, dict) and not risk.get("failed"):
+            for f in (risk.get("findings") or []):
+                t = _client_prose(_dp_value(f), 400)
+                if t:
+                    items.append(t)
+    return items
+
+
+def _client_missing_narrative_heads(dr: dict) -> "dict[str, list[str]]":
+    """أقسام العميل التي سيصادفها التصدير بلا سرد كاتب، مع بنودها الخام
+    المرشّحة لإعادة الصياغة — نفس منطق تجميع الأقسام في `render_client_docx`
+    (وتستعمله بوابة الجودة أيضاً) فلا يتباعدان."""
+    sections = _parse_writer_sections(((dr.get("report") or {}).get("text")
+                                       or ""))
+    buckets: dict[str, list[list[str]]] = {c: [] for c in _CLIENT_SECTION_ORDER}
+    for title, body in sections:
+        if title == "التوصيات الاستراتيجية":
+            decision_part, roadmap_part = _split_at_roadmap(body)
+            buckets["القرار وأساسه"].append(decision_part)
+            if roadmap_part:
+                buckets["مسار الدخول والمتطلبات"].append(roadmap_part)
+            continue
+        head = _CLIENT_SECTION_MAP.get(title)
+        if head:
+            buckets[head].append(body)
+    out: dict[str, list[str]] = {}
+    for head in _CLIENT_SECTION_ORDER:
+        has_body = any(any(str(ln).strip() for ln in body)
+                       for body in buckets[head])
+        if not has_body:
+            out[head] = _client_fallback_sources(dr, head)
+    return out
+
+
+def _dp_value(f: object) -> object:
+    """قيمة نقطة بيانات — dict مخزَّن أو كائن DataPoint حي."""
+    if isinstance(f, dict):
+        return f.get("value")
+    return getattr(f, "value", None)
+
+
 def _client_body_or_fallback(doc, bodies: list[list[str]], dr: dict,
                              client_head: str) -> None:
-    """اعرض متون الكاتب لهذا القسم إن توفّرت؛ وإلا صياغة تجارية موجزة من
-    التقاطعات المهيكلة (سرد الكاتب غائب = فشل النداء) — بلا تِلِمِتري، بلا
-    عنوان فارغ. لا اختلاق: يذكر فقط ما رُصد فعلاً أو يصرّح تجارياً بغيابه."""
+    """اعرض متون الكاتب لهذا القسم إن توفّرت؛ وإلا **النثر التجاري المُعاد
+    صياغته** (نداء كاتب مصغّر، WP-2 §3 — يُحضَّر قبل بوابة التسليم ويُخزَّن
+    في `dr["client_fallback_prose"]`). لا تُسرَد قيم `dp.value` الخام نقاطاً
+    للعميل بعد الآن — قسم بلا سرد ولا نثر مُعاد صياغته تُفشِله بوابة الجودة
+    قبل التسليم أصلاً (النصّ العام أدناه شبكة أمان لمسارات الاستدعاء
+    المباشرة خارج نقطة التصدير فقط)."""
     if bodies:
         for body in bodies:
             _client_render_body_block(doc, body)
         return
-    # مسار احتياطي: لا سرد كاتب — اعرض من التقاطعات المهيكلة إن وُجدت.
-    cat_for_head = {
-        "القرار وأساسه": ("swot",),
-        "السوق بالأرقام": ("demand",),
-        "المنافسة والتسعير والهامش": ("price_competitiveness",),
-        "مسار الدخول والمتطلبات": ("entry_cost", "entry_door"),
-        "المخاطر": (),
-    }.get(client_head, ())
-    by_cat = (dr.get("analyst") or {}).get("by_category") or {}
-    shown = False
-    for cat in cat_for_head:
-        for f in (by_cat.get(cat) or []):
-            # §B-1: نفس القصّ النظيف بلا «…» — حدٌّ أكبر (بدل ٢٢٠) كافٍ
-            # لحقيقة تقاطع واحدة فعلية بلا بتر.
-            doc.add_paragraph(
-                _client_sanitize(_trim_sentence(f.get("value"), 400)),
-                style="List Bullet")
-            shown = True
-    if not shown:
-        # §B-2: هذا النصّ العام يبقى شبكة أمان أخيرة فقط — بوابة الجودة
-        # (`silk_quality_gate._check_client_section_would_be_placeholder`)
-        # تُفشِل التشغيلة **قبل** الوصول لهذا المسار أصلاً حين يخلو القسم من
-        # سرد الكاتب ومن حقائق التقاطع معاً (§0 يحجب تسليم FAIL للعميل)، فلا
-        # يصل هذا النصّ العميل في المسار الطبيعي — يبقى فقط لمسارات استدعاء
-        # مباشرة لهذه الدالة خارج نقطة تصدير API (اختبارات/أدوات).
-        doc.add_paragraph(
-            "التحليل السردي التفصيلي لهذا القسم غير متاح ضمن هذا التقرير؛ "
-            "الأدلة المرصودة ذات الصلة مُدرجة في «المراجع» ختام التقرير.")
+    prose = str(((dr.get("client_fallback_prose") or {}).get(client_head))
+                or "").strip()
+    if prose:
+        for para in prose.splitlines():
+            line = _client_sanitize(_client_prose(para, 600))
+            if line:
+                doc.add_paragraph(line)
+        return
+    doc.add_paragraph(
+        "التحليل السردي التفصيلي لهذا القسم غير متاح ضمن هذا التقرير؛ "
+        "الأدلة المرصودة ذات الصلة مُدرجة في «المراجع» ختام التقرير.")
 
 
 # ── §3 (أمر العمل الرئيس): التصدير النهائي PDF غير قابل للتحرير ────────────
@@ -2633,6 +2897,9 @@ def docx_to_pdf(docx_path: str, pdf_path: "str | None" = None,
         out_dir, os.path.splitext(os.path.basename(docx_path))[0] + ".pdf")
     if proc.returncode != 0 or not os.path.exists(produced):
         raise RuntimeError(_PDF_FAILED)
+    # WP-5 §2: الفحص الآلي لاتجاه الأقواس على الـPDF النهائي — فوق العتبة
+    # يفشل التصدير بصوت عالٍ بدل تسليم مستند معكوس الأقواس.
+    _pdf_bracket_check(produced)
     if pdf_path and os.path.abspath(pdf_path) != os.path.abspath(produced):
         os.replace(produced, pdf_path)
         return pdf_path

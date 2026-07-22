@@ -427,6 +427,34 @@ _SYMBOL_ANCHORS_EXTRA = [
      ["def test_client_docx_export_blocked_409_when_gate_fails",
       "def test_client_pdf_export_blocked_409_when_gate_fails",
       "def test_gate_crash_treated_as_fail_for_client_export"]),
+    # صفوف 47-53 — برنامج إصلاح جودة التقارير (WP-1…WP-7)؛ الحُرّاس السلوكية
+    # الكاملة في tests/test_regression_registry.py (_guard_wp1…_guard_wp7)
+    # وملفات tests/test_wp*.py — هذه مراسي الرموز.
+    (47, "silk_narrative.py", ["def authoritative_verdict"]),
+    (47, "silk_llm_provider.py", ['"temperature": 0']),
+    (47, "silk_style_contract.py", ["def confidence_band_label"]),
+    (48, "silk_reports.py", ["def _client_prose",
+                             "def _client_missing_narrative_heads"]),
+    (48, "silk_ai_judge.py", ["def rephrase_client_sections"]),
+    (48, "silk_quality_gate.py", ["_check_client_scaffold_leak",
+                                  "_check_placeholder_leak"]),
+    (49, "silk_narrative.py", ["def evidence_badge_for",
+                               "RECONCILED_OUT_TAG"]),
+    (49, "silk_render.py", ["def _reconcile_numeric_conflicts"]),
+    (50, "silk_reports.py", ["def _client_gap_inputs"]),
+    (50, "silk_quality_gate.py", ["_check_gaps_closing_contradiction"]),
+    (51, "silk_reports.py", ["def _bidi_isolate_brackets",
+                             "def count_suspicious_brackets",
+                             "def _pdf_bracket_check"]),
+    (51, "tools/rtl_calibration.py", ["def build_bracket_fixture"]),
+    (52, "silk_render.py", ["def _already_explained_nearby",
+                            "def _year_in_growth_span"]),
+    (52, "tests/test_wp6_injector_hardening.py",
+     ["test_delivered_sentence_growth_span_year_not_tagged_stale"]),
+    (53, "api.py", ["owner_override_required"]),
+    (53, "silk_watchdog.py", ["def record_override",
+                              "def override_records_for"]),
+    (53, "silk_quality_gate.py", ["def run_client_artifact_text_gate"]),
 ]
 
 

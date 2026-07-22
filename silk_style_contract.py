@@ -41,6 +41,25 @@ GLOSSARY: dict[str, str] = {
     "SOM": "الحصة الواقعية القابلة للالتقاط في المدى القصير",
 }
 
+# WP-1 §4 — سُلَّم معايرة الثقة الواحد: المصدر الوحيد لعتبات نطاقات الثقة
+# المعروضة على وجه التقرير. الثقة المعروضة هي ثقة المحرّك الحتمي المحسوبة،
+# لا التقرير الذاتي غير المعاير من النموذج؛ والتسمية العربية تُشتقّ من
+# الرقم عبر `confidence_band_label` حصراً — يستهلكه العارض
+# (silk_narrative.confidence_phrase) وحارس البوابة
+# (silk_quality_gate._check_confidence_band_label) معاً فلا يتباعدان.
+CONFIDENCE_HIGH_MIN_PCT = 80    # عالية ≥ 80%
+CONFIDENCE_MEDIUM_MIN_PCT = 60  # متوسطة 60–79% / منخفضة < 60%
+
+
+def confidence_band_label(pct: float) -> str:
+    """التسمية العربية لنطاق الثقة من النسبة المئوية — المشتقّ الوحيد."""
+    if pct >= CONFIDENCE_HIGH_MIN_PCT:
+        return "عالية"
+    if pct >= CONFIDENCE_MEDIUM_MIN_PCT:
+        return "متوسطة"
+    return "منخفضة"
+
+
 # ترتيب الفحص: الأطول أولاً كي لا يبتلع اختصارٌ جزءاً من آخر عند البحث.
 GLOSSARY_ORDER: list[tuple[str, str]] = sorted(
     GLOSSARY.items(), key=lambda kv: -len(kv[0]))

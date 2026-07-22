@@ -44,9 +44,10 @@ def _decision(top: dict | None) -> dict:
                 "why": "لا أسواق مرتّبة — لا بيانات كافية"}
     jury = top.get("jury") or {}
     ai = jury.get("ai") or {}
-    verdict = ai.get("verdict") or jury.get("verdict")
-    confidence = (ai.get("confidence") if ai.get("confidence") is not None
-                  else jury.get("confidence"))
+    # WP-1: الحكم المعروض من المرحلة الحتمية حصراً (authoritative_verdict) —
+    # ai.verdict قراءة استشارية داخلية، لم يعد يتقدّم على الحكم الحتمي.
+    from silk_narrative import authoritative_verdict
+    verdict, confidence = authoritative_verdict(jury)
     # أسماء أصناف الوكلاء الداخلية (TradeFlowAgent...) لا تصل وجه المستخدم —
     # تُعرَّب في المصدر هنا كي يرث كل مستهلك (نص/docx/markdown) الترجمة
     # نفسها، بدل ترقيعها في مستهلك واحد فقط (كانت docx وحدها تُعرِّبها).
@@ -121,10 +122,9 @@ def _deep_research_brief(dr_view: dict) -> list[str]:
 
     نفس فلسفة `_brief` (§10.4: سطر جوال) لكن على شكل view["deep_research"]
     (١٢ بعثة + محلل، لا قائمة أسواق مرتّبة)."""
-    from silk_narrative import verdict_ar
+    from silk_narrative import authoritative_verdict, verdict_ar
     verdict = dr_view.get("verdict") or {}
-    ai = verdict.get("ai") or {}
-    v_raw = ai.get("verdict") or verdict.get("verdict")
+    v_raw, _ = authoritative_verdict(verdict)   # WP-1: الحتمي أولاً
     v = verdict_ar(v_raw) if v_raw else "تعذّر إصدار توصية"
     market = ((dr_view.get("market") or {}).get("name_ar")
              or (dr_view.get("market") or {}).get("name_en") or "؟")
@@ -882,6 +882,15 @@ def _strip_mission_key_prefix(text: str) -> str:
     return text
 
 
+# WP-2 §2 — سقالة «إذن ماذا؟» الحرفية: كانت تعليمة المحلل تفرض ختم كل بند
+# بأثره فكتب النموذج العبارةَ نفسها حرفياً داخل القيم فوصلت تقارير عملاء
+# مُسلَّمة («إذن ماذا؟ يجب…» ×١٠). التعليمة أُعيدت صياغتها (silk_market_
+# analyst) وهذا المُنظِّف شبكة الأمان الحتمية، وبوابة الجودة تُفشِل أي بقايا.
+_SO_WHAT_SCAFFOLD_RE = re.compile(
+    r"[«\"'()\[]*\s*(?:إذن\s*،?\s*ماذا|So\s+what)\s*[؟?]?\s*[»\"')\]]*\s*[:،—-]*\s*",
+    re.I)
+
+
 def _strip_internal_plumbing(text: str | None) -> str | None:
     """أزل تسريبات السباكة الداخلية من نص معروض للعميل (تقرير مكتوب/حدود
     بحث/ملخّص بعثة) — تفريغ JSON خام كامل يُستبدَل بنص مقروء أو فجوة
@@ -924,6 +933,9 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     # §2: لا ذكر لـ«كلود»/Claude في المُسلَّم.
     text = _CLAUDE_JSON_FAIL_RE.sub("تعذّرت قراءة بيانات هذا البند", text)
     text = _CLAUDE_WORD_RE.sub("التحليل الآلي", text)
+    # WP-2 §2: سقالة «إذن ماذا؟»/"So what" الحرفية (من تعليمة المحلل
+    # القديمة) تُنزَع — الأثر يبقى نثراً مدمجاً؛ العنوان السقالي يُحذَف.
+    text = _SO_WHAT_SCAFFOLD_RE.sub("", text)
 
     def _conf_value(m: "re.Match") -> str:
         from silk_narrative import confidence_phrase
@@ -996,6 +1008,99 @@ def _mission_trace_summary(failed: bool, summary: str) -> dict:
     return {"status": status, "tool_calls": int(tool_m.group(1)) if tool_m else 0,
            "dropped": int(dropped_m.group(1)) if dropped_m else 0,
            "gaps": gaps_n}
+
+
+def _reconcile_numeric_conflicts(missions: dict, hs_flagged: bool) -> list[dict]:
+    """WP-3 §2 — ممرّ مصالحة رقمية قبل العرض، يعمل على بنود نموذج العرض
+    (يُعدِّل الوسوم فقط — القيم لا تُمَسّ أبداً، عقد عدم الاختلاق):
+
+    (أ) **قيمة قانونية واحدة لكل رقم**: قيمتان رقميتان كبيرتان (≥ 10000)
+        متقاربتان جداً (فرق نسبي ≤ 0.5%) وغير متطابقتين — بلاغ التدقيق:
+        6,733,369 مقابل 6,733,376 لواردات 2023 معاً في تقرير واحد — تُحسمان
+        لقيمة قانونية (الأعلى ثقةً، فالأولى وروداً)؛ الباقي يُوسَم
+        «متعارض — مستبعد» في سجلّ الأدلة، والتعارض يُفصَح عنه مرة واحدة
+        (قائمة conflicts المعادة). التقارب الرقمي تقريبٌ مُعلَن لهوية
+        (المؤشر، السنة) — لا مطابقة مواضيع بنيوية متاحة عبر البعثات.
+    (ب) عند تعليم رمز HS (غير مؤكَّد): بند كومتريد الرقمي يُوسَم «مؤشر
+        سياقي» فلا يعرض «✓ موثّق» بينما السرد نفسه يرفضه/يعيد تأطيره.
+    (ج) بند جمعه وكيل بحث (وسم tool-use) تسانده قيمة مطابقة من جامعٍ رسمي
+        مباشر => `corroborated` (يرفع سقف شارته — silk_narrative)."""
+    from silk_narrative import RECONCILED_OUT_TAG, is_agent_gathered
+    entries: list[dict] = []
+    for m in missions.values():
+        for f in (m.get("findings") or []):
+            v = f.get("value")
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                continue
+            entries.append(f)
+            if hs_flagged and "comtrade" in str(f.get("source") or "").lower():
+                f.setdefault("evidence_tag", "مؤشر سياقي — رمز غير مؤكَّد")
+    official_vals = [float(f["value"]) for f in entries
+                     if not is_agent_gathered(f.get("source"))]
+    for f in entries:
+        if is_agent_gathered(f.get("source")):
+            fv = float(f["value"])
+            if any(abs(fv - ov) <= max(abs(ov), 1.0) * 0.005
+                   for ov in official_vals):
+                f["corroborated"] = True
+    # مراجعة شيفرة PR #147: التقارب الرقمي وحده كان يخاطر بضمّ رقمين لا
+    # علاقة بينهما (واردات 6.70م$ وعدد سكان 6.72م مثلاً) فيُستبعَد رقم
+    # صحيح بإفصاح تعارضٍ كاذب. تُشترط الآن **هوية سنة معلومة ومتطابقة**
+    # (data_year البنيوي أو سنة صريحة في الملاحظة) — بند بلا سنة قابلة
+    # للاشتقاق لا يدخل المصالحة أصلاً (تحفّظ: لا حسم بلا هوية).
+    def _entry_year(f: dict) -> "int | None":
+        dy = f.get("data_year")
+        if isinstance(dy, int):
+            return dy
+        m = re.search(r"(?<!\d)(19\d\d|20\d\d)(?!\d)",
+                      f"{f.get('note') or ''}")
+        return int(m.group(1)) if m else None
+
+    by_year: dict[int, list[dict]] = {}
+    for f in entries:
+        if abs(float(f["value"])) < 10000:
+            continue
+        yr = _entry_year(f)
+        if yr is not None:
+            by_year.setdefault(yr, []).append(f)
+    conflicts: list[dict] = []
+    for _yr in sorted(by_year):
+        _cluster_year_group(by_year[_yr], conflicts)
+    return conflicts
+
+
+def _cluster_year_group(group: "list[dict]", conflicts: "list[dict]") -> None:
+    """عنقدة قيم سنةٍ واحدة بالتقارب النسبي (≤0.5%) — جزء ممرّ المصالحة."""
+    from silk_narrative import RECONCILED_OUT_TAG
+    big = sorted(group, key=lambda f: float(f["value"]))
+    i = 0
+    while i < len(big):
+        base = float(big[i]["value"])
+        cluster = [big[i]]
+        j = i + 1
+        while j < len(big) and \
+                abs(float(big[j]["value"]) - base) <= abs(base) * 0.005:
+            cluster.append(big[j])
+            j += 1
+        distinct = sorted({float(f["value"]) for f in cluster})
+        if len(distinct) > 1:
+            canonical = max(
+                cluster, key=lambda f: float(f.get("confidence") or 0.0))
+            cv = float(canonical["value"])
+            for f in cluster:
+                if float(f["value"]) != cv:
+                    f["evidence_tag"] = (
+                        f"{RECONCILED_OUT_TAG} — القيمة القانونية المعتمدة "
+                        f"{canonical['value']}")
+            conflicts.append({
+                "canonical_value": canonical["value"],
+                "canonical_source": canonical.get("source"),
+                "rejected_values": [v for v in distinct if v != cv],
+                "note": ("رُصدت قيمتان متقاربتان غير متطابقتين لما يبدو "
+                         f"المؤشر نفسه؛ اعتُمدت {canonical['value']} "
+                         "(الأعلى ثقة) واستُبعد الباقي موسوماً "
+                         f"«{RECONCILED_OUT_TAG}».")})
+        i = j
 
 
 def _mission_gap_lines(name: str, summary: str) -> list[str]:
@@ -1482,7 +1587,12 @@ def _deep_research_view(result: dict) -> dict | None:
             # (بلاغ مالك: "pricing_scout"/"risk_news" ظهرت حرفياً للعميل).
             "label": _mission_label(key),
             "summary": clean_summary,
-            "findings": [_dp(x) for x in f["findings"]],
+            # مراجعة شيفرة PR #147: نسخة سطحية لكل بند — `_dp` تعيد dict
+            # المدوّنة **بالمرجع**، وممرّ المصالحة (WP-3) يكتب وسوم عرضٍ
+            # (evidence_tag/corroborated) على بنود العرض؛ بلا النسخ كانت
+            # الوسوم تتسرّب إلى بنود السجل الخام وتُحفَظ مع أي save_analysis
+            # لاحق (مسار regenerate/enrich) — طبقة العرض لا تلمس المخزون.
+            "findings": [dict(_dp(x)) for x in f["findings"]],
             "trace": _mission_trace_summary(f["failed"], clean_summary),
         }
     analyst = dr.get("analyst") or {}
@@ -1514,7 +1624,9 @@ def _deep_research_view(result: dict) -> dict | None:
         d = {**d,
              "value": _strip_internal_plumbing(val) if isinstance(val, str) else val,
              "note": _strip_internal_plumbing(note) if isinstance(note, str) else note}
-        return {**d, "confidence_badge": evidence_badge(d.get("confidence"))}
+        # WP-3: الشارة الواعية بالمنشأ — بند جمعه وكيل بحث يُسقَف درجةً.
+        from silk_narrative import evidence_badge_for
+        return {**d, "confidence_badge": evidence_badge_for(d)}
     by_category = {cat: [_with_badge(x) for x in (dps or [])]
                   for cat, dps in (analyst.get("by_category") or {}).items()}
     report_out = dr.get("report") or {}
@@ -1584,7 +1696,9 @@ def _deep_research_view(result: dict) -> dict | None:
             "الموسمية" in l for l in limits):
         from silk_trends_agent import SEASONALITY_GAP_CLOSURE
         limits.append(SEASONALITY_GAP_CLOSURE)
-    v_raw = (verdict.get("ai") or {}).get("verdict") or verdict.get("verdict") or ""
+    # WP-1: الحكم المعروض (الشارة/التسمية) من المرحلة الحتمية حصراً.
+    from silk_narrative import authoritative_verdict
+    v_raw, _ = authoritative_verdict(verdict)
     verdict_tone = _verdict_tone(v_raw)
     # Wave 1.3/3.2/4.1 (تدقيق زبدة الفول السوداني/اليمن): حين يُعلَّم رمز HS
     # غير مؤكَّد (صفة المنتج المميّزة غائبة عن وصف الرمز، silk_hs_confirm)،
@@ -1622,6 +1736,25 @@ def _deep_research_view(result: dict) -> dict | None:
                       + (f" ({_missing})" if _missing else "")
                       + " — تُقرأ أرقام الاستيراد والتركّز والحصص كمؤشر سياقي "
                       "حتى تأكيد الرمز الصحيح.")
+    # WP-3 §2/§3: ممرّ المصالحة الرقمية (يوسم البنود المستبعدة/السياقية/
+    # المسانَدة) + إعلان المصادر التي فشل جمعها كلياً — مصدرٌ كل بنوده
+    # أخطاء (value=None) يُستبعَد من سطر «اعتمد هذا التقرير على مصادر…»
+    # (silk_reports._client_methodology_paragraph) ويُذكَر هنا في الحدود فقط.
+    _conflicts = _reconcile_numeric_conflicts(missions, bool(hs_flagged))
+    _src_ok: dict[str, bool] = {}
+    from silk_narrative import TOOLUSE_MARK_RE as _TUM
+    for _m in missions.values():
+        for _f in (_m.get("findings") or []):
+            _lbl = _TUM.sub("", str(_f.get("source") or "")).strip(" ،-—")
+            if not _lbl:
+                continue
+            _src_ok[_lbl] = _src_ok.get(_lbl, False) or (
+                _f.get("value") is not None)
+    for _lbl, _ok in sorted(_src_ok.items()):
+        if not _ok and not any(_lbl in l for l in limits):
+            limits.append(f"المصدر «{_lbl}» تعذّر جلب بياناته في هذه "
+                          "التشغيلة — لم يُعتمد عليه ولا يُدرَج ضمن مصادر "
+                          "التقرير.")
     _report_text_glossed, _glossary = _apply_merchant_language(
         _strip_internal_plumbing(report_out.get("report")))
     # البند ٥ (تدقيق «تحليل #1» DZA): عنوِن عمود السعر بالعملة المرصودة
@@ -1670,6 +1803,15 @@ def _deep_research_view(result: dict) -> dict | None:
         # أرقام كومتريد «مؤشر سياقي» عند التعليم. None/غير مؤكَّد لا يُطأطئ شيئاً.
         "hs_confirmation": hs_conf or {},
         "hs_flagged": bool(hs_flagged),
+        # WP-3 §2: تعارضات رقمية حُسمت — تُفصَح مرة واحدة في سجل الأدلة.
+        "reconciliation": {"conflicts": _conflicts},
+        # مراجعة شيفرة PR #147: نثر الصياغة التجارية المُخزَّن (WP-2 §3،
+        # يكتبه مسار التصدير مرة واحدة عبر save_analysis) يُعاد حمله هنا
+        # فلا يُعاد دفع نداءاته مع كل تصدير — مُطهَّراً كأي نص معروض.
+        "client_fallback_prose": {
+            str(k): _strip_internal_plumbing(str(v))
+            for k, v in (dr.get("client_fallback_prose") or {}).items()
+            if str(v or "").strip()},
         # Wave 3.1: سبب غياب السعر/كجم لكل صفّ سعر مرصود + سطر الفتح الوحيد.
         "price_rows": [
             {"value": (_dp(x).get("value")),

@@ -297,6 +297,24 @@ def country_ar(code_or_name: object, fallback: str | None = None) -> str:
             or fallback or s or GAP)
 
 
+def authoritative_verdict(verdict: "dict | None") -> "tuple[object, object]":
+    """(الحكم المعروض، ثقته) من قاموس التوليف — WP-1 (برنامج إصلاح جودة
+    التقارير): **الحكم الحتمي أولاً**. المرحلة الحتمية
+    (`verdict["verdict"]`/`["confidence"]` — لجنة التحكيم/المحرّك الموزون)
+    هي المصدر الوحيد للحكم المعروض على أي سطح؛ قراءة كلود (`ai.verdict`)
+    حقل استشاري داخلي («قراءة تحليلية للذكاء الاصطناعي») لا يُعرَض توصيةً
+    أبداً — يُستعمَل احتياطاً فقط حين يغيب الحكم الحتمي كلياً (مدوّنات
+    قديمة خُزِّنت بلا مرحلة حتمية). كان الترتيب معكوساً (ai أولاً) فأنتج
+    تشغيلتان بنفس المدخلات حكمين مختلفين (WATCH ثم GO) في يومٍ واحد."""
+    v = verdict if isinstance(verdict, dict) else {}
+    ai = v.get("ai") if isinstance(v.get("ai"), dict) else {}
+    raw = v.get("verdict") or ai.get("verdict") or ""
+    conf = v.get("confidence")
+    if conf is None:
+        conf = ai.get("confidence")
+    return raw, conf
+
+
 def verdict_ar(verdict: object) -> str:
     """الحكم بالعربية — رمز الآلة (GO/CONDITIONAL-GO/NO-GO) لا يصل المستخدم."""
     s = str(verdict or "").strip().upper()
@@ -371,12 +389,11 @@ def confidence_phrase(c: object) -> str:
     except (TypeError, ValueError):
         return str(c)
     pct = round(n * 100)
-    # §F-3 (حزمة الفكس v2.1): نطاقات الثقة الموحّدة — عالية ≥80% / متوسطة
-    # 60-79% / منخفضة <60% (كانت 66%/40% — بلاغ حي: «ثقة عالية (68%)» ظهرت
-    # بجانب 90%/75% بلا مقياس متّسق؛ تحت العتبة القديمة كان 68% يُصنَّف
-    # «عالية» رغم وقوعه فعلياً ضمن مدى «متوسطة» بالمقياس المعتمد الآن).
-    band = "عالية" if pct >= 80 else ("متوسطة" if pct >= 60 else "منخفضة")
-    return f"{band} ({pct}%)"
+    # §F-3 (حزمة الفكس v2.1) + WP-1 §4: نطاقات الثقة الموحّدة — عالية ≥80% /
+    # متوسطة 60-79% / منخفضة <60%. العتبات والمشتقّ في سُلَّم المعايرة الواحد
+    # (silk_style_contract.confidence_band_label) — لا نسخة محلية قد تتباعد.
+    from silk_style_contract import confidence_band_label
+    return f"{confidence_band_label(pct)} ({pct}%)"
 
 
 # عتبات شارة الأدلة — ثابت واحد (P0-B، الموجة ٩): بلاغ حي "درجات ثقة تبدو
@@ -400,6 +417,48 @@ def evidence_badge(confidence: object) -> str:
     if c >= EVIDENCE_SECONDARY_MIN:
         return "◐ ثانوي"
     return "○ غير متحقق"
+
+
+# WP-3 §1 — وسم المنشأ «(Claude tool-use)» يبقى داخلياً على DataPoint
+# ويُجرَّد للعرض فقط؛ هنا يُقرأ لسقف تصنيف الشارة، لا للعرض.
+TOOLUSE_MARK_RE = re.compile(r"\(\s*(?:Claude\s*)?tool[-\s]?use\s*\)", re.I)
+
+# وسم سجل الأدلة لبندٍ رفضته المصالحة الرقمية (WP-3 §2).
+RECONCILED_OUT_TAG = "متعارض — مستبعد"
+
+
+def is_agent_gathered(source: object) -> bool:
+    """هل جُمِع البند بوكيل بحث (وسم tool-use في مصدره الخام)؟"""
+    return bool(TOOLUSE_MARK_RE.search(str(source or "")))
+
+
+def evidence_badge_for(finding: object) -> str:
+    """WP-3 — شارة الأدلة الواعية بالمنشأ والمصالحة، لسجلّ الأدلة وكل عدّاد:
+
+    1. بند أسقطته المصالحة الرقمية (`evidence_tag` = «متعارض — مستبعد»)
+       يعرض وسمه بدل أي شارة — لا «✓ موثّق» لرقمٍ رفضه السرد/المصالحة.
+    2. بند مُعاد تأطيره «مؤشر سياقي» (رمز HS غير مؤكَّد) يُسقَف عند ◐.
+    3. بند جمعه وكيل بحث (وسم tool-use) يُسقَف درجةً واحدة تحت شارة مصدره
+       المسمّى (✓→◐، ◐→○) ما لم يُسانده رصدٌ مباشر من جامعٍ رسمي
+       (`corroborated=True` يضبطها ممرّ المصالحة في نموذج العرض).
+    القيم لا تتغيّر أبداً — التصنيف فقط (عقد عدم الاختلاق)."""
+    if isinstance(finding, dict):
+        f = finding
+    else:
+        f = {"confidence": getattr(finding, "confidence", None),
+             "source": getattr(finding, "source", None)}
+    tag = str(f.get("evidence_tag") or "")
+    if tag.startswith(RECONCILED_OUT_TAG):
+        return RECONCILED_OUT_TAG
+    badge = evidence_badge(f.get("confidence"))
+    if tag.startswith("مؤشر سياقي") and badge.startswith("✓"):
+        badge = "◐ ثانوي"
+    if is_agent_gathered(f.get("source")) and not f.get("corroborated"):
+        if badge.startswith("✓"):
+            return "◐ ثانوي"
+        if badge.startswith("◐"):
+            return "○ غير متحقق"
+    return badge
 
 
 def competition_phrase(hhi: object, top_share_pct: object = None,

@@ -702,11 +702,13 @@ def _summarize_verdict(verdict: dict) -> str:
     فئات الوكلاء (data_gaps) بالإنجليزية. هنا نلخّص بعربية بشرية فقط —
     الحكم المُعرَّب، الثقة كعبارة، عدد المؤشرات المساهمة (رقم لا كائنات)،
     والفجوات مُعرَّبة."""
-    from silk_narrative import confidence_phrase, internal_ar, verdict_ar
+    from silk_narrative import (authoritative_verdict, confidence_phrase,
+                                internal_ar, verdict_ar)
     v = verdict or {}
     ai = v.get("ai") or {}
-    verdict_token = ai.get("verdict") or v.get("verdict")
-    confidence = ai.get("confidence", v.get("confidence"))
+    # WP-1: الكاتب يستلم الحكم الحتمي المعتمد نفسه المعروض على كل سطح —
+    # لا حكم كلود الاستشاري (كانا قد يختلفان فيعيد الكاتب الحكم بنفسه).
+    verdict_token, confidence = authoritative_verdict(v)
     gaps = ", ".join(internal_ar(g) for g in v.get("data_gaps", [])) or "لا شيء"
     parts = [
         f"الحكم: {verdict_ar(verdict_token)}",
@@ -761,6 +763,40 @@ def _product_category(hs_code: object) -> "tuple[str, str] | None":
     return None
 
 
+def rephrase_client_sections(dr: dict) -> dict:
+    """WP-2 §3 — نداء الصياغة التجارية المصغّر لكل قسم عميل بلا سرد كاتب.
+
+    قيم التقاطعات/بعثة المخاطر الخام لم تعد تُسرَد نقاطاً حرفية للعميل
+    (كانت تُسرِّب سقالة «إذن ماذا؟» وبتر «…»)؛ بدلها نداء كاتب واحد لكل
+    قسم (temperature=0 عبر المزوّد — WP-1) يعيد صياغتها فقرة تجارية.
+    فشل النداء/غياب المفتاح = قسم بلا نثر → بوابة الجودة تُفشِل التسليم
+    (409) بدل تسليم بنود خام. لا اختلاق: البنود معزولة والقاعدة «لا رقم
+    غير وارد فيها». يعيد {عنوان القسم: النثر} للأقسام التي نجحت فقط."""
+    if not available():
+        return {}
+    from silk_reports import _client_missing_narrative_heads
+    needs = _client_missing_narrative_heads(dr or {})
+    out: dict[str, str] = {}
+    for head, items in needs.items():
+        if not items:
+            continue
+        joined = "\n".join(f"- {i}" for i in items[:8])
+        user = (
+            f"أعد صياغة البنود التالية فقرة تجارية موجزة (٣-٥ جمل) لقسم "
+            f"«{head}» في دراسة سوق تُسلَّم لعميل غير تقني. قواعد إلزامية: "
+            "لا تذكر أي رقم أو اسم غير وارد في البنود حرفياً؛ لا مصطلحات "
+            "تشغيلية (بعثة/وكيل/نداء/JSON)؛ يُمنَع حرفياً «إذن ماذا» و"
+            "«So what»؛ لا نقاط حذف «...»؛ أعد النص العربي الصِرف فقط بلا "
+            "ترويسات ولا Markdown ولا JSON.\n"
+            f"البنود:\n{_isolate(joined)}")
+        text = _call(_PRINCIPLE, user, max_tokens=600, model=_FAST_MODEL,
+                     timeout=30)
+        text = (text or "").strip()
+        if text and not text.lstrip().startswith(("{", "```")):
+            out[head] = text
+    return out
+
+
 def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
                 product: str, market_name: str,
                 review_notes: list | None = None,
@@ -786,8 +822,16 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
     parts = [
         f"المنتج: {_isolate(product)}. السوق: {_isolate(market_name)}.",
         WRITER_STYLE_CONTRACT,
-        f"الحكم الجاهز (من طبقة التوليف — لا تُصدر حكماً مختلفاً، اشرحه): "
-        f"{_isolate(_summarize_verdict(verdict))}",
+        # WP-1 §3: الحكم المعتمد قيد صلب — لا يجوز للكاتب إصدار توصية مختلفة
+        # ولا «توصية أولية» موازية؛ دوره الشرح والتقييد فقط. درجة الثقة
+        # المعروضة هي ثقة المحرّك الحتمي المرفقة حصراً — يُمنَع اختراع نسبة
+        # أو تسمية نطاق («عالية/متوسطة/منخفضة») غير المشتقّة منها.
+        f"الحكم المعتمد (قيد إلزامي — يُمنَع إصدار أي توصية مختلفة أو "
+        f"«توصية أولية» موازية؛ اشرح هذا الحكم وقيّده فقط، وأي سيناريو "
+        f"بديل يُصاغ كشرط قلبٍ افتراضي لا كتوصية): "
+        f"{_isolate(_summarize_verdict(verdict))}. "
+        "درجة الثقة الوحيدة المسموح ذكرها هي المذكورة أعلاه حرفياً — لا "
+        "تخترع نسبة ثقة أو تسمية نطاق أخرى.",
         f"مسوّدة المحلل الشامل (خمس تقاطعات + SWOT):\n{_isolate(analyst_summary)}",
         f"حقائق البعثات الاثنتي عشرة (لا تتجاوزها، كل رقم من هنا فقط):\n{facts}",
     ]

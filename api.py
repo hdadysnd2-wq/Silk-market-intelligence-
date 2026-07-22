@@ -1126,17 +1126,78 @@ def create_app():
         `?override=1` يتخطّى الحجب (نفس مصادقة `X-API-Key` — لا سلطة مالك
         منفصلة في هذه النقطة). `internal=1` لا يمرّ من هنا إطلاقاً (يبقى
         متاحاً دوماً للمدقّق)."""
+        # WP-2 §3: قبل البوابة — حضِّر نثر الصياغة التجارية للأقسام بلا سرد
+        # كاتب (نداء مصغّر لكل قسم، temperature=0). نجاحه يملأ
+        # dr["client_fallback_prose"] فيمرّ القسم من البوابة ويعرضه
+        # `_client_body_or_fallback`؛ فشله يترك القسم خاوياً فتُفشِله
+        # البوابة (409) — لا بنود `dp.value` خام تصل العميل بعد الآن.
+        #
+        # مراجعة شيفرة PR #147: (أ) هذا نداء كلود على مسارٍ مجاني — يمرّ
+        # عبر بوابة إضافات كلود نفسها (`_free_ai_extras_allowed`: حجب النشر
+        # غير المحمي + حجز ذرّي واحد من SILK_PAID_DAILY_CAP) كأي إضافة
+        # مسار مجاني، لا نداء غير محكوم؛ (ب) النثر الناجح **يُخزَّن على
+        # السجل** (save_analysis بمعرّفه = تحديث في المكان) فلا يُعاد دفع
+        # نفس النداءات مع كل تصدير docx/pdf — build_view يعيد حمله من
+        # المدوّنة عبر view["deep_research"]["client_fallback_prose"].
+        dr = view.get("deep_research") or {}
+        if dr and not dr.get("client_fallback_prose"):
+            try:
+                from silk_reports import _client_missing_narrative_heads
+                needs = {h: items for h, items in
+                         _client_missing_narrative_heads(dr).items() if items}
+            except Exception:  # noqa: BLE001 — تعذّر الفحص = لا نداء
+                needs = {}
+            ai_ok = False
+            if needs:
+                ai_ok, _rephrase_note = _free_ai_extras_allowed()
+            if needs and ai_ok:
+                try:
+                    from silk_ai_judge import rephrase_client_sections
+                    prose = rephrase_client_sections(dr)
+                    if prose:
+                        dr["client_fallback_prose"] = prose
+                        try:
+                            stored_dr = (found or {}).get("deep_research")
+                            if isinstance(stored_dr, dict) and analysis_id:
+                                stored_dr["client_fallback_prose"] = prose
+                                silk_storage.save_analysis(
+                                    found, analysis_id=analysis_id)
+                        except Exception as e:  # noqa: BLE001 — تخزين اختياري
+                            log.warning("prose cache persist failed: %s", e)
+                except Exception as e:  # noqa: BLE001 — فشل التحضير تحكمه البوابة
+                    log.warning("client fallback rephrase failed: %s", e)
         verdict, gate_out = _gate_verdict_for_client_export(view)
         if verdict != "FAIL":
-            return
-        override = str(request.query_params.get("override") or "").lower() in (
-            "1", "true", "yes")
-        if override:
             return
         findings = gate_out.get("findings") or []
         digest = [{"check": f.get("check"), "note": f.get("note")}
                   for f in findings if not f.get("repairable", True)] or [
             {"check": f.get("check"), "note": f.get("note")} for f in findings]
+        override = str(request.query_params.get("override") or "").lower() in (
+            "1", "true", "yes")
+        if override:
+            # WP-7 §1: التجاوز يتطلّب سلطة مالكٍ منفصلة (SILK_OWNER_KEY عبر
+            # ترويسة X-Owner-Key) — مفتاح API العادي لم يعد يكفي. كل تجاوز
+            # ناجح يُسجَّل في الحارس (kind=export_override) فتُختَم النسخ
+            # الداخلية اللاحقة «سُلِّم بتجاوز مالك — ملاحظات البوابة مرفقة».
+            owner_key = os.environ.get("SILK_OWNER_KEY", "").strip()
+            supplied = (request.headers.get("X-Owner-Key") or "").strip()
+            if not owner_key or supplied != owner_key:
+                raise HTTPException(status_code=403, detail={
+                    "error": "owner_override_required",
+                    "message": "تجاوز بوابة الجودة يتطلّب سلطة المالك "
+                               "المنفصلة (ترويسة X-Owner-Key المطابقة لـ"
+                               "SILK_OWNER_KEY على الخادم) — مفتاح API "
+                               "العادي لا يكفي.",
+                })
+            try:
+                import silk_watchdog
+                silk_watchdog.record_override(
+                    analysis_id, found.get("product"),
+                    (found.get("market") or {}).get("name_en"), findings, fmt)
+            except Exception as e:  # noqa: BLE001 — تسجيل التجاوز لا يُسقِطه
+                log.warning("watchdog override record failed: %s", e)
+            return
         try:
             import silk_watchdog
             silk_watchdog.record_blocked_export(
@@ -1157,6 +1218,18 @@ def create_app():
                        "الحجب (مسؤولية من يملك مفتاح API).",
             "findings": digest,
         })
+
+    def _attach_override_history(view: dict, analysis_id: int | None) -> None:
+        """WP-7 §1: حمِّل سجلّات تجاوز المالك (إن وُجدت) على القالب قبل بناء
+        النسخة الداخلية — يختمها `silk_reports._render_research_docx` بسطر
+        «سُلِّمت نسخة عميل بتجاوز مالكٍ — ملاحظات البوابة مرفقة»."""
+        try:
+            import silk_watchdog
+            ov = silk_watchdog.override_records_for(analysis_id)
+            if ov:
+                view["owner_override_history"] = ov[:3]
+        except Exception as e:  # noqa: BLE001 — الختم توثيق، لا شرط تصدير
+            log.warning("override history attach failed: %s", e)
 
     def _attach_watchdog(result: dict, analysis_id: int | None,
                          kind: str) -> None:
@@ -2297,6 +2370,8 @@ def create_app():
         if is_research and not internal:
             _block_client_export_if_gate_failed(
                 view, analysis_id, found, "docx", request)
+        if is_research and internal:
+            _attach_override_history(view, analysis_id)
         try:
             if is_research and not internal:
                 path = render_client_docx(
@@ -2351,6 +2426,8 @@ def create_app():
         if is_research and not internal:
             _block_client_export_if_gate_failed(
                 view, analysis_id, found, "pdf", request)
+        if is_research and internal:
+            _attach_override_history(view, analysis_id)
         out = os.path.join(tempfile.mkdtemp(), "report.pdf")
         try:
             if is_research and not internal:
