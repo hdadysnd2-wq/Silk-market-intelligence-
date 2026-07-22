@@ -948,6 +948,33 @@ def _guard_hs_classifier_valve_fail_safe_default():
         "تعطيلٌ صريحٌ للصمّام مع مفتاح كلود متاح يجب أن يظهر تحذيراً في /health")
 
 
+def _guard_verdict_tone_recognizes_arabic_labels():
+    """LESSONS ٤٤ — Master Prompt Part 2 §B: بوابة اتساق الحكم عند التسليم
+    كشفت أنّ `silk_render._verdict_tone` كانت تتعرّف على الرموز الإنجليزية
+    فقط (GO/WATCH/CONDITIONAL/NO-GO)، فأيّ مسارٍ يضع التسمية العربية مباشرةً
+    (`"دخول مشروط"` لا `"CONDITIONAL-GO"`) كان ينهار إلى tone="unknown"
+    فتعرض الشارة «تعذّر إصدار توصية» بينما جدول/متن التقرير يذكران التسمية
+    الصحيحة — تناقضٌ شارة/متن. الحارس السلوكي: التسمية العربية والرمز
+    الإنجليزي المطابق يُنتِجان نفس الـtone؛ وبوابة اتساق التسليم (شارة/جدول/
+    سطر القرار) تمرّ فعلياً على مدوّنة الكويت القانونية بلا رفعٍ."""
+    from silk_render import _verdict_tone
+    assert _verdict_tone("دخول مشروط") == _verdict_tone("CONDITIONAL-GO") == "conditional"
+    assert _verdict_tone("مراقبة السوق") == _verdict_tone("WATCH") == "watch"
+    assert _verdict_tone("عدم الدخول حالياً") == _verdict_tone("NO-GO") == "nogo"
+    assert _verdict_tone("التوصية بالدخول") == _verdict_tone("GO") == "go"
+
+    from tools.canonical_kuwait_peanut_butter import kuwait_research_blob
+    from silk_render import build_view
+    from silk_reports import render_docx, render_client_docx
+    import os
+    import tempfile
+    os.environ["SILK_HERMETIC"] = "1"
+    view = build_view(kuwait_research_blob())
+    tmp = tempfile.mkdtemp()
+    render_docx(view, os.path.join(tmp, "r.docx"))
+    render_client_docx(view, os.path.join(tmp, "c.docx"))
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -997,6 +1024,7 @@ _LESSONS = {
     41: _guard_active_resolution_beats_rejected_and_short_root_collision,  # ONE FIX — المصادَق يتصدّر على المرفوض، لا تصادف جذرٍ قصير
     42: _guard_dza_quality_gate_six_findings,  # تحليل #1 DZA — ست نتائج فشل بوّابة الجودة معاً على تشغيلة واحدة
     43: _guard_hs_classifier_valve_fail_safe_default,  # المُصنِّف العام — صمّامٌ فشل-آمن مفعَّل افتراضياً لا مُطفأ
+    44: _guard_verdict_tone_recognizes_arabic_labels,  # Master Prompt Part 2 §B — _verdict_tone تتعرّف على التسمية العربية أيضاً
 }
 
 _TRAPS = [

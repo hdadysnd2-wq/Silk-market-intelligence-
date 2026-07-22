@@ -270,7 +270,10 @@ result = {
         },
         "verdict": {
             "verdict": "PRELIMINARY GO",
-            "ai": {"verdict": "WATCH→GO مشروط", "confidence": 0.64,
+            # Master Prompt Part 2 §B: رمزٌ واحدٌ غير مُركَّب (لا "WATCH→GO
+            # مشروط" مُلتبِس) — يجب أن يطابق جدول القرار في REPORT_TEXT أدناه
+            # ("| التوصية | دخول مشروط |") بلا تناقضٍ بادجة/متن.
+            "ai": {"verdict": "CONDITIONAL-GO", "confidence": 0.64,
                   "reasoning": ("الأدلة تدعم دخولاً مشروطاً بتأمين الأهلية "
                                "التنظيمية أولاً — تجزّؤ سوق المورّدين "
                                "(HHI معتدل) والفجوة السعرية كافيان، "
