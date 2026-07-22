@@ -163,6 +163,20 @@ def test_forbidden_hits_helper_detects_each_pattern():
         "واردات هولندا 38 مليون دولار وفق UN Comtrade، نمو 7%.") == []
 
 
+def test_forbidden_hits_helper_detects_section_marker_glyph():
+    """حارسٌ نهائي: رمز قسمٍ داخليٍّ («§4b»/«§10.3»/«§» مجرّداً) لا يخصّ
+    العميل — يُزال فعلياً في `_client_sanitize`، وهذا يتحقّق أن الحارس
+    النهائي (`_client_forbidden_hits`) يلتقطه أيضاً كشبكة أمانٍ إن أفلت من
+    التطهير الاستباقي (مدوّنة مخزَّنة قديمة، مثلاً)."""
+    import silk_reports as R
+    assert R._client_forbidden_hits("راجع §4b للتفاصيل")
+    assert R._client_forbidden_hits("وفق §10.3 من الوثيقة")
+    assert R._client_forbidden_hits("علامة § مجرّدة")
+    # يُزال (لا يُستبدَل بحشو) في مسار التنقية الفعلي — لا بقايا بعد التطهير.
+    assert R._client_sanitize("راجع §4b للتفاصيل") == "راجع للتفاصيل"
+    assert R._client_forbidden_hits(R._client_sanitize("راجع §4b للتفاصيل")) == []
+
+
 # ── البنية: أقسام العميل السبعة بالترتيب ─────────────────────────────────
 
 def test_client_structure_headings_in_order(tmp_path):
