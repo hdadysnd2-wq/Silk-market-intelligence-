@@ -975,6 +975,24 @@ def _guard_verdict_tone_recognizes_arabic_labels():
     render_client_docx(view, os.path.join(tmp, "c.docx"))
 
 
+def _guard_price_fix_scoped_to_table_window():
+    """LESSONS ٤٥ — دالة الإصلاح `silk_render._fix_price_column_currency_
+    label` تقتصر على نافذة الجدول نفسه (لا كامل المستند) عند البحث عن
+    عملةٍ أخرى، مطابقةً لدالة الفحص الشقيقة (اللائحة ٤٢). حارسٌ مضاد: تناقضٌ
+    حقيقي داخل نفس الجدول يبقى مُصلَحاً بالعملة الصحيحة."""
+    from silk_render import _fix_price_column_currency_label
+    unrelated_euro_elsewhere = (
+        "| المنتج | السعر/كجم بالدولار |\n| --- | --- |\n| صنف | 6.0$ |\n\n"
+        "## قسمٌ آخر\nخطر صرف العملة: اليورو هو عملة السوق نفسها.")
+    out = _fix_price_column_currency_label(unrelated_euro_elsewhere)
+    assert "السعر/كجم بالدولار" in out and "السعر/كجم باليورو" not in out
+
+    same_table_mismatch = (
+        "| المنتج | السعر/كجم بالدولار |\n| --- | --- |\n| صنف | 9.14€ |")
+    out2 = _fix_price_column_currency_label(same_table_mismatch)
+    assert "السعر/كجم باليورو" in out2
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -1025,6 +1043,7 @@ _LESSONS = {
     42: _guard_dza_quality_gate_six_findings,  # تحليل #1 DZA — ست نتائج فشل بوّابة الجودة معاً على تشغيلة واحدة
     43: _guard_hs_classifier_valve_fail_safe_default,  # المُصنِّف العام — صمّامٌ فشل-آمن مفعَّل افتراضياً لا مُطفأ
     44: _guard_verdict_tone_recognizes_arabic_labels,  # Master Prompt Part 2 §B — _verdict_tone تتعرّف على التسمية العربية أيضاً
+    45: _guard_price_fix_scoped_to_table_window,  # دالة إصلاح عملة السعر مقيَّدة بنافذة الجدول لا كامل المستند
 }
 
 _TRAPS = [

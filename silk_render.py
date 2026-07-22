@@ -727,15 +727,25 @@ def _fix_price_column_currency_label(text: str) -> str:
     """عنوِن عمود السعر بالعملة المرصودة فعلاً في متن التقرير نفسه، لا
     باليورو/الدولار حسب الترويسة وحدها. إن لم تظهر عملة أخرى غير الموعودة في
     الترويسة، لا تغيير (لا مؤشّر مطابَق سلباً — نفس منطق الاكتشاف في
-    silk_quality_gate._check_currency_label_mismatch)."""
+    silk_quality_gate._check_currency_label_mismatch).
+
+    البحث عن العملة الأخرى **يقتصر على نافذة الجدول نفسه** (من الترويسة حتى
+    أول سطر فارغ) — لا كامل المستند. بلاغ حي (Master Prompt Part 2، تدقيق
+    عيّنة تقرير العميل): بحثٌ على كامل النص كان يُعنوِن عمود سعرٍ مطبَّعٍ
+    بالدولار عمداً بـ«باليورو» لمجرّد أنّ قسماً آخر تماماً (نقاش خطر صرف
+    العملة، «اليورو هو عملة السوق نفسها») يذكر اليورو — نفس مبدأ نافذة
+    الجدول في silk_quality_gate._check_currency_label_mismatch (LESSONS ٤٢)
+    لم يكن مطبَّقاً هنا في دالة الإصلاح الشقيقة."""
     if not text:
         return text
     m = _PRICE_HEADER_CUR_RE.search(text)
     if not m:
         return text
-    rest = text[:m.start()] + text[m.end():]
+    block_end = text.find("\n\n", m.end())
+    block_end = block_end if block_end != -1 else len(text)
+    block = text[m.start():block_end]
     for label, pat in _OTHER_CUR_RELABEL:
-        if pat.search(rest):
+        if pat.search(block):
             return text[:m.start()] + m.group(1) + label + text[m.end():]
     return text
 

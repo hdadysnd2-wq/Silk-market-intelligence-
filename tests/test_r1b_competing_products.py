@@ -85,7 +85,11 @@ def test_committed_client_sample_shows_competing_products_table():
     # العنوان المسمّى + صف منافِس + شارة دليل + عمود التطبيع
     assert "المنتجات المنافسة وأسعارها" in text
     assert "دقلة نور" in text                       # منتج منافِس مرصود بالاسم
-    assert "السعر/كجم بالدولار" in text             # عمود التطبيع
+    # Q3 (تدقيق عملة العمود): عمود التطبيع يُعنوَن بعملة الرصد لا دولاراً
+    # مفروضاً — نفس عقد برومبت الكاتب (test_writer_prompt_requires_
+    # competing_products_table) لا صياغة عيّنة قديمة سابقة للإصلاح.
+    assert "السعر/كجم (بعملة الرصد)" in text        # عمود التطبيع
+    assert "السعر/كجم بالدولار" not in text
     assert "✓" in text and "◐" in text              # شارتا الدليل
     # يهبط داخل قسم العميل الصحيح
     assert "المنافسة والتسعير والهامش" in text
