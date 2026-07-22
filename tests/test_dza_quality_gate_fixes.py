@@ -191,6 +191,47 @@ def test_5_currency_check_still_fires_within_the_same_table_block():
     assert findings[0]["repairable"] is True
 
 
+# LESSONS ٤٥ — دالة الإصلاح الشقيقة (silk_render._fix_price_column_
+# currency_label) لم تحمل نفس تضييق نافذة الجدول الذي حمله الفحص
+# (silk_quality_gate._check_currency_label_mismatch، اللائحتان أعلاه) —
+# اكتُشف عبر تدقيق عيّنة تقرير العميل (Master Prompt Part 2): جدولٌ مطبَّعٌ
+# بالدولار عمداً أُعيد تعنونه «باليورو» زوراً لمجرّد أنّ قسماً آخر تماماً
+# (نقاش خطر صرف العملة) يذكر «اليورو».
+
+def test_5b_price_fix_scoped_to_table_not_whole_document():
+    """حارس انحدار: دالة **الإصلاح** الشقيقة تقتصر بحثها عن العملة الأخرى
+    على نافذة الجدول أيضاً — لا كامل المستند. جدولٌ مطبَّعٌ بالدولار عمداً
+    (قيمه فعلاً دولارية) لا يُعاد تعنونه بسبب ذكر «اليورو» في قسمٍ آخر لا
+    علاقة له بالجدول (مثل نقاش خطر صرف العملة)."""
+    from silk_render import _fix_price_column_currency_label
+    text = (
+        "## 6. المشهد التنافسي\n"
+        "| المنتج | السعر/كجم بالدولار |\n"
+        "| --- | --- |\n"
+        "| تمر سكري | 6.0$ |\n\n"
+        "## 9. تقييم المخاطر\n"
+        "يشكّل تقلّب سعر الصرف عاملاً لأنّ اليورو هو عملة السوق نفسها.")
+    out = _fix_price_column_currency_label(text)
+    assert "السعر/كجم بالدولار" in out
+    assert "السعر/كجم باليورو" not in out
+
+
+def test_5b_price_fix_still_fires_within_the_same_table_block():
+    """حارس مضاد: التناقض الحقيقي داخل **نفس الجدول** (وعدُ دولارٍ بينما
+    القيم الفعلية يورو) يبقى يُعنوَن بالعملة الصحيحة — التضييق لا يُسقِط
+    الحالة الحقيقية (المدوّنة القانونية DZA بالضبط)."""
+    from silk_render import _fix_price_column_currency_label
+    text = (
+        "## 6. المشهد التنافسي\n"
+        "| المنتج | السعر/كجم بالدولار |\n"
+        "| --- | --- |\n"
+        "| زبدة فول سوداني | 9.14€ |\n\n"
+        "## 7. التنظيم والوصول للسوق\nنص.")
+    out = _fix_price_column_currency_label(text)
+    assert "السعر/كجم باليورو" in out
+    assert "السعر/كجم بالدولار" not in out
+
+
 # ══════════ ٦ — سقف الملحق التقني: رسالة القطع نظيفة ══════════
 
 def test_6_audit_coverage_message_is_clean_and_matches_counts():

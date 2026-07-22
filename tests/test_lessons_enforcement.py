@@ -58,6 +58,16 @@ _SYMBOL_ANCHORS = [
     # البند ٤٣ — المُصنِّف العام: صمّام فشل-آمن مفعَّل افتراضياً.
     (43, "silk_hs_classifier.py", ["def enabled", '"0", "false", "no", "off"']),
     (43, "api.py", ['health["hs_classifier"]']),
+    # البند ٤٤ — Master Prompt Part 2 §B: _verdict_tone تتعرّف على التسمية
+    # العربية أيضاً، وبوابة اتساق الحكم عند التسليم.
+    (44, "silk_render.py", ["عدم الدخول", "مشروط", "مراقبة"]),
+    (44, "silk_reports.py", ["_assert_verdict_consistency_doc",
+                            "_assert_verdict_consistency_text",
+                            "_declared_verdict_labels", "_resolve_vtxt"]),
+    # البند ٤٥ — دالة الإصلاح الشقيقة لعمود العملة تحمل نفس تضييق نافذة
+    # الجدول؛ عيّنة العميل مطابقة لعقد الكاتب المُهجَّر (بعملة الرصد).
+    (45, "silk_render.py", ["_fix_price_column_currency_label"]),
+    (45, "tools/gen_client_report_sample.py", ["السعر/كجم (بعملة الرصد)"]),
 ]
 
 # كل مدخلة: (رقم الدرس، مسار الوثيقة، علامات المنهج التي يجب أن تبقى).
@@ -316,6 +326,13 @@ _TEST_ANCHORS = [
      ["def test_general_classifier_valve_is_fail_safe_on_by_default"]),
     (43, "tests/test_regression_registry.py",
      ["def _guard_hs_classifier_valve_fail_safe_default"]),
+    # البند ٤٤ — Master Prompt Part 2 §B: بوابة اتساق الحكم عند التسليم.
+    (44, "tests/test_master_prompt_part2_verdict.py",
+     ["def test_verdict_tone_recognizes_arabic_labels_not_only_english_codes",
+      "def test_kuwait_client_and_research_docx_pass_verdict_gate"]),
+    (45, "tests/test_dza_quality_gate_fixes.py",
+     ["def test_5b_price_fix_scoped_to_table_not_whole_document",
+      "def test_5b_price_fix_still_fires_within_the_same_table_block"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

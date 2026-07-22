@@ -597,6 +597,122 @@ def _add_verdict_badge(doc, vtxt: str) -> None:
         pass
 
 
+# ═══ Master Prompt Part 2 §B — بوابة اتساق الحكم عند التسليم ═══
+#
+# الحكم حقلٌ واحدٌ (verdict_tone) تشتقّ منه كل مواضع العرض الأربعة: شارة
+# الغلاف، صفّ الجدول («الحكم»/«التوصية»)، وسطر «الحكم:»/«التوصية:» في قسم
+# القرار. الفحص هنا **تصريحيّ محض** — يلتقط فقط هذه المواضع الأربعة، لا
+# يمسح كامل السرد: نقاش «شرطا قلب الحكم» (LESSONS ٣٢) قد يذكر تصنيفاً آخر
+# افتراضياً بصياغة "لو تحقّق كذا لتحوّل الحكم إلى دخول مشروط" بلا أيّ تناقضٍ
+# حقيقي — مسحٌ عامٌّ كان سيُبلِغ زائفاً هنا (نفس عائلة أخطاء false-positive
+# التي عضّت CAGR/العملة سابقاً، LESSONS ٤٢). هذه بوابة تسليم صلبة: تُشغَّل
+# بعد بناء المستند مباشرة وقبل الحفظ، وترفع RuntimeError على أي تعارض حقيقي
+# — لا تسجيل صامت.
+_VERDICT_DECL_RE = re.compile(r"^(?:الحكم|التوصية)\s*:\s*(.+)$")
+
+
+def _match_known_verdict_label(s: str) -> "str | None":
+    """صنِّف نصّاً كتسمية حكمٍ معروفة إن كان **يبدأ** بإحدى تسميات
+    `_VERDICT_LABELS_AR` (مطابقة بادئة لا مساواة سطر كامل) — سطر «مختصر»
+    قد يُلحِق سياقاً بعد التسمية («مراقبة السوق — سوق الكويت (بحث عميق
+    شامل)») بلا أن يكون هذا تناقضاً؛ نصٌّ لا يبدأ بأيّ تسمية معروفة يُهمَل
+    (ليس تصريحاً بحكمٍ أصلاً) بدل تصنيفه تعارضاً زائفاً."""
+    s = s.strip()
+    for lbl in _VERDICT_LABELS_AR.values():
+        if s == lbl or s.startswith(lbl + " ") or s.startswith(lbl + "—") \
+                or s.startswith(lbl + "،"):
+            return lbl
+    return None
+
+
+def _resolve_vtxt(dr: dict) -> str:
+    """سلسلة الحكم الخام الواحدة (GO/WATCH/...) — نقطة اشتقاقٍ مشتركة بدل
+    تكرار `ai.get("verdict") or verdict.get("verdict") or ""` في كل مُصيّر
+    (Master Prompt Part 2 §B، البند ٤: لا يُشتقّ الحكم من نصٍّ منفصل في أكثر
+    من موضع)."""
+    verdict = (dr or {}).get("verdict") or {}
+    ai = verdict.get("ai") or {}
+    return ai.get("verdict") or verdict.get("verdict") or ""
+
+
+def _declared_verdict_labels(doc) -> list[str]:
+    """كل ذكرٍ تصريحيّ لتسمية الحكم في المواضع الثلاثة القابلة للفحص داخل
+    كائن docx: شارة الغلاف (فقرة نصّها بالضبط إحدى تسميات _VERDICT_LABELS_AR)،
+    سطر «الحكم:»/«التوصية:» في متن الفقرات، وصفّ جدول أول عموده «الحكم» أو
+    «التوصية»."""
+    out: list[str] = []
+    labels = set(_VERDICT_LABELS_AR.values())
+    for p in doc.paragraphs:
+        t = p.text.strip()
+        if not t:
+            continue
+        if t in labels:  # شارة الغلاف: تطابق تامّ (فقرة قصيرة مستقلة) لا بادئة
+            out.append(t)
+            continue
+        m = _VERDICT_DECL_RE.match(t)
+        if m:
+            lbl = _match_known_verdict_label(m.group(1))
+            if lbl:
+                out.append(lbl)
+    for table in doc.tables:
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells]
+            if len(cells) >= 2 and cells[0] in ("الحكم", "التوصية"):
+                lbl = _match_known_verdict_label(cells[1])
+                if lbl:
+                    out.append(lbl)
+    return out
+
+
+def _assert_verdict_consistency_doc(doc, vtxt: str, where: str) -> None:
+    """بوابة تسليم: كل ذكرٍ تصريحيّ للحكم في المستند المُولَّد فعلياً يجب أن
+    يطابق الحكم القانوني الواحد (`_verdict_tone(vtxt)`). تعارضٌ = رفضُ
+    التوليد قبل وصول المستند للعميل/المشغّل، لا بعد بلاغٍ حي (Master Prompt
+    Part 2 §B، البندان ٤-٥)."""
+    canonical_label = _VERDICT_LABELS_AR[_verdict_tone(vtxt)]
+    conflicting = sorted({d for d in _declared_verdict_labels(doc)
+                          if d and d != canonical_label})
+    if conflicting:
+        raise RuntimeError(
+            f"تناقض حكمٍ في {where}: الحكم القانوني الواحد "
+            f"'{canonical_label}' بينما مواضع عرضٍ أخرى (الشارة/الجدول/"
+            f"سطر القرار) تذكر '{'، '.join(conflicting)}' — كل موضع عرضٍ "
+            "للحكم يُشتَقّ من الحقل الواحد verdict_tone، لا نصّاً منفصلاً "
+            "قد يتباعد عنه")
+
+
+def _declared_verdict_labels_text(blob: str) -> list[str]:
+    """معادل نصّي (Markdown لا docx) لـ`_declared_verdict_labels` — يفحص
+    سطر «- التوصية: **س**» وصفّ جدول «| الحكم | س |» فقط، لا كامل السرد."""
+    out: list[str] = []
+    for line in blob.splitlines():
+        s = line.strip()
+        m = re.match(r"^-\s*(?:الحكم|التوصية)\s*:\s*\*{0,2}(.+?)\*{0,2}\s*$", s)
+        if m:
+            lbl = _match_known_verdict_label(m.group(1))
+            if lbl:
+                out.append(lbl)
+            continue
+        m2 = re.match(r"^\|\s*(?:الحكم|التوصية)\s*\|\s*(.+?)\s*\|$", s)
+        if m2:
+            lbl = _match_known_verdict_label(m2.group(1))
+            if lbl:
+                out.append(lbl)
+    return out
+
+
+def _assert_verdict_consistency_text(blob: str, vtxt: str, where: str) -> None:
+    """معادل Markdown لـ`_assert_verdict_consistency_doc`."""
+    canonical_label = _VERDICT_LABELS_AR[_verdict_tone(vtxt)]
+    conflicting = sorted({d for d in _declared_verdict_labels_text(blob)
+                          if d and d != canonical_label})
+    if conflicting:
+        raise RuntimeError(
+            f"تناقض حكمٍ في {where}: الحكم القانوني الواحد "
+            f"'{canonical_label}' بينما مواضع عرضٍ أخرى تذكر "
+            f"'{'، '.join(conflicting)}'")
+
+
 def _render_markdown_table(doc, table_lines: list[str]) -> None:
     """حوّل جدول Markdown (| عمود | عمود |) لجدول Word حقيقي — بلاغ حي
     (الموجة ٩): سلاسل رقمية (تدفقات استيراد، سلّم أسعار، اشتراطات،
@@ -1358,7 +1474,7 @@ def _docx_deep_research(doc, view: dict) -> None:
     market = dr.get("market") or {}
     verdict = dr.get("verdict") or {}
     ai = verdict.get("ai") or {}
-    v_raw = ai.get("verdict") or verdict.get("verdict") or ""
+    v_raw = _resolve_vtxt(dr)
     doc.add_paragraph(
         f"السوق: {market.get('name_ar') or market.get('name_en')} "
         f"({market.get('iso3')}) — الحكم: "
@@ -1541,7 +1657,7 @@ def _render_research_docx(doc, view: dict) -> None:
     # _VERDICT_LABELS_AR[_verdict_tone(vtxt)] العربي الكامل (بلاغ تدقيق:
     # كانت الشارة تُترجَم بينما سطر «الحكم:» أسفل الخلاصة التنفيذية يطبع
     # الرمز الخام مباشرة — نفس التصنيف، مصدر عرض واحد لا اثنان).
-    vtxt = ai.get("verdict") or verdict.get("verdict") or ""
+    vtxt = _resolve_vtxt(dr)
     verdict_label = _VERDICT_LABELS_AR[_verdict_tone(vtxt)]
 
     # ٠) الغلاف وبطاقة التعريف — هوية سِلك (الموجة ١١، §11.1)
@@ -2199,7 +2315,7 @@ def render_client_docx(view: dict, path: str) -> str:
     market = dr.get("market") or {}
     verdict = dr.get("verdict") or {}
     ai = verdict.get("ai") or {}
-    vtxt = ai.get("verdict") or verdict.get("verdict") or ""
+    vtxt = _resolve_vtxt(dr)
     branding = _load_branding()
 
     # ٠) الغلاف — هوية سِلك، بلا أيّ تِلِمِتري
@@ -2288,6 +2404,7 @@ def render_client_docx(view: dict, path: str) -> str:
             "تلقائياً لتقديمها بلغة تجارية؛ الأرقام ومصادرها لم تُمَسّ.",
             style="Intense Quote")
     _client_assert_clean(doc)  # شبكة أمان أخيرة — لِما يستحيل تنقيته فقط
+    _assert_verdict_consistency_doc(doc, vtxt, "تقرير العميل")  # Master Prompt Part 2 §B
     _finalize_rtl(doc)         # §4: اتجاه RTL صريح على كل فقرة/run قبل الحفظ
     doc.save(path)
     return path
@@ -2496,6 +2613,8 @@ def render_docx(view: dict, path: str) -> str:
 
     if view.get("deep_research"):
         _render_research_docx(doc, view)
+        _assert_verdict_consistency_doc(  # Master Prompt Part 2 §B
+            doc, _resolve_vtxt(view["deep_research"]), "تقرير البحث العميق")
         _finalize_rtl(doc)   # §4: اتجاه RTL صريح على كل فقرة/run قبل الحفظ
         doc.save(path)
         return path
@@ -3108,7 +3227,10 @@ def _md_deep_research(view: dict, prefix: list[str]) -> str:
     if view.get("note"):
         L += ["", str(view["note"])]
     L.append("")
-    return "\n".join(L)
+    out = "\n".join(L)
+    _assert_verdict_consistency_text(  # Master Prompt Part 2 §B
+        out, _resolve_vtxt(dr), "تقرير Markdown")
+    return out
 
 
 def render_markdown(view: dict) -> str:

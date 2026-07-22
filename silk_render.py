@@ -727,15 +727,25 @@ def _fix_price_column_currency_label(text: str) -> str:
     """عنوِن عمود السعر بالعملة المرصودة فعلاً في متن التقرير نفسه، لا
     باليورو/الدولار حسب الترويسة وحدها. إن لم تظهر عملة أخرى غير الموعودة في
     الترويسة، لا تغيير (لا مؤشّر مطابَق سلباً — نفس منطق الاكتشاف في
-    silk_quality_gate._check_currency_label_mismatch)."""
+    silk_quality_gate._check_currency_label_mismatch).
+
+    البحث عن العملة الأخرى **يقتصر على نافذة الجدول نفسه** (من الترويسة حتى
+    أول سطر فارغ) — لا كامل المستند. بلاغ حي (Master Prompt Part 2، تدقيق
+    عيّنة تقرير العميل): بحثٌ على كامل النص كان يُعنوِن عمود سعرٍ مطبَّعٍ
+    بالدولار عمداً بـ«باليورو» لمجرّد أنّ قسماً آخر تماماً (نقاش خطر صرف
+    العملة، «اليورو هو عملة السوق نفسها») يذكر اليورو — نفس مبدأ نافذة
+    الجدول في silk_quality_gate._check_currency_label_mismatch (LESSONS ٤٢)
+    لم يكن مطبَّقاً هنا في دالة الإصلاح الشقيقة."""
     if not text:
         return text
     m = _PRICE_HEADER_CUR_RE.search(text)
     if not m:
         return text
-    rest = text[:m.start()] + text[m.end():]
+    block_end = text.find("\n\n", m.end())
+    block_end = block_end if block_end != -1 else len(text)
+    block = text[m.start():block_end]
     for label, pat in _OTHER_CUR_RELABEL:
-        if pat.search(rest):
+        if pat.search(block):
             return text[:m.start()] + m.group(1) + label + text[m.end():]
     return text
 
@@ -1110,6 +1120,8 @@ def _reconcile_mission_limits(lines: list[str],
 # JS بمعيارين قد يختلفان لنفس الرمز (سدّ تسريب الطبقة ٦: كانت لوحة الويب
 # تحسب تصنيفها الخاص من رمز الحكم الإنجليزي الخام وتعرض الرمز نفسه كنص
 # ظاهر — silk_reports._verdict_tone/_VERDICT_LABELS_AR كانتا نسخة موازية).
+_NEGATIVE_ENTRY_HINT_RE = re.compile(
+    r"(?:لا|غير|عدم|تأجيل|تجنّب|تجنب)[^\n]{0,15}دخول")
 def _verdict_tone(vtxt: object) -> str:
     """تصنيف لون شارة الحكم — go (أخضر)/conditional (مشروط، أخضر مزرقّ)/
     watch (كهرماني)/nogo (أحمر)/unknown (رمادي).
@@ -1128,6 +1140,29 @@ def _verdict_tone(vtxt: object) -> str:
     if "WATCH" in t:
         return "watch"
     if "GO" in t:
+        return "go"
+    # Master Prompt Part 2 §B: بعض مسارات الحكم (نداء كلود المرحلة الثانية،
+    # أو مدوّناتٌ يضبطها مستدعٍ) قد تضع التسمية **العربية** مباشرةً بدل
+    # الرمز الإنجليزي (`ai["verdict"] = "دخول مشروط"` لا "CONDITIONAL-GO") —
+    # كانت تنهار سابقاً إلى "unknown" فتعرض الشارة «تعذّر إصدار توصية» بينما
+    # المتن/الجدول يذكران التسمية العربية الصحيحة، وهو بالضبط تناقض الشارة/
+    # المتن الذي صُمِّمت هذه الدالة أصلاً لمنعه (بلاغ ٢٠٢٦-٠٧-٢١ أعلاه).
+    # نفس ترتيب الفحص (الأخصّ أولاً): «مشروط» قبل «الدخول» المجرّدة لأن
+    # «دخول مشروط» تحوي كلمة «دخول» أيضاً.
+    s = str(vtxt or "")
+    if "عدم الدخول" in s:
+        return "nogo"
+    if "مشروط" in s:
+        return "conditional"
+    if "مراقبة" in s:
+        return "watch"
+    # مراجعة الشيفرة: «دخول» المجرّدة بلا سياق نفي تُصنَّف go افتراضياً —
+    # لكن نفياً/تأجيلاً بصياغةٍ غير «عدم الدخول» الحرفية («لا يُنصح بالدخول»،
+    # «تأجيل الدخول») كان سيُقلَب زوراً إلى go. نمطٌ إضافي يلتقط ألفاظ النفي
+    # الشائعة قبل «دخول» ضمن نافذة قصيرة قبل الرجوع لـgo.
+    if _NEGATIVE_ENTRY_HINT_RE.search(s):
+        return "nogo"
+    if "الدخول" in s or "دخول" in s:
         return "go"
     return "unknown"
 

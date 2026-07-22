@@ -2315,7 +2315,19 @@ def create_app():
         from silk_render import build_view
         from silk_reports import render_markdown
         from fastapi.responses import PlainTextResponse
-        return PlainTextResponse(render_markdown(build_view(found)),
+        try:
+            text = render_markdown(build_view(found))
+        except RuntimeError as e:
+            # نفس عقد report.docx (البند أعلاه): تناقض حكمٍ أو تسريبٌ يستحيل
+            # تنقيته يُفشِل التوليد داخلياً — 501 نظيف لا 500 غير مُدار.
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "export_failure",
+                "فشل تصدير Markdown (محتوى رفضه حارس التصدير) — التفصيل "
+                "الكامل في استجابة الطلب الأصلي، لا هنا",
+                context={"analysis_id": analysis_id})
+            raise HTTPException(status_code=501, detail=str(e))
+        return PlainTextResponse(text,
                                  media_type="text/markdown; charset=utf-8")
 
     @app.post("/analyses/{analysis_id}/report")

@@ -496,6 +496,103 @@ def _check_currency_label_mismatch(dr: dict) -> list[dict]:
     return []
 
 
+# Master Prompt Part 2 §A3/§C — تناقضٌ رقميٌّ داخليّ: حقيقة في سجل الأدلة
+# (findings البعثات، قيمة DataPoint خام) تخالف رقماً في متن التقرير لنفس
+# المؤشر بأكثر من ٣× (المثال المكتشف: واردات 17K$ في المتن مقابل 11.88
+# مليون$ في سجل الأدلة). سجل الأدلة مصدرٌ **بنيويّ** (قيمة DataPoint رقمية
+# حقيقية) لا نصٌّ حرّ — فالمقارنة أضيق خطراً من CAGR/العملة (نصّ مقابل نصّ):
+# طرفٌ واحد بياناتٌ مؤكَّدة. نافذة تفسيرٍ محلية (٦٠ محرفاً حول الرقم في
+# المتن) تمنع علماً زائفاً حين يُفسَّر التناقض صراحةً (نفس مبدأ فئة كومتريد
+# مجاورة في مدوّنة الكويت القانونية) — مطابقٌ لعقد عدم الاختلاق: كلا الرقمين
+# يُحفَظان، لا يُصحَّح أحدهما صامتاً.
+_RECONCILED_PHRASES = ("مؤشر سياقي", "فئة مجاورة", "فئة كومتريد مجاورة",
+                       "ليس خطأً", "لا يُصلَح برقمٍ مختلَق", "تفسير التناقض",
+                       "التناقض متوقَّع", "مصالحة")
+_IMPORTS_KW_RE = re.compile(r"الواردات|واردات")
+_USD_AMOUNT_RE = re.compile(r"(\d[\d,.]*)\s*(مليار|مليون|ألف|الف)?\s*دولار")
+_USD_MAGNITUDE = {"مليار": 1_000_000_000, "مليون": 1_000_000,
+                  "ألف": 1_000, "الف": 1_000}
+# مراجعة الشيفرة: مذكِّرٌ نموّ/نسبة («نمو الواردات 9% سنوياً») ليس قيمة
+# استيرادٍ مطلقة بالدولار حتى لو ذُكرت كلمة «واردات» في نفس الملاحظة — قيمته
+# الخام (مثال: 9) تعني نسبة مئوية لا مبلغاً، فمقارنتها برقمٍ دولاريّ في المتن
+# تُنتِج نسبة تناقضٍ زائفة (false positive). يُستبعَد من سجل الأدلة هنا.
+_GROWTH_RATE_NOTE_RE = re.compile(r"نمو|معدّل|معدل|CAGR|%|٪", re.I)
+
+
+def _usd_amount_to_float(num_str: str, mag: str) -> "float | None":
+    try:
+        v = float(num_str.replace(",", ""))
+    except ValueError:
+        return None
+    return v * _USD_MAGNITUDE.get(mag, 1)
+
+
+def _check_evidence_body_numeric_consistency(dr: dict) -> list[dict]:
+    """قارن قيمة الواردات المسجَّلة في سجل الأدلة (DataPoint خام في findings
+    البعثات) برقم الواردات المذكور في متن التقرير — تعارضٌ حقيقي (>٣×) بلا
+    تفسيرٍ في نافذة محلية حول الرقم (لا كامل النص) => FAIL."""
+    text = (dr.get("report") or {}).get("text") or ""
+    if not text:
+        return []
+    evidence_values = []
+    for m in (dr.get("missions") or {}).values():
+        for f in (m.get("findings") or []):
+            v = f.get("value")
+            note = str(f.get("note") or "")
+            if isinstance(v, (int, float)) and not isinstance(v, bool) \
+                    and _IMPORTS_KW_RE.search(note) \
+                    and not _GROWTH_RATE_NOTE_RE.search(note):
+                evidence_values.append(float(v))
+    if not evidence_values:
+        return []
+    findings = []
+    seen_pairs = set()
+    for pm in _USD_AMOUNT_RE.finditer(text):
+        ctx = text[max(0, pm.start() - 60):pm.end() + 60]
+        if not _IMPORTS_KW_RE.search(ctx):
+            continue
+        amt = _usd_amount_to_float(pm.group(1), pm.group(2) or "")
+        if amt is None or amt <= 0:
+            continue
+        if any(p in ctx for p in _RECONCILED_PHRASES):
+            continue
+        for ev in evidence_values:
+            if ev <= 0:
+                continue
+            ratio = max(ev, amt) / min(ev, amt)
+            if ratio > 3:
+                key = (round(ev), round(amt))
+                if key in seen_pairs:
+                    continue
+                seen_pairs.add(key)
+                findings.append({
+                    "check": "evidence_body_numeric_contradiction",
+                    "repairable": False,
+                    "note": (f"تناقضٌ رقميٌّ داخليّ: سجل الأدلة يسجّل قيمة "
+                             f"واردات {ev:,.0f}$ بينما متن التقرير يذكر "
+                             f"{amt:,.0f}$ لنفس المؤشر (نسبة {ratio:.1f}× "
+                             "> 3×) بلا تفسيرٍ مجاور — يجب التصالح أو "
+                             "التفسير الصريح قبل التسليم")})
+                break
+    return findings
+
+
+# Master Prompt Part 2 §D — تغطية المصادر: كل مؤشرٍ يحمل مصدراً مسمّى
+# حقيقياً أو وسم «تقدير استرشادي» صريح؛ عتبة القبول ≥٨٥٪. دون العتبة =
+# ضيّق نطاق التقرير وأعلن الفجوة، لا تشحن مؤشرات بلا مصدر (البند ٩).
+def _check_source_coverage(dr: dict) -> list[dict]:
+    from silk_source_coverage import compute_source_coverage, SOURCE_COVERAGE_MIN_PCT
+    cov = compute_source_coverage(dr)
+    if cov["total"] == 0 or cov["pct"] >= SOURCE_COVERAGE_MIN_PCT:
+        return []
+    return [{
+        "check": "source_coverage_below_threshold", "repairable": False,
+        "note": (f"تغطية المصادر {cov['pct']:.0f}% ({cov['backed']}/"
+                 f"{cov['total']} مؤشراً بمصدرٍ مسمّى) دون عتبة القبول "
+                 f"{SOURCE_COVERAGE_MIN_PCT:.0f}% — ضيّق نطاق التقرير أو "
+                 "أعلن الفجوة صراحةً بدل شحن مؤشرات بلا مصدرٍ مسمّى")}]
+
+
 # سدّ تسريب (الطبقة ٧ — مفارقة البوابة): هذه الفحوصات مُعلَّمة repairable=True
 # لأن *صنف* النتيجة يُصلَح عادة في طبقة العرض قبل أن يصل النص هنا (راجع تعليق
 # الوحدة) — لكن حين تُطلِق أحدها فعلياً، فهذا يعني أن الإصلاح **فشل تحديداً في
@@ -559,6 +656,8 @@ def run_quality_gate(view: dict) -> dict:
     findings += _check_section_structure(dr)
     findings += _check_cagr_consistency(dr)
     findings += _check_currency_label_mismatch(dr)
+    findings += _check_evidence_body_numeric_consistency(dr)
+    findings += _check_source_coverage(dr)
     findings += _check_agent_health(dr)
     findings += _check_audit_coverage(dr)
     findings += _check_analyst_layer_failure(dr)
@@ -569,7 +668,10 @@ def run_quality_gate(view: dict) -> dict:
     if not findings:
         verdict = PASS
     elif any(f["check"] in ("section_structure", "agent_failed",
-                            "analyst_layer_failed") for f in non_repairable) \
+                            "analyst_layer_failed",
+                            "evidence_body_numeric_contradiction",
+                            "source_coverage_below_threshold")
+            for f in non_repairable) \
             or guard_fired:
         verdict = FAIL
     else:

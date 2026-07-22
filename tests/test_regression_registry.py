@@ -948,6 +948,51 @@ def _guard_hs_classifier_valve_fail_safe_default():
         "تعطيلٌ صريحٌ للصمّام مع مفتاح كلود متاح يجب أن يظهر تحذيراً في /health")
 
 
+def _guard_verdict_tone_recognizes_arabic_labels():
+    """LESSONS ٤٤ — Master Prompt Part 2 §B: بوابة اتساق الحكم عند التسليم
+    كشفت أنّ `silk_render._verdict_tone` كانت تتعرّف على الرموز الإنجليزية
+    فقط (GO/WATCH/CONDITIONAL/NO-GO)، فأيّ مسارٍ يضع التسمية العربية مباشرةً
+    (`"دخول مشروط"` لا `"CONDITIONAL-GO"`) كان ينهار إلى tone="unknown"
+    فتعرض الشارة «تعذّر إصدار توصية» بينما جدول/متن التقرير يذكران التسمية
+    الصحيحة — تناقضٌ شارة/متن. الحارس السلوكي: التسمية العربية والرمز
+    الإنجليزي المطابق يُنتِجان نفس الـtone؛ وبوابة اتساق التسليم (شارة/جدول/
+    سطر القرار) تمرّ فعلياً على مدوّنة الكويت القانونية بلا رفعٍ."""
+    from silk_render import _verdict_tone
+    assert _verdict_tone("دخول مشروط") == _verdict_tone("CONDITIONAL-GO") == "conditional"
+    assert _verdict_tone("مراقبة السوق") == _verdict_tone("WATCH") == "watch"
+    assert _verdict_tone("عدم الدخول حالياً") == _verdict_tone("NO-GO") == "nogo"
+    assert _verdict_tone("التوصية بالدخول") == _verdict_tone("GO") == "go"
+
+    from tools.canonical_kuwait_peanut_butter import kuwait_research_blob
+    from silk_render import build_view
+    from silk_reports import render_docx, render_client_docx
+    import os
+    import tempfile
+    os.environ["SILK_HERMETIC"] = "1"
+    view = build_view(kuwait_research_blob())
+    tmp = tempfile.mkdtemp()
+    render_docx(view, os.path.join(tmp, "r.docx"))
+    render_client_docx(view, os.path.join(tmp, "c.docx"))
+
+
+def _guard_price_fix_scoped_to_table_window():
+    """LESSONS ٤٥ — دالة الإصلاح `silk_render._fix_price_column_currency_
+    label` تقتصر على نافذة الجدول نفسه (لا كامل المستند) عند البحث عن
+    عملةٍ أخرى، مطابقةً لدالة الفحص الشقيقة (اللائحة ٤٢). حارسٌ مضاد: تناقضٌ
+    حقيقي داخل نفس الجدول يبقى مُصلَحاً بالعملة الصحيحة."""
+    from silk_render import _fix_price_column_currency_label
+    unrelated_euro_elsewhere = (
+        "| المنتج | السعر/كجم بالدولار |\n| --- | --- |\n| صنف | 6.0$ |\n\n"
+        "## قسمٌ آخر\nخطر صرف العملة: اليورو هو عملة السوق نفسها.")
+    out = _fix_price_column_currency_label(unrelated_euro_elsewhere)
+    assert "السعر/كجم بالدولار" in out and "السعر/كجم باليورو" not in out
+
+    same_table_mismatch = (
+        "| المنتج | السعر/كجم بالدولار |\n| --- | --- |\n| صنف | 9.14€ |")
+    out2 = _fix_price_column_currency_label(same_table_mismatch)
+    assert "السعر/كجم باليورو" in out2
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -997,6 +1042,8 @@ _LESSONS = {
     41: _guard_active_resolution_beats_rejected_and_short_root_collision,  # ONE FIX — المصادَق يتصدّر على المرفوض، لا تصادف جذرٍ قصير
     42: _guard_dza_quality_gate_six_findings,  # تحليل #1 DZA — ست نتائج فشل بوّابة الجودة معاً على تشغيلة واحدة
     43: _guard_hs_classifier_valve_fail_safe_default,  # المُصنِّف العام — صمّامٌ فشل-آمن مفعَّل افتراضياً لا مُطفأ
+    44: _guard_verdict_tone_recognizes_arabic_labels,  # Master Prompt Part 2 §B — _verdict_tone تتعرّف على التسمية العربية أيضاً
+    45: _guard_price_fix_scoped_to_table_window,  # دالة إصلاح عملة السعر مقيَّدة بنافذة الجدول لا كامل المستند
 }
 
 _TRAPS = [
