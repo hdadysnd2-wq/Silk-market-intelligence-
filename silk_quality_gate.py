@@ -1024,6 +1024,50 @@ _REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
                            "currency_label_mismatch"}
 
 
+# WP-7 §3 — النصوص النائبة الصلبة التي لا يجوز أن تبلغ **المستند النهائي
+# المبني** أبداً (سطر عدم التوفّر العام مستثنى هنا: مسار التدهور المتعمَّد
+# للاستدعاء المباشر؛ تسليمه عبر API محكوم بفحص القالب client_section_placeholder).
+_ARTIFACT_HARD_PLACEHOLDERS = (
+    "بند تقني غير قابل للعرض المباشر",
+    "أثر التتبع",
+)
+
+
+def run_client_artifact_text_gate(text: str) -> list[dict]:
+    """WP-7 §3 — بوابة نصّ المُنتَج النهائي: تُشغَّل على النص الكامل
+    المستخرَج من مستند العميل **بعد** بنائه (docx — ومنه يُشتق الـPDF)، لا
+    على القالب فقط: طبقة العرض نفسها قد تُدخِل نصاً لم يمرّ على فحوصات
+    القالب. تعيد قائمة بنود؛ أي بند = رفض التسليم (RuntimeError في
+    `render_client_docx`)."""
+    findings: list[dict] = []
+    if not text:
+        return findings
+    findings += _check_client_scaffold_leak(text)
+    for ph in _ARTIFACT_HARD_PLACEHOLDERS:
+        if ph in text:
+            findings.append({
+                "check": "placeholder_leak", "repairable": False,
+                "note": f"نصّ نائب تقني في المستند النهائي: «{ph}»"})
+    # بتر «…» على مستوى السطر (نص docx المستخرَج سطرٌ لكل فقرة، لا كتل
+    # منفصلة بأسطر فارغة) — الاقتباسات (»/") الخاتمة مستثناة بنيوياً لأن
+    # السطر حينها لا ينتهي بالنقاط نفسها.
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith(">"):
+            continue
+        if len(s) > 25 and (s.endswith("…") or s.endswith("...")):
+            findings.append({
+                "check": "trailing_ellipsis", "repairable": False,
+                "note": f"سطر في المستند النهائي ينتهي بنقاط حذف: "
+                       f"'...{s[-40:]}'"})
+    if "لا فجوة جوهرية" in text and "فجوة بيانات" in text:
+        findings.append({
+            "check": "gaps_closing_contradiction", "repairable": False,
+            "note": "المستند النهائي يعلن «فجوة بيانات» ويطبع «لا فجوة "
+                   "جوهرية» معاً — تناقض فجوات في المُنتَج المبني"})
+    return findings
+
+
 def run_quality_gate(view: dict) -> dict:
     """شغّل بوابة الجودة على `view["deep_research"]` — يعيد
     {"verdict": PASS|WARN|FAIL, "findings": [...], "methodology_notes": [...]}.

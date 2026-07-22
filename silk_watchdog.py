@@ -159,6 +159,58 @@ def record_blocked_export(analysis_id: int | None, product: str | None,
     return record
 
 
+def record_override(analysis_id: int | None, product: str | None,
+                    market: str | None, gate_findings: list[dict],
+                    fmt: str) -> dict | None:
+    """WP-7 §1 — كل تجاوز مالكٍ لبوابة الجودة (`?override=1` بسلطة
+    `SILK_OWNER_KEY` المنفصلة) يُسجَّل حدثاً مستقلاً `kind="export_override"`
+    — يقرؤه التصدير الداخلي (`?internal=1`) ليختم النسخة التشغيلية بسطر
+    «سُلِّم بتجاوز مالك — ملاحظات البوابة مرفقة»."""
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    record = {
+        "analysis_id": analysis_id, "kind": "export_override",
+        "product": product, "market": market, "overall": RED,
+        "created_at": now, "contracts": {}, "economics": {},
+        "services": [], "failures": {},
+        "findings": [_finding(
+            "client_export_override", RED,
+            f"تصدير العميل ({fmt}) سُلِّم بتجاوز مالكٍ رغم FAIL بوابة "
+            f"الجودة ({len(gate_findings or [])} ملاحظة).", "export_gate")],
+        "gate_findings": [
+            {"check": f.get("check"), "note": f.get("note")}
+            for f in (gate_findings or [])][:12],
+        "self_error": None,
+    }
+    _store(record)
+    return record
+
+
+def override_records_for(analysis_id: int | None,
+                         path: str | None = None) -> list[dict]:
+    """سجلّات تجاوز المالك لتحليل بعينه (الأحدث أولاً) — `[]` بلا قاعدة/صفوف."""
+    if analysis_id is None:
+        return []
+    path = path or _db_path()
+    if not os.path.exists(path):
+        return []
+    try:
+        with _connect(path) as conn:
+            rows = conn.execute(
+                "SELECT record_json FROM watchdog_records WHERE "
+                "kind = 'export_override' AND analysis_id = ? "
+                "ORDER BY id DESC", (int(analysis_id),)).fetchall()
+        out = []
+        for r in rows:
+            try:
+                out.append(json.loads(r["record_json"]))
+            except Exception:  # noqa: BLE001
+                continue
+        return out
+    except Exception as e:  # noqa: BLE001
+        log.warning("watchdog override read failed: %s", e)
+        return []
+
+
 # ── PART 1 — طبقة الاستشعار: حساب حتمي، صفر نداء كلود ───────────────────────
 
 _VENDOR_PLACEHOLDER_RE = re.compile(r"\[شعار[^\]]*\]|\[LOGO[^\]]*\]", re.I)

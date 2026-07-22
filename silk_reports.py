@@ -1563,6 +1563,16 @@ def _docx_deep_research(doc, view: dict) -> None:
     doc.add_heading("قسم البحث العميق — التقاطعات الخمسة والمحلل الشامل",
                     level=1)
     _stamp_degraded_banner(doc, view)
+    # WP-7 §1: ختم التجاوز على النسخ الداخلية — نسخة عميل سُلِّمت بتجاوز
+    # مالكٍ لبوابة الجودة تُوثَّق هنا مع ملاحظات البوابة المرفقة.
+    for ov in (view.get("owner_override_history") or []):
+        doc.add_paragraph(
+            f"⚠ سُلِّمت نسخة عميل من هذا التقرير بتجاوز مالكٍ لبوابة "
+            f"الجودة بتاريخ {ov.get('created_at')} — ملاحظات البوابة مرفقة:",
+            style="Intense Quote")
+        for gf in (ov.get("gate_findings") or [])[:6]:
+            doc.add_paragraph(f"• {gf.get('check')}: {gf.get('note')}",
+                              style="Intense Quote")
 
     # نفس تصنيف/تعريب الحكم المستعمَل في الغلاف (_VERDICT_LABELS_AR عبر
     # _verdict_tone) — لا مصدر عرض ثانٍ قد يختلف نصّه عن الأول لنفس الرمز
@@ -2642,6 +2652,17 @@ def render_client_docx(view: dict, path: str) -> str:
             style="Intense Quote")
     _client_assert_clean(doc)  # شبكة أمان أخيرة — لِما يستحيل تنقيته فقط
     _assert_verdict_consistency_doc(doc, vtxt, "تقرير العميل")  # Master Prompt Part 2 §B
+    # WP-7 §3: بوابة نصّ المُنتَج النهائي — على النص الكامل المبني فعلياً
+    # (فقرات + جداول)، لا على القالب فقط؛ يغطّي مسار PDF أيضاً (يُبنى منه).
+    import silk_quality_gate as _qg
+    _artifact_text = "\n".join(
+        [p.text for p in doc.paragraphs]
+        + [c.text for t in doc.tables for row in t.rows for c in row.cells])
+    _artifact_findings = _qg.run_client_artifact_text_gate(_artifact_text)
+    if _artifact_findings:
+        raise RuntimeError(
+            "رفضت بوابة نصّ المُنتَج النهائي تسليم تقرير العميل: "
+            + "؛ ".join(f["note"] for f in _artifact_findings[:5]))
     _finalize_rtl(doc)         # §4: اتجاه RTL صريح على كل فقرة/run قبل الحفظ
     doc.save(path)
     return path

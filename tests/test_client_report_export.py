@@ -496,9 +496,20 @@ def test_client_docx_export_blocked_409_when_gate_fails(tmp_path):
             assert body["findings"]
             assert any(f["check"] == "section_structure" for f in body["findings"])
 
-            # ?override=1 يتخطّى الحجب صراحةً (مسؤولية حامل مفتاح API)
-            r_override = client.get(f"/analyses/{aid}/report.docx?override=1")
-            assert r_override.status_code in (200, 501)
+            # WP-7 §1: ?override=1 يتطلّب سلطة المالك المنفصلة — مفتاح API
+            # العادي وحده يُرفَض 403؛ ومع X-Owner-Key المطابقة يمرّ.
+            r_no_owner = client.get(f"/analyses/{aid}/report.docx?override=1")
+            assert r_no_owner.status_code == 403
+            assert r_no_owner.json()["detail"]["error"] == \
+                "owner_override_required"
+            os.environ["SILK_OWNER_KEY"] = "owner-secret"
+            try:
+                r_override = client.get(
+                    f"/analyses/{aid}/report.docx?override=1",
+                    headers={"X-Owner-Key": "owner-secret"})
+                assert r_override.status_code in (200, 501)
+            finally:
+                os.environ.pop("SILK_OWNER_KEY", None)
 
             # ?internal=1 معفًى من فحص البوابة تماماً — لا 409 مهما كان الحكم
             r_internal = client.get(f"/analyses/{aid}/report.docx?internal=1")
