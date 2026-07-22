@@ -2372,8 +2372,17 @@ def create_app():
                 view, analysis_id, found, "docx", request)
         if is_research and internal:
             _attach_override_history(view, analysis_id)
+        # القالب الأكاديمي (قرار المالك 2026-07-22): ?style=academic يبدّل
+        # ترتيب/نبرة تقرير العميل فقط — نفس النموذج القانوني ونفس بوابة
+        # التسليم أعلاه ونفس مُطهِّرات العميل؛ صفر نداء كلود إضافي.
+        style = str(request.query_params.get("style") or "").lower()
         try:
-            if is_research and not internal:
+            if is_research and not internal and style == "academic":
+                from silk_reports import render_academic_docx
+                path = render_academic_docx(
+                    view, os.path.join(tempfile.mkdtemp(), "report.docx"))
+                fname = f"silk_academic_report_{analysis_id}.docx"
+            elif is_research and not internal:
                 path = render_client_docx(
                     view, os.path.join(tempfile.mkdtemp(), "report.docx"))
                 fname = f"silk_client_report_{analysis_id}.docx"
@@ -2429,8 +2438,13 @@ def create_app():
         if is_research and internal:
             _attach_override_history(view, analysis_id)
         out = os.path.join(tempfile.mkdtemp(), "report.pdf")
+        style = str(request.query_params.get("style") or "").lower()
         try:
-            if is_research and not internal:
+            if is_research and not internal and style == "academic":
+                from silk_reports import render_academic_pdf
+                path = render_academic_pdf(view, out)
+                fname = f"silk_academic_report_{analysis_id}.pdf"
+            elif is_research and not internal:
                 path = render_client_pdf(view, out)
                 fname = f"silk_client_report_{analysis_id}.pdf"
             else:
