@@ -163,6 +163,32 @@ def _trim_sentence(s: object, max_len: int = 240) -> str:
     return (cut[:sp] if sp > 0 else cut).rstrip()
 
 
+# WP-2 §1 — النصّ النائب التقني (يبقى في المسارات الداخلية/?internal=1 فقط).
+_UNRENDERABLE_NOTE = "بند تقني غير قابل للعرض المباشر"
+
+
+def _client_prose(s: object, max_len: int = 400) -> str:
+    """نص آمن لمتن **العميل** — WP-2 §1: لا نصّ نائب يصل العميل أبداً.
+    كتلة JSON/سياج من ردٍّ خام: يُحاوَل استخلاص المضمون (نفس مستخلص
+    `silk_render._strip_raw_json_leak`)، وإن تعذّر تُسقَط الكتلة ("") —
+    فيخلو القسم وتلتقطه بوابة الجودة (FAIL يمنع التسليم) بدل تسليم نائبٍ
+    مثل «بند تقني غير قابل للعرض المباشر — التفاصيل في أثر التتبع»."""
+    text = str(s or "").strip()
+    if not text:
+        return ""
+    if text.lstrip().startswith(("{", "```")):
+        try:
+            from silk_render import _strip_raw_json_leak
+            extracted = str(_strip_raw_json_leak(text) or "").strip()
+        except Exception:  # noqa: BLE001 — تعذّر الاستخلاص = إسقاط
+            extracted = ""
+        if (not extracted or extracted.lstrip().startswith(("{", "```"))
+                or "تعذّر تفسير" in extracted):
+            return ""
+        text = extracted
+    return _trim_sentence(text, max_len)
+
+
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 _ITALIC_RE = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
 _CODE_SPAN_RE = re.compile(r"`([^`]*)`")
@@ -2180,11 +2206,14 @@ def _client_gaps_section(doc, dr: dict) -> None:
             f for f in (by_cat.get("entry_door") or [])
             if _dp_conf(f) is not None and _dp_conf(f) < EVIDENCE_SECONDARY_MIN]
         if unverified_doors:
+            # WP-2 §1: `_client_prose` لا `_clean_report_text` — لا نصّ نائب
+            # («بند تقني…») يصل متن العميل حتى في أسماء الأبواب.
             names = "، ".join(
-                _client_sanitize(_clean_report_text(f.get("value"), 80))
-                for f in unverified_doors[:2])
+                n for n in (_client_sanitize(_client_prose(f.get("value"), 80))
+                            for f in unverified_doors[:2]) if n)
+            _named = f" ({names})" if names else ""
             gap_lines.append(
-                f"لم نتمكّن من تأكيد قناة الدخول الأولى ({names}) من مصدر "
+                f"لم نتمكّن من تأكيد قناة الدخول الأولى{_named} من مصدر "
                 "موثّق — إغلاق هذه الفجوة يتطلّب خدمة تحقّق جهات اتصال مدفوعة "
                 "(قواعد بيانات تجارية) قبل الالتزام بالموزّع.")
 
@@ -2423,11 +2452,12 @@ def render_client_docx(view: dict, path: str) -> str:
     reasoning = ((ai.get("reasoning") if _ai_agrees else "")
                  or verdict.get("note") or "")
     if reasoning:
-        # §B-1 (حزمة الفكس v2.1): متن العميل لا يُقصّ بـ«…» أبداً — القصّ
-        # النظيف عند حدّ جملة (`_trim_sentence`، بلا نقاط حذف) بحدٍّ كبيرٍ
-        # كافٍ فعلياً لأطول تعليل حكم واقعي، لا `_clean_report_text` (يقصّ
-        # عند حدّ كلمة + «…»، مصمَّمة للسطور التشغيلية/الداخلية فقط).
-        doc.add_paragraph(_client_sanitize(_trim_sentence(reasoning, 2000)))
+        # §B-1 (حزمة الفكس v2.1) + WP-2 §1: متن العميل لا يُقصّ بـ«…» ولا
+        # يستقبل نصّاً نائباً أبداً — `_client_prose` تستخلص من الكتلة الخام
+        # أو تُسقِطها (فتلتقطها البوابة)، بدل «بند تقني غير قابل للعرض».
+        _r = _client_sanitize(_client_prose(reasoning, 2000))
+        if _r:
+            doc.add_paragraph(_r)
     # تصدير متدهور بدل فشل صامت (بلاغ المالك، القضية ٣): حين يتعذّر توليد
     # التقرير السردي (report=None بعد فشل نداء الكاتب) نُصدّر مستنداً كاملاً
     # بما هو متاح — الحكم أعلاه + الأدلة المرصودة + الفجوات المعلنة — مع
@@ -2483,43 +2513,94 @@ def render_client_docx(view: dict, path: str) -> str:
     return path
 
 
+# WP-2 §4 — مصادر البنود الخام لكل قسم عميل حين يغيب سرد الكاتب.
+# «المخاطر» لم تعد مربوطة بمجموعة فارغة () تضمن فقرة الاعتذار العامة —
+# صارت تقرأ من نتائج بعثة المخاطر (risk_news) + بنود SWOT (التهديدات ضمنها).
+_CLIENT_FALLBACK_CATS = {
+    "القرار وأساسه": ("swot",),
+    "السوق بالأرقام": ("demand",),
+    "المنافسة والتسعير والهامش": ("price_competitiveness",),
+    "مسار الدخول والمتطلبات": ("entry_cost", "entry_door"),
+    "المخاطر": ("swot",),
+}
+
+
+def _client_fallback_sources(dr: dict, client_head: str) -> list[str]:
+    """البنود الخام المرشّحة لإعادة الصياغة التجارية لقسم عميل بلا سرد كاتب.
+    نصوص فقط (لا نصّ نائب): كتل JSON غير القابلة للاستخلاص تُسقَط."""
+    by_cat = (dr.get("analyst") or {}).get("by_category") or {}
+    items: list[str] = []
+    for cat in _CLIENT_FALLBACK_CATS.get(client_head, ()):
+        for f in (by_cat.get(cat) or []):
+            t = _client_prose(_dp_value(f), 400)
+            if t:
+                items.append(t)
+    if client_head == "المخاطر":
+        risk = (dr.get("missions") or {}).get("risk_news") or {}
+        if isinstance(risk, dict) and not risk.get("failed"):
+            for f in (risk.get("findings") or []):
+                t = _client_prose(_dp_value(f), 400)
+                if t:
+                    items.append(t)
+    return items
+
+
+def _client_missing_narrative_heads(dr: dict) -> "dict[str, list[str]]":
+    """أقسام العميل التي سيصادفها التصدير بلا سرد كاتب، مع بنودها الخام
+    المرشّحة لإعادة الصياغة — نفس منطق تجميع الأقسام في `render_client_docx`
+    (وتستعمله بوابة الجودة أيضاً) فلا يتباعدان."""
+    sections = _parse_writer_sections(((dr.get("report") or {}).get("text")
+                                       or ""))
+    buckets: dict[str, list[list[str]]] = {c: [] for c in _CLIENT_SECTION_ORDER}
+    for title, body in sections:
+        if title == "التوصيات الاستراتيجية":
+            decision_part, roadmap_part = _split_at_roadmap(body)
+            buckets["القرار وأساسه"].append(decision_part)
+            if roadmap_part:
+                buckets["مسار الدخول والمتطلبات"].append(roadmap_part)
+            continue
+        head = _CLIENT_SECTION_MAP.get(title)
+        if head:
+            buckets[head].append(body)
+    out: dict[str, list[str]] = {}
+    for head in _CLIENT_SECTION_ORDER:
+        has_body = any(any(str(ln).strip() for ln in body)
+                       for body in buckets[head])
+        if not has_body:
+            out[head] = _client_fallback_sources(dr, head)
+    return out
+
+
+def _dp_value(f: object) -> object:
+    """قيمة نقطة بيانات — dict مخزَّن أو كائن DataPoint حي."""
+    if isinstance(f, dict):
+        return f.get("value")
+    return getattr(f, "value", None)
+
+
 def _client_body_or_fallback(doc, bodies: list[list[str]], dr: dict,
                              client_head: str) -> None:
-    """اعرض متون الكاتب لهذا القسم إن توفّرت؛ وإلا صياغة تجارية موجزة من
-    التقاطعات المهيكلة (سرد الكاتب غائب = فشل النداء) — بلا تِلِمِتري، بلا
-    عنوان فارغ. لا اختلاق: يذكر فقط ما رُصد فعلاً أو يصرّح تجارياً بغيابه."""
+    """اعرض متون الكاتب لهذا القسم إن توفّرت؛ وإلا **النثر التجاري المُعاد
+    صياغته** (نداء كاتب مصغّر، WP-2 §3 — يُحضَّر قبل بوابة التسليم ويُخزَّن
+    في `dr["client_fallback_prose"]`). لا تُسرَد قيم `dp.value` الخام نقاطاً
+    للعميل بعد الآن — قسم بلا سرد ولا نثر مُعاد صياغته تُفشِله بوابة الجودة
+    قبل التسليم أصلاً (النصّ العام أدناه شبكة أمان لمسارات الاستدعاء
+    المباشرة خارج نقطة التصدير فقط)."""
     if bodies:
         for body in bodies:
             _client_render_body_block(doc, body)
         return
-    # مسار احتياطي: لا سرد كاتب — اعرض من التقاطعات المهيكلة إن وُجدت.
-    cat_for_head = {
-        "القرار وأساسه": ("swot",),
-        "السوق بالأرقام": ("demand",),
-        "المنافسة والتسعير والهامش": ("price_competitiveness",),
-        "مسار الدخول والمتطلبات": ("entry_cost", "entry_door"),
-        "المخاطر": (),
-    }.get(client_head, ())
-    by_cat = (dr.get("analyst") or {}).get("by_category") or {}
-    shown = False
-    for cat in cat_for_head:
-        for f in (by_cat.get(cat) or []):
-            # §B-1: نفس القصّ النظيف بلا «…» — حدٌّ أكبر (بدل ٢٢٠) كافٍ
-            # لحقيقة تقاطع واحدة فعلية بلا بتر.
-            doc.add_paragraph(
-                _client_sanitize(_trim_sentence(f.get("value"), 400)),
-                style="List Bullet")
-            shown = True
-    if not shown:
-        # §B-2: هذا النصّ العام يبقى شبكة أمان أخيرة فقط — بوابة الجودة
-        # (`silk_quality_gate._check_client_section_would_be_placeholder`)
-        # تُفشِل التشغيلة **قبل** الوصول لهذا المسار أصلاً حين يخلو القسم من
-        # سرد الكاتب ومن حقائق التقاطع معاً (§0 يحجب تسليم FAIL للعميل)، فلا
-        # يصل هذا النصّ العميل في المسار الطبيعي — يبقى فقط لمسارات استدعاء
-        # مباشرة لهذه الدالة خارج نقطة تصدير API (اختبارات/أدوات).
-        doc.add_paragraph(
-            "التحليل السردي التفصيلي لهذا القسم غير متاح ضمن هذا التقرير؛ "
-            "الأدلة المرصودة ذات الصلة مُدرجة في «المراجع» ختام التقرير.")
+    prose = str(((dr.get("client_fallback_prose") or {}).get(client_head))
+                or "").strip()
+    if prose:
+        for para in prose.splitlines():
+            line = _client_sanitize(_client_prose(para, 600))
+            if line:
+                doc.add_paragraph(line)
+        return
+    doc.add_paragraph(
+        "التحليل السردي التفصيلي لهذا القسم غير متاح ضمن هذا التقرير؛ "
+        "الأدلة المرصودة ذات الصلة مُدرجة في «المراجع» ختام التقرير.")
 
 
 # ── §3 (أمر العمل الرئيس): التصدير النهائي PDF غير قابل للتحرير ────────────

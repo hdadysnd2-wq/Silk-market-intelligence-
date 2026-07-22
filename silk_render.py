@@ -882,6 +882,15 @@ def _strip_mission_key_prefix(text: str) -> str:
     return text
 
 
+# WP-2 §2 — سقالة «إذن ماذا؟» الحرفية: كانت تعليمة المحلل تفرض ختم كل بند
+# بأثره فكتب النموذج العبارةَ نفسها حرفياً داخل القيم فوصلت تقارير عملاء
+# مُسلَّمة («إذن ماذا؟ يجب…» ×١٠). التعليمة أُعيدت صياغتها (silk_market_
+# analyst) وهذا المُنظِّف شبكة الأمان الحتمية، وبوابة الجودة تُفشِل أي بقايا.
+_SO_WHAT_SCAFFOLD_RE = re.compile(
+    r"[«\"'()\[]*\s*(?:إذن\s*،?\s*ماذا|So\s+what)\s*[؟?]?\s*[»\"')\]]*\s*[:،—-]*\s*",
+    re.I)
+
+
 def _strip_internal_plumbing(text: str | None) -> str | None:
     """أزل تسريبات السباكة الداخلية من نص معروض للعميل (تقرير مكتوب/حدود
     بحث/ملخّص بعثة) — تفريغ JSON خام كامل يُستبدَل بنص مقروء أو فجوة
@@ -924,6 +933,9 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     # §2: لا ذكر لـ«كلود»/Claude في المُسلَّم.
     text = _CLAUDE_JSON_FAIL_RE.sub("تعذّرت قراءة بيانات هذا البند", text)
     text = _CLAUDE_WORD_RE.sub("التحليل الآلي", text)
+    # WP-2 §2: سقالة «إذن ماذا؟»/"So what" الحرفية (من تعليمة المحلل
+    # القديمة) تُنزَع — الأثر يبقى نثراً مدمجاً؛ العنوان السقالي يُحذَف.
+    text = _SO_WHAT_SCAFFOLD_RE.sub("", text)
 
     def _conf_value(m: "re.Match") -> str:
         from silk_narrative import confidence_phrase

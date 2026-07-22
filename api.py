@@ -1126,6 +1126,20 @@ def create_app():
         `?override=1` يتخطّى الحجب (نفس مصادقة `X-API-Key` — لا سلطة مالك
         منفصلة في هذه النقطة). `internal=1` لا يمرّ من هنا إطلاقاً (يبقى
         متاحاً دوماً للمدقّق)."""
+        # WP-2 §3: قبل البوابة — حضِّر نثر الصياغة التجارية للأقسام بلا سرد
+        # كاتب (نداء مصغّر لكل قسم، temperature=0). نجاحه يملأ
+        # dr["client_fallback_prose"] فيمرّ القسم من البوابة ويعرضه
+        # `_client_body_or_fallback`؛ فشله يترك القسم خاوياً فتُفشِله
+        # البوابة (409) — لا بنود `dp.value` خام تصل العميل بعد الآن.
+        dr = view.get("deep_research") or {}
+        if dr and not dr.get("client_fallback_prose"):
+            try:
+                from silk_ai_judge import rephrase_client_sections
+                prose = rephrase_client_sections(dr)
+                if prose:
+                    dr["client_fallback_prose"] = prose
+            except Exception as e:  # noqa: BLE001 — فشل التحضير تحكمه البوابة
+                log.warning("client fallback rephrase failed: %s", e)
         verdict, gate_out = _gate_verdict_for_client_export(view)
         if verdict != "FAIL":
             return

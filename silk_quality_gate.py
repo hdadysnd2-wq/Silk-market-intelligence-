@@ -101,8 +101,12 @@ def _check_trailing_ellipsis(text: str) -> list[dict]:
     findings = []
     for block in re.split(r"\n\s*\n", text):
         s = block.strip()
+        # WP-2 §6(ب): الاقتباس الحرفي (كتلة > أو نصّ داخل «») يُستثنى — فقرة
+        # غير اقتباسية تنتهي بنقاط حذف = بتر يصل العميل => FAIL لا تحذير.
+        if s.startswith(">"):
+            continue
         if s.endswith("…") or s.endswith("..."):
-            findings.append({"check": "trailing_ellipsis", "repairable": True,
+            findings.append({"check": "trailing_ellipsis", "repairable": False,
                              "note": "نصّ ينتهي بنقاط حذف «…» — بتر غير نظيف "
                                      "(§5): يجب القصّ عند حدّ جملة أو العرض كاملاً"})
     return findings
@@ -169,16 +173,48 @@ def _check_dangling_cross_reference(text: str) -> list[dict]:
     return findings
 
 
+# WP-2 §6 — سقالة «إذن ماذا؟»/"So what" الحرفية والنصوص النائبة التقنية:
+# كلتاهما وصلت تقارير عملاء مُسلَّمة فعلاً (تدقيق 2026-07-22). FAIL لا تحذير.
+_SO_WHAT_LEAK_RE = re.compile(r"إذن\s*،?\s*ماذا|So\s+what", re.I)
+_PLACEHOLDER_STRINGS = (
+    "بند تقني غير قابل للعرض المباشر",
+    "أثر التتبع",
+    "التحليل السردي التفصيلي لهذا القسم غير متاح",
+)
+
+
+def _check_client_scaffold_leak(text: str) -> list[dict]:
+    """WP-2 §6(أ) — العبارة السقالية الحرفية «إذن ماذا»/"So what" في نص
+    يواجه العميل: أثر تعليمة المحلل القديمة، نُزِعت في المصدر والمُنظِّف —
+    ظهورها هنا انحدار حاجب."""
+    if text and _SO_WHAT_LEAK_RE.search(text):
+        return [{"check": "client_scaffold_leak", "repairable": False,
+                 "note": "العبارة السقالية الحرفية «إذن ماذا»/So what "
+                        "ظهرت في نص التقرير — تُصاغ الآثار نثراً مدمجاً، "
+                        "لا سقالة تعليمات تصل العميل"}]
+    return []
+
+
+def _check_placeholder_leak(text: str) -> list[dict]:
+    """WP-2 §6(ج) — نصّ نائب تقني («بند تقني غير قابل للعرض المباشر»/«أثر
+    التتبع»/سطر عدم التوفّر العام) في نص يواجه العميل = فشل توليد سُلِّم
+    بدل أن يُعاد أو يُحجَب — FAIL."""
+    findings = []
+    for ph in _PLACEHOLDER_STRINGS:
+        if text and ph in text:
+            findings.append({
+                "check": "placeholder_leak", "repairable": False,
+                "note": f"نصّ نائب تقني وصل نص التقرير: «{ph}» — فشل "
+                       "التوليد يُعاد أو يُحجَب التسليم، لا يُسلَّم نائب"})
+    return findings
+
+
 # §B-2 — بدل نصّ عام ثابت («التحليل السردي التفصيلي لهذا القسم غير متاح…»)
-# حين يخلو قسم عميل من سرد الكاتب ومن حقائق تقاطع معاً: FAIL يمنع التسليم
-# (§0) بدل نصّ عام دائم يوهم بتحليل لم يحدث فعلياً.
-_CLIENT_SECTION_FACT_CATEGORIES = {
-    "القرار وأساسه": ("swot",),
-    "السوق بالأرقام": ("demand",),
-    "المنافسة والتسعير والهامش": ("price_competitiveness",),
-    "مسار الدخول والمتطلبات": ("entry_cost", "entry_door"),
-    "المخاطر": (),
-}
+# حين يخلو قسم عميل من سرد الكاتب: FAIL يمنع التسليم (§0) بدل نصّ عام دائم
+# يوهم بتحليل لم يحدث فعلياً. WP-2 §3: حقائق التقاطع الخام لم تعد تكفي
+# وحدها (كانت تُسرَد نقاطاً حرفية بسقالة «إذن ماذا» وبتر) — القسم بلا سرد
+# كاتب يمرّ فقط إن حمل نثر الصياغة التجارية المُحضَّر
+# (`dr["client_fallback_prose"]`، نداء كاتب مصغّر قبل البوابة).
 
 
 def _check_client_section_would_be_placeholder(dr: dict) -> list[dict]:
@@ -206,21 +242,22 @@ def _check_client_section_would_be_placeholder(dr: dict) -> list[dict]:
         head = _CLIENT_SECTION_MAP.get(title)
         if head:
             buckets[head].append(body)
-    by_cat = (dr.get("analyst") or {}).get("by_category") or {}
+    prose_map = dr.get("client_fallback_prose") or {}
     findings = []
     for head in _CLIENT_SECTION_ORDER:
         has_body = any(any(str(ln).strip() for ln in body)
                       for body in buckets[head])
         if has_body:
             continue
-        cats = _CLIENT_SECTION_FACT_CATEGORIES.get(head, ())
-        has_facts = any((by_cat.get(cat) or []) for cat in cats)
-        if not has_facts:
-            findings.append({
-                "check": "client_section_placeholder", "repairable": False,
-                "note": f"قسم «{head}» سيُعرَض للعميل بنصٍّ عام ثابت بدل "
-                       "تحليل حقيقي — لا سرد كاتب ولا حقائق تقاطع مهيكلة "
-                       "له في هذه التشغيلة"})
+        # WP-2 §3: القسم بلا سرد كاتب يمرّ فقط بنثر الصياغة التجارية
+        # المُحضَّر — لا تكفي حقائق التقاطع الخام (كانت تُسرَد نقاطاً حرفية).
+        if str(prose_map.get(head) or "").strip():
+            continue
+        findings.append({
+            "check": "client_section_placeholder", "repairable": False,
+            "note": f"قسم «{head}» سيُعرَض للعميل بنصٍّ عام ثابت بدل "
+                   "تحليل حقيقي — لا سرد كاتب ولا نثر صياغة تجارية "
+                   "مُحضَّر له في هذه التشغيلة"})
     return findings
 
 
@@ -998,6 +1035,8 @@ def run_quality_gate(view: dict) -> dict:
     findings += _check_hhi_false_precision(text)
     findings += _check_supplier_rank_contiguity(text)
     findings += _check_client_section_would_be_placeholder(dr)
+    findings += _check_client_scaffold_leak(combined_text)
+    findings += _check_placeholder_leak(combined_text)
     findings += _check_internal_plumbing_leak(text)
     findings += _check_english_field_and_mission_key_leak(text)
     findings += _check_confidentiality_leaks(combined_text)
@@ -1029,7 +1068,11 @@ def run_quality_gate(view: dict) -> dict:
                             "client_section_placeholder",
                             # WP-1 §4: تسمية نطاق ثقة لا تطابق رقمها = خطأ
                             # يصل وجه التقرير — FAIL لا تحذير.
-                            "confidence_band_mismatch")
+                            "confidence_band_mismatch",
+                            # WP-2 §6: سقالة «إذن ماذا»/نصّ نائب تقني/بتر
+                            # «…» غير اقتباسي — كلها وصلت عملاء فعلاً.
+                            "client_scaffold_leak", "placeholder_leak",
+                            "trailing_ellipsis")
             for f in non_repairable) \
             or guard_fired:
         verdict = FAIL

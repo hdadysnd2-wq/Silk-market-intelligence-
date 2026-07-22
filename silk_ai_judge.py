@@ -763,6 +763,40 @@ def _product_category(hs_code: object) -> "tuple[str, str] | None":
     return None
 
 
+def rephrase_client_sections(dr: dict) -> dict:
+    """WP-2 §3 — نداء الصياغة التجارية المصغّر لكل قسم عميل بلا سرد كاتب.
+
+    قيم التقاطعات/بعثة المخاطر الخام لم تعد تُسرَد نقاطاً حرفية للعميل
+    (كانت تُسرِّب سقالة «إذن ماذا؟» وبتر «…»)؛ بدلها نداء كاتب واحد لكل
+    قسم (temperature=0 عبر المزوّد — WP-1) يعيد صياغتها فقرة تجارية.
+    فشل النداء/غياب المفتاح = قسم بلا نثر → بوابة الجودة تُفشِل التسليم
+    (409) بدل تسليم بنود خام. لا اختلاق: البنود معزولة والقاعدة «لا رقم
+    غير وارد فيها». يعيد {عنوان القسم: النثر} للأقسام التي نجحت فقط."""
+    if not available():
+        return {}
+    from silk_reports import _client_missing_narrative_heads
+    needs = _client_missing_narrative_heads(dr or {})
+    out: dict[str, str] = {}
+    for head, items in needs.items():
+        if not items:
+            continue
+        joined = "\n".join(f"- {i}" for i in items[:8])
+        user = (
+            f"أعد صياغة البنود التالية فقرة تجارية موجزة (٣-٥ جمل) لقسم "
+            f"«{head}» في دراسة سوق تُسلَّم لعميل غير تقني. قواعد إلزامية: "
+            "لا تذكر أي رقم أو اسم غير وارد في البنود حرفياً؛ لا مصطلحات "
+            "تشغيلية (بعثة/وكيل/نداء/JSON)؛ يُمنَع حرفياً «إذن ماذا» و"
+            "«So what»؛ لا نقاط حذف «...»؛ أعد النص العربي الصِرف فقط بلا "
+            "ترويسات ولا Markdown ولا JSON.\n"
+            f"البنود:\n{_isolate(joined)}")
+        text = _call(_PRINCIPLE, user, max_tokens=600, model=_FAST_MODEL,
+                     timeout=30)
+        text = (text or "").strip()
+        if text and not text.lstrip().startswith(("{", "```")):
+            out[head] = text
+    return out
+
+
 def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
                 product: str, market_name: str,
                 review_notes: list | None = None,
