@@ -233,6 +233,41 @@ def test_visual_pdf_lock_production_entrypoint_bare_no_split_no_leaks():
         assert leak not in txt, f"تسريبٌ تشغيليٌّ في PDF العميل: {leak}"
 
 
+@pytest.mark.skipif(not _pdf_tools(),
+                    reason="soffice/pdftotext غير متاح (يعمل في e2e-live-shape)")
+def test_visual_pdf_lock_no_reversed_glyph_tokens():
+    """§E (حزمة الفكس v2.1) — بلاغ حي: الـPDF المُسلَّم استخرج نصّاً مقلوب
+    ترتيب المحارف («مؤرش» بدل «مؤشر»، «رشط» بدل «شرط»، «أكرث» بدل «تركّز»
+    (يُختبَر عبر «مؤشر التركّز»)، «مرسد» بدل «مسرد»، «السوداين» بدل
+    «السودان»، «$M» بدل «M$»/الصيغة الصحيحة) رغم أن مسار التحويل هو
+    python-docx → LibreOffice (`docx_to_pdf`). يبني هذا القفل تقرير المدقّق
+    الداخلي الكامل (`render_research_pdf`، مدوّنة هولندا القانونية الشكل)
+    الذي يحمل كلا الكلمتين المستهدَفتين فعلياً («مؤشر التركّز HHI = 940»،
+    و«شرطا قلب الحكم» لحكمٍ WATCH) — لا نموذج مثالي مصطنَع للاختبار فقط."""
+    import sys as _sys
+    tools_dir = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "tools")
+    if tools_dir not in _sys.path:
+        _sys.path.insert(0, tools_dir)
+    from canonical_netherlands import netherlands_research_blob
+    assert silk_reports.has_arabic_font(), \
+        "لا خطّ عربيّ الشكل — الـPDF سيُصيَّر tofu (fc-list بلا Naskh/Arabic)"
+    view = silk_render.build_view(netherlands_research_blob())
+    pdf = os.path.join(tempfile.mkdtemp(), "research.pdf")
+    silk_reports.render_research_pdf(view, pdf)   # مسار الإنتاج (المدقّق)
+    assert os.path.exists(pdf)
+    txt = subprocess.run(["pdftotext", "-enc", "UTF-8", pdf, "-"],
+                         capture_output=True, timeout=60).stdout.decode(
+                             "utf-8", "replace")
+    flat = txt.replace("\n", "")
+    assert "مؤشر" in flat, "الكلمة الهدف «مؤشر» غائبة — تحقّق من محتوى المدوّنة"
+    assert "شرط" in flat, "الكلمة الهدف «شرط» غائبة — تحقّق من محتوى المدوّنة"
+    for reversed_token in ("مؤرش", "رشط", "أكرث", "مرسد", "السوداين", "$M"):
+        assert reversed_token not in flat, (
+            f"محرفٌ مقلوب الترتيب في استخراج PDF: «{reversed_token}» — "
+            "أثر انقلاب اتجاه غير مُصلَح في تحويل docx→PDF")
+
+
 def test_shape_safe_helper_strips_only_combining_marks():
     """`_shape_safe_ar`: يجرّد الحركات/التطويل فقط، ويُبقي الحروف/اللاتيني."""
     assert silk_reports._shape_safe_ar("سِلك") == "سلك"

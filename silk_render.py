@@ -1185,6 +1185,53 @@ _SAR_PAREN_RE = re.compile(
 _USD_SHORT_MLN_RE = re.compile(r"(\d[\d.,]*)\s*م\s*\$")
 _USD_SHORT_BLN_RE = re.compile(r"(\d[\d.,]*)\s*مليار\s*\$")
 
+# §F-2 (حزمة الفكس v2.1) — بلاغ حي: كلا التعريبين «غوغل» و«قوقل» شُحنا في
+# نفس التقرير (الكاتب يستعمل أيّهما بلا اتساق). تعريبٌ واحد قياسي — «قوقل»
+# (المستعمَل فعلاً في كل شيفرة المشروع، silk_gmaps.py وأخواتها).
+_GOOGLE_TRANSLIT_RE = re.compile(r"غوغل")
+
+# §D-5 (حزمة الفكس v2.1) — بلاغ حي: «بنسبة .%68» (نقطة فاصلة قبل علامة
+# النسبة قبل الرقم — ترتيبٌ معكوس). الصيغة الصحيحة دوماً رقمٌ ثم «%» ثم
+# (اختيارياً) نقطة ختام جملة. أيّ نقطة ملاصقة لـ«%» **قبلها** بلا رقمٍ
+# بينهما، أو «%» متبوعة بنقطة فرقمٍ آخر، خطأ تنسيقٍ لا صيغة شرعية.
+_STRAY_PERCENT_RE = re.compile(r"\.\s*%\s*(\d+(?:\.\d+)?)")
+
+
+def _fix_stray_percent_punctuation(text: str) -> str:
+    """أصلح ترتيب «نقطة-نسبة-رقم» المعكوس إلى «رقم-نسبة-نقطة» الصحيح."""
+    return _STRAY_PERCENT_RE.sub(r"\1%.", text)
+
+
+# §D-1 (حزمة الفكس v2.1) — «CAGR (متوسط النمو السنوي المركب) — معدل نمو
+# سنوي مركب»: الفحص القديم اكتفى بحرف "(" الفوري، ففاته شرح الكاتب بشرطة
+# ("CAGR — معدل نمو سنوي مركب") فحقن تعريفاً ثانياً مكرَّراً بالمعنى فوراً.
+_AR_DIACRITICS_RE = re.compile(r"[ً-ْٰ]")
+_AR_WORD_RE = re.compile(r"[^\W\d_]{3,}", re.U)
+
+
+def _ar_norm_word(w: str) -> str:
+    """تطبيع خفيف لمقارنة الجذر: نزع التشكيل + أداة التعريف «ال» البادئة —
+    كافٍ لمطابقة «النمو» بـ«نمو» و«المركّب» بـ«مركب» بلا محلّل صرفي كامل."""
+    w = _AR_DIACRITICS_RE.sub("", w)
+    if w.startswith("ال") and len(w) > 4:
+        w = w[2:]
+    return w
+
+
+def _already_explained_nearby(s: str, end: int, gloss: str) -> bool:
+    """هل الكاتب شرح المصطلح فعلاً قرب أول ورود له — قوسٌ فوري (الصيغة
+    القديمة الوحيدة المفحوصة) **أو** شرطة/نقطتان متبوعة بعبارة تتقاطع
+    معنوياً مع تعريفنا (≥٢ جذر مشترك) — لا شكل ترقيم بعينه فقط."""
+    window = s[end:end + 60]
+    if window.lstrip().startswith("("):
+        return True
+    m = re.match(r"\s*[—\-:]\s*(.{0,50})", window)
+    if not m:
+        return False
+    following_words = {_ar_norm_word(w) for w in _AR_WORD_RE.findall(m.group(1))}
+    gloss_words = {_ar_norm_word(w) for w in _AR_WORD_RE.findall(gloss)}
+    return len(following_words & gloss_words) >= 2
+
 
 def _apply_merchant_language(text: "str | None") -> "tuple[str, list]":
     """B1 (SPEC-v2): نفّذ عقد لغة التاجر حتمياً على سرد التقرير في النموذج
@@ -1208,15 +1255,18 @@ def _apply_merchant_language(text: "str | None") -> "tuple[str, list]":
     # §1: وحِّد الاختزال «م$»/«مليار$» إلى الصيغة الكاملة بالدولار.
     s = _USD_SHORT_MLN_RE.sub(r"\1 مليون دولار", s)
     s = _USD_SHORT_BLN_RE.sub(r"\1 مليار دولار", s)
+    # §D-5: أصلح ترتيب «نقطة-نسبة-رقم» المعكوس («بنسبة .%68» → «بنسبة 68%.»).
+    s = _fix_stray_percent_punctuation(s)
+    # §F-2: تعريبٌ واحد قياسي لـ«Google» — «قوقل» في كل موضع.
+    s = _GOOGLE_TRANSLIT_RE.sub("قوقل", s)
     used: list = []
     for term, gloss in GLOSSARY_ORDER:
         m = re.search(rf"(?<![A-Za-z]){re.escape(term)}(?![A-Za-z])", s)
         if not m:
             continue
         used.append((term, gloss))
-        tail = s[m.end():m.end() + 3].lstrip()
-        if tail.startswith("("):
-            continue  # الكاتب شرحه فعلاً بين قوسين — لا تكرار
+        if _already_explained_nearby(s, m.end(), gloss):
+            continue  # الكاتب شرحه فعلاً (قوس أو شرطة) — لا تكرار (§D-1)
         s = s[:m.end()] + f" ({gloss})" + s[m.end():]
     s = re.sub(r"[ \t]{2,}", " ", s)
 
@@ -1319,6 +1369,32 @@ def _has_seasonality_gap(missions: dict) -> bool:
     return False
 
 
+# §D-2 (حزمة الفكس v2.1) — بلاغ حي: 2019/2021 وُسِمَتا «الأحدث المتاح» داخل
+# فقرة سلسلتها الخاصة تمتدّ إلى 2023-2024 فعلياً («من 8% في 2019 إلى 12% في
+# 2023»). سنةٌ ذُكِرت في نفس الجملة مع سنةٍ أحدث = مقارنة/مسار نمو صريح، لا
+# ادّعاء أن هذه السنة القديمة هي «أحدث بيانات متاحة».
+_SENTENCE_BOUND_RE = re.compile(r"[.!؟\n]")
+
+
+def _year_in_growth_span(s: str, start: int, end: int, yr: int) -> bool:
+    """هل تذكر جملة هذه السنة سنةً أخرى **أحدث** معها — مقارنة/مسار نمو
+    صريح لا يجوز وسمه «الأحدث المتاح» (§D-2)؟"""
+    lo = 0
+    for m in _SENTENCE_BOUND_RE.finditer(s[:start]):
+        lo = m.end()
+    m2 = _SENTENCE_BOUND_RE.search(s, end)
+    hi = m2.start() if m2 else len(s)
+    sentence = s[lo:hi]
+    for ym in re.finditer(r"(?<![\d/])(19\d\d|20\d\d)(?![\d/])", sentence):
+        try:
+            y2 = int(ym.group(1))
+        except ValueError:
+            continue
+        if y2 > yr:
+            return True
+    return False
+
+
 def _tag_stale_years(text: "str | None",
                      stale_fact_years: "set[int] | frozenset[int]" = frozenset()) -> str:
     """وسم سنوات البيانات المتقادِمة «الأحدث المتاح» — **أساسه قائمة الحقائق
@@ -1358,6 +1434,8 @@ def _tag_stale_years(text: "str | None",
     for start, end, yr in cands:
         if yr in tagged or end < last:
             continue
+        if _year_in_growth_span(s, start, end, yr):
+            continue  # §D-2: مقارنة/مسار نمو صريح مع سنةٍ أحدث في نفس الجملة
         # ضمّ لاحقة سنةٍ ميلادية/هجرية **مفردة عند حدّ كلمة فقط** (م/هـ/ـ) كي
         # لا تتدلّى بعد الوسم — دون ابتلاع أوّل حرفٍ من كلمةٍ ملاصقة مثل «مايو»
         # (مراجعة الشيفرة #4: «2013مايو» تبقى «مايو» سليمة).

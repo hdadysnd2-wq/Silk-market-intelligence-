@@ -395,6 +395,38 @@ _SYMBOL_ANCHORS_EXTRA = [
      ["def test_w2_1_fact_year_reads_structured_provenance_not_prose",
       "def test_w2_1_stale_fact_tagged_regardless_of_phrasing",
       "def test_w2_1_hs_heading_2008_never_tagged_no_stale_fact_behind_it"]),
+    # البند ٤٦ — حزمة الفكس v2.1 (زبدة الفول السوداني/الكويت): بوابة الجودة
+    # شرط تسليم للعميل (409 على FAIL) + عائلة فحوصات كاتب/عرض بنيوية + «المراجع»
+    # تحلّ محلّ سجل الأدلة في بناء العميل.
+    (46, "api.py",
+     ["def _block_client_export_if_gate_failed",
+      "def _gate_verdict_for_client_export"]),
+    (46, "silk_watchdog.py", ["def record_blocked_export"]),
+    (46, "silk_quality_gate.py",
+     ["def _check_orphan_short_token",
+      "def _check_dangling_cross_reference",
+      "def _check_near_duplicate_figures",
+      "def _check_hhi_false_precision",
+      "def _check_supplier_rank_contiguity",
+      "def _check_stray_percent_punctuation",
+      "def _check_entity_near_duplicates",
+      "def _check_confidence_band_label",
+      "def _check_lpi_edition_year",
+      "def _check_recommendation_tier_label_consistency"]),
+    (46, "silk_reports.py", ["def _client_references_section"]),
+    (46, "silk_render.py",
+     ["def _already_explained_nearby", "def _year_in_growth_span",
+      "def _fix_stray_percent_punctuation"]),
+    (46, "tests/test_fix_pack_v2_1.py",
+     ["def test_orphan_short_token_flagged",
+      "def test_near_duplicate_figures_flagged",
+      "def test_hhi_false_precision_flagged",
+      "def test_lpi_invalid_edition_year_flagged",
+      "def test_confidence_band_mismatch_flagged"]),
+    (46, "tests/test_client_report_export.py",
+     ["def test_client_docx_export_blocked_409_when_gate_fails",
+      "def test_client_pdf_export_blocked_409_when_gate_fails",
+      "def test_gate_crash_treated_as_fail_for_client_export"]),
 ]
 
 

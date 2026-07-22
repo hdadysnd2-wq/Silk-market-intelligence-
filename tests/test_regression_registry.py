@@ -993,6 +993,44 @@ def _guard_price_fix_scoped_to_table_window():
     assert "السعر/كجم باليورو" in out2
 
 
+def _guard_quality_gate_is_client_export_delivery_condition():
+    """LESSONS ٤٦ — حزمة الفكس v2.1: بوابة الجودة شرط تسليم للعميل (FAIL =>
+    409) + عائلة فحوصات كاتب/عرض بنيوية تُفشِل على golden-bad. حارسٌ سلوكي:
+    الفحوصات الجديدة تُطلِق فعلياً على مدخلات تُعيد إنتاج العطل، والدوال
+    الحاجبة موجودة في api.py."""
+    import silk_quality_gate as qg
+
+    sections = "\n".join(
+        f"## {i}. {s}\nنصّ القسم بجملة تنتهي بنقطة."
+        for i, s in enumerate((
+            "الخلاصة التنفيذية", "منهجية البحث ونطاقه",
+            "نظرة عامة على السوق وحجمه", "ديناميكيات السوق",
+            "تحليل المستهلك والطلب", "المشهد التنافسي",
+            "التنظيم والوصول للسوق", "اللوجستيات وسلسلة الإمداد",
+            "تقييم المخاطر", "التوصيات الاستراتيجية", "الملاحق"), 1))
+
+    def _checks(text):
+        return {f["check"] for f in qg.run_quality_gate(
+            {"deep_research": {"report": {"text": text},
+                              "missions": {}, "analyst": {},
+                              "verdict": {"verdict": "WATCH"}}})["findings"]}
+
+    # عيّنات golden-bad تُعيد إنتاج العطل الموصوف — كل فحص جديد يُطلِق.
+    assert "hhi_false_precision" in _checks(
+        sections + "\n\nمؤشر التركّز HHI = 2184.7 هنا.")
+    assert "near_duplicate_figure" in _checks(
+        sections + "\n\nالواردات 6,733,369 دولاراً وفي جدول 6,733,376 دولاراً.")
+    assert "supplier_rank_gap" in _checks(
+        sections + "\n\n#1 تونس، #2 الجزائر، #5 إيران، #6 المغرب.")
+    assert "lpi_invalid_edition_year" in _checks(
+        sections + "\n\nمؤشر LPI 3.2 لعام 2022 مرتفع.")
+    # الدوال الحاجبة موجودة في مسار التصدير + الحارس + المُصدِّر.
+    _needles("api.py", "def _block_client_export_if_gate_failed",
+             "def _gate_verdict_for_client_export")()
+    _needles("silk_watchdog.py", "def record_blocked_export")()
+    _needles("silk_reports.py", "def _client_references_section")()
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -1044,6 +1082,7 @@ _LESSONS = {
     43: _guard_hs_classifier_valve_fail_safe_default,  # المُصنِّف العام — صمّامٌ فشل-آمن مفعَّل افتراضياً لا مُطفأ
     44: _guard_verdict_tone_recognizes_arabic_labels,  # Master Prompt Part 2 §B — _verdict_tone تتعرّف على التسمية العربية أيضاً
     45: _guard_price_fix_scoped_to_table_window,  # دالة إصلاح عملة السعر مقيَّدة بنافذة الجدول لا كامل المستند
+    46: _guard_quality_gate_is_client_export_delivery_condition,  # حزمة v2.1 — بوابة الجودة شرط تسليم + عائلة فحوصات كاتب/عرض
 }
 
 _TRAPS = [

@@ -1094,6 +1094,70 @@ def create_app():
         except Exception as e:  # noqa: BLE001 — البوابة تحسين لا شرط تسليم
             log.warning("quality gate skipped: %s", e)
 
+    def _gate_verdict_for_client_export(view: dict) -> tuple[str, dict]:
+        """شغّل بوابة الجودة الحتمية على القالب المُصدَّر لجمهور العميل وأعد
+        (verdict, gate_out) — الفكس الجذري §0: هذه البوابة **شرط تسليم** لا
+        تحسيناً اختيارياً على مسار التصدير للعميل (خلافاً لـ`_attach_quality_
+        gate` أعلاه التي تبقى «أفضل جهد» على مسار بناء التشغيلة نفسها).
+        عطلٌ داخلي في البوابة نفسها (استثناء غير متوقَّع) يُعامَل كـFAIL —
+        لا «تخطٍّ صامت» يسمح بتسريب تقرير لم يُفحَص فعلياً."""
+        try:
+            import silk_quality_gate
+            gate_out = silk_quality_gate.run_quality_gate(view)
+            return gate_out.get("verdict", silk_quality_gate.FAIL), gate_out
+        except Exception as e:  # noqa: BLE001 — عطل البوابة = FAIL للعميل، ليس تخطّياً
+            log.warning("quality gate crashed during client export: %s", e)
+            return "FAIL", {
+                "verdict": "FAIL",
+                "findings": [{
+                    "check": "gate_crash", "repairable": False,
+                    "note": f"عطل داخلي في بوابة الجودة أثناء التصدير "
+                            f"({type(e).__name__}) — عومل التقرير كأنه FAIL "
+                            "لحماية العميل من محتوى لم يُفحَص فعلياً."}],
+                "methodology_notes": [],
+            }
+
+    def _block_client_export_if_gate_failed(
+            view: dict, analysis_id: int, found: dict, fmt: str,
+            request: "Request") -> None:
+        """يرفع 409 إن رصدت بوابة الجودة FAIL على قالب تصدير العميل — البند
+        §0 (الفكس الجذري): البوابة كانت «تحسين لا شرط تسليم»
+        (`_attach_quality_gate`)؛ تقرير FAIL كان يصل العميل بلا أي حجب.
+        `?override=1` يتخطّى الحجب (نفس مصادقة `X-API-Key` — لا سلطة مالك
+        منفصلة في هذه النقطة). `internal=1` لا يمرّ من هنا إطلاقاً (يبقى
+        متاحاً دوماً للمدقّق)."""
+        verdict, gate_out = _gate_verdict_for_client_export(view)
+        if verdict != "FAIL":
+            return
+        override = str(request.query_params.get("override") or "").lower() in (
+            "1", "true", "yes")
+        if override:
+            return
+        findings = gate_out.get("findings") or []
+        digest = [{"check": f.get("check"), "note": f.get("note")}
+                  for f in findings if not f.get("repairable", True)] or [
+            {"check": f.get("check"), "note": f.get("note")} for f in findings]
+        try:
+            import silk_watchdog
+            silk_watchdog.record_blocked_export(
+                analysis_id, found.get("product"),
+                (found.get("market") or {}).get("name_en"), findings, fmt)
+        except Exception as e:  # noqa: BLE001 — تسجيل الحجب لا يُسقِط الحجب نفسه
+            log.warning("watchdog blocked-export record failed: %s", e)
+        import silk_ops_log
+        silk_ops_log.record_error(
+            "quality_gate_blocked_export",
+            f"تصدير العميل ({fmt}) مُنِع: بوابة الجودة أعادت FAIL",
+            context={"analysis_id": analysis_id, "findings": digest})
+        raise HTTPException(status_code=409, detail={
+            "error": "quality_gate_fail",
+            "message": "تعذّر تسليم هذا التقرير للعميل: بوابة الجودة رصدت "
+                       "مشاكل حاجبة قبل التسليم. استخدم ?internal=1 للنسخة "
+                       "التشغيلية الكاملة للمدقّق، أو ?override=1 لتخطّي "
+                       "الحجب (مسؤولية من يملك مفتاح API).",
+            "findings": digest,
+        })
+
     def _attach_watchdog(result: dict, analysis_id: int | None,
                          kind: str) -> None:
         """نقطةُ اختناقٍ مشتركةٌ واحدة يستدعيها **كلا** المسارين (/analyze
@@ -2230,6 +2294,9 @@ def create_app():
         internal = str(request.query_params.get("internal") or "").lower() in (
             "1", "true", "yes")
         is_research = bool(view.get("deep_research"))
+        if is_research and not internal:
+            _block_client_export_if_gate_failed(
+                view, analysis_id, found, "docx", request)
         try:
             if is_research and not internal:
                 path = render_client_docx(
@@ -2281,6 +2348,9 @@ def create_app():
         internal = str(request.query_params.get("internal") or "").lower() in (
             "1", "true", "yes")
         is_research = bool(view.get("deep_research"))
+        if is_research and not internal:
+            _block_client_export_if_gate_failed(
+                view, analysis_id, found, "pdf", request)
         out = os.path.join(tempfile.mkdtemp(), "report.pdf")
         try:
             if is_research and not internal:
