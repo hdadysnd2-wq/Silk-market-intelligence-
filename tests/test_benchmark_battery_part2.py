@@ -109,6 +109,42 @@ def test_battery_e_section_structure_passes(label, product, hs, blob_fn):
     assert _check_section_structure(dr) == [], label
 
 
+# ═════════ مراسي السلامة الرقمية (Master Prompt Part 2 §F، البند ١٤-١٥) ═════════
+# كل حالةٍ صحيحة تحمل ٢-٣ أرقاماً مرجعية صريحة يُتحقَّق من ظهورها حرفياً في
+# متن التقرير المبنيّ — انحرافٌ جسيمٌ عنها (لا رمز HS، ولا حكمٌ آخر) يُفشِل.
+# الكويت (زبدة الفول السوداني) مراسيها مغطّاة أصلاً في
+# test_golden_deep_research_contract.py (HHI 2900، تناقض السعر 0.67$/6$).
+
+def _flat(text: str) -> str:
+    """طبّع الفراغات (بما فيها التفاف الأسطر من نصّ المصدر) لمطابقةٍ لا
+    تتأثّر بموضع كسر السطر — نفس المضمون سواء التفّ أم لا."""
+    return " ".join(text.split())
+
+
+def test_battery_f_germany_dates_numeric_sanity_anchors():
+    """مراسي ألمانيا: واردات ~38 مليون دولار، HHI 780، وإفصاح MFN الصادق
+    (لا أفضلية سعودية-أوروبية) — إطار TARIC صراحةً."""
+    import silk_render as R
+    dr = R.build_view(germany_dates_research_blob())["deep_research"]
+    text = _flat(dr["report"]["text"])
+    assert "38 مليون دولار" in text
+    assert "780" in text
+    assert "TARIC" in text
+    assert "لا اتفاقية تجارة تفضيلية بين السعودية والاتحاد الأوروبي" in text
+
+
+def test_battery_f_japan_honey_numeric_sanity_anchors():
+    """مراسي اليابان: واردات ~62 مليون دولار، HHI 1450، وإفصاح صادق (لا
+    اتفاقية شراكة اقتصادية سعودية-يابانية) — إطار الحجر الزراعي/JAS صراحةً."""
+    import silk_render as R
+    dr = R.build_view(japan_honey_research_blob())["deep_research"]
+    text = _flat(dr["report"]["text"])
+    assert "62 مليون دولار" in text
+    assert "1450" in text
+    assert "الحجر الزراعي" in text
+    assert "لا اتفاقية تجارة تفضيلية أو شراكة اقتصادية بين السعودية واليابان" in text
+
+
 # ═══════════ تكامل: بوّابة الجودة الكاملة تعمل على الحالات الثلاث ═══════════
 
 @pytest.mark.parametrize("label,product,hs,blob_fn", _ALL_CASES)
