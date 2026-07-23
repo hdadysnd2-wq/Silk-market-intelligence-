@@ -29,6 +29,15 @@ def _to_jsonable(obj: object) -> object:
     return obj
 
 
+def _rmtree_bg(tmpdir: str):
+    """BackgroundTask تحذف مجلّد تصدير مؤقّت **بعد** إرسال الردّ (البند #8،
+    تدقيق v2 الموجة ٣) — FileResponse يبثّ الملف لا مجلّده، فبلا هذا يتراكم
+    كل mkdtemp على قرص النشر الفاني حتى إعادة النشر. حذفٌ صامت (ignore_errors)."""
+    import shutil
+    from starlette.background import BackgroundTask
+    return BackgroundTask(shutil.rmtree, tmpdir, ignore_errors=True)
+
+
 def _index_search(q: str = "", limit: int = 20) -> list[dict]:
     """فهرس بحث المنتجات للوحة المعلومات — product search index for the dashboard
     combobox. Returns [{"name", "hs", "analyzed"}]; empty q -> a small default
@@ -2414,19 +2423,23 @@ def create_app():
         style = (str(request.query_params.get("style") or "").lower()
                  or str((view.get("deep_research") or {})
                         .get("report_style") or "").lower())
+        # البند #8 (تدقيق v2 الموجة ٣): مجلّد مؤقّت **واحد** يُنظَّف بعد إرسال
+        # الردّ (BackgroundTask) — كان كلّ طلب يُنشئ mkdtemp لا يُحذَف أبداً
+        # (FileResponse يبثّ الملف لا مجلّده)، فيتراكم على قرص النشر حتى الدوران.
+        _td = tempfile.mkdtemp()
         try:
             if is_research and not internal and style == "academic":
                 from silk_reports import render_academic_docx
                 path = render_academic_docx(
-                    view, os.path.join(tempfile.mkdtemp(), "report.docx"))
+                    view, os.path.join(_td, "report.docx"))
                 fname = f"silk_academic_report_{analysis_id}.docx"
             elif is_research and not internal:
                 path = render_client_docx(
-                    view, os.path.join(tempfile.mkdtemp(), "report.docx"))
+                    view, os.path.join(_td, "report.docx"))
                 fname = f"silk_client_report_{analysis_id}.docx"
             else:
                 path = render_docx(
-                    view, os.path.join(tempfile.mkdtemp(), "report.docx"))
+                    view, os.path.join(_td, "report.docx"))
                 fname = f"silk_report_{analysis_id}.docx"
         except RuntimeError as e:
             # ITEM 5ب: سبب ثابت عام لا نص الاستثناء الخام — رسالة حارس
@@ -2437,6 +2450,8 @@ def create_app():
             # لا يصل /ops/last-errors نص الاستثناء إطلاقاً؛ ردّ الـHTTP نفسه
             # (الذي يخصّ الطالب لا سطحاً عاماً) يبقى يحمل str(e) كاملاً كما
             # كان دوماً — لا تغيير هناك.
+            import shutil as _sh
+            _sh.rmtree(_td, ignore_errors=True)   # البند #8: نظّف عند الفشل أيضاً
             import silk_ops_log
             silk_ops_log.record_error(
                 "export_failure",
@@ -2447,7 +2462,8 @@ def create_app():
         return FileResponse(
             path, filename=fname,
             media_type="application/vnd.openxmlformats-officedocument"
-                       ".wordprocessingml.document")
+                       ".wordprocessingml.document",
+            background=_rmtree_bg(_td))
 
     @app.get("/analyses/{analysis_id}/report.pdf")
     def report_pdf(analysis_id: int, request: Request):
@@ -2475,7 +2491,8 @@ def create_app():
                 view, analysis_id, found, "pdf", request)
         if is_research and internal:
             _attach_override_history(view, analysis_id)
-        out = os.path.join(tempfile.mkdtemp(), "report.pdf")
+        _td = tempfile.mkdtemp()   # البند #8: يُنظَّف بعد الإرسال (background)
+        out = os.path.join(_td, "report.pdf")
         style = (str(request.query_params.get("style") or "").lower()
                  or str((view.get("deep_research") or {})
                         .get("report_style") or "").lower())
@@ -2497,8 +2514,11 @@ def create_app():
                 "فشل إنتاج PDF (محرّك التحويل غير متاح أو فشل) — التفصيل في "
                 "استجابة الطلب الأصلي",
                 context={"analysis_id": analysis_id})
+            import shutil as _sh
+            _sh.rmtree(_td, ignore_errors=True)   # نظّف عند الفشل أيضاً
             raise HTTPException(status_code=503, detail=str(e))
-        return FileResponse(path, filename=fname, media_type="application/pdf")
+        return FileResponse(path, filename=fname, media_type="application/pdf",
+                            background=_rmtree_bg(_td))
 
     @app.get("/analyses/{analysis_id}/report.md")
     def report_md(analysis_id: int, request: Request):
