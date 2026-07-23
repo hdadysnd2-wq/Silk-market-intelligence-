@@ -70,9 +70,16 @@ def test_owner_requested_evidence_sections_present(tmp_path):
     cells = [c.text for t in doc.tables for row in t.rows for c in row.cells]
     joined = "\n".join(cells)
     assert "4.3 مليون نسمة" in joined       # حجم السكان وصل فعلاً
-    assert any("GSO" in c for c in cells)   # اشتراط جمركي بمصدره
-    # كل صف شاهد يحمل شارة توثيق.
-    assert "✓ موثّق" in joined or "◐ ثانوي" in joined
+    assert any("GSO" in c for c in cells)   # اشتراط جمركي (ضمن نصّ البند)
+    # WS10 (قرار المالك): المتن نظيف — لا شارة قوة دليل ولا عمود «قوة الدليل»
+    # ولا عمود مصدر لكل صف؛ الإسناد كلّه في قسم المراجع وحده.
+    headers = [c.text for t in doc.tables for c in t.rows[0].cells]
+    assert "قوة الدليل" not in headers
+    assert "المصدر" not in headers          # لا عمود مصدر لكل صف في المتن
+    for sym in ("✓ موثّق", "◐ ثانوي", "○ غير", "✓ موثق"):
+        assert sym not in joined            # صفر شارة قوة دليل في أيّ خلية
+    # جدول الشواهد الإلزامي صار عموداً واحداً «البند المرصود» (لا مصدر/شارة).
+    assert "البند المرصود" in headers
 
 
 def test_missing_evidence_missions_skip_sections_not_fabricate(tmp_path):

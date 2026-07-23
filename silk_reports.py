@@ -2309,17 +2309,19 @@ def _client_confidence_section(doc, dr: dict) -> None:
     if not total:
         return   # لا مؤشرات معدودة — لا قسم فارغ
     verified_pct = round(100 * counts["verified"] / total)
-    doc.add_heading("مؤشّر ثقة الدراسة", level=1)
+    # WS10 (قرار المالك): مؤشّرٌ محايدُ الصياغة — لا شارات ✓◐○ ولا مصطلحات
+    # «موثّق/ثانوي/غير متحقق» في المتن (الرُتبة بيانات داخلية)، والإسناد يُوجَّه
+    # لقسم المراجع لا لسجل أدلةٍ في المتن.
+    doc.add_heading("مؤشّر تغطية المصادر", level=1)
     doc.add_paragraph(
-        f"من إجمالي {total} مؤشراً مرصوداً في هذه الدراسة، "
-        f"{counts['verified']} موثّق بمصدر رسمي (نحو {verified_pct}%)، "
-        f"{counts['secondary']} من مصدر ثانوي، و{counts['unverified']} غير "
-        "متحقق. كلّ رقم في التقرير يحمل شارة توثيقه ومصدره في سجل الأدلة، "
-        "فالقرار يُتَّخذ بمعرفة درجة اليقين خلف كل رقم لا على ثقة عمياء.")
-    _add_table(doc, ["درجة التوثيق", "عدد المؤشرات"], [
-        ["✓ موثّق (مصدر رسمي)", str(counts["verified"])],
-        ["◐ ثانوي (مصدر واحد غير رسمي)", str(counts["secondary"])],
-        ["○ غير متحقق", str(counts["unverified"])]])
+        f"من إجمالي {total} مؤشراً مرصوداً في هذه الدراسة، نحو {verified_pct}% "
+        "مُسنَدٌ إلى مصادر رسمية أوّلية، والبقية إمّا من مصادر عامّة أو فجوات "
+        "معلنة صراحةً. مصادرُ كل مؤشرٍ مجموعةٌ في قسم «المراجع» ختام التقرير، "
+        "فالقرار يُتَّخذ بمعرفة مدى التغطية خلف الأرقام لا على ثقة عمياء.")
+    _add_table(doc, ["نوع الإسناد", "عدد المؤشرات"], [
+        ["مصدر رسمي أوّلي", str(counts["verified"])],
+        ["مصدر عامّ", str(counts["secondary"])],
+        ["فجوة معلنة", str(counts["unverified"])]])
 
 
 def _client_gap_inputs(dr: dict) -> "tuple[list[str], list[str]]":
@@ -2979,10 +2981,15 @@ def _ar_digits(n: int) -> str:
 
 
 def _academic_evidence_rows(dr: dict, mission_keys: tuple) -> list[list[str]]:
-    """صفوف شواهد مهيكلة من بعثات محدَّدة: (البند المرصود، المصدر، قوة
-    الدليل) — عبر `_client_readable_fact` (بند غير قابل للعرض يُسقَط لا
-    يُستبدَل بنائب) وبشارة المنشأ الواعية. سقف ٨ صفوف لكل جدول."""
-    from silk_narrative import evidence_badge_for
+    """صفوف شواهد مهيكلة من بعثات محدَّدة: «البند المرصود» فقط — عبر
+    `_client_readable_fact` (بند غير قابل للعرض يُسقَط لا يُستبدَل بنائب).
+    سقف ٨ صفوف لكل جدول.
+
+    WS10 (قرار المالك): **لا عمود «المصدر» ولا «قوة الدليل» في المتن** — يبقى
+    البند المرصود وحده، وكل الإسناد يتجمّع في قسم المراجع. يُحسَب المصدر داخلياً
+    فقط للتصفية (بندٌ بلا مصدرٍ قابلٍ للاستشهاد يُسقَط كي يبقى المتن مُغطّى
+    بالمراجع)، ولا يُعرَض.
+    """
     missions = dr.get("missions") or {}
     rows: list[list[str]] = []
     for key in mission_keys:
@@ -2993,10 +3000,11 @@ def _academic_evidence_rows(dr: dict, mission_keys: tuple) -> list[list[str]]:
             fact = _client_readable_fact(f.get("value"), f.get("note"))
             if not fact:
                 continue
+            # المصدر يُحسَب للتصفية فقط (لا يُعرَض) — بندٌ بلا مصدرٍ صالح يُسقَط.
             src = _client_sanitize(_clean_source_label(f.get("source")))
             if not src or src == "—" or _client_forbidden_hits(src):
                 continue
-            rows.append([fact, src, evidence_badge_for(f)])
+            rows.append([fact])
             if len(rows) >= 8:
                 return rows
     return rows
@@ -3015,9 +3023,12 @@ _ACADEMIC_MAIN_REC = {
 
 
 def _academic_headline_table_rows(dr: dict) -> list[list[str]]:
-    """صفوف جدول «أبرز النتائج حسب المحور» — أعلى بند لكل تقاطع محلّل مع
-    شارة توثيقه. بنيوي بحت من by_category؛ تقاطع بلا أدلة يُسقَط."""
-    from silk_narrative import evidence_badge_for
+    """صفوف جدول «أبرز النتائج حسب المحور» — أعلى بند لكل تقاطع محلّل.
+    بنيوي بحت من by_category؛ تقاطع بلا أدلة يُسقَط.
+
+    WS10 (قرار المالك): **لا عمود «قوة الدليل» ولا شارة توثيق في المتن** —
+    الرُتبة تبقى بيانات وصفية داخلية، وكل الإسناد يتجمّع في قسم المراجع وحده.
+    """
     by_cat = (dr.get("analyst") or {}).get("by_category") or {}
     rows: list[list[str]] = []
     for cat, label in _CATEGORY_AR.items():
@@ -3030,7 +3041,7 @@ def _academic_headline_table_rows(dr: dict) -> list[list[str]]:
             else getattr(top, "value", None), 200))
         if not fact:
             continue
-        rows.append([label, fact, evidence_badge_for(top)])
+        rows.append([label, fact])
     return rows
 
 
@@ -3052,7 +3063,7 @@ def _academic_summary(doc, view: dict, dr: dict, vtxt: str) -> None:
     rows = _academic_headline_table_rows(dr)
     if rows:
         doc.add_paragraph("أبرز النتائج حسب محاور التحليل:")
-        _add_table(doc, ["المحور", "أبرز نتيجة مرصودة", "قوة الدليل"], rows)
+        _add_table(doc, ["المحور", "أبرز نتيجة مرصودة"], rows)
     if dr.get("hs_flagged"):
         hs = dr.get("hs_confirmation") or {}
         doc.add_paragraph(
@@ -3166,7 +3177,7 @@ def render_academic_docx(view: dict, path: str) -> str:
             continue
         _idx += 1
         doc.add_heading(f"٣.{_ar_digits(_idx)} {table_title}", level=2)
-        _add_table(doc, ["البند المرصود", "المصدر", "قوة الدليل"], rows)
+        _add_table(doc, ["البند المرصود"], rows)
     if not _idx:
         doc.add_paragraph(
             "لم يتوافر سرد نتائج تفصيلي في هذه التشغيلة؛ الأدلة المرصودة "
@@ -3231,7 +3242,8 @@ def render_academic_docx(view: dict, path: str) -> str:
         f"التوصية الرئيسة: {_ACADEMIC_MAIN_REC[_verdict_tone(vtxt)]}",
         style="List Number")
     for c in (dr.get("flip_conditions") or []):
-        mark = "✓ محقَّق" if c.get("met") else "○ غير محقَّق"
+        # WS10: حالة الشرط بالكلمات لا بشارة ✓/○ (لا رمز قوة دليل في المتن).
+        mark = "محقَّق" if c.get("met") else "غير محقَّق"
         doc.add_paragraph(
             f"{c.get('condition')} — {mark}؛ يُغلَق عبر: "
             f"{c.get('closes_via')}.", style="List Number")
@@ -3869,7 +3881,8 @@ def _md_deep_research(view: dict, prefix: list[str]) -> str:
         from silk_render import FLIP_CONDITIONS_HEADING
         L += [f"## {FLIP_CONDITIONS_HEADING}", ""]
         for i, c in enumerate(_flips, 1):
-            _mark = "✓ محقَّق" if c.get("met") else "○ غير محقَّق"
+            # WS10: حالة الشرط بالكلمات لا بشارة ✓/○ في متن العميل.
+            _mark = "محقَّق" if c.get("met") else "غير محقَّق"
             L.append(f"{i}. **{_md_cell(c.get('condition'))}** — {_mark}؛ "
                      f"يُغلَق عبر: {_md_cell(c.get('closes_via'))}")
         L.append("")
