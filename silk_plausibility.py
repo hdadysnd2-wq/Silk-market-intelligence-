@@ -51,37 +51,46 @@ def action() -> str:
     return "drop" if a == "drop" else "caveat"
 
 
-# مضاعِفاتُ المقياس اللفظيّة (عربيّ/إنجليزيّ) — «497 مليون» → 497e6.
-_SCALE = [
-    ("مليار", 1e9), ("بليون", 1e9), ("billion", 1e9), ("bn", 1e9),
-    ("مليون", 1e6), ("million", 1e6), ("mn", 1e6), ("م$", 1e6),
-    ("ألف", 1e3), ("الف", 1e3), ("thousand", 1e3), ("k$", 1e3),
-]
-_NUM_RE = re.compile(r"[-+]?\d[\d,،٬]*(?:[.٫]\d+)?")
+# مضاعِفاتُ المقياس اللفظيّة (عربيّ/إنجليزيّ) — «497 مليون» → 497e6. **حرجٌ
+# (مراجعةٌ ذاتية):** الكلمةُ تُطابَق **حدَّ كلمةٍ تالياً للرقم مباشرةً** لا كأيّ
+# سلسلةٍ في النصّ — وإلّا «الف» (جزءُ «الفول»/«الفواكه»/«الفلفل») يُضاعِف ×1000
+# زوراً في مجال المنصّة نفسه، فيُفسِد الأرقامَ المشتقّة في تحفّظ العميل.
+_SCALE_MULT = {
+    "مليار": 1e9, "بليون": 1e9, "billion": 1e9, "bn": 1e9,
+    "مليون": 1e6, "million": 1e6, "mn": 1e6, "م$": 1e6,
+    "ألف": 1e3, "الف": 1e3, "thousand": 1e3, "k$": 1e3,
+}
+# رقمٌ متبوعٌ **اختيارياً** بكلمة مقياسٍ محدودةٍ بحدٍّ (لا حرفَ عربيٍّ/لاتينيٍّ
+# بعدها) — فـ«3 الفئات» لا يُضاعَف (بعد «الف» حرفٌ عربيّ)، و«497 مليون دولار»
+# يُضاعَف (بعد «مليون» فراغ).
+_MAGNITUDE_RE = re.compile(
+    r"([-+]?\d[\d,،٬]*(?:[.٫]\d+)?)"
+    r"\s*(?:(مليار|بليون|billion|bn|مليون|million|mn|م\$|ألف|الف|thousand|k\$)"
+    r"(?![A-Za-z؀-ۿ]))?",
+    re.I)
 
 
 def _num_usd(value: object, note: object = "") -> "float | None":
     """قيمةٌ رقميةٌ بالدولار من قيمةٍ عدديةٍ أو نصٍّ («497 مليون دولار»)، أو None.
 
     لا اختلاق: يعيد None إن لم يُرصَد رقمٌ حقيقيّ — المتّصلُ يتجاوز البند بدل
-    افتراضِ صفرٍ أو تخمين."""
+    افتراضِ صفرٍ أو تخمين. المقياسُ يُقرأ من الكلمة التالية للرقم مباشرةً فقط."""
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
         return float(value)
-    text = str(value or "")
-    m = _NUM_RE.search(text)
-    if not m:
-        return None
+    m = _MAGNITUDE_RE.search(str(value or ""))
+    if not m or not m.group(1):
+        # القيمةُ نصٌّ بلا رقم — قد تحمل الملاحظةُ الرقمَ (نادر).
+        m = _MAGNITUDE_RE.search(str(note or ""))
+        if not m or not m.group(1):
+            return None
     try:
-        base = float(re.sub(r"[,،٬]", "", m.group(0)).replace("٫", "."))
+        base = float(re.sub(r"[,،٬]", "", m.group(1)).replace("٫", "."))
     except ValueError:
         return None
-    hay = (text + " " + str(note or "")).lower()
-    for token, mult in _SCALE:
-        if token in hay:
-            return base * mult
-    return base
+    scale = (m.group(2) or "").lower()
+    return base * _SCALE_MULT.get(scale, 1.0)
 
 
 # ── كشفُ المرتكزات والمرشّحين من حقائق البعثات ───────────────────────────────

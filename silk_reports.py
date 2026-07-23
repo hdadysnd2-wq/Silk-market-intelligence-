@@ -2680,14 +2680,17 @@ def _annotate_unverified_entities(text: object, dr: dict) -> str:
     if not s:
         return s
     for nm in sorted(_unverified_entity_names(dr), key=len, reverse=True):
-        idx = s.find(nm)
-        while idx != -1:
-            tail = s[idx + len(nm): idx + len(nm) + 24]
+        # مراجعةٌ ذاتية (MEDIUM): مطابقةُ **حدِّ كلمة** لا سلسلةٍ عمياء — وإلّا
+        # اسمٌ قصيرٌ («Nada») يُوسَم داخل كلمةٍ أطول («Nadason») فيُفسِد نثراً
+        # سليماً. الحدُّ يشمل الحرفَ العربيّ واللاتينيّ والرقم.
+        pat = re.compile(r"(?<![\w؀-ۿ])" + re.escape(nm) + r"(?![\w؀-ۿ])")
+        m = pat.search(s)
+        while m:
+            tail = s[m.end(): m.end() + 24]
             if "موثّق" in tail or "موثَّق" in tail or "مرشّح" in tail:
-                idx = s.find(nm, idx + len(nm))
+                m = pat.search(s, m.end())
                 continue
-            at = idx + len(nm)
-            s = s[:at] + _UNVERIFIED_MARK + s[at:]
+            s = s[:m.end()] + _UNVERIFIED_MARK + s[m.end():]
             break
     return s
 

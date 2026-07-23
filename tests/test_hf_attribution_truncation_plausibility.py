@@ -166,6 +166,34 @@ def test_plausibility_flags_implausible_market_size():
     assert flags[0]["detail"]["import_ratio"] > 20
 
 
+def test_num_usd_scale_word_is_bounded_not_substring():
+    """مراجعةٌ ذاتية (HIGH): «الف» جزءُ «الفول»/«الفواكه» لا يُضاعِف ×1000.
+    المقياسُ يُقرأ ككلمةٍ تاليةٍ للرقم مباشرةً، محدودةً بحدّ."""
+    from silk_plausibility import _num_usd
+    # رقمٌ مكتوبٌ بالأرقام قربَ كلمةٍ تحوي «الف» ⇒ لا مضاعفة.
+    assert _num_usd("حجم سوق الفول السوداني بلغ 497,000,000 دولار") == 497_000_000.0
+    assert _num_usd("واردات الفواكه 7,000,000 دولار") == 7_000_000.0
+    assert _num_usd("3 الفئات المدروسة") == 3.0            # «الف» في «الفئات»
+    # كلمةُ المقياس الحقيقية (تالية للرقم، محدودة) ⇒ تُضاعِف.
+    assert _num_usd("497 مليون دولار") == 497_000_000.0
+    assert _num_usd("2.5 مليار دولار") == 2_500_000_000.0
+    assert _num_usd("500 ألف دولار") == 500_000.0
+    assert _num_usd("$3 million wholesale") == 3_000_000.0
+
+
+def test_plausibility_anchor_not_inflated_by_alif_substring():
+    """المرتكزُ (واردات) لا يُنفَخ ×1000 بـ«الف» في «الفول» فيُخفي علامةً حقيقية."""
+    import silk_plausibility as P
+    result = {"deep_research": {"missions": {
+        "trade_flow": {"findings": [{"value": "واردات الفول 7,000,000 دولار",
+            "source": "UN Comtrade", "note": "إجمالي استيراد قطر من العالم"}]},
+        "consumer_culture": {"findings": [{"value": "497 مليون دولار",
+            "source": "ويب", "note": "حجم سوق الفول الكامل"}]}}}}
+    flags = P.check_magnitudes(result)
+    assert flags, "المرتكزُ الصحيح (7م$) يجب أن يُبقي العلامة قائمة (497م$ = 71×)"
+    assert flags[0]["detail"]["import_ratio"] > 20
+
+
 def test_plausibility_silent_without_anchor_fail_open():
     import silk_plausibility as P
     # لا مرتكزَ وارداتٍ ⇒ لا حكم (فشلٌ آمنٌ مفتوح).
@@ -229,6 +257,21 @@ def test_unverified_entity_annotated_in_prose():
     out2 = silk_reports._annotate_unverified_entities(
         "الموزّع Ejmar Import BV موثَّق.", dr2)
     assert "مرشّح غير موثَّق" not in out2
+
+
+def test_unverified_entity_no_midword_false_match():
+    """مراجعةٌ ذاتية (MEDIUM): اسمٌ غيرُ موثَّقٍ لا يُوسَم داخل كلمةٍ أطول تحويه —
+    «Nada» لا يُطابَق داخل «Nadason»، فلا يُفسَد نثرٌ سليم."""
+    import silk_reports
+    dr = {"importer_leads": {"leads": [
+        {"name": "Nada", "doc_level": "○ مرشّح ويب غير موثَّق"}]}}
+    out = silk_reports._annotate_unverified_entities(
+        "شركة Nadason Trading هي موزّع كبير.", dr)
+    assert "Nadason Trading" in out and "مرشّح غير موثَّق" not in out
+    # لكنّ الورودَ المستقلَّ يُوسَم.
+    out2 = silk_reports._annotate_unverified_entities(
+        "من الموزّعين Nada في الدوحة.", dr)
+    assert "مرشّح غير موثَّق" in out2
 
 
 def test_comtrade_reporter_no_weight_declares_gap_precisely():
