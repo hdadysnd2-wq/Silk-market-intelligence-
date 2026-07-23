@@ -1269,6 +1269,64 @@ def _section_order_issues(draft: str) -> list[str]:
     return issues
 
 
+# البند هـ (#144) — فرض البنية الفرعية داخل الأقسام (لا العناوين وحدها).
+_RECS_SECTION_TITLE = "التوصيات الاستراتيجية"
+
+
+def _substructure_check_enabled() -> bool:
+    """صمّام البند هـ — `SILK_E_SUBSTRUCTURE_CHECK=1` يفعّل حارس البنية الفرعية
+    (افتراضي **مُطفأ** => السلوك كاليوم). المذكّرة §٥: قبل تفعيله يجب قياسٌ حيٌّ
+    مسجّلٌ يؤكّد أنّ الموجّه ينتج هذه العناصر بثقة — وإلا فتحذيرٌ كاذبٌ على قسمٍ
+    يعلن فجوةً مشروعة (المدوّنات القانونية نصُّ تقريرها فارغٌ فتعذّرت المعايرة
+    الهرمتية). خلف الصمّام: يُشحن المنطق مُختبَرًا، ويُفعَّل بقرار المالك بعد
+    معايرة معدّل التحذير على نثرٍ حيّ — نفس نمط `SILK_A2_PLAUSIBILITY`."""
+    import os as _os
+    return _os.environ.get("SILK_E_SUBSTRUCTURE_CHECK", "0").strip() == "1"
+
+
+def _section_window(draft: str, title: str) -> "str | None":
+    """نصّ قسمٍ من عنوانه '## <رقم>. <العنوان>' حتى العنوان '## <رقم>.' التالي
+    — أو None إن غاب العنوان. **فحص النافذة لا كامل المستند** (الدرس ٤٢:
+    قصر الفحص على نافذة القسم يتفادى تعارضًا زائفًا بين أقسامٍ مشروعة)."""
+    m = re.search(r"^##\s+\d+\.\s*" + re.escape(title) + r"\s*$", draft or "",
+                  re.M)
+    if not m:
+        return None
+    start = m.end()
+    nxt = re.search(r"^##\s+\d+\.", (draft or "")[start:], re.M)
+    return (draft or "")[start: start + nxt.start()] if nxt else (draft or "")[start:]
+
+
+def _section_substructure_issues(draft: str) -> list[str]:
+    """البند هـ (#144) — فحص حتمي (لا كلود) للبنية الفرعية داخل قسم التوصيات.
+
+    مشكلةٌ أُقفِلت العناوين وحدها (`_section_order_issues`) بينما البنية الفرعية
+    غير مفحوصة: قسمٌ يحمل عنوانه الصحيح قد يخلو من العناصر التي يطلبها موجّه
+    الكاتب. هذا حارسٌ **غير حاجب (WARN)** — يُعلَن في «حدود هذا التقرير» لا
+    يُطلق دورة تنقيح مدفوعة — ومكمّلٌ **مستقلّ** لطلب المراجع النثري (لا يعتمد
+    على انتباه النموذج وحده، نظير الدرس ٤٢)، مقيَّدٌ بنافذة قسم التوصيات.
+
+    النطاق (المذكّرة `docs/DESIGN_E_SECTION_SUBSTRUCTURE.md`، المجموعة ١-٣):
+    يفحص فقط العناصر التي **يطلبها الموجّه أصلاً** (§6.1): خارطة دخولٍ ٩٠ يومًا،
+    وفرع «شرطا قلب الحكم» حين يكون الحكم مشروطًا/مراقبة. إضافةُ عناصرَ جديدةٍ
+    للموجّه (SWOT كمُخرَج، جداول مؤشرات/شرائح، فجوة سعرية صريحة، قنوات مرتّبة)
+    مؤجّلةٌ لقياسٍ حيّ مسجّل قبل لمس الموجّه (المذكّرة §٥) — بيئة المالك المفتاحية.
+    """
+    win = _section_window(draft, _RECS_SECTION_TITLE)
+    if win is None:
+        return []  # القسم غائبٌ أصلًا — يبلّغه `_section_order_issues` لا هنا.
+    issues: list[str] = []
+    if not (("خارطة" in win or "خطة" in win) and ("٩٠" in win or "90" in win)):
+        issues.append("قسم التوصيات بلا خارطة طريق دخولٍ (٩٠ يومًا) صريحة "
+                      "داخل نافذته (البند هـ)")
+    # «شرطا قلب الحكم» مطلوبان فقط للحكم المشروط/مراقبة (§6.1) — لا للـGO.
+    conditional = ("مشروط" in (draft or "")) or ("مراقبة" in (draft or ""))
+    if conditional and "قلب الحكم" not in win:
+        issues.append("حكمٌ مشروط/مراقبة بلا فرع «شرطا قلب الحكم» داخل قسم "
+                      "التوصيات (البند هـ)")
+    return issues
+
+
 def _alarmist_issues(draft: str) -> list[str]:
     """Wave 5.1 — فحص نبرة حتمي (لا كلود، لا نداء مدفوع): أي عبارة تنبيهية/
     مبالِغة من `silk_style_contract.ALARMIST_PHRASES` تُدرَج مشكلةَ أسلوب
@@ -1316,6 +1374,11 @@ def review_report(draft: str, mission_reports: dict,
     # تدقيق «تحليل #1» DZA — بند ٣+٤: فحص حتمي مستقلّ لتكرار رقم مفتاحي
     # (لا يعتمد وحده على ملاحظة المراجع النثرية في user prompt أدناه).
     keyfig_issues = _repeated_key_figure_issues(draft)
+    # البند هـ (#144): بنيةٌ فرعيةٌ غير حاجبة داخل قسم التوصيات — فحص حتمي
+    # مستقلّ (لا يعتمد على انتباه المراجع وحده). WARN فقط (يُعلَن في الحدود).
+    # خلف صمّامٍ مطفأ افتراضيًا (المذكّرة §٥: معايرةٌ حيّةٌ قبل التفعيل).
+    substructure_issues = (_section_substructure_issues(draft)
+                           if _substructure_check_enabled() else [])
     facts = _isolate(_facts(list(mission_reports.values())))
     user = (
         f"الحقائق الخام المرجعية (لا غيرها):\n{facts}\n\n"
@@ -1370,16 +1433,19 @@ def review_report(draft: str, mission_reports: dict,
         lambda: _call(_PRINCIPLE, user, max_tokens=900, model=_FAST_MODEL,
                      timeout=30))
     if not raw:
-        _fb = structural_issues + tone_issues + keyfig_issues
+        _fb = (structural_issues + tone_issues + keyfig_issues
+               + substructure_issues)
         return {"issues": _fb, "blocking": structural_issues,
                "approved": not _fb} if _fb else None
     obj = _extract_json(raw)  # noqa: BLE001 — رد غير-JSON = لا مراجعة، لا اختلاق
     if obj is None:
-        _fb = structural_issues + tone_issues + keyfig_issues
+        _fb = (structural_issues + tone_issues + keyfig_issues
+               + substructure_issues)
         return {"issues": _fb, "blocking": structural_issues,
                "approved": not _fb} if _fb else None
     llm_issues = [str(i) for i in (obj.get("issues") or []) if str(i).strip()]
-    issues = structural_issues + tone_issues + keyfig_issues + llm_issues
+    issues = (structural_issues + tone_issues + keyfig_issues
+              + substructure_issues + llm_issues)
     # PART C1 (أمر العمل الرئيس — انحدار التكلفة $1.6→$2.0): المشاكل «الحاجبة»
     # وحدها تبرّر دورة تنقيح ثانية (نداء كاتب Opus كامل إضافي). الحاجب =
     # مشاكل البنية الحتمية (أقسام ناقصة/بترتيب خاطئ) دوماً + ما صنّفه المراجع
