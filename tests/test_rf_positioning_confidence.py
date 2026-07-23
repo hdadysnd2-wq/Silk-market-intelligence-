@@ -1,5 +1,5 @@
 """اختبارات PR-F (توصياتي): S2 موقع سعر المصدّر ضمن أسعار المنافسين (سطر
-كاتب)، وS3 مؤشّر ثقة الدراسة (عدّ شارات ✓/◐/○ في تقرير العميل).
+كاتب)، وS3 مؤشّر تغطية المصادر (عدّ داخليّ، عرضٌ محايد الصياغة بعد WS10).
 
 كلاهما يمرّ عبر build_view → render_client_docx وحارس المصطلحات المحظورة.
 Run:  python3 -m pytest tests/test_rf_positioning_confidence.py -q
@@ -15,7 +15,8 @@ from conftest import docx_all_text  # noqa: E402
 # ── S3: مؤشّر ثقة الدراسة ──────────────────────────────────────────────────
 
 def test_confidence_section_tallies_badges_correctly():
-    """✓≥0.8 / ◐≥0.5 / ○<0.5 — البعثة الفاشلة تُتخطّى، والمحلل يُحتسب."""
+    """WS10: التجميع الداخلي كما هو (2 رسمي من 0.9+0.95، الفاشلة مُتخطّاة)،
+    لكن العرض محايد الصياغة — لا شارات ✓/◐/○ ولا مصطلح «موثّق/ثانوي»."""
     from docx import Document
     import silk_reports as R
     dr = {
@@ -28,13 +29,17 @@ def test_confidence_section_tallies_badges_correctly():
     doc = Document()
     R._client_confidence_section(doc, dr)
     text = "\n".join(p.text for p in doc.paragraphs)
-    assert "مؤشّر ثقة الدراسة" in text
+    assert "مؤشّر تغطية المصادر" in text     # العنوان المحايد الجديد
     assert "إجمالي 4 مؤشراً" in text        # 3 من m1 + 1 محلل (m2 فاشلة مُتخطّاة)
-    assert "2 موثّق" in text                 # 0.9 + 0.95
-    # الجدول يحمل العدّات الثلاث
+    assert "50%" in text                     # 2 من 4 مصادر رسمية أوّلية
     tbl = doc.tables[0]
     cells = [c.text for row in tbl.rows for c in row.cells]
-    assert "✓ موثّق (مصدر رسمي)" in cells
+    assert "مصدر رسمي أوّلي" in cells         # صفٌّ محايد بعدّه (2)
+    assert "2" in cells
+    # WS10: صفر شارة/مصطلح قوة دليل في المتن — الرُتبة داخلية، الإسناد للمراجع.
+    for sym in ("✓", "◐", "○", "موثّق", "ثانوي", "غير متحقق"):
+        assert sym not in text
+        assert all(sym not in c for c in cells)
 
 
 def test_confidence_section_absent_when_no_findings():
@@ -42,7 +47,7 @@ def test_confidence_section_absent_when_no_findings():
     import silk_reports as R
     doc = Document()
     R._client_confidence_section(doc, {"missions": {}, "analyst": {}})
-    assert all("ثقة الدراسة" not in p.text for p in doc.paragraphs)
+    assert all("تغطية المصادر" not in p.text for p in doc.paragraphs)
 
 
 # ── S2: سطر عقد برومبت الكاتب ─────────────────────────────────────────────
