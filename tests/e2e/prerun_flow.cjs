@@ -53,18 +53,21 @@ async function main() {
     await mrow.first().click();
     ok("market_selected", MARKET);
 
-    // ٤) «بحث عميق» → نافذة تصنيف HS (اقتراح يؤكّده المستخدم قبل أيّ حجز).
+    // ٤) «بحث عميق» — الموجة ٣ (المصنّف العام): «تمور» تُصنَّف تلقائياً
+    //    بثقةٍ صارمة (tier=auto) بلا أيّ صندوق حوار — الشارة الصادقة
+    //    «✓ صُنّف تلقائياً» تظهر مباشرةً على #pResolved، والتدفّق يتابع
+    //    مباشرةً لاستشارة بلد المنشأ (لا نقرة تأكيدٍ وسيطة لمنتجٍ محسومٍ).
     await page.locator("#researchBtn").click();
-    await page.waitForSelector("#hsOk", { timeout: 15000 });
-    const hsCardText = await page.locator(".prov").first().innerText();
-    if (!/صُنِّف|تأكيد تصنيف/.test(hsCardText))
-      fail("classify_modal", `classify card missing proposal text: ${hsCardText}`);
-    if (!hsCardText.includes(HS))
-      fail("classify_modal", `classify card missing HS ${HS}: ${hsCardText}`);
-    ok("classify_modal", "proposal shown before reservation");
+    await page.waitForFunction(() => {
+      const el = document.querySelector("#pResolved");
+      return el && el.classList.contains("on") && /✓/.test(el.textContent || "");
+    }, { timeout: 15000 });
+    const resolvedText = await page.locator("#pResolved").innerText();
+    if (!resolvedText.includes(HS))
+      fail("auto_classify", `resolved badge missing HS ${HS}: ${resolvedText}`);
+    ok("auto_classify", "honest ✓ badge shown, no blocking dialog for a clean match");
 
-    // ٥) تأكيد التصنيف — يضبط الرمز ويتابع للتشغيل.
-    await page.locator("#hsOk").click();
+    // ٥) (لا نقرة تأكيدٍ هنا — تلقائيٌّ فعلاً، الفرق الجوهري عن مسار المرشّحين.)
 
     // ٦) استشارة بلد المنشأ — سوقٌ من أكبر مصدّري هذا الرمز => نافذة تحذير.
     await page.waitForSelector("#advOk", { timeout: 15000 });

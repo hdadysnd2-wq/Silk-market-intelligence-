@@ -96,6 +96,23 @@ def _isolated_fact_store(monkeypatch):
     silk_context._data_counter.set(None)
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_env_guard():
+    """عزل علم `SILK_HERMETIC` لكل اختبار — اختبارات كانت تضبطه خاماً
+    (`os.environ[...] = "1"`) بلا استرجاع فيتسرّب لكل اختبار لاحق: build_view
+    يسم test_run زوراً فتظهر لافتة «نموذج توضيحي» في PDF عميلٍ إنتاجي المسار
+    (اكتُشف بإعادة إنتاج مباشرة: القفل البصري
+    test_visual_pdf_lock_production_entrypoint_bare_no_split_no_leaks يسقط على
+    «⚠» فقط حين تسبقه اختبارات التصدير في نفس الحزمة وأدوات PDF مثبَّتة).
+    كل اختبار يبدأ بلا العلم، وأي ضبطٍ خام داخله يُمسَح بعده حتماً."""
+    old = os.environ.pop("SILK_HERMETIC", None)
+    yield
+    if old is None:
+        os.environ.pop("SILK_HERMETIC", None)
+    else:
+        os.environ["SILK_HERMETIC"] = old
+
+
 # ── طبقة الدخان الحية (opt-in) — gated live-integration lane ─────────────────
 # اختبارات موسومة `live` تضرب الشبكة الحقيقية (مصادر مجانية بلا مفتاح فقط —
 # لا حرق أرصدة). تُتخطّى دائماً في CI الافتراضي (`pytest tests/ -q`) وتعمل

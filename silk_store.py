@@ -419,6 +419,62 @@ def load_agent_settings() -> dict | None:
         return None
 
 
+def _normalize_product_key(product: str) -> str:
+    """مفتاحُ ذاكرةٍ مطبَّعٌ لاسم منتج — يعيد استعمال تطبيع silk_hs_confirm._norm
+    (تشكيلٌ/تنميطُ ألفٍ وياء/تصغيرٌ) كي الأشكال القريبة لنفس المنتج تصيب نفس
+    الذاكرة — نواةٌ واحدةٌ لا نسخةٌ موازية قابلة للانحراف."""
+    import re
+    try:
+        from silk_hs_confirm import _norm
+        s = _norm(product)
+    except Exception:  # noqa: BLE001 -- احتياطٌ محليٌّ لا يكسر التخزين
+        s = (product or "").strip().lower()
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def cache_hs_classification(product: str, payload: dict) -> None:
+    """خزّن ناتج تصنيف HS العام لمنتجٍ — الموجة ٣ (المصنّف العام،
+    `silk_hs_classifier.classify_general`): منتجٌ سبق تصنيفه لا يُعيد نداء
+    كلود إطلاقاً (نداءٌ واحدٌ فقط لكل اسم منتج جديد). فشل الكتابة قناة
+    جانبية صامتة — التخزين تحسينٌ لا شرط تصنيف."""
+    key = _normalize_product_key(product)
+    if not key:
+        return
+    try:
+        migrate()
+        with connect() as conn:
+            conn.execute(_q(
+                "INSERT INTO hs_classify_cache (product_key, payload_json, "
+                "created_at) VALUES (?,?,?) ON CONFLICT (product_key) DO "
+                "UPDATE SET payload_json=excluded.payload_json, "
+                "created_at=excluded.created_at"),
+                (key, json.dumps(payload or {}, ensure_ascii=False), _now()))
+            conn.commit()
+    except Exception as e:  # noqa: BLE001
+        log.warning("hs classify cache write skipped (product=%r): %s",
+                   product, e)
+
+
+def get_cached_hs_classification(product: str) -> dict | None:
+    """اقرأ ناتج تصنيف HS المخزَّن لمنتجٍ — `None` بلا ذاكرةٍ سابقة (إصابة
+    ذاكرة سلبية، لا استثناء). أيّ فشل (قاعدة غائبة/JSON تالف) = None بهدوء."""
+    key = _normalize_product_key(product)
+    if not key:
+        return None
+    try:
+        migrate()
+        with connect() as conn:
+            row = conn.execute(
+                _q("SELECT payload_json FROM hs_classify_cache "
+                   "WHERE product_key=?"), (key,)).fetchone()
+        got = json.loads(row[0]) if row and row[0] else None
+        return got if isinstance(got, dict) and got else None
+    except Exception as e:  # noqa: BLE001
+        log.debug("hs classify cache read skipped (product=%r): %s",
+                 product, e)
+        return None
+
+
 def get_trade_flow(hs6: str, reporter_iso3: str, partner_iso3: str,
                    year: int, flow: str = "M") -> dict | None:
     """صف تدفق واحد بكامل أعمدته — one flow row (incl. qty_kg) or None. لا اختلاق:

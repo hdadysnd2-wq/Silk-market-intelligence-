@@ -19,6 +19,13 @@
      نفس فحوص التصدير الثلاثة عليه → يظهر في «بحوثي السابقة». هذا الخطُّ لم
      يُدخَّن حيًّا قط (Commands #1-6 غطّت /research حصرًا) فكتب لقرصٍ فانٍ أعاد
      المعرّف «1» ثم 404 — الآن يُثبَت حيًّا مثل /research تمامًا.
+  7. **بوّابة تأكيد HS الحيّة (LESSONS ٣٥، تقرير الكويت):** المنتج الافتراضي
+     لهذه الخطوة («زبدة الفول السوداني») هو **بعينه** منتج الحادثة الحية —
+     يُرسَل أولاً **بلا** `hs_confirmed` فيجب أن يُرفَض ٤٢٢
+     `hs_confirmation_needed` حياً (إثباتٌ حيّ أن البوّابة فشل-آمنة على
+     النشر الفعلي، لا الاختبار الهرمتي فقط)، ثم يُعاد بـ`hs_confirmed=true`
+     لإتمام فحوص الحفظ/التصدير المعتادة. أيّ إعادة ضبط `SILK_HS_CONFIRM_GATE=0`
+     على النشر تُسقِط هذا الفحص بصمت — فيُعلَن ذلك صراحةً لا يُخفى.
 
 الاستعمال:
     python3 tools/post_deploy_smoke.py https://<railway-host>  [--key SILK_API_KEY]
@@ -80,8 +87,16 @@ def _check_exports(base: str, aid: int, key: str | None,
     else:
         print(f"  ✓ report.md 200 — {len(body)} بايت")
 
-    # report.docx — عائلة 501: هنا يُلتقَط الفشل الحيّ
+    # report.docx — عائلة 501: هنا يُلتقَط الفشل الحيّ.
+    # مراجعة شيفرة PR #147: بوابة الجودة صارت **شرط تسليم** — 409 بجسم
+    # quality_gate_fail على قالب العميل نتيجةٌ مشروعة (حجب تسليم متعمَّد)
+    # لا عطل نشر؛ عندها تُفحَص آلية التصدير نفسها عبر النسخة الداخلية
+    # (?internal=1) التي لا تمرّ بالبوابة. أي حالة أخرى غير 200 تبقى فشلاً.
     st, body = _get(base, f"/analyses/{aid}/report.docx", key)
+    if st == 409 and b"quality_gate_fail" in (body or b""):
+        print(f"  ~ report.docx 409 — بوابة الجودة حجبت تسليم العميل "
+              "(سلوك مقصود)؛ نفحص الآلية عبر النسخة الداخلية")
+        st, body = _get(base, f"/analyses/{aid}/report.docx?internal=1", key)
     if st != 200:
         fails.append(f"report.docx id={aid}: HTTP {st} — {(body or b'')[:200]!r}")
     elif not (body[:2] == b"PK"):     # docx = حاوية ZIP
@@ -100,8 +115,13 @@ def _check_exports(base: str, aid: int, key: str | None,
             opened = "فشل الفتح"
         print(f"  ✓ report.docx 200 — {len(body)} بايت، {opened}")
 
-    # report.pdf — §3: المُسلَّم النهائي؛ يُثبِت أن soffice يعمل حياً
+    # report.pdf — §3: المُسلَّم النهائي؛ يُثبِت أن soffice يعمل حياً.
+    # نفس معاملة 409 البوابة (حجب مقصود => النسخة الداخلية تثبت الآلية).
     st, body = _get(base, f"/analyses/{aid}/report.pdf", key)
+    if st == 409 and b"quality_gate_fail" in (body or b""):
+        print(f"  ~ report.pdf 409 — بوابة الجودة حجبت تسليم العميل "
+              "(سلوك مقصود)؛ نفحص الآلية عبر النسخة الداخلية")
+        st, body = _get(base, f"/analyses/{aid}/report.pdf?internal=1", key)
     if st != 200:
         fails.append(f"report.pdf id={aid}: HTTP {st} — {(body or b'')[:200]!r} "
                      "(503 = محرّك تحويل PDF غائب على النشر)")
@@ -137,6 +157,18 @@ def main() -> int:
         fails.append("storage.data_dir فارغ — التخزين فانٍ (لا وحدة تخزين)")
     if health.get("warnings"):
         print("  ⚠ warnings:", "; ".join(health["warnings"]))
+    # اللائحة ٤٣ (بلاغ حي متكرّر — رمز HS خاطئ رغم إصلاح المُصنِّف العام):
+    # الصمّام فشل-آمن مفعَّل افتراضياً الآن، لكن ضبطٌ صريحٌ سابقٌ على النشر
+    # (SILK_HS_CLASSIFIER=0) يبقى ممكناً ويُسقِط الإصلاح صامتاً إن لم يُفحَص
+    # هنا — نفس منطق فحص بوّابة HS الحيّة أدناه، لا افتراض أن الكود يكفي.
+    hsc = health.get("hs_classifier") or {}
+    print(f"  hs_classifier.enabled={hsc.get('enabled')}")
+    if hsc.get("enabled") is False:
+        fails.append(
+            "hs_classifier.enabled=False — SILK_HS_CLASSIFIER مُعطَّل صراحةً "
+            "على هذا النشر؛ المُصنِّف العام لن يستدعي كلود فيعود للرمز "
+            "الخاطئ (بلاغ «زبدة الفول السوداني»). أزِل هذا المتغيّر أو "
+            "اضبطه على قيمةٍ غير 0/false/no/off")
 
     # 2) أحدث تحليل مكتمل
     st, body = _get(base, "/analyses", key)
@@ -160,8 +192,35 @@ def main() -> int:
     if args.skip_analyze:
         print("⊘ خطوة /analyze الحيّة متخطّاة (--skip-analyze)")
     else:
+        # 6ب) بوّابة تأكيد HS (LESSONS ٣٥): المنتج الافتراضي هو منتج حادثة
+        # الكويت الحيّة بعينه — أوّل نداءٍ **بلا** hs_confirmed يجب أن يُرفَض
+        # ٤٢٢ حياً؛ فشل-آمن يعني أن الصمّام مفعّلٌ افتراضياً على النشر لا
+        # الاختبار الهرمتي فقط. غياب الرفض (200 أو أيّ خطأ آخر) = انحدارٌ حيّ
+        # على البوّابة الأهم في هذه الجولة، لا يُمرَّر بصمت.
+        st_gate, body_gate = _post(
+            base, "/analyze", {"product": args.analyze_product}, key)
+        if st_gate == 422:
+            try:
+                err = json.loads(body_gate).get("detail", {}).get("error")
+            except Exception:  # noqa: BLE001
+                err = None
+            if err == "hs_confirmation_needed":
+                print(f"  ✓ بوّابة HS الحيّة رفضت «{args.analyze_product}» "
+                      "بلا تأكيد (422 hs_confirmation_needed) — فشل-آمن يعمل حياً")
+            else:
+                fails.append(f"POST /analyze (بلا تأكيد): 422 لكن error="
+                             f"{err!r}، متوقَّع hs_confirmation_needed")
+        elif st_gate == 200:
+            fails.append(
+                "POST /analyze (بلا تأكيد HS): 200 — بوّابة تأكيد HS لم "
+                "تحجب رمزاً غير مؤكَّد حياً (LESSONS ٣٥؛ تحقّق "
+                "SILK_HS_CONFIRM_GATE على النشر)")
+        else:
+            fails.append(f"POST /analyze (بلا تأكيد HS): HTTP {st_gate} غير متوقَّع")
+
         st, body = _post(base, "/analyze",
-                         {"product": args.analyze_product, "persist": True},
+                         {"product": args.analyze_product, "persist": True,
+                          "hs_confirmed": True},
                          key)
         if st != 200:
             fails.append(f"POST /analyze: HTTP {st} — {(body or b'')[:200]!r}")

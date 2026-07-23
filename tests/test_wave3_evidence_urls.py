@@ -96,31 +96,29 @@ def test_auditor_evidence_log_has_real_url_for_comtrade_fact():
     assert "comtradeplus.un.org" in joined, joined
 
 
-def test_client_evidence_log_now_has_url_column_and_real_url():
-    """ملحق العميل: عمود «الرابط» أُضيف (كان غائبًا) ويحمل الرابط العمومي."""
+def test_client_references_section_has_real_url_for_comtrade_fact():
+    """§A (حزمة الفكس v2.1): «المراجع» تحلّ محلّ جدول سجل الأدلة القديم —
+    مصدر عمومي معروف يظهر باسمه ورابطه الرسمي الحقيقي."""
     from docx import Document
     doc = Document()
-    sr._client_evidence_appendix(doc, _dr_with_comtrade_fact())
-    tables = [t for t in _tables_text(doc) if "الحقيقة" in t[0]]
-    assert tables, "لا جدول سجل أدلة في تقرير العميل"
-    hdr, body = tables[-1]
-    assert "الرابط" in hdr, hdr
-    assert any("comtradeplus.un.org" in row for row in body), body
+    sr._client_references_section(doc, _dr_with_comtrade_fact())
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "المراجع" in text
+    assert "UN Comtrade" in text
+    assert "comtradeplus.un.org" in text
 
 
-def test_client_evidence_log_paid_source_gets_dash_not_vendor_url():
-    """لا اختلاق ولا تسريب: مصدرٌ مدفوع في تقرير العميل => «—» في الرابط
-    واسمٌ محايد في المصدر (لا نطاق مورّد، لا رابط مخترَع)."""
+def test_client_references_paid_source_dropped_not_leaked():
+    """لا اختلاق ولا تسريب: مصدرٌ مدفوع بلا رابط عمومي حقيقي لا يظهر في
+    «المراجع» إطلاقاً (لا اسم مورّد، لا رابط مخترَع) — يبقى في الملحق
+    الداخلي فقط (§A-2/٥)."""
     from docx import Document
     dr = {"missions": {"buyers": {"findings": [{
         "value": "ثلاثة مستوردين نشطين في السوق",
         "source": "Volza", "note": "لا رابط عموميّ",
         "retrieved_at": "2026-07-01", "confidence": 0.6}]}}}
     doc = Document()
-    sr._client_evidence_appendix(doc, dr)
-    tables = [t for t in _tables_text(doc) if "الحقيقة" in t[0]]
-    assert tables
-    _, body = tables[-1]
-    joined = "\n".join(body)
-    assert "volza" not in joined.lower(), joined
-    assert "—" in joined, joined
+    sr._client_references_section(doc, dr)
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "volza" not in text.lower()
+    assert "لا مصادر عمومية موثّقة" in text

@@ -48,6 +48,26 @@ _SYMBOL_ANCHORS = [
     (7, "silk_agents.py", ["class BaseAgent"]),
     # البند ٨ — عقد DataPoint (لا اختلاق)
     (8, "silk_data_layer.py", ["class DataPoint"]),
+    # البند ٤٢ — تحليل #1 DZA: تنقية Markdown شارد/ثقة خام + إصلاح عمود
+    # العملة + علم مراجع حتمي لتكرار رقم مفتاحي.
+    (42, "silk_render.py", ["_strip_stray_markdown", "_AR_RAW_CONF_RE",
+                           "_fix_price_column_currency_label"]),
+    (42, "silk_ai_judge.py", ["_repeated_key_figure_issues"]),
+    (42, "silk_quality_gate.py", ["currency_label_mismatch"]),
+    (42, "tools/canonical_dza_peanut_butter.py", ["def dza_research_blob"]),
+    # البند ٤٣ — المُصنِّف العام: صمّام فشل-آمن مفعَّل افتراضياً.
+    (43, "silk_hs_classifier.py", ["def enabled", '"0", "false", "no", "off"']),
+    (43, "api.py", ['health["hs_classifier"]']),
+    # البند ٤٤ — Master Prompt Part 2 §B: _verdict_tone تتعرّف على التسمية
+    # العربية أيضاً، وبوابة اتساق الحكم عند التسليم.
+    (44, "silk_render.py", ["عدم الدخول", "مشروط", "مراقبة"]),
+    (44, "silk_reports.py", ["_assert_verdict_consistency_doc",
+                            "_assert_verdict_consistency_text",
+                            "_declared_verdict_labels", "_resolve_vtxt"]),
+    # البند ٤٥ — دالة الإصلاح الشقيقة لعمود العملة تحمل نفس تضييق نافذة
+    # الجدول؛ عيّنة العميل مطابقة لعقد الكاتب المُهجَّر (بعملة الرصد).
+    (45, "silk_render.py", ["_fix_price_column_currency_label"]),
+    (45, "tools/gen_client_report_sample.py", ["السعر/كجم (بعملة الرصد)"]),
 ]
 
 # كل مدخلة: (رقم الدرس، مسار الوثيقة، علامات المنهج التي يجب أن تبقى).
@@ -64,14 +84,14 @@ _DOC_ANCHORS = [
     # البند ١٥ — دلاء الصدق المنقسمة (hermetic only مقابل real-server+browser)
     (15, ".claude/skills/pr-and-wave-discipline/SKILL.md",
      ["hermetic only", "passed real-server + browser e2e", "e2e-live-shape"]),
-    # البند ٣٢ — المراجعة الذاتية (/code-review) قبل فتح/وسم أي PR جاهزًا؛ قاعدة
+    # البند ٥٨ — المراجعة الذاتية (/code-review) قبل فتح/وسم أي PR جاهزًا؛ قاعدة
     # عملية (عائلة البندين ١/١٠) بلا اختبار سلوكي — العلامات في CLAUDE.md +
     # مهارة pr-and-wave-discipline §7 (سابقة Yemen stale-tag). حذف القاعدة
     # من أيّهما يُحمِّر هذا الاختبار.
-    (32, "CLAUDE.md",
+    (58, "CLAUDE.md",
      ["/code-review",
       "self-review catches what hermetic tests structurally cannot"]),
-    (32, ".claude/skills/pr-and-wave-discipline/SKILL.md",
+    (58, ".claude/skills/pr-and-wave-discipline/SKILL.md",
      ["/code-review", "Yemen stale-tag",
       "self-review catches what hermetic tests"]),
 ]
@@ -231,6 +251,98 @@ _TEST_ANCHORS = [
     (31, "tests/test_regression_registry.py",
      ["def _guard_analyze_persist_canonical_db"]),
     (31, "tools/post_deploy_smoke.py", ["def _check_exports"]),
+    # البند ٣٢ — مصدرٌ جديد = نفس العقود (فجوة معلنة/ops/مخزَّن/محكوم/نظيف الشروط).
+    (34, "tests/test_wave_datasources_integration.py",
+     ["def test_imf_declared_gap_on_fetch_failure_and_ops_logged",
+      "def test_wto_no_key_is_declared_gap_with_zero_network_calls",
+      "def test_tariff_fallback_prefers_wto_when_available",
+      "def test_preferred_domains_map_keys_all_have_web_search_tool",
+      "def test_new_source_modules_do_no_html_scraping",
+      "def test_world_bank_arabic_portal_only_for_client_citation"]),
+    (34, "docs/DECISIONS.md",
+     ["INTEGRATED-with-artifact", "SEARCH-BIASED",
+      "REJECTED as a data source"]),
+    # البند ٣٥ — بوّابة HS فشل-آمن + نقطة اختناق مشتركة (تقرير الكويت الحيّ).
+    (35, "silk_hs_confirm.py", ["def preflight_block"]),
+    (35, "tests/test_report_quality_upgrade.py",
+     ["def test_w1_2_research_gate_on_by_default_blocks_unconfirmed_hs",
+      "def test_w2_hs_gate_blocks_on_both_analyze_and_research_by_default",
+      "def test_w2_hs_gate_choke_point_is_shared_not_duplicated"]),
+    (35, "tests/test_regression_registry.py",
+     ["def _guard_hs_gate_shared_choke_point_fail_safe"]),
+    # البند ٣٦ — تسرّب اليمن↔الكويت عبر نقاط تفتيش بعثات /research.
+    (36, "silk_storage.py", ["market_iso3"]),
+    (36, "tests/test_cross_market_leak_guard.py",
+     ["def test_resume_with_different_market_is_rejected_409_not_silently_served",
+      "def test_checkpoint_store_rejects_foreign_market_even_if_api_gate_bypassed"]),
+    (36, "tests/test_regression_registry.py",
+     ["def _guard_cross_market_checkpoint_leak"]),
+    # البند ٣٧ — الاختبار الذهبي: كل العقود معاً على نفس سيناريو الحادثة.
+    (37, "tools/canonical_kuwait_peanut_butter.py", ["def kuwait_research_blob"]),
+    (37, "tests/test_golden_deep_research_contract.py",
+     ["def test_golden_a_zero_cross_market_leak_in_kuwait_view",
+      "def test_golden_b_hs_gate_blocks_kuwait_peanut_butter_on_both_paths_live",
+      "def test_golden_b_resume_of_kuwait_run_as_different_market_is_rejected_live"]),
+    (37, "tools/post_deploy_smoke.py", ["بوّابة تأكيد HS الحيّة"]),
+    # البند ٣٨ — الحارس: مراقبةٌ دائمة للمالك حصراً، صفر تلوّث للعميل.
+    (38, "silk_watchdog.py", ["def observe", "def render_report_md",
+                              "def trend_report"]),
+    (38, "tests/test_watchdog.py",
+     ["def test_cross_market_leak_seeded_violation_is_red",
+      "def test_clean_run_is_overall_green",
+      "def test_watchdog_crash_is_isolated_never_raises",
+      "def test_no_watchdog_strings_reach_rendered_client_markdown",
+      "def test_three_known_service_failures_produce_yellow_findings"]),
+    (38, "tests/test_regression_registry.py",
+     ["def _guard_watchdog_owner_only_no_client_contamination"]),
+    # البند ٣٩ — المصنّف العام: جدول البحث تلميحٌ ابتدائي لا حاكمٌ نهائي.
+    (39, "silk_hs_classifier.py",
+     ["def classify_general", "def _validated_candidate",
+      "def _claude_classify_general"]),
+    (39, "silk_hs_resolver.py", ["VALID_HS_CHAPTERS", "def chapter_valid"]),
+    (39, "silk_hs_confirm.py", ["def confirm_against_description"]),
+    (39, "silk_store.py",
+     ["def cache_hs_classification", "def get_cached_hs_classification"]),
+    (39, "tests/test_hs_general_classifier.py",
+     ["def test_battery_never_auto_passes_wrong_chapter_without_llm",
+      "def test_classify_general_never_auto_passes_flagged_product_without_llm",
+      "def test_repeat_product_hits_cache_zero_extra_llm_calls"]),
+    (39, "tests/test_regression_registry.py",
+     ["def _guard_general_hs_classifier_no_lookup_table_ceiling"]),
+    # البند ٤٠ — UI-ONLY FIX: نقطة اختناق tier واحدة، لا مسار واجهةٍ ثانٍ
+    # يثق بـhs6 خامًا.
+    (40, "web/index.html", ["function ensureHs(", 'res.tier==="auto"']),
+    (40, "tests/test_wave1_hs_classifier.py",
+     ["def test_web_ui_never_shows_auto_badge_from_unverified_source"]),
+    (40, "tests/test_rung3_playwright_e2e.py",
+     ["def test_rung3_ui_tier_consumption_locked_across_product_families"]),
+    (40, "tests/test_regression_registry.py",
+     ["def _guard_ui_tier_consumption_single_choke_point"]),
+    # البند ٤١ — ONE FIX: المصادَق فعلياً من كلود يتصدّر على المرفوض
+    # الحتمي؛ نواة التداخل ترفض تصادف جذرٍ قصير.
+    (41, "silk_hs_classifier.py", ["def _rank_key"]),
+    (41, "silk_hs_confirm.py", ["_MIN_CONTAINMENT_LEN", "def _covered"]),
+    (41, "tests/test_hs_general_classifier.py",
+     ["def test_breadth_active_resolution_surfaces_correct_primary_not_rejected_or_blank"]),
+    (41, "tests/test_regression_registry.py",
+     ["def _guard_active_resolution_beats_rejected_and_short_root_collision"]),
+    # البند ٤٢ — تحليل #1 DZA: ست نتائج فشل بوّابة الجودة معاً (Markdown
+    # شارد، ثقة خام، تكرار رقم مفتاحي، عمود سعر مضلِّل، سقف الملحق).
+    (42, "tests/test_dza_quality_gate_fixes.py",
+     ["def test_overall_verdict_moves_from_fail_to_pass_with_warnings"]),
+    (42, "tests/test_regression_registry.py",
+     ["def _guard_dza_quality_gate_six_findings"]),
+    (43, "tests/test_hs_general_classifier.py",
+     ["def test_general_classifier_valve_is_fail_safe_on_by_default"]),
+    (43, "tests/test_regression_registry.py",
+     ["def _guard_hs_classifier_valve_fail_safe_default"]),
+    # البند ٤٤ — Master Prompt Part 2 §B: بوابة اتساق الحكم عند التسليم.
+    (44, "tests/test_master_prompt_part2_verdict.py",
+     ["def test_verdict_tone_recognizes_arabic_labels_not_only_english_codes",
+      "def test_kuwait_client_and_research_docx_pass_verdict_gate"]),
+    (45, "tests/test_dza_quality_gate_fixes.py",
+     ["def test_5b_price_fix_scoped_to_table_not_whole_document",
+      "def test_5b_price_fix_still_fires_within_the_same_table_block"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.
@@ -266,6 +378,107 @@ _SYMBOL_ANCHORS_EXTRA = [
                             'data-act="pdf"']),
     (19, "api.py", ["report.pdf", 'media_type="application/pdf"']),
     (19, "Dockerfile", ["libreoffice-writer"]),
+    # البند ٣٢ — إصلاحُ المحرّك لا تحرير التقرير (تدقيق زبدة الفول السوداني/
+    # اليمن): كل عائلة عيبٍ تحريريّ صارت قاعدةَ عقدٍ + إنفاذ عرضٍ حتميّ + قفلًا.
+    (32, "silk_hs_confirm.py", ["def confirm_hs", "def is_flagged",
+                                "CONTEXTUAL_TAG"]),
+    (32, "silk_render.py", ["_tag_stale_years", "_flip_conditions",
+                            "_price_row_reason", "_has_seasonality_gap"]),
+    (32, "silk_trends_agent.py", ["def broaden_if_weak",
+                                  "SEASONALITY_GAP_CLOSURE"]),
+    (32, "silk_style_contract.py", ["ALARMIST_PHRASES",
+                                    "PROFESSIONAL_TONE_RULE"]),
+    (32, "silk_ai_judge.py", ["def _alarmist_issues"]),
+    (32, "tools/canonical_yemen.py", ["def yemen_research_blob"]),
+    (32, "tests/test_report_quality_upgrade.py",
+     ["def test_w1_2_hs_confirm_flags_peanut_butter_but_not_valid_matches",
+      "def test_w6_1_watch_verdict_has_structured_flip_conditions"]),
+    # البند ٣٣ — حلِّل المصدر لا النثر (parse provenance, not prose): قاعدةُ
+    # الإفصاح تُرسى إلى بياناتٍ بنيوية، والمطابقة النصّية شبكةُ أمانٍ أخيرة.
+    (33, "silk_staleness.py", ["def fact_year", "def is_stale_fact",
+                              "def stale_fact_years", "def stale_tag"]),
+    (33, "silk_ai_judge.py", ["from silk_staleness import"]),
+    (33, "silk_render.py", ["stale_fact_years", "def _tag_stale_years"]),
+    # الحقل البنيويّ data_year هو مصدر الفِنتيج (لا وسم نصّيّ year=).
+    (33, "silk_data_layer.py", ["data_year"]),
+    (33, "tests/test_report_quality_upgrade.py",
+     ["def test_w2_1_fact_year_reads_structured_provenance_not_prose",
+      "def test_w2_1_stale_fact_tagged_regardless_of_phrasing",
+      "def test_w2_1_hs_heading_2008_never_tagged_no_stale_fact_behind_it"]),
+    # البند ٤٦ — حزمة الفكس v2.1 (زبدة الفول السوداني/الكويت): بوابة الجودة
+    # شرط تسليم للعميل (409 على FAIL) + عائلة فحوصات كاتب/عرض بنيوية + «المراجع»
+    # تحلّ محلّ سجل الأدلة في بناء العميل.
+    (46, "api.py",
+     ["def _block_client_export_if_gate_failed",
+      "def _gate_verdict_for_client_export"]),
+    (46, "silk_watchdog.py", ["def record_blocked_export"]),
+    (46, "silk_quality_gate.py",
+     ["def _check_orphan_short_token",
+      "def _check_dangling_cross_reference",
+      "def _check_near_duplicate_figures",
+      "def _check_hhi_false_precision",
+      "def _check_supplier_rank_contiguity",
+      "def _check_stray_percent_punctuation",
+      "def _check_entity_near_duplicates",
+      "def _check_confidence_band_label",
+      "def _check_lpi_edition_year",
+      "def _check_recommendation_tier_label_consistency"]),
+    (46, "silk_reports.py", ["def _client_references_section"]),
+    (46, "silk_render.py",
+     ["def _already_explained_nearby", "def _year_in_growth_span",
+      "def _fix_stray_percent_punctuation"]),
+    (46, "tests/test_fix_pack_v2_1.py",
+     ["def test_orphan_short_token_flagged",
+      "def test_near_duplicate_figures_flagged",
+      "def test_hhi_false_precision_flagged",
+      "def test_lpi_invalid_edition_year_flagged",
+      "def test_confidence_band_mismatch_flagged"]),
+    (46, "tests/test_client_report_export.py",
+     ["def test_client_docx_export_blocked_409_when_gate_fails",
+      "def test_client_pdf_export_blocked_409_when_gate_fails",
+      "def test_gate_crash_treated_as_fail_for_client_export"]),
+    # صفوف 47-53 — برنامج إصلاح جودة التقارير (WP-1…WP-7)؛ الحُرّاس السلوكية
+    # الكاملة في tests/test_regression_registry.py (_guard_wp1…_guard_wp7)
+    # وملفات tests/test_wp*.py — هذه مراسي الرموز.
+    (47, "silk_narrative.py", ["def authoritative_verdict"]),
+    (47, "silk_llm_provider.py", ['"temperature": 0']),
+    (47, "silk_style_contract.py", ["def confidence_band_label"]),
+    (48, "silk_reports.py", ["def _client_prose",
+                             "def _client_missing_narrative_heads"]),
+    (48, "silk_ai_judge.py", ["def rephrase_client_sections"]),
+    (48, "silk_quality_gate.py", ["_check_client_scaffold_leak",
+                                  "_check_placeholder_leak"]),
+    (49, "silk_narrative.py", ["def evidence_badge_for",
+                               "RECONCILED_OUT_TAG"]),
+    (49, "silk_render.py", ["def _reconcile_numeric_conflicts"]),
+    (50, "silk_reports.py", ["def _client_gap_inputs"]),
+    (50, "silk_quality_gate.py", ["_check_gaps_closing_contradiction"]),
+    (51, "silk_reports.py", ["def _bidi_isolate_brackets",
+                             "def count_suspicious_brackets",
+                             "def _pdf_bracket_check"]),
+    (51, "tools/rtl_calibration.py", ["def build_bracket_fixture"]),
+    (52, "silk_render.py", ["def _already_explained_nearby",
+                            "def _year_in_growth_span"]),
+    (52, "tests/test_wp6_injector_hardening.py",
+     ["test_delivered_sentence_growth_span_year_not_tagged_stale"]),
+    (53, "api.py", ["owner_override_required"]),
+    (53, "silk_watchdog.py", ["def record_override",
+                              "def override_records_for"]),
+    (53, "silk_quality_gate.py", ["def run_client_artifact_text_gate"]),
+    # البند ٥٤ — بند بثقة 0.0 (خرق حارس المراقبة الحي على demand_trends):
+    # ادعاء بثقة صفرية يُعلَن فجوة لا يُشحَن بنداً.
+    (54, "silk_llm_runtime.py", ["zero_conf_gaps",
+                                 "zero-confidence claim -> declared gap"]),
+    (54, "silk_watchdog.py", ["def _check_no_fabrication"]),
+    (54, "tests/test_zero_confidence_finding_gap.py",
+     ["def test_model_stated_zero_confidence_claim_becomes_declared_gap",
+      "def test_inherited_zero_confidence_from_cited_gap_datapoint_not_shipped",
+      "def test_watchdog_no_fabrication_holds_on_parse_output_shape"]),
+    # البند ٥٥ — تسرّب SILK_HERMETIC الخام بين الاختبارات (لافتة «نموذج
+    # توضيحي» في PDF عميل): عازل autouse مضمون الاسترجاع في conftest.
+    (55, "tests/conftest.py", ["def _hermetic_env_guard"]),
+    (55, "tests/test_wave2_first_pdf_cluster.py",
+     ["def test_visual_pdf_lock_production_entrypoint_bare_no_split_no_leaks"]),
 ]
 
 

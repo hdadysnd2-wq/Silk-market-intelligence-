@@ -399,7 +399,7 @@ def _guard_unresolved_hs_silent_spend():
     api = _read("api.py")
     assert "def _require_hs6" in api and '"error": "unresolved_hs"' in api, \
         "بوّابة hs6 الصلبة غائبة"
-    assert "def classify_hs" in api and "def _classify_ai_allowed" in api, \
+    assert "def classify_hs" in api and "def _classify_general_allow_claude" in api, \
         "نقطة/حارس التصنيف غائبة"
     gate = api.index('"error": "unresolved_hs"')
     reserve = api.index("try_reserve_usd(_expected_usd)")
@@ -593,6 +593,529 @@ def _guard_analyze_persist_canonical_db():
         importlib.reload(silk_storage)
 
 
+def _guard_new_source_contracts():
+    """LESSONS ٣٢ — مصدرٌ جديد = نفس العقود (فجوة معلنة/ops/مخزَّن/محكوم/نظيف
+    الشروط). الحارس السلوكي: (أ) IMF/WTO دون الشبكة => فجوة معلنة None/0.0 لا
+    اختلاق؛ (ب) WTO بلا مفتاح => فجوة معلنة بصفر نداء شبكة؛ (ج) سلسلة التراجع
+    كلا-الفشلين تُبقي مصدر WITS؛ (د) البوّابة العربية للبنك الدولي تطابق تامّ
+    (لا تُحوِّل WITS)؛ (هـ) كل نطاق مُفضَّل بعثته تملك web_search (لا إعداد ميت)."""
+    from unittest.mock import patch
+    import silk_imf_agent as imf
+    import silk_wto_tariff as wto
+    import silk_tariffs_agent as tar
+    import silk_missions as M
+    from silk_data_layer import DataPoint, public_source_url, WORLD_BANK_AR_PORTAL
+
+    # (أ) لا اختلاق دون الشبكة
+    with patch("silk_cache.cached_get", return_value=None):
+        assert imf.imf_indicator("NLD", "gdp_growth").value is None
+    # (ب) WTO بلا مفتاح => صفر نداء شبكة
+    saved = {k: os.environ.get(k) for k in ("WTO_TTD_API_KEY", "WTO_API_KEY")}
+    try:
+        os.environ.pop("WTO_TTD_API_KEY", None)
+        os.environ.pop("WTO_API_KEY", None)
+        with patch("silk_cache.cached_get") as cg:
+            dp = wto.wto_applied_tariff("080410", "NLD")
+        cg.assert_not_called()
+        assert dp.value is None
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    # (ج) سلسلة التراجع: كلا الفشلين => مصدر WITS يبقى
+    with patch("silk_wto_tariff.wto_applied_tariff",
+               return_value=DataPoint(None, "WTO TTD", 0.0, "x")), \
+         patch("silk_tariffs_agent.applied_tariff",
+               return_value=DataPoint(None, "World Bank WITS", 0.0, "y")):
+        dp = tar.tariff_with_fallback("080410", "NLD")
+    assert dp.value is None and dp.source == "World Bank WITS"
+    # (د) البوّابة العربية للعميل: تطابق تامّ، WITS لا يُحوَّل
+    assert public_source_url("World Bank", arabic=True) == WORLD_BANK_AR_PORTAL
+    assert public_source_url("World Bank WITS", arabic=True) != WORLD_BANK_AR_PORTAL
+    assert public_source_url("World Bank") == "https://data.worldbank.org/"
+    # (هـ) لا نطاق مُفضَّل بعثته بلا web_search
+    for key in M.PREFERRED_DOMAINS:
+        assert "web_search" in M.MISSIONS[key]["allowed_tools"]
+
+
+def _guard_report_quality_upgrade():
+    """LESSONS ٣٢ — إصلاحُ المحرّك لا تحرير التقرير (تدقيق زبدة الفول السوداني/
+    اليمن): كل عائلة عيبٍ تحريريّ صارت إنفاذًا حتميًّا. الحارس السلوكي على
+    مدوّنة اليمن الإنتاجية الشكل: (١) عقد التأكيد يُعلِّم الرمز الخاطئ ولا
+    يُعلِّم الصحيح؛ (٢) الرمز المُعلَّم يُعيد التأطير بملاحظةٍ واحدة + يسقف
+    الثقة؛ (٣) شرطا قلب الحكم حقلان مهيكلان."""
+    import silk_render as R
+    from silk_hs_confirm import confirm_hs, is_flagged, CONTEXTUAL_TAG
+    from tools.canonical_yemen import yemen_research_blob
+    # (١) عقد التأكيد: الصفة المميّزة لا تخسر أمام كلمة ثانوية عارية.
+    assert is_flagged(confirm_hs("زبدة الفول السوداني", "040510"))
+    assert confirm_hs("تمور", "080410")["confirmed"] is not False
+    # (٢) التأطير + سقف الثقة على المدوّنة، بملاحظةٍ واحدة (لا تكرار).
+    dr = R.build_view(yemen_research_blob())["deep_research"]
+    assert dr["hs_flagged"] is True
+    assert dr["verdict"]["confidence"] <= 0.5
+    assert sum(1 for l in dr["limits"] if CONTEXTUAL_TAG in l) == 1
+    # (٣) شرطا قلب الحكم المهيكلان (حكم مراقبة).
+    assert len(dr["flip_conditions"]) == 2
+    assert all(c.get("closes_via") for c in dr["flip_conditions"])
+
+
+def _guard_parse_provenance_not_prose():
+    """LESSONS ٣٣ — حلِّل المصدر لا النثر: قاعدةُ إفصاح التقادُم تُرسى إلى
+    بياناتٍ بنيوية. الحارس السلوكي: (١) `fact_year` يقرأ الوسم البنيويّ
+    `year=YYYY`/`retrieved_at`؛ (٢) حقيقةٌ متقادِمة تُوسَم بأيّ صياغة؛
+    (٣) رمز HS 2008 بلا حقيقة خلفه لا يُوسَم؛ (٤) «الطعام 2013» بلا حقيقة لا
+    يُوسَم (لا false-positive نثريّ)."""
+    import silk_render as R
+    from silk_staleness import fact_year, stale_fact_years, is_stale_fact
+    # (١) المصدر البنيويّ.
+    assert fact_year({"value": 1, "note": "x year=2013", "retrieved_at": "2026"}) == 2013
+    assert fact_year({"value": 1, "retrieved_at": "2018-12-31"}) == 2018
+    assert not is_stale_fact({"value": 1, "retrieved_at": "2026-01-01"})
+    # (٢) الوسم مستقلّ عن الصياغة.
+    for s in ["في 2013 بلغ الدخل.", "عام 2013م.", "الدخل 2013 منخفض."]:
+        assert R._STALE_TAG in R._tag_stale_years(s, {2013}), s
+    # (٣) رمز HS 2008 لا يُوسَم (ليس سنة حقيقة، وليس في القائمة).
+    assert R._STALE_TAG not in R._tag_stale_years("البند 2008 للمحضرات.", {2013})
+    # (٤) «الطعام 2013» بلا حقيقة متقادِمة => بلا وسم (لا مطابقة داخل كلمة).
+    assert R._STALE_TAG not in R._tag_stale_years("استهلاك الطعام 2013.", set())
+    # (٥) القائمة تُشتَقّ من حقائق اليمن (2013/2018).
+    from tools.canonical_yemen import yemen_research_blob
+    ms = yemen_research_blob()["deep_research"]["missions"]
+    allf = [f for v in ms.values() for f in v["findings"]]
+    assert stale_fact_years(allf) == {2013, 2018}
+
+
+def _guard_hs_gate_shared_choke_point_fail_safe():
+    """LESSONS ٣٥ — تقرير الكويت الحيّ (زبدة الفول السوداني، 2026-07-21):
+    بوّابة تأكيد HS كانت موصولة بـ/research وحده خلف صمّامٍ مُطفأ افتراضياً.
+    الحارس السلوكي: (١) `gate_enabled` فشل-آمن — مفعّلة بلا أيّ متغيّر env؛
+    (٢) `preflight_block` نقطة اختناق واحدة تحجب رمزاً غير مؤكَّد؛ (٣) كلا
+    معالجَي `/analyze` و`/research` في api.py يستدعيانها فعلياً (لا نسخة
+    مكرَّرة/مسار واحد فقط)."""
+    import silk_hs_confirm as C
+    saved = os.environ.pop("SILK_HS_CONFIRM_GATE", None)
+    try:
+        # (١) فشل-آمن: بلا أيّ ضبط => مفعّلة.
+        assert C.gate_enabled() is True
+        # إطفاءٌ صريح فقط يُعطّلها.
+        os.environ["SILK_HS_CONFIRM_GATE"] = "0"
+        assert C.gate_enabled() is False
+        os.environ["SILK_HS_CONFIRM_GATE"] = "1"
+        assert C.gate_enabled() is True
+        del os.environ["SILK_HS_CONFIRM_GATE"]
+        # (٢) نقطة الاختناق تحجب فعلياً — نفس عيّنة الحادثة الحية.
+        blocked = C.preflight_block("زبدة الفول السوداني", "040510")
+        assert blocked is not None and blocked["error"] == "hs_confirmation_needed"
+        assert C.preflight_block("زبدة الفول السوداني", "040510",
+                                 hs_confirmed=True) is None
+    finally:
+        if saved is None:
+            os.environ.pop("SILK_HS_CONFIRM_GATE", None)
+        else:
+            os.environ["SILK_HS_CONFIRM_GATE"] = saved
+    # (٣) كلا المعالجَين يستدعيان preflight_block — لا مسارٌ واحد فقط.
+    api_src = _read("api.py")
+    assert api_src.count("preflight_block(") >= 2, (
+        "preflight_block يجب أن تُستدعى من كلا /analyze و/research")
+
+
+def _guard_cross_market_checkpoint_leak():
+    """LESSONS ٣٦ — تسرّب اليمن↔الكويت: نقاط تفتيش بعثات `/research` كانت
+    تُقرأ بمفتاح analysis_id فقط بلا عمود سوق، واستئنافٌ بسوقٍ مختلف يُعيد
+    استهلاكها بصمت. الحارس السلوكي: (١) نقطة تفتيش مختومة بسوقٍ (اليمن) لا
+    تُعاد لطلبٍ بسوقٍ آخر (الكويت)؛ (٢) صفوفٌ قديمة بلا ختم لا تُحجَب؛
+    (٣) بوّابة `/research`'s resume_market_mismatch (٤٠٩) موجودة في api.py
+    **قبل** فرع «مكتملة => أعِدها كما هي» (لا إرجاعٌ صامتٌ يتجاهل الطلب)."""
+    import silk_storage
+    from silk_agents import AgentReport
+    import tempfile as _tf
+    db = os.path.join(_tf.mkdtemp(), "silk.db")
+    yemen_report = AgentReport(agent_name="x", findings=[], failed=False,
+                               summary="سوق عدن المركزي / ربوع")
+    silk_storage.save_mission_checkpoint(1, "consumer_culture", yemen_report,
+                                         path=db, market_iso3="YEM")
+    # (١) طلبٌ بسوق آخر لا يستلم الصفّ.
+    assert "consumer_culture" not in silk_storage.load_mission_checkpoints(
+        1, path=db, market_iso3="KWT")
+    assert "consumer_culture" in silk_storage.load_mission_checkpoints(
+        1, path=db, market_iso3="YEM")
+    # (٢) صفٌّ قديم بلا ختم (market_iso3=None) لا يُحجَب.
+    old_report = AgentReport(agent_name="y", findings=[], failed=False, summary="s")
+    silk_storage.save_mission_checkpoint(2, "tradeflow", old_report, path=db)
+    assert "tradeflow" in silk_storage.load_mission_checkpoints(
+        2, path=db, market_iso3="KWT")
+    # (٣) بوّابة API تسبق فرع الإعادة الصامتة لتشغيلةٍ مكتملة.
+    api_src = _read("api.py")
+    assert "resume_market_mismatch" in api_src
+    gate_idx = api_src.index("resume_market_mismatch")
+    completed_shortcut_idx = api_src.index(
+        'if run_row.get("status") == "completed"')
+    assert gate_idx < completed_shortcut_idx, (
+        "بوّابة تعارض السوق يجب أن تسبق فرع «مكتملة => أعِدها كما هي»")
+
+
+def _guard_golden_contract_test_exists_and_covers_both_paths():
+    """LESSONS ٣٧ — الاختبار الذهبي موجودٌ فعلياً ويفحص كِلا مسارَي الدخول
+    على نفس سيناريو الحادثة (زبدة الفول السوداني/الكويت)، لا مساراً واحداً."""
+    assert _exists("tools/canonical_kuwait_peanut_butter.py")
+    assert _exists("tests/test_golden_deep_research_contract.py")
+    golden_src = _read("tests/test_golden_deep_research_contract.py")
+    assert '"/analyze"' in golden_src and '"/research"' in golden_src
+    assert "resume_market_mismatch" in golden_src
+    smoke_src = _read("tools/post_deploy_smoke.py")
+    assert "hs_confirmation_needed" in smoke_src, (
+        "فحص الدخان بعد النشر يجب أن يثبت بوّابة HS حياً (Wave 3.2)")
+
+
+def _guard_general_hs_classifier_no_lookup_table_ceiling():
+    """LESSONS ٣٩ — عائلة `lookup-table-ceiling`: بذرة CSV تلميحٌ ابتدائي لا
+    الحاكم النهائي. الحارس السلوكي: (١) بوّابة سلامة الفصل ترفض رمزاً خارج
+    بنية WCO الحقيقية بمعزلٍ عن ادّعاء أيّ نموذج؛ (٢) منتجٌ محسومٌ جيداً
+    («تمور») تلقائيٌّ بلا أيّ نداء كلود؛ (٣) منتجٌ مُعلَّم (زبدة الفول
+    السوداني) لا يمرّ تلقائياً بلا كلود؛ (٤) نقطة الاختناق `preflight_block`
+    تُلحِق `candidates` فعلياً بردّ الحجب — لا رفضٌ عارٍ بلا توجيه."""
+    import silk_hs_classifier as hsc
+    from silk_hs_resolver import chapter_valid
+    # (١) سلامة الفصل بنيويةٌ بمعزلٍ عن مصدر الادّعاء.
+    assert chapter_valid("999999") is False
+    assert hsc._validated_candidate("أيّ منتج", "999999") is None
+    # (٢) لا هدر — منتجٌ واثقٌ لا يستدعي كلود إطلاقاً.
+    from unittest.mock import patch
+    with patch("silk_ai_judge._call") as mock_call:
+        r = hsc.classify_general("تمور", allow_claude=True)
+    assert r["tier"] == "auto" and r["hs6"] == "080410"
+    assert mock_call.called is False
+    # (٣) منتجٌ مُعلَّم — لا تلقائي بلا مساعدة (نفس عائلة الحادثة الأصلية).
+    r2 = hsc.classify_general("زبدة الفول السوداني", hs_code="040510",
+                              allow_claude=False)
+    assert r2["tier"] != "auto" and r2["hs6"] is None
+    # (٤) preflight_block يُلحِق مرشّحين فعليّين بردّ الحجب.
+    from silk_hs_confirm import preflight_block
+    with patch.dict(os.environ, {"SILK_HS_CONFIRM_GATE": "1"}):
+        blocked = preflight_block("زبدة الفول السوداني", "040510",
+                                  allow_claude=False)
+    assert blocked is not None and blocked.get("candidates")
+
+
+def _guard_watchdog_owner_only_no_client_contamination():
+    """LESSONS ٣٨ — الحارس («كاميرا مراقبة»، طلب المُشرِف): مراقبةٌ دائمة
+    مملوكة للمالك حصراً بلا أيّ تلوّث لسطح العميل. الحارس السلوكي:
+    (١) نقطة استدعاءٍ واحدة مشتركة يُستدعاها كلا `/analyze` و`/research`
+    (نفس معيار البند ٣٥: عدّ استدعاءات `_attach_watchdog(` ≥ ٣ — التعريف
+    + نداءان)؛ (٢) `silk_render.py`/`silk_reports.py` (طبقتا العرض/التصدير
+    التي يراها العميل) لا تستوردان `silk_watchdog` إطلاقاً؛ (٣) `observe()`
+    لا يعدّل نتيجة التحليل الممرَّرة إليه؛ (٤) عطلٌ داخلي في الحارس لا يرفع
+    استثناءً أبداً — يُعاد سجلٌّ يحمل `self_error` بدل إسقاط التحليل."""
+    import inspect
+    api_src = _read("api.py")
+    assert api_src.count("_attach_watchdog(") >= 3, (
+        "_attach_watchdog يجب أن تُستدعى من كلا /analyze و/research")
+    import silk_render
+    import silk_reports
+    assert "silk_watchdog" not in inspect.getsource(silk_render)
+    assert "silk_watchdog" not in inspect.getsource(silk_reports)
+    import silk_watchdog
+    result = {"product": "x", "view": {"deep_research": {}},
+             "data_economics": {}, "market": {}}
+    before = dict(result)
+    silk_watchdog.observe(result, "research", analysis_id=None)
+    assert result == before, "الحارس عدَّل نتيجة التحليل — خرق مبدأ عدم التلوّث"
+    rec = silk_watchdog.observe(object(), "research", analysis_id=999)
+    assert rec is not None and rec.get("self_error")
+
+
+def _guard_ui_tier_consumption_single_choke_point():
+    """LESSONS ٤٠ — بلاغ «UI-ONLY FIX» (المُشرِف): نقطة اختناق التصنيف
+    (`res.tier` من `/classify_hs`) لها موقعُ استهلاكٍ واحدٌ في الواجهة، لا
+    مسارٌ ثانٍ يثق بـhs6 خامًا. الحارس السلوكي: (١) شارة «✓ صُنّف تلقائياً»
+    نصٌّ حرفيٌّ ظهورهُ الوحيد داخل `ensureHs` مشروطًا بـ`tier==="auto"`؛
+    (٢) معالجا نقر صفّ الفهرس (`#pDrop`) وتأكيد استخلاص الصورة (`#intakeGo`)
+    يمرّان عبر `ensureHs` بدل ضبط الحسم مباشرةً؛ (٣) نصّ الشارة المشترك
+    (`resolvedAs`) لم يعد يحمل ادّعاء «صُنّف تلقائياً» بذاته — وإلا يظهر على
+    أيّ تأكيدٍ يدويّ (اختيار مرشّح، إدخال يدويّ) رغم أنه ليس تلقائيًا فعلاً."""
+    html = _read("web/index.html")
+    badge = "✓ صُنّف تلقائياً"
+    assert html.count(badge) == 1, (
+        f"شارة «{badge}» ظهرت {html.count(badge)} مرّة — يجب أن تكون نقطة "
+        "انطلاقٍ واحدة فقط داخل ensureHs")
+    ensure_hs_start = html.index("function ensureHs(")
+    ensure_hs_body = html[ensure_hs_start:html.index("function _pct(", ensure_hs_start)]
+    assert badge in ensure_hs_body and 'res.tier==="auto"' in ensure_hs_body
+    pdrop_start = html.index('$("#pDrop").addEventListener("click"')
+    assert "ensureHs(function(){})" in html[pdrop_start:pdrop_start + 1000]
+    intake_go_start = html.index('$("#intakeGo").addEventListener("click"')
+    assert "ensureHs(function(){})" in html[intake_go_start:intake_go_start + 1000]
+    # نصّ الشارة المشتركة نفسه بلا ادّعاء «تلقائي» — وإلا تظهر على أيّ تأكيدٍ
+    # يدويّ (اختيار مرشّح/إدخال يدويّ) عبر إعادة استعمال t("resolvedAs").
+    resolved_as_start = html.index("resolvedAs:{")
+    resolved_as_line = html[resolved_as_start:resolved_as_start + 120]
+    assert "صُنّف تلقائياً" not in resolved_as_line, (
+        "resolvedAs المشتركة تحمل ادّعاء «صُنّف تلقائياً» — تُعيد ظهور الشارة "
+        "على مساراتٍ يدويةٍ غير محسومة (نفس عائلة الحادثة)")
+
+
+def _guard_active_resolution_beats_rejected_and_short_root_collision():
+    """LESSONS ٤١ — «ONE FIX» (المُشرِف): رفضٌ بلا بديلٍ صحيحٍ مأزقٌ لا حَل؛
+    التاجر لا يعرف رموز HS ولا يجوز أن يُطلَب منه ذلك. الحارس السلوكي:
+    (١) مرشّح كلود المصادَق يتصدّر على مرشّحٍ حتميٍّ مرفوضٍ (تداخلٌ دون
+    العتبة) رغم بقاء الأخير «مُتحقَّقاً» لمجرّد وجوده في بذرتنا الجزئية —
+    نفس بلاغ «زبدة الفول السوداني»، منتجٌ مختلف؛ (٢) احتواء جذرٍ من حرفين
+    («بن» داخل «بنكهة»/«جبن») لا يُحتسَب تداخلاً حقيقياً — نواة المطابقة
+    ترفض التصادف اللفظي القصير بمعزلٍ عن تدفّق المصنِّف بأكمله."""
+    import silk_hs_classifier as hsc
+    from silk_hs_confirm import _covered
+    # (١) الترتيب: مرشّحٌ حتميٌّ مرفوضٌ (متحقَّق، تداخلٌ ضعيف) لا يتصدّر على
+    # مرشّح كلود (غير متحقَّق لكنه عابرٌ للعتبة وأعلى تداخلاً) — نفس السيناريو
+    # الذي كان يُبقي الرمز المرفوض معروضاً كخيارٍ أساسيّ بلا بديل.
+    rejected = {"hs6": "040510", "overlap": 0.33, "verified": True,
+               "model_confidence": 0.5, "source": "deterministic"}
+    resolved = {"hs6": "200811", "overlap": 0.6, "verified": False,
+               "model_confidence": 0.9, "source": "llm"}
+    ordered = sorted([rejected, resolved], key=hsc._rank_key, reverse=True)
+    assert ordered[0]["hs6"] == "200811", (
+        "المرشّح المرفوض تصدّر على المرشّح المصادَق من كلود — التاجر يبقى "
+        "بين تأكيد رمزٍ خاطئ وإدخال رمزٍ يجهله")
+    # (٢) نواة التداخل: احتواء جذرٍ قصيرٍ (حرفان) لا يُعَدّ تطابقاً — التطابق
+    # التامّ يبقى بلا قيدٍ على الطول.
+    assert _covered("بنكهه", ["بن", "غير", "محمص"]) is False
+    assert _covered("زبده", ["زبده"]) is True
+
+
+def _guard_dza_quality_gate_six_findings():
+    """LESSONS ٤٢ — «تحليل #1» (زبدة الفول السوداني/الجزائر DZA، 2026-07-21):
+    ستّ نتائج فشل بوّابة الجودة معاً على تشغيلة واحدة (Markdown/تنسيق شارد،
+    ثقة خام، تكرار رقم مفتاحي ×٢، عمود سعر مضلِّل، سقف الملحق التقني). رمز
+    HS الخاطئ خارج نطاق هذا الحارس عمداً (يُصلَح عبر مسار مصنِّف HS العام).
+    الحارس السلوكي: يعيد بناء المدوّنة الحقيقية الشكل (tools/canonical_
+    dza_peanut_butter.py) ويؤكّد أن الحكم لم يعد FAIL بعد الإصلاح، وأن
+    حارسي الانحدار الحقيقيين (raw_confidence/currency_label_mismatch) صفر."""
+    from tools.canonical_dza_peanut_butter import dza_research_blob
+    import silk_render
+    import silk_quality_gate as QG
+    view = silk_render.build_view(dza_research_blob())
+    out = QG.run_quality_gate(view)
+    assert out["verdict"] != "FAIL", f"لا يزال FAIL: {out['findings']}"
+    checks = {f["check"] for f in out["findings"]}
+    assert "raw_confidence" not in checks
+    assert "currency_label_mismatch" not in checks
+    fired = checks & QG._REGRESSION_GUARD_FIRED
+    assert fired == set(), f"حارس انحدار أُطلِق رغم الإصلاح: {fired}"
+
+
+def _guard_hs_classifier_valve_fail_safe_default():
+    """LESSONS ٤٣ — بلاغ حيّ متكرّر (المالك): المُصنِّف العام مُصلَحٌ ومُختبَرٌ
+    ليتعرَّف على الرمز الصحيح لمنتجٍ متعدِّد الصفات، لكنه كان خلف صمّامٍ
+    `SILK_HS_CLASSIFIER` مُطفأٍ افتراضياً — فلا يعمل أبداً في الإنتاج ما لم
+    يُضبَط صراحةً. الحارس السلوكي: (١) الصمّام مفعَّلٌ حين المتغيّر غير
+    مضبوط إطلاقاً؛ (٢) يُطفَأ فقط بقيمةٍ صريحة (0/false/no/off)؛ (٣) مع
+    الصمّام الافتراضي وحده (بلا أيّ ضبطٍ إضافي)، محاكاة تصنيف منتجٍ متعدِّد
+    الصفات تحسم تلقائياً للفصل الصحيح لا الصفة الثانوية العارضة."""
+    import os
+    from unittest.mock import patch
+    import silk_hs_classifier as hsc
+    os.environ.pop("SILK_HS_CLASSIFIER", None)
+    assert hsc.enabled() is True, "الصمّام يجب أن يكون فشلاً-آمناً (مفعَّلاً) دون ضبط"
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "0"}):
+        assert hsc.enabled() is False
+    fake = ('{"candidates":[{"hs6":"200811","description_ar":'
+           '"فول سوداني محضّر أو محفوظ","reason_ar":'
+           '"زبدة الفول السوداني محضّرةٌ من الفول السوداني","confidence":0.92}]}')
+    with patch("silk_ai_judge.available", return_value=True), \
+         patch("silk_ai_judge._call", return_value=fake), \
+         patch("silk_usage.try_reserve_paid_calls", return_value=True), \
+         patch("silk_usage.try_reserve_usd", return_value=True):
+        r = hsc.classify_general("زبدة الفول السوداني", hs_code="040510",
+                                 allow_claude=True)
+    assert r["tier"] == "auto", f"لم يُحسَم تلقائياً بالإعدادات الافتراضية: {r}"
+    assert r["hs6"] != "040510"
+    # (٤) الصمّام مرئيٌّ عن بُعد من /health (نفس نمط persist_guard) — لا
+    # اعتماد على قراءة الشيفرة لمعرفة حالته الفعلية على النشر الحيّ.
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    import api
+    with patch.dict(os.environ, {"SILK_API_KEY": "", "ANTHROPIC_API_KEY": "k"}):
+        health = TestClient(api.create_app()).get("/health").json()
+    assert health["hs_classifier"]["enabled"] is True
+    with patch.dict(os.environ, {"SILK_HS_CLASSIFIER": "0",
+                                 "ANTHROPIC_API_KEY": "k"}):
+        health_off = TestClient(api.create_app()).get("/health").json()
+    assert health_off["hs_classifier"]["enabled"] is False
+    assert any("SILK_HS_CLASSIFIER" in w
+              for w in (health_off.get("warnings") or [])), (
+        "تعطيلٌ صريحٌ للصمّام مع مفتاح كلود متاح يجب أن يظهر تحذيراً في /health")
+
+
+def _guard_verdict_tone_recognizes_arabic_labels():
+    """LESSONS ٤٤ — Master Prompt Part 2 §B: بوابة اتساق الحكم عند التسليم
+    كشفت أنّ `silk_render._verdict_tone` كانت تتعرّف على الرموز الإنجليزية
+    فقط (GO/WATCH/CONDITIONAL/NO-GO)، فأيّ مسارٍ يضع التسمية العربية مباشرةً
+    (`"دخول مشروط"` لا `"CONDITIONAL-GO"`) كان ينهار إلى tone="unknown"
+    فتعرض الشارة «تعذّر إصدار توصية» بينما جدول/متن التقرير يذكران التسمية
+    الصحيحة — تناقضٌ شارة/متن. الحارس السلوكي: التسمية العربية والرمز
+    الإنجليزي المطابق يُنتِجان نفس الـtone؛ وبوابة اتساق التسليم (شارة/جدول/
+    سطر القرار) تمرّ فعلياً على مدوّنة الكويت القانونية بلا رفعٍ."""
+    from silk_render import _verdict_tone
+    assert _verdict_tone("دخول مشروط") == _verdict_tone("CONDITIONAL-GO") == "conditional"
+    assert _verdict_tone("مراقبة السوق") == _verdict_tone("WATCH") == "watch"
+    assert _verdict_tone("عدم الدخول حالياً") == _verdict_tone("NO-GO") == "nogo"
+    assert _verdict_tone("التوصية بالدخول") == _verdict_tone("GO") == "go"
+
+    from tools.canonical_kuwait_peanut_butter import kuwait_research_blob
+    from silk_render import build_view
+    from silk_reports import render_docx, render_client_docx
+    import os
+    import tempfile
+    os.environ["SILK_HERMETIC"] = "1"
+    view = build_view(kuwait_research_blob())
+    tmp = tempfile.mkdtemp()
+    render_docx(view, os.path.join(tmp, "r.docx"))
+    render_client_docx(view, os.path.join(tmp, "c.docx"))
+
+
+def _guard_price_fix_scoped_to_table_window():
+    """LESSONS ٤٥ — دالة الإصلاح `silk_render._fix_price_column_currency_
+    label` تقتصر على نافذة الجدول نفسه (لا كامل المستند) عند البحث عن
+    عملةٍ أخرى، مطابقةً لدالة الفحص الشقيقة (اللائحة ٤٢). حارسٌ مضاد: تناقضٌ
+    حقيقي داخل نفس الجدول يبقى مُصلَحاً بالعملة الصحيحة."""
+    from silk_render import _fix_price_column_currency_label
+    unrelated_euro_elsewhere = (
+        "| المنتج | السعر/كجم بالدولار |\n| --- | --- |\n| صنف | 6.0$ |\n\n"
+        "## قسمٌ آخر\nخطر صرف العملة: اليورو هو عملة السوق نفسها.")
+    out = _fix_price_column_currency_label(unrelated_euro_elsewhere)
+    assert "السعر/كجم بالدولار" in out and "السعر/كجم باليورو" not in out
+
+    same_table_mismatch = (
+        "| المنتج | السعر/كجم بالدولار |\n| --- | --- |\n| صنف | 9.14€ |")
+    out2 = _fix_price_column_currency_label(same_table_mismatch)
+    assert "السعر/كجم باليورو" in out2
+
+
+def _guard_quality_gate_is_client_export_delivery_condition():
+    """LESSONS ٤٦ — حزمة الفكس v2.1: بوابة الجودة شرط تسليم للعميل (FAIL =>
+    409) + عائلة فحوصات كاتب/عرض بنيوية تُفشِل على golden-bad. حارسٌ سلوكي:
+    الفحوصات الجديدة تُطلِق فعلياً على مدخلات تُعيد إنتاج العطل، والدوال
+    الحاجبة موجودة في api.py."""
+    import silk_quality_gate as qg
+
+    sections = "\n".join(
+        f"## {i}. {s}\nنصّ القسم بجملة تنتهي بنقطة."
+        for i, s in enumerate((
+            "الخلاصة التنفيذية", "منهجية البحث ونطاقه",
+            "نظرة عامة على السوق وحجمه", "ديناميكيات السوق",
+            "تحليل المستهلك والطلب", "المشهد التنافسي",
+            "التنظيم والوصول للسوق", "اللوجستيات وسلسلة الإمداد",
+            "تقييم المخاطر", "التوصيات الاستراتيجية", "الملاحق"), 1))
+
+    def _checks(text):
+        return {f["check"] for f in qg.run_quality_gate(
+            {"deep_research": {"report": {"text": text},
+                              "missions": {}, "analyst": {},
+                              "verdict": {"verdict": "WATCH"}}})["findings"]}
+
+    # عيّنات golden-bad تُعيد إنتاج العطل الموصوف — كل فحص جديد يُطلِق.
+    assert "hhi_false_precision" in _checks(
+        sections + "\n\nمؤشر التركّز HHI = 2184.7 هنا.")
+    assert "near_duplicate_figure" in _checks(
+        sections + "\n\nالواردات 6,733,369 دولاراً وفي جدول 6,733,376 دولاراً.")
+    assert "supplier_rank_gap" in _checks(
+        sections + "\n\n#1 تونس، #2 الجزائر، #5 إيران، #6 المغرب.")
+    assert "lpi_invalid_edition_year" in _checks(
+        sections + "\n\nمؤشر LPI 3.2 لعام 2022 مرتفع.")
+    # الدوال الحاجبة موجودة في مسار التصدير + الحارس + المُصدِّر.
+    _needles("api.py", "def _block_client_export_if_gate_failed",
+             "def _gate_verdict_for_client_export")()
+    _needles("silk_watchdog.py", "def record_blocked_export")()
+    _needles("silk_reports.py", "def _client_references_section")()
+
+
+# ── حُرّاس برنامج إصلاح جودة التقارير (WP-1…WP-7، صفوف 47-53) ────────────────
+
+def _guard_wp1_verdict_determinism():
+    """صفّ ٤٧ — الحكم الحتمي هو المعروض الوحيد + temperature=0 + سُلَّم ثقة واحد."""
+    _needles("silk_narrative.py", "def authoritative_verdict")()
+    _needles("silk_llm_provider.py", '"temperature": 0')()
+    _needles("silk_style_contract.py", "def confidence_band_label")()
+    _needles("tests/test_wp1_verdict_determinism.py",
+             "test_three_consecutive_renders_are_byte_identical")()
+
+
+def _guard_wp2_no_raw_internal_output():
+    """صفّ ٤٨ — لا نائب/سقالة/بتر يصل العميل؛ الحجب لا التسليم المشوَّه."""
+    _needles("silk_reports.py", "def _client_prose",
+             "def _client_missing_narrative_heads")()
+    _needles("silk_ai_judge.py", "def rephrase_client_sections")()
+    _needles("silk_quality_gate.py", "_check_client_scaffold_leak",
+             "_check_placeholder_leak")()
+    _needles("tests/test_wp2_client_output_hygiene.py",
+             "test_gate_fails_on_literal_so_what_in_client_text")()
+
+
+def _guard_wp3_evidence_integrity():
+    """صفّ ٤٩ — شارة واعية بالمنشأ + مصالحة رقمية + تفريد مصادر مُطبَّع."""
+    _needles("silk_narrative.py", "def evidence_badge_for",
+             "RECONCILED_OUT_TAG")()
+    _needles("silk_render.py", "def _reconcile_numeric_conflicts")()
+    _needles("tests/test_wp3_evidence_integrity.py",
+             "test_near_duplicate_values_reconcile_to_one_canonical")()
+
+
+def _guard_wp4_gaps_consistency():
+    """صفّ ٥٠ — مصدر واحد لمدخلات الفجوات الأربعة + حارس تناقض الختام."""
+    _needles("silk_reports.py", "def _client_gap_inputs")()
+    _needles("silk_quality_gate.py", "_check_gaps_closing_contradiction")()
+    _needles("tests/test_wp4_gaps_consistency.py",
+             "test_gate_fails_on_closing_contradiction")()
+
+
+def _guard_wp5_rtl_bracket_isolation():
+    """صفّ ٥١ — عزل RLM قبل _finalize_rtl + فحص أقواس آلي على الـPDF."""
+    _needles("silk_reports.py", "def _bidi_isolate_brackets",
+             "def count_suspicious_brackets", "def _pdf_bracket_check")()
+    _needles("tools/rtl_calibration.py", "def build_bracket_fixture")()
+    _needles("tests/test_wp5_rtl_brackets.py",
+             "test_pdf_bracket_check_fails_export_above_threshold")()
+
+
+def _guard_wp6_injector_adversarial_locks():
+    """صفّ ٥٢ — حاقنا §D-1/§D-2 مقفولان بجُمل التقارير المُسلَّمة."""
+    _needles("silk_render.py", "def _already_explained_nearby",
+             "def _year_in_growth_span")()
+    _needles("tests/test_wp6_injector_hardening.py",
+             "test_delivered_sentence_growth_span_year_not_tagged_stale",
+             "test_delivered_sentence_dash_explained_cagr_not_redefined")()
+
+
+def _guard_wp7_delivery_gate_hardening():
+    """صفّ ٥٣ — تجاوز بسلطة مالك منفصلة + بوابة نصّ المُنتَج النهائي."""
+    _needles("api.py", "owner_override_required", "X-Owner-Key")()
+    _needles("silk_watchdog.py", "def record_override",
+             "def override_records_for")()
+    _needles("silk_quality_gate.py", "def run_client_artifact_text_gate")()
+    _needles("tests/test_wp7_delivery_gate_hardening.py",
+             "test_artifact_text_gate_catches_all_leak_classes")()
+
+
+def _guard_zero_confidence_finding_declared_gap():
+    """LESSONS ٥٤ — بند بعثة قيمته غير فارغة بثقة 0.0 (خرق حارس المراقبة الحي
+    على demand_trends): ادعاء بثقة صفرية — مصرَّحاً بها أو موروثة من نقطة فجوة
+    مستشهَد بها — يُعلَن فجوة في gaps لا يُشحَن بنداً أبداً."""
+    import json as _json
+
+    import silk_llm_runtime as _rt
+    from silk_data_layer import DataPoint as _DP
+    reg = {"gap1": _DP(None, "FAOSTAT", 0.0, "401 — فجوة معلنة", "2026-07-23")}
+    text = _json.dumps({"findings": [
+        {"claim": "ادعاء صفري الثقة", "datapoint_ids": ["gap1"],
+         "confidence": 0.0}], "gaps": [], "summary": ""}, ensure_ascii=False)
+    out = _rt._parse_output(text, reg)
+    assert out["findings"] == [], "بند بثقة 0.0 شُحن بدل إعلانه فجوة"
+    assert any("ادعاء صفري الثقة" in g for g in out["gaps"]), \
+        "الادعاء الصفري لم يُعلَن فجوة"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -630,8 +1153,32 @@ _LESSONS = {
     29: _guard_report_arabic_shape_a4,      # Wave 2 — «سلك» متّصلة + A4
     30: _guard_client_template_no_hardcoded_product,  # Wave 2 — لا منتج مثبَّت في القوالب
     31: _guard_analyze_persist_canonical_db,   # /analyze — التخزين للقاعدة القانونية لا قرصٍ نسبيّ فانٍ
-    32: _needles("CLAUDE.md", "/code-review",   # المراجعة الذاتية قبل فتح/وسم أي PR جاهزًا (Yemen stale-tag)
+    32: _guard_report_quality_upgrade,         # ترقية جودة التقرير — إصلاحُ المحرّك لا تحرير التقرير
+    33: _guard_parse_provenance_not_prose,     # التقادُم من المصدر لا النثر (قرار المالك)
+    34: _guard_new_source_contracts,           # دمج مصادر جديدة — نفس العقود (فجوة/ops/مخزَّن/محكوم/نظيف)
+    35: _guard_hs_gate_shared_choke_point_fail_safe,  # تقرير الكويت — بوّابة HS فشل-آمن + نقطة اختناق مشتركة
+    36: _guard_cross_market_checkpoint_leak,          # تقرير الكويت — تسرّب يمن↔كويت عبر نقاط تفتيش بعثات
+    37: _guard_golden_contract_test_exists_and_covers_both_paths,  # الاختبار الذهبي — كل العقود، كلا المسارين
+    38: _guard_watchdog_owner_only_no_client_contamination,  # الحارس — مراقبةٌ للمالك حصراً، صفر تلوّث للعميل
+    39: _guard_general_hs_classifier_no_lookup_table_ceiling,  # المصنّف العام — جدول البحث تلميحٌ ابتدائي لا حاكمٌ نهائي
+    40: _guard_ui_tier_consumption_single_choke_point,  # UI-ONLY FIX — نقطة اختناق tier واحدة، لا مسار ثانٍ يثق بـhs6 خامًا
+    41: _guard_active_resolution_beats_rejected_and_short_root_collision,  # ONE FIX — المصادَق يتصدّر على المرفوض، لا تصادف جذرٍ قصير
+    42: _guard_dza_quality_gate_six_findings,  # تحليل #1 DZA — ست نتائج فشل بوّابة الجودة معاً على تشغيلة واحدة
+    43: _guard_hs_classifier_valve_fail_safe_default,  # المُصنِّف العام — صمّامٌ فشل-آمن مفعَّل افتراضياً لا مُطفأ
+    44: _guard_verdict_tone_recognizes_arabic_labels,  # Master Prompt Part 2 §B — _verdict_tone تتعرّف على التسمية العربية أيضاً
+    45: _guard_price_fix_scoped_to_table_window,  # دالة إصلاح عملة السعر مقيَّدة بنافذة الجدول لا كامل المستند
+    46: _guard_quality_gate_is_client_export_delivery_condition,  # حزمة v2.1 — بوابة الجودة شرط تسليم + عائلة فحوصات كاتب/عرض
+    47: _guard_wp1_verdict_determinism,        # WP-1 — حتمية الحكم ومصدره الواحد
+    48: _guard_wp2_no_raw_internal_output,     # WP-2 — لا مخرَج داخلي خام للعميل
+    49: _guard_wp3_evidence_integrity,         # WP-3 — نزاهة الأدلة والمصالحة
+    50: _guard_wp4_gaps_consistency,           # WP-4 — اتساق الفجوات مع الختام
+    51: _guard_wp5_rtl_bracket_isolation,      # WP-5 — عزل أقواس RTL + فحص PDF
+    52: _guard_wp6_injector_adversarial_locks,  # WP-6 — أقفال الحاقنات العدائية
+    53: _guard_wp7_delivery_gate_hardening,    # WP-7 — تصليب بوابة التسليم
+    54: _guard_zero_confidence_finding_declared_gap,  # بند بثقة 0.0 => فجوة معلنة لا بند (خرق حارس المراقبة الحي)
+    58: _needles("CLAUDE.md", "/code-review",   # المراجعة الذاتية قبل فتح/وسم أي PR جاهزًا (Yemen stale-tag)
                  "self-review catches what hermetic tests structurally cannot"),
+    55: _needles("tests/conftest.py", "def _hermetic_env_guard"),  # عزل SILK_HERMETIC لكل اختبار — لا تسرّب لافتة «نموذج توضيحي»
 }
 
 _TRAPS = [
