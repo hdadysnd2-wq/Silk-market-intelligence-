@@ -271,6 +271,7 @@
           <button class="expbtn" id="pdfBtn" data-t="export" title="المُسلَّم النهائي للعميل — PDF غير قابل للتحرير (القسم 3، اتفاق المالك)">⇩ تصدير التقرير (PDF)</button>
           <button class="abtn" id="wordBtn" title="نسخة تشغيلية قابلة للتحرير — للمشغّل لا العميل">Word (نسخة قابلة للتحرير)</button>
           <button class="abtn" id="mdBtn">Markdown</button>
+          <button class="abtn" id="regenBtn" title="يعيد نداء الكاتب على البحث المحفوظ (بقروش، بلا إعادة بحث كامل) — لإنقاذ تقرير فشل توليد سرده">↻ إعادة توليد التقرير</button>
         </div></div>
       <div class="wrap" id="boardBody"><div class="empty" data-t="boardEmpty">شغّل تحليلاً من «تحليل جديد» أو الدردشة — اللوحة تُبنى من نتائج حقيقية.</div></div>
     </div>
@@ -1104,6 +1105,20 @@ function dlReport(kind){var id=S.raw&&S.raw.analysis_id;if(id==null){toast("شغ
 $("#pdfBtn").addEventListener("click",function(){dlReport("pdf")});
 $("#wordBtn").addEventListener("click",function(){dlReport("docx")});
 $("#mdBtn").addEventListener("click",function(){dlReport("md")});
+/* إعادة توليد التقرير (بلاغ الكويت): يعيد نداء الكاتب+المراجع على نقاط تفتيش
+   البعثات المحفوظة (POST /analyses/{id}/report) — بقروش لا دولارات، بلا إعادة
+   البحث الكامل — لإنقاذ تقرير فشل توليد سرده (نداء الكاتب سقط بخطأ عابر). ثم
+   يعيد تحميل التحليل ويعرضه. */
+$("#regenBtn").addEventListener("click",function(){
+  var id=S.raw&&S.raw.analysis_id;if(id==null){toast("افتح تحليلاً أولاً");return}
+  var b=$("#regenBtn");if(b.disabled)return;var old=b.textContent;b.disabled=true;b.textContent="جارٍ إعادة التوليد…";
+  post("/analyses/"+id+"/report",{}).then(function(){return getJSON("/analyses/"+id)}).then(function(res){
+    S.raw=res;S.view=res.view||null;sync();renderBoard();
+    var ok=S.view&&S.view.deep_research&&S.view.deep_research.report&&S.view.deep_research.report.text;
+    toast(ok?"أُعيد توليد التقرير بنجاح":"أُعيد التوليد — راجع النتيجة")
+  }).catch(function(e){
+    var s=e&&e.__status;toast(s===409?"لا نقاط تفتيش محفوظة لهذه التشغيلة (أقدم من الميزة)":s===400?"هذه ليست نتيجة بحث عميق (/research)":"تعذّرت إعادة التوليد: "+((e&&e.message)||e))
+  }).then(function(){b.disabled=false;b.textContent=old})});
 
 /* ── تقرير الحارس — سطحٌ منفصلٌ تماماً عن أي تحليل (LAW: للمالك حصراً).
    لا يقرأ S.raw/S.view (نتيجة التحليل الحالية) إطلاقاً — استقلالٌ بنيويٌّ
