@@ -273,7 +273,8 @@ def test_deep_research_view_exposes_verdict_tone_and_label_not_raw_token():
             "missions": {},
             "analyst": {"report": {"summary": ""}, "by_category": {},
                        "missing_categories": []},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الشارة/التسمية من الحقل الحتمي حصراً — ai قراءة استشارية.
+            "verdict": {"verdict": "CONDITIONAL-GO", "confidence": 0.55,
                        "ai": {"verdict": "CONDITIONAL-GO", "confidence": 0.55,
                              "reasoning": "الحكم الحالي CONDITIONAL-GO لأن "
                                          "النمو معتدل."}},

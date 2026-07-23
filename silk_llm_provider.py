@@ -137,7 +137,14 @@ class AnthropicProvider(LLMProvider):
             resp = requests.post(
                 self._ENDPOINT, timeout=self._timeout_pair(timeout),
                 headers=self._headers(key),
+                # WP-1 §1: temperature مثبّتة صفراً على كل نداءات `complete`
+                # (التوليف/الكاتب/المراجع/المحلل النصي) — الافتراضي 1.0 أنتج
+                # حكمين مختلفين لنفس المدخلات في يوم واحد (WATCH ثم GO).
+                # لا top_p معها — Anthropic توصي بضبط أحدهما لا كليهما.
+                # حلقة الأدوات (`complete_tools`) تبقى على افتراضها: مخرجاتها
+                # لا تحدّد الحكم المعروض مباشرة (الحكم من المحرّك الحتمي).
                 json={"model": model, "max_tokens": max_tokens,
+                     "temperature": 0,
                      "system": [{"type": "text", "text": system,
                                 "cache_control": {"type": "ephemeral"}}],
                      "messages": [{"role": "user", "content": user}]})
@@ -221,6 +228,7 @@ class AnthropicProvider(LLMProvider):
                 self._ENDPOINT, timeout=self._timeout_pair(timeout),
                 headers=self._headers(key),
                 json={"model": model, "max_tokens": max_tokens,
+                      "temperature": 0,   # WP-1 §1: استخلاص حتمي كالنصّي
                       "system": [{"type": "text", "text": system,
                                   "cache_control": {"type": "ephemeral"}}],
                       "messages": [{"role": "user", "content": [

@@ -136,6 +136,81 @@ def get_record(watchdog_id: int, path: str | None = None) -> dict | None:
         return None
 
 
+def record_blocked_export(analysis_id: int | None, product: str | None,
+                          market: str | None, gate_findings: list[dict],
+                          fmt: str) -> dict | None:
+    """سجلّ حدثاً مستقلاً حين تُحجَب تصدير عميل بسبب FAIL في بوابة الجودة
+    (§0 — الفكس الجذري: البوابة كانت «تحسين لا شرط تسليم»). سجلٌّ منفصلٌ
+    عن `observe()` الخاص بالتشغيلة نفسها (`kind="export_blocked"` لا
+    `"research"`) كي يميّز الحارس بين «شُحن» و«حُجب» بدل خلطهما."""
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    record = {
+        "analysis_id": analysis_id, "kind": "export_blocked",
+        "product": product, "market": market, "overall": RED,
+        "created_at": now, "contracts": {}, "economics": {},
+        "services": [], "failures": {},
+        "findings": [_finding(
+            "client_export_blocked", RED,
+            f"تصدير العميل ({fmt}) حُجب: بوابة الجودة FAIL "
+            f"({len(gate_findings or [])} ملاحظة).", "export_gate")],
+        "self_error": None,
+    }
+    _store(record)
+    return record
+
+
+def record_override(analysis_id: int | None, product: str | None,
+                    market: str | None, gate_findings: list[dict],
+                    fmt: str) -> dict | None:
+    """WP-7 §1 — كل تجاوز مالكٍ لبوابة الجودة (`?override=1` بسلطة
+    `SILK_OWNER_KEY` المنفصلة) يُسجَّل حدثاً مستقلاً `kind="export_override"`
+    — يقرؤه التصدير الداخلي (`?internal=1`) ليختم النسخة التشغيلية بسطر
+    «سُلِّم بتجاوز مالك — ملاحظات البوابة مرفقة»."""
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    record = {
+        "analysis_id": analysis_id, "kind": "export_override",
+        "product": product, "market": market, "overall": RED,
+        "created_at": now, "contracts": {}, "economics": {},
+        "services": [], "failures": {},
+        "findings": [_finding(
+            "client_export_override", RED,
+            f"تصدير العميل ({fmt}) سُلِّم بتجاوز مالكٍ رغم FAIL بوابة "
+            f"الجودة ({len(gate_findings or [])} ملاحظة).", "export_gate")],
+        "gate_findings": [
+            {"check": f.get("check"), "note": f.get("note")}
+            for f in (gate_findings or [])][:12],
+        "self_error": None,
+    }
+    _store(record)
+    return record
+
+
+def override_records_for(analysis_id: int | None,
+                         path: str | None = None) -> list[dict]:
+    """سجلّات تجاوز المالك لتحليل بعينه (الأحدث أولاً) — `[]` بلا قاعدة/صفوف."""
+    if analysis_id is None:
+        return []
+    path = path or _db_path()
+    if not os.path.exists(path):
+        return []
+    try:
+        with _connect(path) as conn:
+            rows = conn.execute(
+                "SELECT record_json FROM watchdog_records WHERE "
+                "kind = 'export_override' AND analysis_id = ? "
+                "ORDER BY id DESC", (int(analysis_id),)).fetchall()
+        out = []
+        for r in rows:
+            try:
+                out.append(json.loads(r["record_json"]))
+            except Exception:  # noqa: BLE001
+                continue
+        return out
+    except Exception as e:  # noqa: BLE001
+        log.warning("watchdog override read failed: %s", e)
+        return []
+
+
 # ── PART 1 — طبقة الاستشعار: حساب حتمي، صفر نداء كلود ───────────────────────
 
 _VENDOR_PLACEHOLDER_RE = re.compile(r"\[شعار[^\]]*\]|\[LOGO[^\]]*\]", re.I)
@@ -203,10 +278,13 @@ def _check_badge_body(dr: dict) -> tuple[dict, list[dict]]:
         return {"status": "n/a", "detail": ""}, []
     badge = dr.get("verdict_label") or ""
     verdict = dr.get("verdict") or {}
-    v_raw = ((verdict.get("ai") or {}).get("verdict") or verdict.get("verdict") or "")
     try:
-        from silk_narrative import verdict_ar
-        body = verdict_ar(v_raw)
+        # مراجعة شيفرة PR #147: نفس المصدر الواحد للحكم (الحتمي أولاً) الذي
+        # تُشتقّ منه الشارة — القراءة القديمة (ai أولاً) كانت ستُطلق
+        # badge_body_mismatch كاذباً كلما خالفت قراءةُ كلود الحكمَ الحتمي.
+        from silk_narrative import authoritative_verdict, verdict_ar
+        v_raw, _ = authoritative_verdict(verdict)
+        body = verdict_ar(v_raw or "")
     except Exception:  # noqa: BLE001 — فحصٌ إضافي، لا يكسر الحارس
         return {"status": "n/a", "detail": ""}, []
     bc, tc = _badge_class(badge), _badge_class(body)

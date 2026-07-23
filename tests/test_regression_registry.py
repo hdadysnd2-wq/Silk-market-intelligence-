@@ -993,6 +993,129 @@ def _guard_price_fix_scoped_to_table_window():
     assert "السعر/كجم باليورو" in out2
 
 
+def _guard_quality_gate_is_client_export_delivery_condition():
+    """LESSONS ٤٦ — حزمة الفكس v2.1: بوابة الجودة شرط تسليم للعميل (FAIL =>
+    409) + عائلة فحوصات كاتب/عرض بنيوية تُفشِل على golden-bad. حارسٌ سلوكي:
+    الفحوصات الجديدة تُطلِق فعلياً على مدخلات تُعيد إنتاج العطل، والدوال
+    الحاجبة موجودة في api.py."""
+    import silk_quality_gate as qg
+
+    sections = "\n".join(
+        f"## {i}. {s}\nنصّ القسم بجملة تنتهي بنقطة."
+        for i, s in enumerate((
+            "الخلاصة التنفيذية", "منهجية البحث ونطاقه",
+            "نظرة عامة على السوق وحجمه", "ديناميكيات السوق",
+            "تحليل المستهلك والطلب", "المشهد التنافسي",
+            "التنظيم والوصول للسوق", "اللوجستيات وسلسلة الإمداد",
+            "تقييم المخاطر", "التوصيات الاستراتيجية", "الملاحق"), 1))
+
+    def _checks(text):
+        return {f["check"] for f in qg.run_quality_gate(
+            {"deep_research": {"report": {"text": text},
+                              "missions": {}, "analyst": {},
+                              "verdict": {"verdict": "WATCH"}}})["findings"]}
+
+    # عيّنات golden-bad تُعيد إنتاج العطل الموصوف — كل فحص جديد يُطلِق.
+    assert "hhi_false_precision" in _checks(
+        sections + "\n\nمؤشر التركّز HHI = 2184.7 هنا.")
+    assert "near_duplicate_figure" in _checks(
+        sections + "\n\nالواردات 6,733,369 دولاراً وفي جدول 6,733,376 دولاراً.")
+    assert "supplier_rank_gap" in _checks(
+        sections + "\n\n#1 تونس، #2 الجزائر، #5 إيران، #6 المغرب.")
+    assert "lpi_invalid_edition_year" in _checks(
+        sections + "\n\nمؤشر LPI 3.2 لعام 2022 مرتفع.")
+    # الدوال الحاجبة موجودة في مسار التصدير + الحارس + المُصدِّر.
+    _needles("api.py", "def _block_client_export_if_gate_failed",
+             "def _gate_verdict_for_client_export")()
+    _needles("silk_watchdog.py", "def record_blocked_export")()
+    _needles("silk_reports.py", "def _client_references_section")()
+
+
+# ── حُرّاس برنامج إصلاح جودة التقارير (WP-1…WP-7، صفوف 47-53) ────────────────
+
+def _guard_wp1_verdict_determinism():
+    """صفّ ٤٧ — الحكم الحتمي هو المعروض الوحيد + temperature=0 + سُلَّم ثقة واحد."""
+    _needles("silk_narrative.py", "def authoritative_verdict")()
+    _needles("silk_llm_provider.py", '"temperature": 0')()
+    _needles("silk_style_contract.py", "def confidence_band_label")()
+    _needles("tests/test_wp1_verdict_determinism.py",
+             "test_three_consecutive_renders_are_byte_identical")()
+
+
+def _guard_wp2_no_raw_internal_output():
+    """صفّ ٤٨ — لا نائب/سقالة/بتر يصل العميل؛ الحجب لا التسليم المشوَّه."""
+    _needles("silk_reports.py", "def _client_prose",
+             "def _client_missing_narrative_heads")()
+    _needles("silk_ai_judge.py", "def rephrase_client_sections")()
+    _needles("silk_quality_gate.py", "_check_client_scaffold_leak",
+             "_check_placeholder_leak")()
+    _needles("tests/test_wp2_client_output_hygiene.py",
+             "test_gate_fails_on_literal_so_what_in_client_text")()
+
+
+def _guard_wp3_evidence_integrity():
+    """صفّ ٤٩ — شارة واعية بالمنشأ + مصالحة رقمية + تفريد مصادر مُطبَّع."""
+    _needles("silk_narrative.py", "def evidence_badge_for",
+             "RECONCILED_OUT_TAG")()
+    _needles("silk_render.py", "def _reconcile_numeric_conflicts")()
+    _needles("tests/test_wp3_evidence_integrity.py",
+             "test_near_duplicate_values_reconcile_to_one_canonical")()
+
+
+def _guard_wp4_gaps_consistency():
+    """صفّ ٥٠ — مصدر واحد لمدخلات الفجوات الأربعة + حارس تناقض الختام."""
+    _needles("silk_reports.py", "def _client_gap_inputs")()
+    _needles("silk_quality_gate.py", "_check_gaps_closing_contradiction")()
+    _needles("tests/test_wp4_gaps_consistency.py",
+             "test_gate_fails_on_closing_contradiction")()
+
+
+def _guard_wp5_rtl_bracket_isolation():
+    """صفّ ٥١ — عزل RLM قبل _finalize_rtl + فحص أقواس آلي على الـPDF."""
+    _needles("silk_reports.py", "def _bidi_isolate_brackets",
+             "def count_suspicious_brackets", "def _pdf_bracket_check")()
+    _needles("tools/rtl_calibration.py", "def build_bracket_fixture")()
+    _needles("tests/test_wp5_rtl_brackets.py",
+             "test_pdf_bracket_check_fails_export_above_threshold")()
+
+
+def _guard_wp6_injector_adversarial_locks():
+    """صفّ ٥٢ — حاقنا §D-1/§D-2 مقفولان بجُمل التقارير المُسلَّمة."""
+    _needles("silk_render.py", "def _already_explained_nearby",
+             "def _year_in_growth_span")()
+    _needles("tests/test_wp6_injector_hardening.py",
+             "test_delivered_sentence_growth_span_year_not_tagged_stale",
+             "test_delivered_sentence_dash_explained_cagr_not_redefined")()
+
+
+def _guard_wp7_delivery_gate_hardening():
+    """صفّ ٥٣ — تجاوز بسلطة مالك منفصلة + بوابة نصّ المُنتَج النهائي."""
+    _needles("api.py", "owner_override_required", "X-Owner-Key")()
+    _needles("silk_watchdog.py", "def record_override",
+             "def override_records_for")()
+    _needles("silk_quality_gate.py", "def run_client_artifact_text_gate")()
+    _needles("tests/test_wp7_delivery_gate_hardening.py",
+             "test_artifact_text_gate_catches_all_leak_classes")()
+
+
+def _guard_zero_confidence_finding_declared_gap():
+    """LESSONS ٥٤ — بند بعثة قيمته غير فارغة بثقة 0.0 (خرق حارس المراقبة الحي
+    على demand_trends): ادعاء بثقة صفرية — مصرَّحاً بها أو موروثة من نقطة فجوة
+    مستشهَد بها — يُعلَن فجوة في gaps لا يُشحَن بنداً أبداً."""
+    import json as _json
+
+    import silk_llm_runtime as _rt
+    from silk_data_layer import DataPoint as _DP
+    reg = {"gap1": _DP(None, "FAOSTAT", 0.0, "401 — فجوة معلنة", "2026-07-23")}
+    text = _json.dumps({"findings": [
+        {"claim": "ادعاء صفري الثقة", "datapoint_ids": ["gap1"],
+         "confidence": 0.0}], "gaps": [], "summary": ""}, ensure_ascii=False)
+    out = _rt._parse_output(text, reg)
+    assert out["findings"] == [], "بند بثقة 0.0 شُحن بدل إعلانه فجوة"
+    assert any("ادعاء صفري الثقة" in g for g in out["gaps"]), \
+        "الادعاء الصفري لم يُعلَن فجوة"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -1044,6 +1167,16 @@ _LESSONS = {
     43: _guard_hs_classifier_valve_fail_safe_default,  # المُصنِّف العام — صمّامٌ فشل-آمن مفعَّل افتراضياً لا مُطفأ
     44: _guard_verdict_tone_recognizes_arabic_labels,  # Master Prompt Part 2 §B — _verdict_tone تتعرّف على التسمية العربية أيضاً
     45: _guard_price_fix_scoped_to_table_window,  # دالة إصلاح عملة السعر مقيَّدة بنافذة الجدول لا كامل المستند
+    46: _guard_quality_gate_is_client_export_delivery_condition,  # حزمة v2.1 — بوابة الجودة شرط تسليم + عائلة فحوصات كاتب/عرض
+    47: _guard_wp1_verdict_determinism,        # WP-1 — حتمية الحكم ومصدره الواحد
+    48: _guard_wp2_no_raw_internal_output,     # WP-2 — لا مخرَج داخلي خام للعميل
+    49: _guard_wp3_evidence_integrity,         # WP-3 — نزاهة الأدلة والمصالحة
+    50: _guard_wp4_gaps_consistency,           # WP-4 — اتساق الفجوات مع الختام
+    51: _guard_wp5_rtl_bracket_isolation,      # WP-5 — عزل أقواس RTL + فحص PDF
+    52: _guard_wp6_injector_adversarial_locks,  # WP-6 — أقفال الحاقنات العدائية
+    53: _guard_wp7_delivery_gate_hardening,    # WP-7 — تصليب بوابة التسليم
+    54: _guard_zero_confidence_finding_declared_gap,  # بند بثقة 0.0 => فجوة معلنة لا بند (خرق حارس المراقبة الحي)
+    55: _needles("tests/conftest.py", "def _hermetic_env_guard"),  # عزل SILK_HERMETIC لكل اختبار — لا تسرّب لافتة «نموذج توضيحي»
 }
 
 _TRAPS = [

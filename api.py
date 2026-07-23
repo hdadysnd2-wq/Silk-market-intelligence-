@@ -1094,6 +1094,143 @@ def create_app():
         except Exception as e:  # noqa: BLE001 — البوابة تحسين لا شرط تسليم
             log.warning("quality gate skipped: %s", e)
 
+    def _gate_verdict_for_client_export(view: dict) -> tuple[str, dict]:
+        """شغّل بوابة الجودة الحتمية على القالب المُصدَّر لجمهور العميل وأعد
+        (verdict, gate_out) — الفكس الجذري §0: هذه البوابة **شرط تسليم** لا
+        تحسيناً اختيارياً على مسار التصدير للعميل (خلافاً لـ`_attach_quality_
+        gate` أعلاه التي تبقى «أفضل جهد» على مسار بناء التشغيلة نفسها).
+        عطلٌ داخلي في البوابة نفسها (استثناء غير متوقَّع) يُعامَل كـFAIL —
+        لا «تخطٍّ صامت» يسمح بتسريب تقرير لم يُفحَص فعلياً."""
+        try:
+            import silk_quality_gate
+            gate_out = silk_quality_gate.run_quality_gate(view)
+            return gate_out.get("verdict", silk_quality_gate.FAIL), gate_out
+        except Exception as e:  # noqa: BLE001 — عطل البوابة = FAIL للعميل، ليس تخطّياً
+            log.warning("quality gate crashed during client export: %s", e)
+            return "FAIL", {
+                "verdict": "FAIL",
+                "findings": [{
+                    "check": "gate_crash", "repairable": False,
+                    "note": f"عطل داخلي في بوابة الجودة أثناء التصدير "
+                            f"({type(e).__name__}) — عومل التقرير كأنه FAIL "
+                            "لحماية العميل من محتوى لم يُفحَص فعلياً."}],
+                "methodology_notes": [],
+            }
+
+    def _block_client_export_if_gate_failed(
+            view: dict, analysis_id: int, found: dict, fmt: str,
+            request: "Request") -> None:
+        """يرفع 409 إن رصدت بوابة الجودة FAIL على قالب تصدير العميل — البند
+        §0 (الفكس الجذري): البوابة كانت «تحسين لا شرط تسليم»
+        (`_attach_quality_gate`)؛ تقرير FAIL كان يصل العميل بلا أي حجب.
+        `?override=1` يتخطّى الحجب (نفس مصادقة `X-API-Key` — لا سلطة مالك
+        منفصلة في هذه النقطة). `internal=1` لا يمرّ من هنا إطلاقاً (يبقى
+        متاحاً دوماً للمدقّق)."""
+        # WP-2 §3: قبل البوابة — حضِّر نثر الصياغة التجارية للأقسام بلا سرد
+        # كاتب (نداء مصغّر لكل قسم، temperature=0). نجاحه يملأ
+        # dr["client_fallback_prose"] فيمرّ القسم من البوابة ويعرضه
+        # `_client_body_or_fallback`؛ فشله يترك القسم خاوياً فتُفشِله
+        # البوابة (409) — لا بنود `dp.value` خام تصل العميل بعد الآن.
+        #
+        # مراجعة شيفرة PR #147: (أ) هذا نداء كلود على مسارٍ مجاني — يمرّ
+        # عبر بوابة إضافات كلود نفسها (`_free_ai_extras_allowed`: حجب النشر
+        # غير المحمي + حجز ذرّي واحد من SILK_PAID_DAILY_CAP) كأي إضافة
+        # مسار مجاني، لا نداء غير محكوم؛ (ب) النثر الناجح **يُخزَّن على
+        # السجل** (save_analysis بمعرّفه = تحديث في المكان) فلا يُعاد دفع
+        # نفس النداءات مع كل تصدير docx/pdf — build_view يعيد حمله من
+        # المدوّنة عبر view["deep_research"]["client_fallback_prose"].
+        dr = view.get("deep_research") or {}
+        if dr and not dr.get("client_fallback_prose"):
+            try:
+                from silk_reports import _client_missing_narrative_heads
+                needs = {h: items for h, items in
+                         _client_missing_narrative_heads(dr).items() if items}
+            except Exception:  # noqa: BLE001 — تعذّر الفحص = لا نداء
+                needs = {}
+            ai_ok = False
+            if needs:
+                ai_ok, _rephrase_note = _free_ai_extras_allowed()
+            if needs and ai_ok:
+                try:
+                    from silk_ai_judge import rephrase_client_sections
+                    prose = rephrase_client_sections(dr)
+                    if prose:
+                        dr["client_fallback_prose"] = prose
+                        try:
+                            stored_dr = (found or {}).get("deep_research")
+                            if isinstance(stored_dr, dict) and analysis_id:
+                                stored_dr["client_fallback_prose"] = prose
+                                silk_storage.save_analysis(
+                                    found, analysis_id=analysis_id)
+                        except Exception as e:  # noqa: BLE001 — تخزين اختياري
+                            log.warning("prose cache persist failed: %s", e)
+                except Exception as e:  # noqa: BLE001 — فشل التحضير تحكمه البوابة
+                    log.warning("client fallback rephrase failed: %s", e)
+        verdict, gate_out = _gate_verdict_for_client_export(view)
+        if verdict != "FAIL":
+            return
+        findings = gate_out.get("findings") or []
+        digest = [{"check": f.get("check"), "note": f.get("note")}
+                  for f in findings if not f.get("repairable", True)] or [
+            {"check": f.get("check"), "note": f.get("note")} for f in findings]
+        override = str(request.query_params.get("override") or "").lower() in (
+            "1", "true", "yes")
+        if override:
+            # WP-7 §1: التجاوز يتطلّب سلطة مالكٍ منفصلة (SILK_OWNER_KEY عبر
+            # ترويسة X-Owner-Key) — مفتاح API العادي لم يعد يكفي. كل تجاوز
+            # ناجح يُسجَّل في الحارس (kind=export_override) فتُختَم النسخ
+            # الداخلية اللاحقة «سُلِّم بتجاوز مالك — ملاحظات البوابة مرفقة».
+            owner_key = os.environ.get("SILK_OWNER_KEY", "").strip()
+            supplied = (request.headers.get("X-Owner-Key") or "").strip()
+            if not owner_key or supplied != owner_key:
+                raise HTTPException(status_code=403, detail={
+                    "error": "owner_override_required",
+                    "message": "تجاوز بوابة الجودة يتطلّب سلطة المالك "
+                               "المنفصلة (ترويسة X-Owner-Key المطابقة لـ"
+                               "SILK_OWNER_KEY على الخادم) — مفتاح API "
+                               "العادي لا يكفي.",
+                })
+            try:
+                import silk_watchdog
+                silk_watchdog.record_override(
+                    analysis_id, found.get("product"),
+                    (found.get("market") or {}).get("name_en"), findings, fmt)
+            except Exception as e:  # noqa: BLE001 — تسجيل التجاوز لا يُسقِطه
+                log.warning("watchdog override record failed: %s", e)
+            return
+        try:
+            import silk_watchdog
+            silk_watchdog.record_blocked_export(
+                analysis_id, found.get("product"),
+                (found.get("market") or {}).get("name_en"), findings, fmt)
+        except Exception as e:  # noqa: BLE001 — تسجيل الحجب لا يُسقِط الحجب نفسه
+            log.warning("watchdog blocked-export record failed: %s", e)
+        import silk_ops_log
+        silk_ops_log.record_error(
+            "quality_gate_blocked_export",
+            f"تصدير العميل ({fmt}) مُنِع: بوابة الجودة أعادت FAIL",
+            context={"analysis_id": analysis_id, "findings": digest})
+        raise HTTPException(status_code=409, detail={
+            "error": "quality_gate_fail",
+            "message": "تعذّر تسليم هذا التقرير للعميل: بوابة الجودة رصدت "
+                       "مشاكل حاجبة قبل التسليم. استخدم ?internal=1 للنسخة "
+                       "التشغيلية الكاملة للمدقّق، أو ?override=1 لتخطّي "
+                       "الحجب (مسؤولية من يملك مفتاح API).",
+            "findings": digest,
+        })
+
+    def _attach_override_history(view: dict, analysis_id: int | None) -> None:
+        """WP-7 §1: حمِّل سجلّات تجاوز المالك (إن وُجدت) على القالب قبل بناء
+        النسخة الداخلية — يختمها `silk_reports._render_research_docx` بسطر
+        «سُلِّمت نسخة عميل بتجاوز مالكٍ — ملاحظات البوابة مرفقة»."""
+        try:
+            import silk_watchdog
+            ov = silk_watchdog.override_records_for(analysis_id)
+            if ov:
+                view["owner_override_history"] = ov[:3]
+        except Exception as e:  # noqa: BLE001 — الختم توثيق، لا شرط تصدير
+            log.warning("override history attach failed: %s", e)
+
     def _attach_watchdog(result: dict, analysis_id: int | None,
                          kind: str) -> None:
         """نقطةُ اختناقٍ مشتركةٌ واحدة يستدعيها **كلا** المسارين (/analyze
@@ -2230,8 +2367,25 @@ def create_app():
         internal = str(request.query_params.get("internal") or "").lower() in (
             "1", "true", "yes")
         is_research = bool(view.get("deep_research"))
+        if is_research and not internal:
+            _block_client_export_if_gate_failed(
+                view, analysis_id, found, "docx", request)
+        if is_research and internal:
+            _attach_override_history(view, analysis_id)
+        # القالب الأكاديمي (قرار المالك 2026-07-22): ?style=academic يبدّل
+        # ترتيب/نبرة تقرير العميل فقط — نفس النموذج القانوني ونفس بوابة
+        # التسليم أعلاه ونفس مُطهِّرات العميل؛ صفر نداء كلود إضافي.
+        # أسلوب مخزَّن مع السجل (إعادة توليد أكاديمية سابقة) = الافتراضي.
+        style = (str(request.query_params.get("style") or "").lower()
+                 or str((view.get("deep_research") or {})
+                        .get("report_style") or "").lower())
         try:
-            if is_research and not internal:
+            if is_research and not internal and style == "academic":
+                from silk_reports import render_academic_docx
+                path = render_academic_docx(
+                    view, os.path.join(tempfile.mkdtemp(), "report.docx"))
+                fname = f"silk_academic_report_{analysis_id}.docx"
+            elif is_research and not internal:
                 path = render_client_docx(
                     view, os.path.join(tempfile.mkdtemp(), "report.docx"))
                 fname = f"silk_client_report_{analysis_id}.docx"
@@ -2281,9 +2435,21 @@ def create_app():
         internal = str(request.query_params.get("internal") or "").lower() in (
             "1", "true", "yes")
         is_research = bool(view.get("deep_research"))
+        if is_research and not internal:
+            _block_client_export_if_gate_failed(
+                view, analysis_id, found, "pdf", request)
+        if is_research and internal:
+            _attach_override_history(view, analysis_id)
         out = os.path.join(tempfile.mkdtemp(), "report.pdf")
+        style = (str(request.query_params.get("style") or "").lower()
+                 or str((view.get("deep_research") or {})
+                        .get("report_style") or "").lower())
         try:
-            if is_research and not internal:
+            if is_research and not internal and style == "academic":
+                from silk_reports import render_academic_pdf
+                path = render_academic_pdf(view, out)
+                fname = f"silk_academic_report_{analysis_id}.pdf"
+            elif is_research and not internal:
                 path = render_client_pdf(view, out)
                 fname = f"silk_client_report_{analysis_id}.pdf"
             else:
@@ -2372,10 +2538,15 @@ def create_app():
         verdict = dr.get("verdict") or {}
         market_name = (found.get("market") or {}).get("name_en", "")
         trace_id = dr.get("trace_id")
+        # قرار المالك (متابعة القالب الأكاديمي): ?style=academic يعيد كتابة
+        # النثر نفسه بالسجل الأكاديمي (نداء كاتب واحد — قروش لا دولارات)؛
+        # الأسلوب يُخزَّن مع السجل فتتبعه التصديرات افتراضياً.
+        regen_style = str(request.query_params.get("style") or "").lower() \
+            or None
         report_out = write_reviewed_report(
             mission_reports, analyst_summary, verdict,
             found.get("product", ""), market_name, trace_id=trace_id,
-            hs_code=found.get("hs_code"))
+            hs_code=found.get("hs_code"), style=regen_style)
         # H1 (تدقيق): إعادة التوليد كانت تطمس التقرير المخزَّن بـreport_out حتى
         # لو فشل الكاتب هذه المرة (report=None) — فيُفقَد تقرير سابق ناجح كلّفت
         # تشغيلته الكاملة، وهو بالضبط ما تُنقِذه هذه النقطة. الآن: لا نحفظ null
@@ -2399,6 +2570,8 @@ def create_app():
                           "failure_reason": _strip_internal_plumbing(
                               report_out.get("failure_reason") or "")})
         found["deep_research"]["report"] = report_out
+        if regen_style:
+            found["deep_research"]["report_style"] = regen_style
         found["analysis_id"] = analysis_id
         found["view"] = _view(found)
         _attach_quality_gate(found, trace_id)

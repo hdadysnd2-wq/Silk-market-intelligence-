@@ -383,7 +383,9 @@ def _report_with_table_and_markdown():
                            "demand", "entry_cost", "price_competitiveness",
                            "entry_door", "swot")},
                        "missing_categories": []},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحكم المعروض من الحقل الحتمي حصراً.
+            "verdict": {"verdict": "WATCH — مراقبة قبل الدخول",
+                       "confidence": 0.55,
                        "ai": {"verdict": "WATCH — مراقبة قبل الدخول",
                              "confidence": 0.55, "reasoning": "سبب"}},
             "report": {"report": (
@@ -522,7 +524,8 @@ def _deep_research_result_for_badges():
                                       "entry_cost": [], "price_competitiveness": [],
                                       "entry_door": [], "swot": []},
                        "missing_categories": []},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحكم المعروض من الحقل الحتمي حصراً.
+            "verdict": {"verdict": "WATCH", "confidence": 0.5,
                        "ai": {"verdict": "WATCH", "confidence": 0.5,
                              "reasoning": "سبب"}},
             "report": {"report": (
