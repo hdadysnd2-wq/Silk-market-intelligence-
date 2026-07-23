@@ -600,6 +600,12 @@ _JSON_FENCE_RE = re.compile(r"`{3,}|(?<![A-Za-z؀-ۿ])json(?=\s*[{\[])",
 # لعدّ نداءات الأدوات، فلا يُجرَّد هنا (بلاغ حي: تجريده صفّر العدّ في اللوحة).
 _TOOL_CALLS_SUFFIX_RE = re.compile(
     r"\s*\|\s*tool calls\s*:?\s*\d+\s*$", re.I)
+# تدقيق v2 (تسريب المشرف #7، متابعة مستقلّة): الشكل العربي «نداءات أدوات: N»
+# (أرقام لاتينية أو عربية-هندية) تِلِمتري تتبّعٍ مشروع — يُقرأ من الملخّص الخام
+# قبل العرض؛ لكنه على أسطح العميل (report.md/ask/brief) عبر `_strip_internal_plumbing`
+# سباكةٌ داخلية تُسرَّب. يُجرَّد للعرض فقط، والتتبّع يقرأ الخام فلا يتصفّر عدّ اللوحة.
+_AR_TOOL_CALLS_RE = re.compile(
+    r"\s*[|]?\s*نداء(?:ات)?\s+أدوات?\s*[:：]\s*[0-9٠-٩۰-۹]+")
 # علامات بنية JSON داخلية للنموذج — وجود أيّها يعني تسريب سباكة لا نثر عميل.
 # تشمل مفاتيح الحكم بصيغتها الإنجليزية الخام وصيغتها المُعرَّبة (كان
 # _EN_FIELD_RE يحوّل verdict/confidence داخل JSON مسرَّب قبل التقاطه، فيظهر
@@ -920,6 +926,9 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     # وتترك محتوى الكتلة الخام (مقطع مصدر مقتبَس حرفياً) عارياً كفقرة زائدة.
     text = _CODE_FENCE_RE.sub("", text)
     text = _strip_raw_json_leak(text)
+    # لاحقة عدّ نداءات الأدوات العربية (تِلِمتري) — تُجرَّد لسطح العرض؛ التتبّع
+    # يقرأ الخام قبل هنا (build_view) فلا يتأثّر عدّ اللوحة (تسريب المشرف #7).
+    text = _AR_TOOL_CALLS_RE.sub("", text)
     # حيِّد أيّ ريبر DataPoint(...) **كاملاً** قبل ترجمة الحقول (وإلا نصف-ترجمة):
     # تُستخرَج القيمة المقروءة، أو تُعلَن فجوة إن كانت None/فارغة (لا اختلاق).
     text = _DATAPOINT_REPR_RE.sub(_neutralize_datapoint_repr, text)
@@ -1616,7 +1625,9 @@ def _deep_research_view(result: dict) -> dict | None:
             # الوسوم تتسرّب إلى بنود السجل الخام وتُحفَظ مع أي save_analysis
             # لاحق (مسار regenerate/enrich) — طبقة العرض لا تلمس المخزون.
             "findings": [dict(_dp(x)) for x in f["findings"]],
-            "trace": _mission_trace_summary(f["failed"], clean_summary),
+            # التتبّع يُستخرَج من الملخّص **الخام** (لا المُطهَّر): تِلِمتري عدّ
+            # نداءات الأدوات يُجرَّد الآن من سطح العرض (LESSON 57، تسريب المشرف #7).
+            "trace": _mission_trace_summary(f["failed"], f["summary"]),
         }
     analyst = dr.get("analyst") or {}
     analyst_report = _report_fields(analyst.get("report"))
