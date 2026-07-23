@@ -1229,6 +1229,8 @@ _LESSONS = {
     54: _guard_zero_confidence_finding_declared_gap,  # بند بثقة 0.0 => فجوة معلنة لا بند (خرق حارس المراقبة الحي)
     56: _guard_coverage_gate_year_fallback,    # تدقيق v2 الموجة ١ — سُلَّم سنوات بوّابة التغطية
     57: _guard_sanitizer_obfuscation_variants,  # الموجة ١ — ست صيغ تشويش المشرف
+    58: _needles("CLAUDE.md", "/code-review",   # المراجعة الذاتية قبل فتح/وسم أي PR جاهزًا (Yemen stale-tag)
+                 "self-review catches what hermetic tests structurally cannot"),
     55: _needles("tests/conftest.py", "def _hermetic_env_guard"),  # عزل SILK_HERMETIC لكل اختبار — لا تسرّب لافتة «نموذج توضيحي»
 }
 

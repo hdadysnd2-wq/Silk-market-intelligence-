@@ -84,6 +84,16 @@ _DOC_ANCHORS = [
     # البند ١٥ — دلاء الصدق المنقسمة (hermetic only مقابل real-server+browser)
     (15, ".claude/skills/pr-and-wave-discipline/SKILL.md",
      ["hermetic only", "passed real-server + browser e2e", "e2e-live-shape"]),
+    # البند ٥٨ — المراجعة الذاتية (/code-review) قبل فتح/وسم أي PR جاهزًا؛ قاعدة
+    # عملية (عائلة البندين ١/١٠) بلا اختبار سلوكي — العلامات في CLAUDE.md +
+    # مهارة pr-and-wave-discipline §7 (سابقة Yemen stale-tag). حذف القاعدة
+    # من أيّهما يُحمِّر هذا الاختبار.
+    (58, "CLAUDE.md",
+     ["/code-review",
+      "self-review catches what hermetic tests structurally cannot"]),
+    (58, ".claude/skills/pr-and-wave-discipline/SKILL.md",
+     ["/code-review", "Yemen stale-tag",
+      "self-review catches what hermetic tests"]),
 ]
 
 # كل مدخلة: (رقم الدرس، ملف الاختبار، دوال اختبار يجب أن تبقى).

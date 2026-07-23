@@ -120,3 +120,17 @@ writing.
    tests/test_rung3_playwright_e2e.py -q` — real uvicorn + headless chromium.
    The CI job `e2e-live-shape` runs this and is a required check on `main`;
    such a PR cannot merge without the Playwright flow green.
+
+## 7. Self-review before opening or marking a PR ready (rule §32)
+
+Before opening any PR or flipping it out of draft / "ready for review", run
+`/code-review` on the working diff and **address every finding of severity
+high or above** — or log it explicitly as accepted-risk in the ledger
+(`docs/DEEP_RESEARCH_DECISIONS.md`). The PR summary must state that
+self-review ran and list its findings + their dispositions. This is **not
+optional**: the Yemen stale-tag incident (HS code `2008` mis-tagged as a
+stale year, caught by self-review BEFORE merge instead of by the owner AFTER
+deploy) is the precedent — self-review catches what hermetic tests
+structurally cannot. It is a permanent rule in `CLAUDE.md` (unbreakable-rules
+section) and `docs/LESSONS.md` (row 32), anchored in
+`tests/test_lessons_enforcement.py`.
