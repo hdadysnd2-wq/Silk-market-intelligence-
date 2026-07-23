@@ -1,6 +1,6 @@
 """C5 (SPEC-v2, Command #5b) — جدول «قائمة مستوردين وموزعين قابلين للتواصل»
 يُصيَّر في md **و**docx (المدقّق والعميل) من بنية النموذج الواحدة، بالأعمدة
-السبعة + مستوى التوثيق «◐ مرصود عبر خرائط قوقل» + سطر الإفصاح، وبلا اختلاق.
+الستة (بلا عمود «مستوى التوثيق» بعد WS10) + سطر الإفصاح، وبلا اختلاق.
 كذلك: إيقاف المكشطة أثناء تشغيلة لا يُسقط التقرير (فجوة معلنة).
 
 Run: python3 -m pytest tests/test_importer_leads_render_c5.py -q
@@ -58,11 +58,12 @@ def test_md_renders_leads_table_with_columns_and_disclaimer():
     from silk_reports import render_markdown
     md = render_markdown(silk_render.build_view(_blob()))
     assert "قائمة مستوردين وموزعين قابلين للتواصل" in md
-    for col in ("الاسم", "العنوان", "الهاتف", "الإيميل", "التقييم",
-                "مستوى التوثيق"):
+    for col in ("الاسم", "العنوان", "الهاتف", "الإيميل", "التقييم"):
         assert col in md, f"عمود مفقود: {col}"
     assert "Ajwa XL" in md and "sales@ajwa.nl" in md and "+3110123" in md
-    assert "◐ مرصود عبر خرائط قوقل" in md          # مستوى توثيق الخرائط
+    # WS10 (قرار المالك): لا عمود «مستوى التوثيق» ولا قيمته في متن التقرير.
+    assert "مستوى التوثيق" not in md
+    assert "مرصود عبر خرائط قوقل" not in md
     assert "لا أنه يستورد «تمور»" in md    # Wave 2: بارامتري بالمنتج (لا «التمور السعودية»)
 
 
@@ -81,7 +82,9 @@ def test_client_docx_renders_leads_table_and_survives_guard():
                 blob += "\n" + c.text
     assert "قائمة مستوردين وموزعين قابلين للتواصل" in blob
     assert "Ajwa XL" in blob and "sales@ajwa.nl" in blob
-    assert "مرصود عبر خرائط قوقل" in blob
+    # WS10 (قرار المالك): لا عمود «مستوى التوثيق» ولا قيمته في متن العميل.
+    assert "مستوى التوثيق" not in blob
+    assert "مرصود عبر خرائط قوقل" not in blob
     assert "لا أنه يستورد «تمور»" in blob    # Wave 2: بارامتري بالمنتج
 
 

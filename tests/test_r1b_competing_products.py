@@ -62,7 +62,10 @@ def test_writer_prompt_requires_competing_products_table():
     assert "السعر/كجم (بعملة الرصد)" in src              # عمود التطبيع بعملة الرصد
     assert "السعر/كجم بالدولار" not in src               # لم يعد يفرض الدولار
     assert "لا تحوّل عملةً ولا تَعِد بتحويلٍ لم يُجرَ" in src
-    assert "✓ مرصود برابط" in src and "◐ مُقدَّر" in src  # عمود الدليل
+    # WS10 (قرار المالك): عمود الدليل (✓ مرصود/◐ مُقدَّر) ومستوى التوثيق أُزيلا
+    # من عقد الكاتب — لا شارة/عمود إسناد في متن التقرير (الإسناد في المراجع).
+    assert "✓ مرصود برابط" not in src and "ومستوى توثيقه" not in src
+    assert "مستوى التوثيق" not in src
     assert "صفّ بفجوة معلنة لا حذف" in src               # لا حذف للمفقود
 
 
@@ -90,7 +93,10 @@ def test_committed_client_sample_shows_competing_products_table():
     # competing_products_table) لا صياغة عيّنة قديمة سابقة للإصلاح.
     assert "السعر/كجم (بعملة الرصد)" in text        # عمود التطبيع
     assert "السعر/كجم بالدولار" not in text
-    assert "✓" in text and "◐" in text              # شارتا الدليل
+    # WS10 (قرار المالك): لا عمود «مستوى التوثيق» ولا شارة دليل ✓/◐/○ في المتن.
+    assert "مستوى التوثيق" not in text
+    for sym in ("✓", "◐", "○"):
+        assert sym not in text
     # يهبط داخل قسم العميل الصحيح
     assert "المنافسة والتسعير والهامش" in text
     # يبقى خالياً من التِلِمِتري رغم الإضافة
