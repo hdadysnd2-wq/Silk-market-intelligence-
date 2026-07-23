@@ -64,6 +64,75 @@ def trends_interest(
                          f"pytrends unavailable / no network: {e}", _today())
 
 
+def _snapshot_geo(geo: str | None) -> str:
+    """مفتاح جغرافيا اللقطة — geo السوق (ISO2) بحروفٍ كبيرة، أو ``WW`` للعالم."""
+    return (geo or "WW").strip().upper() or "WW"
+
+
+def _snapshot_indicator(keyword: str) -> str:
+    """مفتاح مؤشر اللقطة داخل جدول `indicators` — منفصلٌ ببادئة ``trends:`` كي
+    لا يخلط مؤشرات البنك الدولي الحقيقية (لا مصدرَ رقمٍ ثانٍ، مجرّد تخزين لقطة)."""
+    return f"trends:{(keyword or '').strip().lower()}"
+
+
+def trends_interest_resilient(keyword: str, geo: str | None = None,
+                              timeframe: str = "today 12-m") -> DataPoint:
+    """سلسلة صمود الاتجاهات (WS11.1) — pytrends → لقطة مخزَّنة سابقة → فجوة معلنة.
+
+    pytrends هشّةُ الحصّة (429 مرصود حياً)؛ فشلها لم يعد يسقط مباشرةً إلى فجوة:
+    نجاحُ نداءٍ حيّ يُخزِّن لقطةً في `silk_store`، وفشلُ التحديث الحيّ يخدم **آخر
+    لقطةٍ مخزَّنة** موسومةً «من المخزن» بتاريخ رصدها الأصلي وثقةٍ مخفوضة
+    (`status="stale"`) — **لا تُقدَّم كحيّة، ولا يُختلَق رقمٌ طازج** (المبدأ
+    التأسيسي: لقطةٌ موثَّقةٌ قديمة خيرٌ من رقمٍ حيّ ملفَّق، والفجوة خيرٌ منهما إن
+    لم توجد لقطة). تعذّر المخزن أو غيابُ لقطة => الفجوة المعلنة كما هي.
+
+    Chain: live pytrends (VERIFIED) → last stored snapshot (SECONDARY, stale,
+    carrying its observed date) → declared gap. A price/interest is never
+    estimated; a stale documented value beats a fabricated fresh one.
+    """
+    live = trends_interest(keyword, geo, timeframe)
+    if live.value is not None:
+        try:  # أفضل جهد: خزّن اللقطة كي يخدمها فشلٌ لاحق (لا يُسقِط عند التعذّر).
+            import datetime
+            import silk_store
+            year = datetime.datetime.now(datetime.timezone.utc).year
+            silk_store.upsert_indicator(
+                _snapshot_geo(geo), _snapshot_indicator(keyword), year,
+                live.value, "Google Trends", float(live.confidence), live.note)
+        except Exception as e:  # noqa: BLE001 — التخزين تحسينٌ لا شرط
+            log.warning("trends snapshot store failed ('%s'): %r", keyword, e)
+        return live
+
+    # التحديث الحيّ فشل — اخدم آخر لقطةٍ مخزَّنة إن وُجدت (موسومةً، غير حيّة).
+    try:
+        import silk_store
+        row = silk_store.get_indicator(_snapshot_geo(geo),
+                                       _snapshot_indicator(keyword))
+    except Exception as e:  # noqa: BLE001
+        log.warning("trends snapshot read failed ('%s'): %r", keyword, e)
+        row = None
+    if row is not None and row["value"] is not None:
+        observed = row["retrieved_at"] or "؟"
+        capped_conf = min(0.5, float(row["confidence"] or 0.5))
+        # WS4/WS11.1 (حارس المالك ٢): أظهِر تاريخ اللقطة + الثقة المسقوفة في
+        # تتبّع التشغيلة (بديل الـmanifest اليوم) — no-op صامت خارج سياق تتبّع.
+        # التصيير المؤرَّخ في «المنهجية» (لا شارةَ متن) يأتي في PR واجهة WS9/WS10.
+        try:
+            import silk_trace
+            silk_trace.record_event(
+                event="trends_snapshot_served", keyword=(keyword or "").strip(),
+                geo=_snapshot_geo(geo), observed_at=observed,
+                confidence=capped_conf, status="stale")
+        except Exception:  # noqa: BLE001 — تشخيص لا شرط تنفيذ
+            pass
+        return DataPoint(
+            row["value"], "Google Trends", capped_conf,
+            f"لقطة مخزَّنة (اهتمام بحث سابق) — تعذّر التحديث الحيّ؛ رُصدت في "
+            f"{observed} (من المخزن، لا قيمة حيّة)", observed, status="stale")
+    # لا لقطة — تبقى الفجوة المعلنة (value=None) كما هي، لا اختلاق.
+    return live
+
+
 def trends_series(keyword: str, geo: str | None = None,
                   timeframe: str = "today 12-m") -> dict:
     """سلسلة اهتمام + نمو من نداء pytrends واحد — Stage 3 المرحلة ٢ (§7).
@@ -307,7 +376,8 @@ class TrendsAgent(BaseAgent):
         geo = task.get("geo")
         timeframe = task.get("timeframe", "today 12-m")
 
-        interest = trends_interest(keyword, geo, timeframe)
+        # WS11.1: سلسلة صمود — pytrends → لقطة مخزَّنة → فجوة (لا اختلاق).
+        interest = trends_interest_resilient(keyword, geo, timeframe)
         if interest.value is None:
             return AgentReport(self.name, [interest], True,
                                "لا توجد بيانات اتجاهات — no Google Trends data available")
