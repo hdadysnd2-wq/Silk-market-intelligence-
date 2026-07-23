@@ -85,6 +85,64 @@ def test_gap_rate_counts_declared_gaps():
     assert (gaps, total) == (2, 3) and round(rate, 3) == 0.667
 
 
+def test_suite_covers_four_diverse_cases_with_per_case_ceilings():
+    # التغطية الحقيقية للمنصّة (أيّ منتج × أيّ سوق) — لا حالةٌ واحدة.
+    import silk_evals as E
+    cases = {c["key"]: c for c in E.load_golden_cases()}
+    assert {"qatar_peanut_butter", "netherlands_peanut_butter",
+            "nigeria_peanut_butter", "india_dates"} <= set(cases)
+    # سقفٌ لكل حالة لا سقفٌ عالميّ — الصعبة (نيجيريا) أعلى من السهلة (قطر).
+    caps = {k: v["structural"]["gap_rate_max"] for k, v in cases.items()}
+    assert caps["nigeria_peanut_butter"] > caps["qatar_peanut_butter"]
+    assert caps["nigeria_peanut_butter"] > caps["netherlands_peanut_butter"]
+    # فئة منتج مختلفة (تمور، فصل HS مختلف) خارج الأغذية المصنّعة.
+    assert cases["india_dates"]["hs_code"] == "080410"
+    assert cases["netherlands_peanut_butter"]["hs_code"] == "200811"
+
+
+def test_aggregate_reports_per_case_and_total():
+    import silk_evals as E
+    cases = {c["key"]: c for c in E.load_golden_cases()}
+    r_clean = {"deep_research": {"missions": {"m": {"findings": [
+        {"value": 1}, {"value": 2}]}}}}                       # 0/2
+    r_gappy = {"deep_research": {"missions": {"m": {"findings": [
+        {"value": 1}, {"value": None}, {"value": None}]}}}}   # 2/3
+    agg = E.aggregate_gap_rates(
+        {"qatar_peanut_butter": r_clean, "nigeria_peanut_butter": r_gappy},
+        cases)
+    assert set(agg["per_case"]) == {"qatar_peanut_butter", "nigeria_peanut_butter"}
+    assert agg["per_case"]["nigeria_peanut_butter"]["rate"] == 0.667
+    assert agg["aggregate"] == {"rate": 0.4, "gaps": 2, "total": 5}
+
+
+def test_aggregate_flags_a_collapsing_market_even_when_total_is_low():
+    # سوقٌ صغيرةٌ انهارت تغطيتها (فوق سقفها) لا تختبئ خلف مجموعٍ منخفض تميّعه
+    # سوقٌ كبيرةٌ نظيفة — البوّابة per-case ترفعها.
+    import silk_evals as E
+    cases = {c["key"]: c for c in E.load_golden_cases()}
+    big_clean = {"deep_research": {"missions": {"m": {"findings":
+        [{"value": i} for i in range(90)]}}}}                 # 0/90
+    small_collapsed = {"deep_research": {"missions": {"m": {"findings":
+        [{"value": None}] * 8 + [{"value": 1}] * 2}}}}         # 8/10 = 0.8 > 0.45
+    agg = E.aggregate_gap_rates(
+        {"qatar_peanut_butter": big_clean,
+         "nigeria_peanut_butter": small_collapsed}, cases)
+    assert agg["aggregate"]["rate"] < 0.1          # المجموع يبدو ممتازاً
+    assert agg["any_case_over_ceiling"] is True    # لكن السوق المنهارة مكشوفة
+    assert agg["per_case"]["nigeria_peanut_butter"]["passed"] is False
+
+
+def test_main_all_skips_with_reason_without_key(monkeypatch, capsys):
+    import json
+    import silk_evals as E
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    rc = E.main(["--all"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["skipped"] is True and len(out["cases"]) >= 4
+    assert out["how_to_run_live"].endswith("--all")
+
+
 def test_main_skips_with_reason_without_key(monkeypatch, capsys):
     import silk_evals as E
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)

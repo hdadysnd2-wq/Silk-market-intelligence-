@@ -527,56 +527,111 @@ def _has_key() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
 
 
+def aggregate_gap_rates(results_by_case: dict, cases_by_key: dict) -> dict:
+    """نسبة الفجوات **لكل حالة** (مع سقفها الخاصّ ونجاحها) **والمجموع الكلّي**.
+
+    قرار مقصود: يُعرَض الاثنان معاً — المجموع وحده يُخفي سوقاً منهارة (سوقٌ
+    نظيفةٌ كبيرة تُميّع نسبةَ سوقٍ صغيرةٍ انهارت تغطيتها). كل حالةٍ تُقيَّم مقابل
+    `gap_rate_max` الخاصّ بها (per-case لا سقفٌ عالميّ — السوق الصعبة تحتمل
+    أرضيةً أعلى). hermetic بالكامل — لا نموذج، لا مفتاح."""
+    per_case: dict = {}
+    tot_gaps = tot_total = 0
+    for key, result in results_by_case.items():
+        rate, g, t = gap_rate(result)
+        cap = ((cases_by_key.get(key) or {}).get("structural") or {}).get(
+            "gap_rate_max")
+        per_case[key] = {"rate": round(rate, 3), "gaps": g, "total": t,
+                         "max": cap,
+                         "passed": (cap is None or rate <= float(cap))}
+        tot_gaps += g
+        tot_total += t
+    agg = (tot_gaps / tot_total) if tot_total else 0.0
+    return {
+        "per_case": per_case,
+        "aggregate": {"rate": round(agg, 3), "gaps": tot_gaps,
+                      "total": tot_total},
+        "any_case_over_ceiling": any(not v["passed"]
+                                     for v in per_case.values()),
+    }
+
+
+def run_suite(cases: list) -> dict:
+    """شغّل كل الحالات حياً (يتطلب مفتاحاً وشبكة) — {key: (case, result,
+    evaluation, structural)}. غير مُختبَر هرمتياً (يموّه المُستدعي run_case)."""
+    out: dict = {}
+    for case in cases:
+        result = run_case(case)
+        out[case["key"]] = {
+            "case": case, "result": result,
+            "evaluation": evaluate_report(result),
+            "structural": structural_checks(result, case)}
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO)
     ap = argparse.ArgumentParser(
-        description="أعد تشغيل حالة ذهبية: بوّابة بنيوية هرمتية + تقييمُ حَكَمٍ "
-                    "حيّ. الجزء الحيّ يتطلب شبكة ومفتاح Anthropic — يتخطّى "
+        description="أعد تشغيل حالة/حالات ذهبية: بوّابة بنيوية هرمتية + تقييمُ "
+                    "حَكَمٍ حيّ. الجزء الحيّ يتطلب شبكة ومفتاح Anthropic — يتخطّى "
                     "بسببٍ معلن (لا يفشل) حين لا مفتاح، فيبقى مخرَج CI نظيفاً.")
-    ap.add_argument("--case", required=True, help="مفتاح الحالة (key)")
+    grp = ap.add_mutually_exclusive_group(required=True)
+    grp.add_argument("--case", help="مفتاح حالة واحدة (key)")
+    grp.add_argument("--all", action="store_true",
+                     help="كل الحالات + تقرير نسبة فجوات لكل حالة والمجموع")
     args = ap.parse_args(argv)
 
     cases = {c["key"]: c for c in load_golden_cases()}
-    case = cases.get(args.case)
-    if case is None:
+    if args.case is not None and args.case not in cases:
         log.error("unknown golden case %r (available: %s)", args.case,
                   sorted(cases) or "none — evals/golden_cases.json فارغ حالياً")
         return 1
+    selected = (list(cases.values()) if args.all
+                else [cases[args.case]])
+    keys = [c["key"] for c in selected]
 
-    # تخطٍّ صريحٌ بسبب (لا فشل) حين لا مفتاح — الجزء الحيّ (بعثات+محلل+كاتب)
-    # يحتاج شبكةً ومفتاحاً؛ فبيئةُ CI/الصندوق تبقى إشارتُها نظيفة.
+    # تخطٍّ صريحٌ بسبب (لا فشل) حين لا مفتاح — الجزء الحيّ يحتاج شبكةً ومفتاحاً؛
+    # فبيئةُ CI/الصندوق تبقى إشارتُها نظيفة (نفس عقد #166).
     if not _has_key():
         print(json.dumps({
-            "case": args.case, "skipped": True,
+            "cases": keys, "skipped": True,
             "reason": "ANTHROPIC_API_KEY غير مضبوط — الجزء الحيّ (run_case + "
                       "تقييم الحَكَم) يتطلّب مفتاحاً وشبكة. البوّابة البنيوية "
-                      "الهرمتية تُشغَّل في CI عبر tests/test_ws10_golden_case.py.",
-            "how_to_run_live": f"ANTHROPIC_API_KEY=<key> python3 silk_evals.py "
-                               f"--case {args.case}",
+                      "الهرمتية (بما فيها نسبة الفجوات لكل حالة والمجموع) "
+                      "تُشغَّل في CI عبر tests/test_ws10_golden_case.py.",
+            "how_to_run_live": ("ANTHROPIC_API_KEY=<key> python3 silk_evals.py "
+                                + ("--all" if args.all
+                                   else f"--case {args.case}")),
         }, ensure_ascii=False, indent=2))
         return 0
 
-    result = run_case(case)
-    evaluation = evaluate_report(result)
-    structural = structural_checks(result, case)
-    overall = (evaluation or {}).get("overall")
+    suite = run_suite(selected)
     scores = load_scores()
-    cmp = compare_to_last_score(args.case, overall, scores)
-    print(json.dumps({"case": args.case, "evaluation": evaluation,
-                      "structural": structural, "comparison": cmp},
+    results_by_case = {k: v["result"] for k, v in suite.items()}
+    gap_report = aggregate_gap_rates(results_by_case, cases)
+
+    regressed = False
+    structural_failed = False
+    per_case_out: dict = {}
+    for key, s in suite.items():
+        overall = (s["evaluation"] or {}).get("overall")
+        cmp = compare_to_last_score(key, overall, scores)
+        per_case_out[key] = {"evaluation": s["evaluation"],
+                             "structural": s["structural"], "comparison": cmp}
+        if overall is not None:
+            scores[key] = overall
+        if cmp["regression"]:
+            regressed = True
+            log.error("quality regression on %s: %s -> %s (drop %.1f)",
+                     key, cmp["previous"], cmp["new"], cmp["drop"])
+        if not s["structural"]["passed"]:
+            structural_failed = True
+            log.error("structural gate failed on %s: %s",
+                     key, s["structural"]["failures"])
+
+    save_scores(scores)
+    print(json.dumps({"cases": per_case_out, "gap_rates": gap_report},
                      ensure_ascii=False, indent=2))
-    if overall is not None:
-        scores[args.case] = overall
-        save_scores(scores)
-    if cmp["regression"]:
-        log.error("quality regression on %s: %s -> %s (drop %.1f)",
-                 args.case, cmp["previous"], cmp["new"], cmp["drop"])
-        return 1
-    if not structural["passed"]:
-        log.error("structural gate failed on %s: %s",
-                 args.case, structural["failures"])
-        return 1
-    return 0
+    return 1 if (regressed or structural_failed) else 0
 
 
 if __name__ == "__main__":
