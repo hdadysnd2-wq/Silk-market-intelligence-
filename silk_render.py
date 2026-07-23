@@ -636,6 +636,17 @@ _DATAPOINT_ANY_RE = re.compile(r"DataPoint\((?:'[^']*'|\"[^\"]*\"|[^)])*\)")
 # | 0.64 |") لكن ليس نثراً حرّاً بفاصلة فراغ ("confidence 0.64") — الشكل
 # الذي ظهر فعلياً في جواب الدردشة السياقية الحرّ (سطح جديد لهذا المُطهِّر).
 _EN_CONF_VALUE_RE = re.compile(r"\bconfidence\b(\s*[|:：]?\s*)(\d?\.\d{1,4})")
+# تدقيق v2 (الموجة ١، تسريب المشرف #3): الصيغة العربية الخام «ثقة=٠٫٦٤» (كلمة
+# «ثقة» + أرقام عربية-هندية + فاصلة عربية ٫) كانت تنجو من `_EN_CONF_VALUE_RE`
+# (إنجليزي فقط). تُلتقَط بأرقامٍ عربية أو لاتينية وتُصاغ بشرياً كنظيرتها.
+_AR_DIGIT_FOLD = {ord(c): str(i) for i, c in enumerate("٠١٢٣٤٥٦٧٨٩")}
+_AR_DIGIT_FOLD.update({ord(c): str(i) for i, c in enumerate("۰۱۲۳۴۵۶۷۸۹")})
+_AR_CONF_RE = re.compile(
+    r"ثقة\s*[=:：]\s*([0-9٠-٩۰-۹]+[.,٫][0-9٠-٩۰-۹]+)")
+# تدقيق v2 (تسريب المشرف #6): بادئة مفتاح بعثة مرقّمة «m3_pricing_scout» —
+# البادئة الرقمية «mN_» أمام مفتاحٍ لاتيني تُزال، فيبقى المفتاح ليُترجَم لاسمه
+# العربي عبر `_map_mission_keys` (لا مفتاح داخلي مرقّم في المُسلَّم).
+_MISSION_NUM_PREFIX_RE = re.compile(r"\bm\d+_(?=[a-z])")
 _EN_FIELD_RE = re.compile(r"\b(verdict|confidence)\b")
 _EN_FIELD_AR = {"verdict": "الحكم", "confidence": "درجة الثقة"}
 # رمز حكم آلة خام (GO/WATCH/NO-GO/CONDITIONAL-GO) داخل نثر حرّ كتبه الكاتب
@@ -915,6 +926,9 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     # شبكة أمان: أي DataPoint(...) شاذ نجا من النمط المرن → فجوة معلنة كاملة.
     text = _DATAPOINT_ANY_RE.sub(_RAW_JSON_GAP, text)
     text = _strip_mission_key_prefix(text)
+    # تدقيق v2 (تسريب المشرف #6): بادئة «mN_» المرقّمة أمام مفتاح بعثة تُزال
+    # قبل تعيين المفاتيح، فيُترجَم المفتاح الباقي لاسمه العربي أدناه.
+    text = _MISSION_NUM_PREFIX_RE.sub("", text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
     text = _DP_TAG_RE.sub("", text)
     # §٢ (تدقيق «تحليل #1» DZA): تنسيق «**» شارد + رقم ثقة عربي خام — راجع
@@ -941,6 +955,15 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
         from silk_narrative import confidence_phrase
         return f"درجة الثقة{m.group(1)}{confidence_phrase(float(m.group(2)))}"
     text = _EN_CONF_VALUE_RE.sub(_conf_value, text)
+
+    def _ar_conf_value(m: "re.Match") -> str:
+        from silk_narrative import confidence_phrase
+        raw = m.group(1).translate(_AR_DIGIT_FOLD).replace("٫", ".").replace(",", ".")
+        try:
+            return f"درجة الثقة {confidence_phrase(float(raw))}"
+        except ValueError:
+            return "درجة الثقة"
+    text = _AR_CONF_RE.sub(_ar_conf_value, text)
     text = _EN_FIELD_RE.sub(lambda m: _EN_FIELD_AR[m.group(1)], text)
     from silk_narrative import humanize_technical_note, verdict_ar
     text = _RAW_VERDICT_RE.sub(lambda m: verdict_ar(m.group(1).upper()), text)
