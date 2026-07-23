@@ -63,6 +63,70 @@ def _seq_post(responses):
     return _post
 
 
+def _raise_then(exc, then_resp):
+    """side_effect يرمي `exc` أول مرّة ثم يُرجع `then_resp` — يحاكي فشل اتصال عابر."""
+    calls = {"n": 0}
+
+    def _post(url, timeout, headers, json):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise exc
+        return then_resp
+    return _post
+
+
+def test_retries_on_connect_timeout_then_succeeds():
+    """بلاغ الكويت: ConnectTimeout عابر (فشل اتصال سريع) ثم 200 => ينجح بعد
+    إعادة محاولة. هذا نوع فشل الكاتب الفعلي الذي لم يغطّه retry الـ429/529."""
+    exc = requests.exceptions.ConnectTimeout("Connection timed out.")
+    with _env(ANTHROPIC_API_KEY="k"), \
+         patch("requests.post", side_effect=_raise_then(exc, _Resp(200))), \
+         patch("time.sleep") as slept:
+        out = lp.AnthropicProvider().complete("s", "u", 100, "m", 300)
+    assert out == "OK"
+    assert lp.last_error() is None
+    assert slept.call_count == 1
+
+
+def test_retries_on_connection_error_then_succeeds():
+    """ConnectionError عابر ثم 200 => ينجح بعد إعادة محاولة."""
+    exc = requests.exceptions.ConnectionError("Connection reset by peer")
+    with _env(ANTHROPIC_API_KEY="k"), \
+         patch("requests.post", side_effect=_raise_then(exc, _Resp(200))), \
+         patch("time.sleep"):
+        out = lp.AnthropicProvider().complete("s", "u", 100, "m", 300)
+    assert out == "OK"
+
+
+def test_read_timeout_is_NOT_retried_fails_immediately():
+    """ReadTimeout (مهلة قراءة بطيئة — النموذج ولّد فعلاً) **لا يُعاد** — إعادته
+    تحرق رموزاً بلا طائل. يفشل فوراً بلا نوم، وlast_error يحمل النوع."""
+    exc = requests.exceptions.ReadTimeout("Read timed out.")
+    with _env(ANTHROPIC_API_KEY="k"), \
+         patch("requests.post", side_effect=_raise_then(exc, _Resp(200))), \
+         patch("time.sleep") as slept:
+        out = lp.AnthropicProvider().complete("s", "u", 100, "m", 300)
+    assert out is None
+    assert slept.call_count == 0
+    assert lp.last_error()["type"] == "ReadTimeout"
+
+
+def test_persistent_connect_timeout_exhausts_then_returns_none():
+    """ConnectTimeout دائم => بعد استنفاد المحاولات: None + last_error بنوعه
+    (مطابق للسلوك بعد الاستنفاد)، وينام max_retries مرّة."""
+    exc = requests.exceptions.ConnectTimeout("down")
+
+    def _always(url, timeout, headers, json):
+        raise exc
+    with _env(ANTHROPIC_API_KEY="k", SILK_LLM_MAX_RETRIES="2"), \
+         patch("requests.post", side_effect=_always), \
+         patch("time.sleep") as slept:
+        out = lp.AnthropicProvider().complete("s", "u", 100, "m", 300)
+    assert out is None
+    assert lp.last_error()["type"] == "ConnectTimeout"
+    assert slept.call_count == 2
+
+
 def test_retries_on_429_then_succeeds():
     """429 عابر ثم 200 => النداء ينجح بعد إعادة محاولة واحدة (لا None)."""
     seq = [_Resp(429), _Resp(200)]

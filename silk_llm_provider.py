@@ -128,9 +128,32 @@ class AnthropicProvider(LLMProvider):
 
     # الحالات العابرة التي تُعاد محاولتها فقط — 429 (تجاوز حصّة/معدّل) و529
     # (ازدحام Anthropic). كلاهما يُرفض **قبل** التوليد فكلفة الرموز صفر، وإعادة
-    # المحاولة بـbackoff هي النمط الموصى به. غير هذين (400 حمولة/401 مفتاح/رفض/
-    # مهلة/شبكة) لا يُعاد — فشل فوري كما كان (لا تخمين، لا حرق رموز على مهلة).
+    # المحاولة بـbackoff هي النمط الموصى به. غير هذين (400 حمولة/401 مفتاح/رفض)
+    # لا يُعاد — فشل فوري كما كان.
     _RETRYABLE_STATUS = (429, 529)
+
+    # أخطاء الاتصال السريعة العابرة — بلاغ مالك حيّ بدليل مباشر (تقرير الكويت،
+    # تشغيلتان): نداء الكاتب (أثقل حمولة، في الذيل) فشل بـ«تعذّر الاتصال بالمصدر»
+    # بينما المحلّل نجح على نفس الخادم قبله بثوانٍ — فشلٌ متقطّع في طور الاتصال،
+    # لا حصّة (لم يلتقطه retry الـ429/529) ولا مهلة قراءة بطيئة (المدّة 200ث <
+    # 300ث). ConnectTimeout يفشل ≤10ث (راجع _timeout_pair) فكلفة الرموز صفر،
+    # وإعادة محاولته آمنة. **ReadTimeout مستثنى عمداً**: يعني أن النموذج ولّد
+    # فعلاً حتى مهلة القراءة الكاملة — إعادته تحرق رموزاً/وقتاً بلا طائل، وذاك
+    # مسار إصلاح مختلف (تقليص الحمولة/streaming) يقرّره دليل writer-diagnostics.
+    @classmethod
+    def _is_retryable_exc(cls, exc: Exception) -> bool:
+        """هل الاستثناء خطأ اتصال سريع عابر يُعاد؟ ConnectTimeout/ConnectionError
+        نعم؛ ReadTimeout (مهلة قراءة بطيئة) وغيرها لا."""
+        try:
+            import requests
+        except Exception:  # noqa: BLE001
+            return False
+        exc_type = type(exc)
+        # ReadTimeout يرث Timeout؛ نستثنيه صراحةً قبل فحص العائلة العابرة.
+        if isinstance(exc, requests.exceptions.ReadTimeout):
+            return False
+        return isinstance(exc, (requests.exceptions.ConnectTimeout,
+                                requests.exceptions.ConnectionError))
 
     @staticmethod
     def _retry_after(resp, cap: float = 60.0) -> float | None:
@@ -170,9 +193,23 @@ class AnthropicProvider(LLMProvider):
             base = 1.0
         attempt = 0
         while True:
-            resp = requests.post(
-                self._ENDPOINT, timeout=self._timeout_pair(timeout),
-                headers=self._headers(key), json=payload)
+            try:
+                resp = requests.post(
+                    self._ENDPOINT, timeout=self._timeout_pair(timeout),
+                    headers=self._headers(key), json=payload)
+            except Exception as exc:  # noqa: BLE001
+                # خطأ اتصال سريع عابر (ConnectTimeout/ConnectionError) → أعِد
+                # المحاولة؛ غيره (ReadTimeout/…) يُرمى فوراً للمستدعي كالسابق.
+                if self._is_retryable_exc(exc) and attempt < max_retries:
+                    wait = base * (2 ** attempt)
+                    log.warning("AI call transient %s (attempt %d/%d) — retry "
+                                "in %.1fs", type(exc).__name__, attempt + 1,
+                                max_retries + 1, wait)
+                    if wait > 0:
+                        time.sleep(wait)
+                    attempt += 1
+                    continue
+                raise
             # getattr دفاعي: كائن ردٍّ بلا status_code (نادر) يُعامَل كغير عابر
             # فيمرّ لـraise_for_status كالسابق — لا انهيار على شكل ردٍّ غريب.
             if (getattr(resp, "status_code", None) in self._RETRYABLE_STATUS
