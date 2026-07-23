@@ -51,6 +51,59 @@ def _wits_reporter_code(iso3: str) -> tuple[str | None, bool]:
     return (m49.zfill(3) if m49 else None), False
 
 
+# أعضاء الاتحاد الجمركي الخليجي — ثابت معاهدة (ميثاق مجلس التعاون، الاتحاد
+# الجمركي 2003، gcc-sg.org). السعودية طرف المنشأ فلا صفّ لها في مرجع
+# agreements_l1.csv (نطاقه الأسواق المستهدفة فقط)؛ العضوية هنا للتحقق من
+# الطرفين معاً قبل خدمة الإعفاء البيني الموثّق.
+_GCC_MEMBERS = frozenset({"SAU", "ARE", "KWT", "QAT", "BHR", "OMN"})
+
+
+def _gcc_documented_exemption(hs_code: str, market_iso3: str,
+                              partner_iso3: str) -> DataPoint | None:
+    """الرُتبة الموثّقة: إعفاء الاتحاد الجمركي الخليجي البيني من مرجع الاتفاقيات.
+
+    بلاغ حي (زبدة الفول السوداني/الكويت): فجوة «يفترض صفراً بموجب GCC لكن لا
+    توثيق رقمي» بينما المرجع الموثّق موجود في `data/agreements_l1.csv` (صفّ
+    GCC: «إعفاء كامل بين الأعضاء»، GCC secretariat). تُخدَم 0.0 فقط حين يكون
+    **كلا** الطرفين عضوين وللسوق صفّ GCC member في المرجع — موسومةً مرجعاً
+    قانونياً موثّقاً (`status="documented_agreement"`) لا رصداً تعريفياً حياً،
+    وبشرط شهادة المنشأ معلَناً في الملاحظة. عضوية GAFTA («شبه كامل») لا تكفي
+    لرقم؛ أي شرط ناقص => None فتبقى الفجوة معلنة (لا صفر مختلَق).
+    قراءة CSV محلية فقط — صفر نداء شبكة في هذه الرُتبة."""
+    market = (market_iso3 or "").upper()
+    partner = (partner_iso3 or "").upper()
+    if market not in _GCC_MEMBERS or partner not in _GCC_MEMBERS:
+        return None
+    import csv
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "data", "agreements_l1.csv")
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            lines = [ln for ln in f if not ln.lstrip().startswith("#")]
+        rows = list(csv.DictReader(lines))
+    except Exception as e:  # noqa: BLE001 — مرجع غائب = لا رُتبة موثّقة، فجوة
+        log.warning("agreements reference unavailable (%s): %s", path, e)
+        return None
+    row = next((r for r in rows
+                if (r.get("iso3") or "").strip().upper() == market
+                and (r.get("agreement") or "").strip() == "GCC"
+                and (r.get("status") or "").strip() == "member"), None)
+    if row is None:
+        return None
+    try:
+        conf = float(row.get("confidence") or 0.75)
+    except (TypeError, ValueError):
+        conf = 0.75
+    src_url = (row.get("source_url") or "").strip()
+    note = (f"إعفاء جمركي كامل بين أعضاء الاتحاد الجمركي الخليجي لرمز "
+            f"HS{_hs6(hs_code)} ({partner}→{market}) — مرجع اتفاقيات موثّق "
+            f"({row.get('tariff_effect', '')})، لا رصد تعريفي حي من WITS/WTO؛ "
+            f"يتطلب شهادة منشأ خليجية. المصدر: {src_url}")
+    return DataPoint(0.0, (row.get("source") or "GCC secretariat").strip(),
+                     conf, note, _today(), status="documented_agreement")
+
+
 def _default_year() -> int:
     """آخر سنة على الأرجح متاحة في WITS — بيانات التعريفة أبطأ من التجارة
     العادية عادةً، فنؤخّرها سنتين إضافيتين؛ محسوبة لا رقماً ثابتاً يتقادم."""
@@ -214,6 +267,11 @@ def tariff_with_fallback(
         log.info("tariff path=wits HS%s %s<-%s: %s%%",
                  _hs6(hs_code), market_iso3, partner_iso3, wits.value)
         return wits
+    documented = _gcc_documented_exemption(hs_code, market_iso3, partner_iso3)
+    if documented is not None:
+        log.info("tariff path=gcc_agreement HS%s %s<-%s: 0.0%% (documented)",
+                 _hs6(hs_code), market_iso3, partner_iso3)
+        return documented
     log.info("tariff path=gap HS%s %s<-%s (WTO + WITS both unavailable)",
              _hs6(hs_code), market_iso3, partner_iso3)
     merged_note = f"{wits.note} | وWTO TTD أيضاً غير متاح: {wto.note}"

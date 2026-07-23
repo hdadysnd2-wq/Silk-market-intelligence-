@@ -1098,6 +1098,24 @@ def _guard_wp7_delivery_gate_hardening():
              "test_artifact_text_gate_catches_all_leak_classes")()
 
 
+def _guard_zero_confidence_finding_declared_gap():
+    """LESSONS ٥٤ — بند بعثة قيمته غير فارغة بثقة 0.0 (خرق حارس المراقبة الحي
+    على demand_trends): ادعاء بثقة صفرية — مصرَّحاً بها أو موروثة من نقطة فجوة
+    مستشهَد بها — يُعلَن فجوة في gaps لا يُشحَن بنداً أبداً."""
+    import json as _json
+
+    import silk_llm_runtime as _rt
+    from silk_data_layer import DataPoint as _DP
+    reg = {"gap1": _DP(None, "FAOSTAT", 0.0, "401 — فجوة معلنة", "2026-07-23")}
+    text = _json.dumps({"findings": [
+        {"claim": "ادعاء صفري الثقة", "datapoint_ids": ["gap1"],
+         "confidence": 0.0}], "gaps": [], "summary": ""}, ensure_ascii=False)
+    out = _rt._parse_output(text, reg)
+    assert out["findings"] == [], "بند بثقة 0.0 شُحن بدل إعلانه فجوة"
+    assert any("ادعاء صفري الثقة" in g for g in out["gaps"]), \
+        "الادعاء الصفري لم يُعلَن فجوة"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -1157,6 +1175,8 @@ _LESSONS = {
     51: _guard_wp5_rtl_bracket_isolation,      # WP-5 — عزل أقواس RTL + فحص PDF
     52: _guard_wp6_injector_adversarial_locks,  # WP-6 — أقفال الحاقنات العدائية
     53: _guard_wp7_delivery_gate_hardening,    # WP-7 — تصليب بوابة التسليم
+    54: _guard_zero_confidence_finding_declared_gap,  # بند بثقة 0.0 => فجوة معلنة لا بند (خرق حارس المراقبة الحي)
+    55: _needles("tests/conftest.py", "def _hermetic_env_guard"),  # عزل SILK_HERMETIC لكل اختبار — لا تسرّب لافتة «نموذج توضيحي»
 }
 
 _TRAPS = [
