@@ -176,6 +176,28 @@ def resolve_all(product_name: str, top_n: int = 3,
                                       f"({r['hs_code']})",
                                  retrieved_at=today))
             continue
+        # بوّابة الصفة المميّزة (عائلة `unresolved-hs-silent-spend`، الدرس ٣٢):
+        # درجةٌ عاليةٌ قد تأتي من تطابق كلمةٍ **عامّة** مُتضمَّنةٍ في اسمٍ مركّب
+        # («زبدة» داخل «زبدة الفول السوداني» => رمز الألبان 040510) بينما صفةُ
+        # المنتج المميّزة غائبةٌ عن وصف الرمز. عقد عدم الاختلاق: رمزٌ صفتُه
+        # المميّزة غير مغطّاةٍ بوصفه **فجوةٌ معلَنة** (value=None) لا رمزٌ خاطئٌ
+        # واثق — نفس نواة التداخل التي تستعملها بوّابة التأكيد (مصدرُ حقيقةٍ
+        # واحد، لا استدلالٌ جديد). التأكيد `None` (لا وصف/لا صفات) لا يُخفِّض:
+        # فشلٌ آمنٌ مفتوح — لا نُسقِط مطابقةً لمجرّد تعذّر الحكم عليها.
+        try:
+            from silk_hs_confirm import confirm_hs
+            conf = confirm_hs(product_name, r["hs_code"], path=path)
+        except Exception:  # noqa: BLE001 — تعذّر التأكيد لا يكسر الحلّ
+            conf = None
+        if conf is not None and conf.get("confirmed") is False:
+            out.append(DataPoint(
+                None, _SOURCE, 0.0,
+                note=f"رمزٌ غير مؤكَّد لـ{product_name!r}: {conf.get('reason')}"
+                     f" — أقرب تطابق {r.get('name_ar') or r.get('name_en')} "
+                     f"({r['hs_code']}, score={sc:.2f}). صنِّف عبر المصنّف العام "
+                     f"أو أدخِل الرمز يدوياً.",
+                retrieved_at=today))
+            continue
         out.append(DataPoint(
             r["hs_code"], _SOURCE, round(sc, 2),
             note=f"{r.get('name_en')} / {r.get('name_ar')}",

@@ -57,7 +57,7 @@ hs_code,name_en,name_ar,keywords
 150990,Olive oil other,زيت زيتون آخر,"زيت زيتون,olive oil,refined olive oil"
 071120,Olives provisionally preserved,زيتون محفوظ,"زيتون,olive,olives"
 200570,Olives prepared,زيتون محضر,"زيتون معلب,زيتون مخلل,prepared olives,olives"
-151590,Other fixed vegetable oils,زيوت نباتية أخرى,"زيت نباتي,vegetable oil,seed oil"
+151590,Other fixed vegetable oils,زيوت نباتية أخرى,"زيت نباتي,vegetable oil,seed oil,زبدة الشيا,زبدة شيا,shea butter"
 330129,Essential oils other,زيوت عطرية,"زيت عطري,زيوت عطرية,essential oil,essential oils"
 330741,Agarbatti and odoriferous (oud incense),بخور وعود,"بخور,عود,دخون,معمول,oud,bakhoor,incense,agarwood"
 330300,Perfumes and toilet waters,عطور,"عطر,عطور,برفان,perfume,perfumes,fragrance,toilet water"
@@ -881,7 +881,7 @@ hs_code,name_en,name_ar,keywords
 180200,"Cocoa; shells, husks, skins and other cocoa waste",,
 180310,"Cocoa; paste, not defatted",,
 180320,"Cocoa; paste, wholly or partly defatted",,
-180400,"Cocoa; butter, fat and oil",,
+180400,"Cocoa; butter, fat and oil",زبدة الكاكاو,"زبدة الكاكاو,زبدة كاكاو,cocoa butter"
 180500,"Cocoa; powder, not containing added sugar or other sweetening matter",,
 180620,"Chocolate & other food preparations containing cocoa; in blocks, slabs or bars weighing more than 2kg or in liquid, paste, powder, granular or other bulk form in containers or immediate packings, content exceeding 2kg",,
 180631,"Chocolate and other food preparations containing cocoa; in blocks, slabs or bars, filled, weighing 2kg or less",,
@@ -917,7 +917,7 @@ hs_code,name_en,name_ar,keywords
 200600,"Vegetables, fruit, nuts, fruit-peel and other parts of plants, preserved by sugar (drained, glace or crystallised)",,
 200710,"Jams, fruit jellies, marmalades, fruit or nut puree and fruit or nut pastes; homogenised, cooked preparations, whether or not containing added sugar or other sweetening matter",,
 200791,"Jams, jellies, marmalades, purees and pastes; of citrus fruit, being cooked preparations (excluding homogenised), whether or not containing added sugar or other sweetening matter",,
-200811,"Nuts; ground-nuts, whether or not containing added sugar, other sweetening matter or spirit",,
+200811,"Nuts; ground-nuts, whether or not containing added sugar, other sweetening matter or spirit",زبدة الفول السوداني (فول سوداني محضّر),"زبدة الفول السوداني,زبدة فول سوداني,فول سوداني محضر,فول سوداني محمص,peanut butter,groundnut butter"
 200819,"Nuts and other seeds; whether or not containing added sugar, other sweetening matter or spirit (excluding ground-nuts except in mixtures)",,
 200820,"Fruit; pineapples, prepared or preserved in ways n.e.c. in heading no. 2007, whether or not containing added sugar, other sweetening matter or spirit",,
 200830,"Fruit; citrus, prepared or preserved in ways n.e.c. in heading no. 2007, whether or not containing added sugar, other sweetening matter or spirit",,
