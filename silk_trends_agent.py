@@ -113,9 +113,20 @@ def trends_interest_resilient(keyword: str, geo: str | None = None,
         row = None
     if row is not None and row["value"] is not None:
         observed = row["retrieved_at"] or "؟"
+        capped_conf = min(0.5, float(row["confidence"] or 0.5))
+        # WS4/WS11.1 (حارس المالك ٢): أظهِر تاريخ اللقطة + الثقة المسقوفة في
+        # تتبّع التشغيلة (بديل الـmanifest اليوم) — no-op صامت خارج سياق تتبّع.
+        # التصيير المؤرَّخ في «المنهجية» (لا شارةَ متن) يأتي في PR واجهة WS9/WS10.
+        try:
+            import silk_trace
+            silk_trace.record_event(
+                event="trends_snapshot_served", keyword=(keyword or "").strip(),
+                geo=_snapshot_geo(geo), observed_at=observed,
+                confidence=capped_conf, status="stale")
+        except Exception:  # noqa: BLE001 — تشخيص لا شرط تنفيذ
+            pass
         return DataPoint(
-            row["value"], "Google Trends",
-            min(0.5, float(row["confidence"] or 0.5)),
+            row["value"], "Google Trends", capped_conf,
             f"لقطة مخزَّنة (اهتمام بحث سابق) — تعذّر التحديث الحيّ؛ رُصدت في "
             f"{observed} (من المخزن، لا قيمة حيّة)", observed, status="stale")
     # لا لقطة — تبقى الفجوة المعلنة (value=None) كما هي، لا اختلاق.

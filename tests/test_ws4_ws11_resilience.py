@@ -188,6 +188,23 @@ def test_trends_resilient_serves_stored_snapshot_when_live_fails():
         assert "من المخزن" in dp.note      # مصرَّحٌ أنها مخزَّنة لا حيّة
 
 
+def test_trends_stale_snapshot_surfaces_date_and_conf_in_trace(tmp_path):
+    # حارس المالك ٢: تاريخ اللقطة + الثقة المسقوفة يظهران في تتبّع التشغيلة.
+    import silk_trends_agent as ta
+    import silk_trace
+    with _tmp_store() as store:
+        store.upsert_indicator(ta._snapshot_geo("NL"),
+                               ta._snapshot_indicator("peanut butter"),
+                               2026, 63.0, "Google Trends", 0.7, "prior")
+        with silk_trace.trace_context("ws11trace", dir_path=str(tmp_path)):
+            with block_network():
+                ta.trends_interest_resilient("peanut butter", "NL")
+    ev = [e for e in silk_trace.read_trace("ws11trace", dir_path=str(tmp_path))
+          if e.get("event") == "trends_snapshot_served"]
+    assert ev and ev[0]["status"] == "stale"
+    assert ev[0]["observed_at"] and ev[0]["confidence"] <= 0.5
+
+
 def test_trends_resilient_declares_gap_when_no_snapshot():
     import silk_trends_agent as ta
     with _tmp_store():
