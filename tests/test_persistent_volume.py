@@ -204,7 +204,8 @@ def _reload_api_under(env_overrides: dict):
     يوجَّه التخزين لمسار مؤقّت افتراضاً كي لا يكتب في مجلد المستودع."""
     import contextlib
     import importlib
-    keys = ("SILK_REQUIRE_PERSISTENT_DATA_DIR", "SILK_DATA_DIR", "SILK_DB",
+    keys = ("SILK_REQUIRE_PERSISTENT_DATA_DIR", "SILK_ALLOW_NONMOUNT_PERSIST",
+            "SILK_DATA_DIR", "SILK_DB",
             "VOLZA_API_KEY", "ANTHROPIC_API_KEY", "EXPLEE_API_KEY",
             "LOCALPRICE_API_KEY")
     saved = {k: os.environ.get(k) for k in keys}
@@ -242,21 +243,55 @@ def test_create_app_refuses_ephemeral_storage_when_require_flag_set():
 
 
 def test_create_app_boots_when_require_flag_set_and_data_dir_present(tmp_path):
-    """المصيدة مضبوطة مع SILK_DATA_DIR موجَّه => إقلاع سليم، لا رفض."""
+    """المصيدة مضبوطة مع SILK_DATA_DIR موجَّه لوحدة **مركّبة فعلًا** => إقلاع
+    سليم. نحاكي وحدة تخزين حقيقية بـ ismount=True (tmp_path ليس نقطة تركيب)."""
     import pytest
+    from unittest.mock import patch
     pytest.importorskip("fastapi")
-    mod, msg = _reload_api_under({"SILK_REQUIRE_PERSISTENT_DATA_DIR": "1",
-                                  "SILK_DATA_DIR": str(tmp_path)})
+    with patch("os.path.ismount", return_value=True):
+        mod, msg = _reload_api_under({"SILK_REQUIRE_PERSISTENT_DATA_DIR": "1",
+                                      "SILK_DATA_DIR": str(tmp_path)})
     assert msg is None and mod is not None and mod.app is not None
 
 
 def test_create_app_boots_when_require_flag_set_and_explicit_silk_db(tmp_path):
-    """SILK_DB الصريح وحده يكفي المصيدة (نفس تتالي _db_path) — لا رفض."""
+    """SILK_DB الصريح وحده يكفي المصيدة (نفس تتالي _db_path) — لا رفض حين
+    مجلّده وحدة مركّبة."""
     import pytest
+    from unittest.mock import patch
     pytest.importorskip("fastapi")
-    mod, msg = _reload_api_under({
-        "SILK_REQUIRE_PERSISTENT_DATA_DIR": "1",
-        "SILK_DB": str(tmp_path / "silk.db")})
+    with patch("os.path.ismount", return_value=True):
+        mod, msg = _reload_api_under({
+            "SILK_REQUIRE_PERSISTENT_DATA_DIR": "1",
+            "SILK_DB": str(tmp_path / "silk.db")})
+    assert msg is None and mod is not None
+
+
+def test_create_app_refuses_when_data_dir_set_but_not_a_real_mount(tmp_path):
+    """تقوية (بلاغ المالك): SILK_DATA_DIR مضبوط لكن **لا وحدة مركّبة** على
+    مساره (ismount=False طوال الصعود => جذر الحاوية الفاني) => رفض إقلاع
+    بصوت عالٍ. هذا بالضبط السيناريو الذي كان يمسح الدراسات المدفوعة بصمت."""
+    import pytest
+    from unittest.mock import patch
+    pytest.importorskip("fastapi")
+    with patch("os.path.ismount", return_value=False):
+        mod, msg = _reload_api_under({"SILK_REQUIRE_PERSISTENT_DATA_DIR": "1",
+                                      "SILK_DATA_DIR": str(tmp_path)})
+    assert mod is None and msg is not None
+    assert "وحدة تخزين مركّبة" in msg and str(tmp_path) in msg
+
+
+def test_create_app_boots_nonmount_when_escape_hatch_set(tmp_path):
+    """المخرج الصريح SILK_ALLOW_NONMOUNT_PERSIST=1 (مضيفٌ قرصه الجذري دائم)
+    => يقلع رغم أن المسار ليس نقطة تركيب منفصلة. قرار مشغّل صريح لا صمت."""
+    import pytest
+    from unittest.mock import patch
+    pytest.importorskip("fastapi")
+    with patch("os.path.ismount", return_value=False):
+        mod, msg = _reload_api_under({
+            "SILK_REQUIRE_PERSISTENT_DATA_DIR": "1",
+            "SILK_ALLOW_NONMOUNT_PERSIST": "1",
+            "SILK_DATA_DIR": str(tmp_path)})
     assert msg is None and mod is not None
 
 
@@ -267,3 +302,50 @@ def test_create_app_boots_by_default_without_require_flag_even_with_paid_key():
     pytest.importorskip("fastapi")
     mod, msg = _reload_api_under({"VOLZA_API_KEY": "paid-key-present"})
     assert msg is None and mod is not None
+
+
+# ── وحدة: persistence_status (تمييز «مضبوط» عن «مركّب فعلًا») ────────────────
+
+def test_persistence_status_unconfigured(monkeypatch):
+    """بلا أي متغيّر تخزين => configured=False وكل الحقول محايدة."""
+    for var in ("SILK_DATA_DIR", "SILK_DB"):
+        monkeypatch.delenv(var, raising=False)
+    st = silk_storage.persistence_status()
+    assert st["configured"] is False
+    assert st["is_mount"] is False and st["path"] is None
+
+
+def test_persistence_status_configured_real_mount(monkeypatch, tmp_path):
+    """SILK_DATA_DIR على وحدة مركّبة (ismount=True) + قابل للكتابة =>
+    is_mount=True و writable=True والمسار هو نقطة التركيب."""
+    from unittest.mock import patch
+    monkeypatch.delenv("SILK_DB", raising=False)
+    monkeypatch.setenv("SILK_DATA_DIR", str(tmp_path))
+    with patch("os.path.ismount", return_value=True):
+        st = silk_storage.persistence_status()
+    assert st["configured"] and st["is_mount"] and st["writable"]
+    assert st["path"] == str(tmp_path)
+
+
+def test_persistence_status_configured_but_not_mounted(monkeypatch, tmp_path):
+    """SILK_DATA_DIR مضبوط لكن بلا وحدة مركّبة (ismount=False) => is_mount=False
+    رغم configured=True — هذا هو الفخّ الذي يمسح الدراسات بصمت."""
+    from unittest.mock import patch
+    monkeypatch.delenv("SILK_DB", raising=False)
+    monkeypatch.setenv("SILK_DATA_DIR", str(tmp_path))
+    with patch("os.path.ismount", return_value=False):
+        st = silk_storage.persistence_status()
+    assert st["configured"] is True and st["is_mount"] is False
+    # قابل للكتابة يبقى صحيحًا (المجلّد المؤقّت يُكتب) — الفخّ ليس الكتابة بل
+    # فناء القرص عند إعادة النشر؛ لذا is_mount هو الكاشف الوحيد.
+    assert st["writable"] is True
+
+
+def test_persistence_status_unwritable_path(monkeypatch, tmp_path):
+    """مسار غير قابل للكتابة (فشل المجسّ) => writable=False بلا استثناء."""
+    from unittest.mock import patch
+    monkeypatch.delenv("SILK_DB", raising=False)
+    monkeypatch.setenv("SILK_DATA_DIR", str(tmp_path))
+    with patch("tempfile.mkstemp", side_effect=OSError("read-only fs")):
+        st = silk_storage.persistence_status()
+    assert st["configured"] is True and st["writable"] is False

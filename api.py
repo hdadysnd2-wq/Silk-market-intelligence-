@@ -160,19 +160,41 @@ def create_app():
     # بصمت. مطفأة افتراضياً — نفس عقد المشروع «غير مضبوط = وضع تطوير مفتوح»
     # (كـSILK_API_KEY/SILK_PAID_DAILY_CAP)، فالمجموعة الهرمتية والتطوير بلا
     # مفاتيح لا يتأثران؛ تحذير /health الدائم يبقى قائماً في كلتا الحالتين.
+    #
+    # تقوية (بلاغ المالك الحيّ — «الدراسة تروح بعد كل دبلوي رغم ضبط المتغيّر»):
+    # الفحص القديم اكتفى بأن المتغيّر **غير فارغ**، فمرّ سيناريو `SILK_DATA_DIR`
+    # مضبوط بلا وحدة تخزين مركّبة على مساره فعلًا — الكتابة تذهب لجذر الحاوية
+    # الفاني والحارس نائم. الآن نتحقّق من الحالة الفعلية: مركَّب (is_mount) +
+    # قابل للكتابة (writable). المخرج الوحيد لغير-المركَّب هو SILK_ALLOW_NONMOUNT_
+    # PERSIST=1 (لمضيفٍ قرصه الجذري دائم أصلًا) — قرار مشغّل صريح لا صمت.
     _require_persist = os.environ.get(
         "SILK_REQUIRE_PERSISTENT_DATA_DIR", "").strip().lower() \
         in ("1", "true", "yes", "on")
-    _persist_configured = bool(
-        os.environ.get("SILK_DATA_DIR", "").strip()
-        or os.environ.get("SILK_DB", "").strip())
-    if _require_persist and not _persist_configured:
-        raise RuntimeError(
-            "SILK_REQUIRE_PERSISTENT_DATA_DIR مضبوط لكن لا SILK_DATA_DIR ولا "
-            "SILK_DB موجَّه إلى تخزين دائم — الحاوية ستفقد كل التحليلات "
-            "(والمخزن/الاستخدام/الذاكرة المؤقتة) عند إعادة النشر التالية. "
-            "اضبط SILK_DATA_DIR=/data (وحدة تخزين Railway) قبل الإقلاع، أو "
-            "أزِل SILK_REQUIRE_PERSISTENT_DATA_DIR إن كان التخزين الفاني مقصوداً.")
+    if _require_persist:
+        _pst = silk_storage.persistence_status()
+        _allow_nonmount = os.environ.get(
+            "SILK_ALLOW_NONMOUNT_PERSIST", "").strip().lower() \
+            in ("1", "true", "yes", "on")
+        if not _pst["configured"]:
+            raise RuntimeError(
+                "SILK_REQUIRE_PERSISTENT_DATA_DIR مضبوط لكن لا SILK_DATA_DIR ولا "
+                "SILK_DB موجَّه إلى تخزين دائم — الحاوية ستفقد كل التحليلات "
+                "(والمخزن/الاستخدام/الذاكرة المؤقتة) عند إعادة النشر التالية. "
+                "اضبط SILK_DATA_DIR=/data (وحدة تخزين Railway) قبل الإقلاع، أو "
+                "أزِل SILK_REQUIRE_PERSISTENT_DATA_DIR إن كان التخزين الفاني مقصوداً.")
+        if not _pst["writable"]:
+            raise RuntimeError(
+                "SILK_REQUIRE_PERSISTENT_DATA_DIR مضبوط لكن مسار التخزين "
+                f"'{_pst['path']}' غير قابل للكتابة — تعذّر إنشاء ملف مجسّ فيه. "
+                "تأكّد أن وحدة التخزين مركّبة وصلاحياتها صحيحة قبل الإقلاع.")
+        if not _pst["is_mount"] and not _allow_nonmount:
+            raise RuntimeError(
+                "SILK_REQUIRE_PERSISTENT_DATA_DIR مضبوط لكن مسار التخزين "
+                f"'{_pst['path']}' ليس وحدة تخزين مركّبة (أقرب نقطة تركيب = "
+                f"'{_pst['mountpoint']}' = جذر الحاوية الفاني) — بياناتك ستُمحى "
+                "عند إعادة النشر رغم ضبط المتغيّر. تأكّد أن Mount Path لوحدة "
+                "Railway يساوي SILK_DATA_DIR تمامًا، أو اضبط "
+                "SILK_ALLOW_NONMOUNT_PERSIST=1 إن كان القرص الجذري للمضيف دائمًا.")
 
     # حاصد التشغيلات اليتيمة عند الإقلاع — إعادة النشر تقتل عمليةً منتصف
     # تشغيلة /research، فيبقى صفّها 'running' أبداً وحجزُ الدولار المسبق بلا
@@ -389,6 +411,7 @@ def create_app():
             import silk_store as _fact_store
             import silk_usage as _usage
             _base = os.environ.get("SILK_DATA_DIR", "").strip()
+            _pstatus = silk_storage.persistence_status()
             health["storage"] = {
                 "data_dir": _base or None,
                 "analyses_db": silk_storage._db_path(),
@@ -401,6 +424,12 @@ def create_app():
                 "persist_guard": os.environ.get(
                     "SILK_REQUIRE_PERSISTENT_DATA_DIR", "").strip().lower()
                     in ("1", "true", "yes", "on"),
+                # بلاغ المالك الحيّ: «المتغيّر مضبوط» لا يكفي — نكشف الحالة
+                # الفعلية (قرص مركّب + قابل للكتابة) كي يرى المالك عن بُعد إن
+                # كانت وحدة التخزين مركّبة حقًّا على مسار SILK_DATA_DIR.
+                "is_mount": _pstatus["is_mount"],
+                "writable": _pstatus["writable"],
+                "mountpoint": _pstatus["mountpoint"],
             }
             # بلاغ حي (تدقيق تكلفة): تحليلات مكتملة مدفوعة الثمن كانت تختفي
             # بعد كل إعادة نشر — SILK_DATA_DIR فارغ يعني كل الأربعة مخازن
@@ -414,6 +443,15 @@ def create_app():
                     "حاوية Railway الفانية؛ كل التحليلات (والمخزن/الاستخدام/"
                     "الذاكرة المؤقتة) ستُفقَد عند إعادة النشر التالية ما لم "
                     "تُركَّب وحدة تخزين (Volume) وتُوجَّه إليها هذا المتغيّر")
+            # بلاغ المالك الحيّ: المتغيّر مضبوط لكن لا وحدة مركّبة على مساره —
+            # الكتابة على جذر الحاوية الفاني فتُمحى عند كل دبلوي رغم ضبط
+            # المتغيّر. تحذير صريح حتى دون تفعيل مصيدة الإقلاع.
+            elif _pstatus["configured"] and not _pstatus["is_mount"]:
+                _warnings.append(
+                    f"مسار التخزين '{_pstatus['path']}' مضبوط لكن ليس وحدة "
+                    f"تخزين مركّبة (أقرب نقطة تركيب '{_pstatus['mountpoint']}' = "
+                    "جذر الحاوية الفاني) — كل البيانات ستُمحى عند إعادة النشر. "
+                    "اجعل Mount Path لوحدة Railway يساوي هذا المسار تمامًا")
         except Exception as _e:  # noqa: BLE001 — تشخيص لا شرط
             log.debug("storage health section skipped: %s", _e)
         # اللائحة ٤٣ (بلاغ حي متكرّر — رمز HS خاطئ رغم إصلاح المُصنِّف العام):
