@@ -45,12 +45,13 @@ def test_pricing_scout_label_is_business_idiom_not_calque():
     assert "كومتريد" not in ins
 
 
-def test_writer_prompt_competing_table_uses_documentation_level_column():
-    """عمود الدليل في جدول المنتجات المنافسة صار «مستوى التوثيق»، والسعر
-    يُوصَف «محسوباً بسعر الكيلوغرام … للمقارنة العادلة» لا «مطبَّعاً»."""
+def test_writer_prompt_competing_table_has_no_documentation_level_column():
+    """WS10 (قرار المالك): عمود «مستوى التوثيق» أُزيل من جدول المنتجات المنافسة
+    (لا عمود إسناد في المتن)، والسعر يبقى «محسوباً بسعر الكيلوغرام … للمقارنة
+    العادلة» لا «مطبَّعاً»."""
     import silk_ai_judge as J
     src = inspect.getsource(J.deep_report)
-    assert "مستوى التوثيق" in src
+    assert "مستوى التوثيق" not in src
     assert "بسعر الكيلوغرام" in src and "للمقارنة العادلة" in src
     # لا كلمة هندسية «مطبَّع» في عقد الكاتب (تُطبَّع لغوياً لا رقمياً).
     assert "مُطبَّع" not in src and "مطبَّع" not in src
