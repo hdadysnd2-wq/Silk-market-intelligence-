@@ -17,8 +17,12 @@
 بها الوكيل من الأداة (التعليمات تُلزمه بذكرها كما وردت). تحسين لاحق طبيعي:
 حفظ السجل الخام نفسه لكل بعثة لفحصٍ أدق — غير مطبَّق هنا (نطاق الموجة ٥).
 
-الحالات الذهبية (`evals/golden_cases.json`) تبدأ **فارغة عمداً**: بناء
-حالة ذهبية حقيقية يتطلب أرقاماً مُتحقَّقة يدوياً من مصدر رسمي حيّ
+الحالات الذهبية (`evals/golden_cases.json`) — WS10 أغلق الفجوة النظامية:
+الملف يحمل حالةً قياسية **بنيوية** (قطر × HS 200811) تعمل هرمتياً في CI
+بلا مفتاح (أقسام/نظافة متن/سلامة مراجع/سقف فجوات)، **بلا `expected`
+مُختلَق**. حقل `expected` (رقم محقَّق يدوياً بمصدرٍ حي) يبقى اختيارياً
+يُملأ في بيئةٍ بمفتاح — وبقيّة هذا الشرح للجزء الحيّ:
+حالةٌ رقمية حقيقية تتطلب أرقاماً مُتحقَّقة يدوياً من مصدر رسمي حيّ
 (مثال: Comtrade مباشرة) — هذه البيئة بلا مفتاح Anthropic وبلا وصول شبكي
 لمصادر البيانات (Comtrade/WorldBank/GDELT/WITS)، فإضافة حالة الآن تعني
 إما اختلاق أرقام أو ترك الحقول فارغة زوراً بمظهر التحقق. البنية والمخطط
@@ -274,8 +278,15 @@ def evaluate_report(result: dict) -> dict | None:
 
 # ── الحالات الذهبية · golden cases ───────────────────────────────────────────
 
-_REQUIRED_CASE_FIELDS = ("key", "product", "market", "hs_code", "expected",
+# الحقول الإلزامية — `expected` (أرقام مُتحقَّقة يدوياً) صار **اختيارياً**: حالةٌ
+# ذهبية بنيوية (أقسام/نظافة متن/سلامة مراجع/سقف فجوات) لا تتطلّب رقماً محقَّقاً
+# حياً (لا يمكن التحقّق منه في بيئةٍ بلا شبكة — لا اختلاق). كل حالة تحمل إمّا
+# `expected` (أرقام) أو `structural` (بوّابة بنيوية) أو كليهما.
+_REQUIRED_CASE_FIELDS = ("key", "product", "market", "hs_code",
                          "verified_at", "verified_by")
+
+_STRUCTURAL_KEYS = ("required_sections", "clean_body", "references_integrity",
+                    "gap_rate_max")
 
 
 def validate_case(case: dict) -> list[str]:
@@ -295,6 +306,25 @@ def validate_case(case: dict) -> list[str]:
                 errors.append(f"expected.{k} missing value/source_url")
     elif "expected" in case:
         errors.append("expected must be an object")
+    struct = case.get("structural")
+    if struct is not None:
+        if not isinstance(struct, dict):
+            errors.append("structural must be an object")
+        else:
+            rs = struct.get("required_sections")
+            if rs is not None and not (isinstance(rs, list)
+                                       and all(isinstance(s, str) for s in rs)):
+                errors.append("structural.required_sections must be a list of strings")
+            gm = struct.get("gap_rate_max")
+            if gm is not None and not (isinstance(gm, (int, float))
+                                       and 0.0 <= float(gm) <= 1.0):
+                errors.append("structural.gap_rate_max must be a number in [0,1]")
+            for b in ("clean_body", "references_integrity"):
+                if b in struct and not isinstance(struct[b], bool):
+                    errors.append(f"structural.{b} must be a boolean")
+    # حالةٌ بلا `expected` **ولا** `structural` = بلا معيار قبول (مرفوضة).
+    if "expected" not in case and struct is None:
+        errors.append("case must declare 'expected' and/or 'structural'")
     return errors
 
 
@@ -379,11 +409,130 @@ def run_case(case: dict) -> dict:
                             "verdict": verdict, "report": report_out}}
 
 
+# ── البوّابة البنيوية (WS10) — هرمتية بالكامل، صفر مفتاح، صفر تكلفة ───────────
+# تُشغَّل على **نتيجةٍ مُولَّدة** (حيّة في بيئةٍ بمفتاح، أو مموّهة في CI): حضور
+# الأقسام، نظافة المتن (لا شارات/أعمدة إسناد)، سلامة المراجع (WS9)، وسقف نسبة
+# الفجوات. لا تستدعي أيّ نموذج — تفحص بنية التقرير المُصيَّر وحقائق البعثات.
+
+_FORBIDDEN_BODY_TOKENS = ("قوة الدليل", "مستوى التوثيق", "✓ موثّق",
+                          "◐ ثانوي", "○ غير", "✓", "◐", "○")
+
+
+def _rendered_client_body(result: dict):
+    """(نصّ متن تقرير العميل، ترويسات الجداول) — hermetic، عبر render_client_docx.
+
+    يُصيَّر المستند الفعلي ويُستخرَج نصّه (فقرات + خلايا) كي تفحص البوّابة ما
+    يراه العميل حقيقةً لا مسوّدة الكاتب الخام. يتطلّب python-docx (مثبّت في
+    الاختبارات والبيئة المفتاحية)."""
+    import os
+    import tempfile
+    import silk_render
+    import silk_reports
+    from docx import Document
+    view = silk_render.build_view(result)
+    path = os.path.join(tempfile.mkdtemp(), "eval_client.docx")
+    silk_reports.render_client_docx(view, path)
+    doc = Document(path)
+    parts = [p.text for p in doc.paragraphs]
+    headers: list[str] = []
+    for t in doc.tables:
+        if t.rows:
+            headers += [c.text for c in t.rows[0].cells]
+        for row in t.rows:
+            parts += [c.text for c in row.cells]
+    return "\n".join(parts), headers
+
+
+def gap_rate(result: dict) -> tuple:
+    """(نسبة الفجوات، عدد الفجوات، الإجمالي) — نتيجةٌ بلا قيمة (None) أو
+    `status=fetch_failed` = فجوة معلنة؛ النسبة = الفجوات ÷ إجمالي نتائج البعثات."""
+    missions = (result.get("deep_research") or {}).get("missions") or {}
+    total = gaps = 0
+    for m in missions.values():
+        if not isinstance(m, dict):
+            continue
+        for f in (m.get("findings") or []):
+            if not isinstance(f, dict):
+                continue
+            total += 1
+            if f.get("value") is None or f.get("status") == "fetch_failed":
+                gaps += 1
+    return ((gaps / total) if total else 0.0), gaps, total
+
+
+def structural_checks(result: dict, case: dict) -> dict:
+    """بوّابة بنيوية هرمتية — {passed, checks, failures}. لا نموذج، لا مفتاح."""
+    struct = case.get("structural") or {}
+    text, headers = _rendered_client_body(result)
+    checks: dict = {}
+    failures: list[str] = []
+
+    req = struct.get("required_sections") or []
+    missing = [s for s in req if s not in text]
+    checks["required_sections"] = {"missing": missing, "passed": not missing}
+    if missing:
+        failures.append(f"أقسام مطلوبة مفقودة: {missing}")
+
+    if struct.get("clean_body"):
+        hits = sorted({tok for tok in _FORBIDDEN_BODY_TOKENS if tok in text})
+        if "المصدر" in headers:
+            hits.append("عمود «المصدر» لكل صف")
+        if "قوة الدليل" in headers:
+            hits.append("عمود «قوة الدليل»")
+        checks["clean_body"] = {"hits": hits, "passed": not hits}
+        if hits:
+            failures.append(f"شارات/أعمدة إسناد في المتن: {hits}")
+
+    if struct.get("references_integrity"):
+        ok, detail = _references_integrity(result, text)
+        checks["references_integrity"] = {"passed": ok, "detail": detail}
+        if not ok:
+            failures.append(f"سلامة المراجع (WS9): {detail}")
+
+    if "gap_rate_max" in struct:
+        rate, g, tot = gap_rate(result)
+        passed = rate <= float(struct["gap_rate_max"])
+        checks["gap_rate"] = {"rate": round(rate, 3), "gaps": g, "total": tot,
+                              "max": struct["gap_rate_max"], "passed": passed}
+        if not passed:
+            failures.append(
+                f"نسبة الفجوات {rate:.1%} تتجاوز السقف "
+                f"{float(struct['gap_rate_max']):.0%}")
+
+    return {"passed": not failures, "checks": checks, "failures": failures}
+
+
+def _references_integrity(result: dict, body_text: str) -> tuple:
+    """WS9 — قسم المراجع حاضر وغير فارغ حين توجد نتائج قابلة للاستشهاد، وبلا
+    مصدرٍ نائبٍ عام («Web Search»/«مرجع سلك»/«Silk L1»). لا يُكرِّر بناء الاتحاد
+    (يفعله `_client_references_section` أصلاً) — يتحقّق من المخرَج."""
+    missions = (result.get("deep_research") or {}).get("missions") or {}
+    has_citable = any(
+        isinstance(f, dict) and f.get("value") is not None
+        for m in missions.values() if isinstance(m, dict)
+        for f in (m.get("findings") or []))
+    if "المراجع" not in body_text:
+        if has_citable:
+            return False, "قسم «المراجع» غائب رغم وجود نتائج قابلة للاستشهاد"
+        return True, "لا نتائج قابلة للاستشهاد ⇒ لا قسم مراجع (سليم)"
+    for placeholder in ("Web Search", "مرجع سلك", "Silk L1 reference",
+                        "Silk requirements"):
+        if placeholder in body_text:
+            return False, f"مصدرٌ نائبٌ عامٌّ في المراجع: {placeholder!r}"
+    return True, "قسم المراجع حاضر بمصادر مسمّاة بلا نائب"
+
+
+def _has_key() -> bool:
+    """هل يتوفّر مفتاح Anthropic لتشغيل الجزء الحيّ؟"""
+    return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO)
     ap = argparse.ArgumentParser(
-        description="أعد تشغيل حالة ذهبية وقارن النتيجة بالسجل السابق — "
-                    "يتطلب شبكة ومفتاح Anthropic؛ لا يعمل في CI.")
+        description="أعد تشغيل حالة ذهبية: بوّابة بنيوية هرمتية + تقييمُ حَكَمٍ "
+                    "حيّ. الجزء الحيّ يتطلب شبكة ومفتاح Anthropic — يتخطّى "
+                    "بسببٍ معلن (لا يفشل) حين لا مفتاح، فيبقى مخرَج CI نظيفاً.")
     ap.add_argument("--case", required=True, help="مفتاح الحالة (key)")
     args = ap.parse_args(argv)
 
@@ -394,19 +543,38 @@ def main(argv: list[str] | None = None) -> int:
                   sorted(cases) or "none — evals/golden_cases.json فارغ حالياً")
         return 1
 
+    # تخطٍّ صريحٌ بسبب (لا فشل) حين لا مفتاح — الجزء الحيّ (بعثات+محلل+كاتب)
+    # يحتاج شبكةً ومفتاحاً؛ فبيئةُ CI/الصندوق تبقى إشارتُها نظيفة.
+    if not _has_key():
+        print(json.dumps({
+            "case": args.case, "skipped": True,
+            "reason": "ANTHROPIC_API_KEY غير مضبوط — الجزء الحيّ (run_case + "
+                      "تقييم الحَكَم) يتطلّب مفتاحاً وشبكة. البوّابة البنيوية "
+                      "الهرمتية تُشغَّل في CI عبر tests/test_ws10_golden_case.py.",
+            "how_to_run_live": f"ANTHROPIC_API_KEY=<key> python3 silk_evals.py "
+                               f"--case {args.case}",
+        }, ensure_ascii=False, indent=2))
+        return 0
+
     result = run_case(case)
     evaluation = evaluate_report(result)
+    structural = structural_checks(result, case)
     overall = (evaluation or {}).get("overall")
     scores = load_scores()
     cmp = compare_to_last_score(args.case, overall, scores)
     print(json.dumps({"case": args.case, "evaluation": evaluation,
-                      "comparison": cmp}, ensure_ascii=False, indent=2))
+                      "structural": structural, "comparison": cmp},
+                     ensure_ascii=False, indent=2))
     if overall is not None:
         scores[args.case] = overall
         save_scores(scores)
     if cmp["regression"]:
         log.error("quality regression on %s: %s -> %s (drop %.1f)",
                  args.case, cmp["previous"], cmp["new"], cmp["drop"])
+        return 1
+    if not structural["passed"]:
+        log.error("structural gate failed on %s: %s",
+                 args.case, structural["failures"])
         return 1
     return 0
 
