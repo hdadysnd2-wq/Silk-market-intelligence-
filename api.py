@@ -1130,6 +1130,10 @@ def create_app():
         # يتغيّر). غيابه => الافتراضي من البيئة `SILK_REPORT_STYLE`
         # (المضبوط "academic"). قيمة صريحة في الطلب تتقدّم على البيئة.
         report_style: str | None = None
+        # موافقةٌ صريحة على تحذير معقولية بلد المورّد (البند أ٢): حين يكشف
+        # الفحص الاقتصادي تفكّكًا شبه تامٍّ بين موردي السوق وأكبر مصدّري الرمز
+        # عالميًا => 422 استشاري حتى يؤكّد المستخدم الرمز أو يعيد تصنيفه.
+        a2_ack: bool = False
 
     def _default_report_style() -> str:
         """نمط الكتابة الافتراضي للتوليد — `SILK_REPORT_STYLE` (طلب المالك:
@@ -1679,6 +1683,24 @@ def create_app():
                 "detail_ar": ("من أكبر مصدّري هذا الرمز عالميًا — دخول تنافسي جدًّا"
                               if _is_top else "ليست من كبار المصدّرين"),
                 "blocking": False})
+        # (٣ب) معقولية بلد المورّد (البند أ٢) — إشارةٌ اقتصادية: هل ملفُّ موردي
+        # السوق يطابق الرمز؟ تفكّكٌ شبه تامٌّ => تحذيرٌ استشاري (لا حجب نهائي).
+        from silk_market_ranker import _a2_plausibility_enabled
+        if _a2_plausibility_enabled() and hs_code and len(iso3) == 3:
+            from silk_market_ranker import supplier_plausibility
+            _a2r = supplier_plausibility(
+                hs_code, iso3, getattr(market_ref, "m49", ""), year)
+            if _a2r is not None:
+                _bad = bool(_a2r.get("implausible"))
+                checks.append({
+                    "key": "supplier_plausibility",
+                    "label_ar": "معقولية بلد المورّد",
+                    "status": "advisory" if _bad else "ok",
+                    "detail_ar": (
+                        "موردو السوق الفعليون لا يطابقون أكبر مصدّري الرمز "
+                        "عالميًا — راجع التصنيف" if _bad
+                        else "ملفّ الموردين متّسقٌ مع مصدّري الرمز عالميًا"),
+                    "blocking": False})
         # (٤) أشقّاء عائلة A (Wave 1.5) — بلد المنشأ نفسه/عقوبات/فصل مقيَّد.
         import silk_prerun
         if silk_prerun.advisories_enabled() and len(iso3) == 3:
@@ -1978,6 +2000,52 @@ def create_app():
                     f"مصدّري HS {hs_code} عالميًا)",
                     context={"product": product,
                              "market_iso3": market_ref.iso3, "hs_code": hs_code})
+
+        # البند أ٢ — معقولية بلد المورّد (إشارةٌ اقتصاديةٌ مُعاضِدةٌ لتأكيد الرمز):
+        # تفكّكٌ شبه تامٌّ بين موردي السوق الفعليين وأكبر مصدّري الرمز عالميًا =>
+        # الرمز قد يصف عائلةً مختلفة (حادثة زبدة الفول السوداني/الألبان). تحذيرٌ
+        # حاجبٌ (422) حتى موافقةٍ صريحة (`a2_ack`) تؤكّد الرمز أو تعيد التصنيف —
+        # لا رفضٌ نهائي (قد يعرف المستخدم رمزه صحيح). صفر نداء مدفوع (كومتريد
+        # فقط بميزانيته). مُطفأ افتراضيًا (SILK_A2_PLAUSIBILITY) => السلوك كاليوم.
+        # يُتخطّى عند الاستئناف (وافق المستخدم وقت الإنشاء). المذكّرة:
+        # docs/DESIGN_A2_SUPPLIER_PLAUSIBILITY.md.
+        if req.resume is None and hs_code:
+            from silk_market_ranker import (_a2_plausibility_enabled,
+                                            supplier_plausibility)
+            if _a2_plausibility_enabled():
+                import datetime as _dt2
+                _a2 = supplier_plausibility(
+                    hs_code, market_ref.iso3, market_ref.m49,
+                    _dt2.date.today().year - 1)
+                if _a2 and _a2.get("implausible") and not req.a2_ack:
+                    import silk_ops_log
+                    silk_ops_log.record_error(
+                        "a2_plausibility_shown",
+                        f"معقولية بلد المورّد ({market_ref.iso3}): موردو السوق "
+                        f"{_a2['market_suppliers']} لا يظهرون بين أكبر مصدّري "
+                        f"HS {hs_code} عالميًا {_a2['world_exporters']}",
+                        context={"product": product,
+                                 "market_iso3": market_ref.iso3,
+                                 "hs_code": hs_code, "overlap": _a2["overlap"]})
+                    raise HTTPException(status_code=422, detail={
+                        "error": "supplier_plausibility_advisory",
+                        "message": "⚠ كبار موردي هذه السوق لهذا الرمز لا يظهرون "
+                                   "بين أكبر مصدّري الرمز عالميًا — قد يكون الرمز "
+                                   "يصف عائلة منتجٍ مختلفة. راجع التصنيف أو أكّد "
+                                   "الرمز للمتابعة.",
+                        "market_suppliers": _a2["market_suppliers"],
+                        "world_exporters": _a2["world_exporters"],
+                        "overlap": _a2["overlap"],
+                        "needs_ack": True})
+                if _a2 and _a2.get("implausible") and req.a2_ack:
+                    import silk_ops_log
+                    silk_ops_log.record_error(
+                        "a2_plausibility_consent",
+                        f"موافقةٌ صريحة على رمز HS {hs_code} رغم تحذير معقولية "
+                        f"بلد المورّد ({market_ref.iso3})",
+                        context={"product": product,
+                                 "market_iso3": market_ref.iso3,
+                                 "hs_code": hs_code})
 
         # أشقّاء عائلة «الدراسة بالاتجاه الخاطئ» (Wave 1.5، عائلة A): تصدير إلى
         # بلد المنشأ / سوق تحت عقوبات / فصل مقيَّد قانونيًا — config-driven، صفر

@@ -216,6 +216,90 @@ def is_top_world_exporter(hs_code, iso3: str, year: int,
     return iso3 in {t["iso3"] for t in top}, top
 
 
+# ═══ البند أ٢ — فحص معقولية بلد المورّد · A2 supplier-country plausibility ═══
+# إشارةٌ اقتصاديةٌ مُعاضِدةٌ لتأكيد رمز HS: بوّابات التأكيد القائمة نصّية فقط
+# (تداخل صفات المنتج مع وصف الرمز). لا شيء منها يقارن **موردي السوق الفعليين**
+# بما يجب أن يبدو عليه ملفُّ مصدّرٍ معقولٍ للرمز — فرمزٌ خاطئٌ لكنه نصّياً معقول
+# يعبرها. البند أ٢ يقارن مجموعتين كلتاهما من كومتريد حيّ (صفر نداء مدفوع، صفر
+# رمز دولة/HS مكتوب صلبًا): أكبر موردي السوق لهذا الرمز، وأكبر مصدّري الرمز
+# عالميًا. تفكّكٌ شبه تامٌّ بينهما = الرمز قد يصف عائلةً مختلفةً عمّا يُتاجَر
+# فعلاً تحته (حادثة زبدة الفول السوداني/الألبان: أيرلندا/نيوزيلندا تتصدّران
+# 040510 لا مصدّرو زبدة الفول السوداني). المذكّرة: docs/DESIGN_A2_SUPPLIER_PLAUSIBILITY.md.
+
+
+def _a2_plausibility_enabled() -> bool:
+    """صمّام البند أ٢ — `SILK_A2_PLAUSIBILITY=1` يفعّله (افتراضي مُطفأ =>
+    السلوك كاليوم). طرحٌ محافظٌ خلف صمّام حتى يعايره المالك حيًّا."""
+    return os.environ.get("SILK_A2_PLAUSIBILITY", "0").strip() == "1"
+
+
+def _a2_params() -> tuple[int, int, float]:
+    """عتبات البند أ٢ config-driven (لا رقم صلب في المنطق):
+    (أعلى M موردٍ للسوق، الحدّ الأدنى K للطرفين، أقصى تداخلٍ يُطلق التحذير)."""
+    def _int(name: str, default: int) -> int:
+        try:
+            return max(1, int(os.environ.get(name, str(default)) or default))
+        except ValueError:
+            return default
+    try:
+        maxov = float(os.environ.get("SILK_A2_MAX_OVERLAP", "0.0") or "0.0")
+    except ValueError:
+        maxov = 0.0
+    return (_int("SILK_A2_SUPPLIERS_TOPM", 5),
+            _int("SILK_A2_MIN_ENTRIES", 3), max(0.0, min(1.0, maxov)))
+
+
+def supplier_plausibility(hs_code, market_iso3: str, market_m49,
+                          year: int) -> dict | None:
+    """هل ملفُّ موردي السوق يطابق الرمز HS المحسوم؟ — A2 economic cross-check.
+
+    يعيد `{implausible, overlap, market_suppliers, world_exporters,
+    intersection}` أو `None` (صمت: بيانات غير كافية/تعذّر القياس — **فشلٌ آمن
+    مفتوح**، نظير `is_top_world_exporter`: لا تحذيرٌ كاذبٌ على قياسٍ متعذّر).
+
+    مجموعتان من كومتريد حيّ (صفر نداء مدفوع، صفر ISO/HS مكتوب صلبًا):
+    - **A** موردو السوق الفعليون: `market_imports(...).competitors` (أعلى M
+      بالقيمة، مرتَّبون تنازليًا أصلًا) → ISO3 عبر `M49_TO_ISO3`.
+    - **B** أكبر مصدّري الرمز عالميًا: `top_world_exporters` (نفس N استشارة
+      بلد المنشأ). عتبةُ بياناتٍ كافية: كلا الطرفين ≥ K وإلا صمت.
+
+    `implausible=True` فقط عند `overlap ≤ SILK_A2_MAX_OVERLAP` (افتراضًا 0.0:
+    **تفكّكٌ تامٌّ** — صفرٌ من كبار موردي السوق بين أكبر مصدّري الرمز عالميًا).
+    """
+    hs = "".join(ch for ch in str(hs_code or "") if ch.isdigit())
+    iso3 = (market_iso3 or "").strip().upper()
+    if not hs or len(iso3) != 3:
+        return None
+    topm, mink, maxov = _a2_params()
+    try:
+        from silk_data_layer import M49_TO_ISO3
+        from silk_data_layer_v2 import market_imports
+        mi = market_imports(hs, market_m49, year) or {}
+        suppliers: list[str] = []
+        for dp in (mi.get("competitors") or []):
+            v = getattr(dp, "value", None) or {}
+            i3 = M49_TO_ISO3.get(str(v.get("code") or ""), "")
+            if len(i3) == 3 and i3 not in suppliers:
+                suppliers.append(i3)
+            if len(suppliers) >= topm:
+                break
+        world = [t["iso3"] for t in
+                 top_world_exporters(hs, year, _producer_advisory_topn())]
+    except Exception as e:  # noqa: BLE001 — عطل قياس لا يُطلق تحذيرًا كاذبًا
+        log.warning("A2 supplier plausibility probe failed: %s", e)
+        return None
+    # عتبة بياناتٍ كافية (المذكّرة §٣٫٢): طرفٌ هزيلٌ => صمت لا تحذيرٌ هشّ.
+    if len(suppliers) < mink or len(world) < mink:
+        return None
+    wset = set(world)
+    inter = [i for i in suppliers if i in wset]
+    denom = min(len(suppliers), len(world))
+    overlap = round(len(inter) / denom, 2) if denom else 1.0
+    return {"implausible": overlap <= maxov, "overlap": overlap,
+            "market_suppliers": suppliers, "world_exporters": world,
+            "intersection": inter}
+
+
 # ═══ تغطية العالم (SILK_WORLD_MARKETS) — two-tier world coverage ═══
 # الفئة-١: الأسواق المنسّقة (تسجيل محلّي كامل). الفئة-٢: بقية العالم، تُسجَّل
 # **حصراً** على بياناتٍ متاحةٍ عالمياً (إجمالي وارداتها من نداء العالم الواحد +
