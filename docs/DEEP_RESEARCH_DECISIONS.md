@@ -1775,3 +1775,61 @@ review**.
 **الأقفال:** `tests/test_llm_provider_retry.py` (+4: ConnectTimeout→نجاح،
 ConnectionError→نجاح، ReadTimeout **لا** يُعاد، ConnectTimeout دائم→استنفاد+نوع).
 تدفّق e2e-live-shape يغطّي زرّ اللوحة الجديد.
+
+
+## WS8 — سلسلة الأخبار المتدرّجة GDELT → Google News RSS → Serper (2026-07-23)
+
+**السياق:** أمر عمل واسع (WS1–WS11: «إزالة صنف الفجوات» + resilience البيانات).
+**تصنيف الدليل: static code review (file:line)** عبر مسح شامل للمستودع قابله
+الأمرُ بالحالة الفعلية، فتبيّن أن الغالبية العظمى منه **مُنفَّذةٌ أو مُقرَّرةٌ
+سلفاً** عبر موجاتٍ سابقة — إعادةُ بنائها تخالف «لا تُعِد فتح قرارٍ مستقر» (LAW).
+
+**ما هو قائمٌ فعلاً (لا يُلمَس — file:line):**
+- إعادة المحاولة/التراجع/jitter للموصّلات: `silk_data_layer._backoff_delay`
+  (:104)، `_http_get` (:117)؛ للنموذج: `silk_llm_provider._post` (:174).
+- كومتريد: تفصيل الشركاء بنداءٍ واحد (حذف `partnerCode`، :369)، إستراتيجية
+  المرآة `comtrade_trade_mirror_total` (:397) + مرايا v2.
+- سلسلة التعريفة WTO→WITS→GCC(CSV)→gap: `silk_tariffs_agent.tariff_with_fallback`
+  (:242) + مصفوفة الكتلة `_gcc_documented_exemption` (:61).
+- WGI مخزنٌ-أولاً: `silk_missions._wgi_governance_datapoints` (:440).
+- طبقة اللقطة/التخزين: `silk_store` + `silk_cache` + `silk_collectors`
+  (bulk `country=all`, مجدوِل `SILK_REFRESH_HOURS`, CLI `python -m silk_collectors`).
+- قسم المراجع من المصادر المُستعمَلة فعلاً + حارس النائب الداخلي:
+  `silk_reports._client_references_section` (:2518)/`_INTERNAL_SOURCE_LABEL_RE` (:2488).
+- عقد عدم الاختلاق مُنفَّذ هرمتياً في كل مسار (المبدأ التأسيسي).
+- خطأ «API failed 3 times ), , (» الوارد في الأمر: **غير موجود** — كل تسلسل
+  استثناء يستعمل `str(e)`/`type(e).__name__`, لا `exc.args` فارغة (تحقّق grep).
+
+**المُشحون في هذا الـPR (WS8 — الفجوة الحقيقية الوحيدة الإضافية غير المتعارضة):**
+سلسلةُ الأخبار كانت تِيرين مستقلّين (GDELT + Serper) بلا سُلَّم؛ فشلُ GDELT
+(429/حجب IP سحابي/لا نتيجة) يسقط مباشرةً إلى فجوة. الآن:
+1. `silk_google_news_agent.google_news_rss` — موصّل **مجاني بلا مفتاح** (RSS
+   من news.google.com، تفكيك XML بـstdlib)، بشكل `DataPoint` مطابق لـGDELT،
+   عقد عدم اختلاق كامل (شبكة/جسم-غير-XML/لا عناصر ⇒ `None` موسوم)، وإعلان
+   `record_service_failure("google_news", …)` على الفشل (عائلة C).
+2. `news_with_fallback` — سُلَّم **GDELT → Google News RSS → Serper**؛ يُرجِع أوّل
+   تِيرٍ يحمل عنواناً، والفجوة تُعلَن مرّةً واحدةً فقط بعد استنفاد السلسلة كاملةً
+   وتسمّي الروابط المُجرَّبة (قابلية تدقيق). موصولٌ في `silk_llm_runtime.
+   _tool_gdelt_news` مع gl/hl من مرجع locale.
+3. WS9 (سطر واحد): `SOURCE_PUBLIC_URL["google news"]` ⇒ الرابط الرسمي، فيحلّ
+   المصدرُ المسمّى في المراجع لا كنائبٍ عام.
+
+**الأقفال:** `tests/test_ws8_news_fallback_chain.py` (١٢ حالة: نجاح RSS، شبكة
+مقطوعة، جسم غير-XML، لا عناصر، ترتيب السُلَّم الأربع، استنفاد ⇒ فجوة واحدة تسمّي
+الروابط، نجاة السلسلة من تِيرٍ يرمي، رابط WS9). المجموعة الهرمتية كاملةً خضراء
+(1781 passed / 20 skipped).
+
+**دلو الصدق: «hermetic only».** لم تُشغَّل رُتبتا ٢–٣ ولا انحدار القبول الحيّ
+(Qatar×200811 / Netherlands) لأنّها تشغيلاتُ `/research` مدفوعة تحتاج إذنَ المالك
+الصريح (LAW: لا إنفاق مدفوع بلا موافقته). **ليست جاهزةً للمالك بنقرة** حتى تُستنفَد
+الرُتب على شكلٍ حقيقيّ.
+
+**مُؤجَّلٌ صراحةً (بسبب — لا فجوةٌ منسيّة):**
+- WS1 (enum ستّ رُتب على `DataPoint` + حقول tier/source_id/method) وWS10 (حذف
+  عمودَي «قوة الدليل»/«المصدر» من متن التقرير): **يعكسان قراراً منتَجياً
+  مستقرّاً تحرسه اختباراتٌ فاعلة** (`test_wp3_evidence_integrity`,
+  `test_academic_report_style`, `test_wave3_style_gate_tiers`) — تغييرٌ متنيٌّ
+  للعميل يحتاج قرارَ المالك، لا يُعاد فتحه من طرفٍ واحد (LAW).
+- WS11.1 (لقطة Trends احتياطية) وWS4 (مهلة لكل مصدر + قاطع دائرة عام + run
+  manifest): فجواتٌ إضافيةٌ حقيقيةٌ لكنّها خارج أضيق نطاقٍ آمن؛ عائلةُ resilience
+  نفسها، تُشحَن في PR تالٍ مستقلّ (انضباط موجة/PR).
