@@ -333,6 +333,17 @@ _TEST_ANCHORS = [
     (45, "tests/test_dza_quality_gate_fixes.py",
      ["def test_5b_price_fix_scoped_to_table_not_whole_document",
       "def test_5b_price_fix_still_fires_within_the_same_table_block"]),
+    # البند ٥٦ — بوّابة التغطية كانت تفشل مفتوحةً (تدقيق v2، الموجة ١): سُلَّم
+    # fallback + السنة المشتركة؛ الأقفال السلوكية + الحارس في السجل.
+    (56, "tests/test_out_of_coverage_guard.py",
+     ["def test_coverage_gate_closes_when_current_year_empty_but_study_year_full",
+      "def test_world_import_totals_resolved_ladders_to_first_nonempty_year"]),
+    (56, "tests/test_regression_registry.py",
+     ["def _guard_coverage_gate_year_fallback"]),
+    # البند ٥٧ — ست صيغ تشويش نفذت من المعقِّم (تسريبات المشرف): تطبيعٌ قبل
+    # المطابقة؛ الحارس السلوكي بالسلاسل الست الحرفية في السجل.
+    (57, "tests/test_regression_registry.py",
+     ["def _guard_sanitizer_obfuscation_variants"]),
 ]
 
 # حراس رمزية للبندين ١٢/١٣ (المصالحة + نقِّ-لا-ترفض) — وجود الدوال في المصدر.

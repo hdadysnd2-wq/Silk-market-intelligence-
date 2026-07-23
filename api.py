@@ -793,21 +793,23 @@ def create_app():
         رمز/ميزانية كومتريد منفدة/شبكة) => (True, False): نفتح البوّابة (يعمل
         كاليوم، فجوات معلنة) بدل حجب سوقٍ مشروع على عطلٍ عابر — فشلٌ آمن.
         """
-        from silk_market_ranker import (COUNTRIES, world_import_totals,
+        from silk_market_ranker import (COUNTRIES, world_import_totals_resolved,
                                         _TIER1_N, _TIER2_MAX)
         if iso3 in {c["iso3"] for c in COUNTRIES}:
             return True, True               # Tier-1 منسّقة — مغطّاة دائماً
         if not hs_code:
             return True, False              # لا رمز => لا يمكن حساب المجموعة
-        import datetime as _dt
-        year = _dt.date.today().year - 1
+        # تدقيق v2 (الموجة ١): استطلاع بسُلَّم fallback (سنة-١ → سنة-٢ → سنة-٣ →
+        # سنة الدراسة الافتراضية) بدل سنة اليوم-١ وحدها — كومتريد يتأخّر فكانت
+        # ٢٠٢٥ تعود فارغةً دوماً فتفشل البوّابة مفتوحةً (لا تُغلَق أبداً). الآن تشترك
+        # البوّابة والدراسة في **أساس مستوردين واحد** (نفس السُّلَّم، نفس السنة).
         try:
-            totals = world_import_totals(hs_code, year)
+            totals, _yr = world_import_totals_resolved(hs_code)
         except Exception as e:  # noqa: BLE001 — عطل قياس لا يحجب سوقاً
             log.warning("coverage probe failed: %s", e)
             totals = []
         if not totals:
-            return True, False              # تعذّر التحديد => فتح البوّابة
+            return True, False              # تعذّر التحديد => فتح البوّابة (آمن)
         covered = {t["iso3"] for t in totals[:_TIER1_N + _TIER2_MAX]}
         return iso3 in covered, True
 

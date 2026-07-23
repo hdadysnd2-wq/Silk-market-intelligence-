@@ -145,3 +145,53 @@ def test_undeterminable_coverage_fails_open(monkeypatch):
         del os.environ["SILK_WORLD_MARKETS"]
     finally:
         importlib.reload(__import__("api"))
+
+
+# ── تدقيق v2، الموجة ١ (HIGH #1/#2): البوّابة تُغلق فعلاً عبر سُلَّم fallback ──
+
+def test_world_import_totals_resolved_ladders_to_first_nonempty_year():
+    """المُحَلِّل يبدأ من سنة اليوم-١ ويتدرّج حتى أوّل سنةٍ غير فارغة (سنة الدراسة
+    الافتراضية) — لا يقف عند سنةٍ فارغة (الخلل الأصلي: استطلاعٌ لسنةٍ واحدة)."""
+    import datetime as _dt
+    from silk_market_ranker import DEFAULT_STUDY_YEAR
+    calls: list[int] = []
+
+    def _by_year(hs, year):
+        calls.append(year)
+        return _totals("USA", "DEU", "CHN") if year == DEFAULT_STUDY_YEAR else []
+
+    with mock.patch.object(R, "world_import_totals", side_effect=_by_year):
+        totals, yr = R.world_import_totals_resolved("080410")
+    assert yr == DEFAULT_STUDY_YEAR and totals, (yr, totals)
+    assert calls[0] == _dt.date.today().year - 1, "لم يبدأ من سنة اليوم-١"
+    assert DEFAULT_STUDY_YEAR in calls, "لم يتدرّج حتى سنة الدراسة"
+
+
+def test_coverage_gate_closes_when_current_year_empty_but_study_year_full():
+    """اللقطة الحرفية للخلل (HIGH #1): سنة اليوم-١ (٢٠٢٥) فارغة — كومتريد متأخّر —
+    بينما سنة الدراسة (٢٠٢٢) ممتلئة. قبل الإصلاح: البوّابة تستطلع ٢٠٢٥ وحدها،
+    تعود فارغة، فتفشل مفتوحةً (أيّ سوق يمرّ). بعده: السُّلَّم يتدرّج حتى ٢٠٢٢
+    فتُغلَق البوّابة فعلاً على سوقٍ خارج أكبر مئة مستورد (ABW) => ٤٢٢."""
+    from silk_market_ranker import DEFAULT_STUDY_YEAR
+    ops_db = os.path.join(tempfile.mkdtemp(), "ops.db")
+
+    def _by_year(hs, year):
+        # ٢٠٢٢ وحدها ممتلئة؛ ABW غائبة عنها => خارج التغطية.
+        return _totals("USA", "DEU", "CHN") if year == DEFAULT_STUDY_YEAR else []
+
+    with mock.patch.object(R, "world_import_totals", side_effect=_by_year):
+        client = _client(SILK_WORLD_MARKETS="1", SILK_API_KEY=None,
+                         SILK_OPS_LOG_DB=ops_db)
+        with mock.patch("requests.get",
+                        side_effect=OSError("net blocked for offline test")):
+            r = client.post("/research",
+                            json={"product": "تمر", "market": "Aruba",
+                                  "hs_code": "080410", "async_run": False,
+                                  "persist": False})
+    assert r.status_code == 422, r.text
+    d = r.json()["detail"]
+    assert d["error"] == "out_of_coverage" and d["message"] == _MSG
+    try:
+        del os.environ["SILK_WORLD_MARKETS"]; del os.environ["SILK_OPS_LOG_DB"]
+    finally:
+        importlib.reload(__import__("api"))
