@@ -1080,7 +1080,13 @@ function dlFail(r){return r.text().then(function(t){var d=null;try{d=JSON.parse(
 function dlBlob(url,accept,filename){return fetch(base()+url,{headers:Object.assign({Accept:accept},hdrs(false))})
   .then(function(r){if(!r.ok)return dlFail(r);return r.blob()})
   .then(function(b){var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)})}
+// البند #7 (تدقيق v2 الموجة ٢): أزرار التصدير لم تكن تُعطَّل أثناء الجلب —
+// نقرٌ مزدوج = طلبا report.pdf متزامنان، كلٌّ يُشغّل تحويل LibreOffice (soffice)
+// على الخادم مرّتين + تنزيلٌ مكرّر. صمّامٌ واحد يعطّل الثلاثة أثناء أيّ تصدير.
+function _expBusy(on){S.exportBusy=on;["#pdfBtn","#wordBtn","#mdBtn"].forEach(function(s){var b=$(s);if(b)b.disabled=on})}
 function dlReport(kind){var id=S.raw&&S.raw.analysis_id;if(id==null){toast("شغّل تحليلاً أولاً");return}
+  if(S.exportBusy){toast("تنزيلٌ جارٍ — انتظر اكتماله");return}   // منع النقر المزدوج
+  _expBusy(true);var _done=function(){_expBusy(false)};
   // PDF — المُسلَّم النهائي للعميل (§3، اتفاق المالك): غير قابل للتحرير.
   // 503 = محرّك التحويل (LibreOffice) غائب على الخادم — رسالة عربية صريحة
   // تقترح Word مؤقتاً، لا «HTTP 503» عارية (عائلة البلاغ المبتلَع، البند ٢/١١).
@@ -1090,11 +1096,11 @@ function dlReport(kind){var id=S.raw&&S.raw.analysis_id;if(id==null){toast("شغ
         var det=detailText(d,t);throw new Error("محرّك التحويل غير متاح — جرّب Word مؤقتاً"+(det?" ("+det.toString().slice(0,160)+")":""))});
       if(!r.ok)return dlFail(r);return r.blob()})
     .then(function(b){if(!b)return;var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="سِلك_تقرير_"+id+".pdf";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000)})
-    .catch(function(e){toast("فشل التنزيل: "+e.message)});return}
+    .catch(function(e){toast("فشل التنزيل: "+e.message)}).then(_done,_done);return}
   if(kind==="docx"){dlBlob("/analyses/"+id+"/report.docx","application/vnd.openxmlformats-officedocument.wordprocessingml.document","سِلك_تقرير_"+id+".docx")
-    .catch(function(e){toast("فشل التنزيل: "+e.message)});return}
+    .catch(function(e){toast("فشل التنزيل: "+e.message)}).then(_done,_done);return}
   fetch(base()+"/analyses/"+id+"/report.md",{headers:hdrs(false)}).then(function(r){if(!r.ok)return dlFail(r);return r.text()}).then(function(t){
-    var w=window.open("","_blank");if(!w)return;var pre=w.document.createElement("pre");pre.style.cssText="white-space:pre-wrap;font-family:monospace;padding:28px;max-width:900px;margin:0 auto";pre.textContent=t;w.document.body.appendChild(pre)}).catch(function(e){toast("فشل: "+e.message)})}
+    var w=window.open("","_blank");if(!w)return;var pre=w.document.createElement("pre");pre.style.cssText="white-space:pre-wrap;font-family:monospace;padding:28px;max-width:900px;margin:0 auto";pre.textContent=t;w.document.body.appendChild(pre)}).catch(function(e){toast("فشل: "+e.message)}).then(_done,_done)}
 $("#pdfBtn").addEventListener("click",function(){dlReport("pdf")});
 $("#wordBtn").addEventListener("click",function(){dlReport("docx")});
 $("#mdBtn").addEventListener("click",function(){dlReport("md")});

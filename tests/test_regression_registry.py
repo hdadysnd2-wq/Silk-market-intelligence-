@@ -1173,6 +1173,26 @@ def _guard_sanitizer_obfuscation_variants():
     assert "نداءات أدوات" not in _gen("الملخّص | نداءات أدوات: ٢")
 
 
+def _guard_wave2_med_hardening():
+    """LESSON ٥٩ — خمسة إصلاحات MED من تدقيق v2 (الموجة ٢). الحارس يؤكّد نقاط
+    الإنفاذ الخمس (قراءة مصدر) + وجود ملف الأقفال السلوكية."""
+    st = _read("silk_storage.py")
+    assert "def _reconcile_leaked_usd" in st, "#3 مُصالِح الحجز المتسرّب غائب"
+    assert "def reconcile_failed_run_usd" in st, "#3 مصالحة الفشل الرشيق غائبة"
+    assert "status = 'failed'" in st, "#3 المكنَس لا يمسح صفوف 'failed'"
+    api = _read("api.py")
+    assert api.count("reconcile_failed_run_usd(analysis_id)") >= 2, (
+        "#3 أحد مساري فشل /research لا يُصالِح")
+    assert "begin_data_counter()" in api and "record_usd" in api, "#6 قياس الرؤية غائب"
+    assert "البند #5" in api and "أداة اختبار المفاتيح قبل ضبط" in api, "#5 غير موثَّق"
+    assert 'SILK_GMAPS_ENRICH_GRACE_S", "25"' in api, "#4 المهلة الآمنة غائبة"
+    assert '"processing": processing' in api, "#4 علم processing غائب"
+    html = _read("web/index.html")
+    assert "function _expBusy(" in html and "if(S.exportBusy){" in html, (
+        "#7 صمّام تعطيل التصدير/حارس النقر المزدوج غائب")
+    assert _exists("tests/test_wave2_med_fixes.py"), "ملف أقفال الموجة ٢ مفقود"
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -1238,6 +1258,7 @@ _LESSONS = {
     58: _needles("CLAUDE.md", "/code-review",   # المراجعة الذاتية قبل فتح/وسم أي PR جاهزًا (Yemen stale-tag)
                  "self-review catches what hermetic tests structurally cannot"),
     55: _needles("tests/conftest.py", "def _hermetic_env_guard"),  # عزل SILK_HERMETIC لكل اختبار — لا تسرّب لافتة «نموذج توضيحي»
+    59: _guard_wave2_med_hardening,   # الموجة ٢ — خمسة إصلاحات MED من تدقيق v2
 }
 
 _TRAPS = [

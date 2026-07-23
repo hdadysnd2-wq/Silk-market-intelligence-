@@ -148,3 +148,51 @@ def test_intake_vision_cost_is_usd_metered(tmp_path):
             "كلفة نداء الرؤية لم تُسجَّل في الدفتر الدولاري")
         prov.reset_provider()
     importlib.reload(__import__("api"))
+
+
+# ── البند #7 — أزرار التصدير تُعطَّل أثناء الجلب (لا نقر مزدوج) ────────────────
+
+def _read_repo(rel: str) -> str:
+    return open(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), rel), encoding="utf-8").read()
+
+
+def test_export_buttons_disable_during_fetch():
+    """نقرٌ مزدوج على «تصدير PDF» كان يُطلِق تحويلَي soffice على الخادم + تنزيلاً
+    مكرّراً — الأزرار الآن تُعطَّل أثناء أيّ تصدير وتُعاد عند اكتماله/فشله."""
+    html = _read_repo("web/index.html")
+    assert "function _expBusy(" in html, "صمّام تعطيل التصدير غائب"
+    assert "if(S.exportBusy){" in html, "حارس النقر المزدوج غائب"
+    # يعطّل الأزرار الثلاثة، ويعيدها في نهاية كلّ مسار (pdf/docx/md).
+    assert '["#pdfBtn","#wordBtn","#mdBtn"]' in html, "لا يعطّل كل أزرار التصدير"
+    assert html.count(".then(_done,_done)") >= 3, (
+        "أحد مسارات التصدير لا يعيد تفعيل الأزرار عند الاكتمال/الفشل")
+
+
+# ── البند #4 — enrich-leads بمهلة آمنة للبروكسي + تصريح «قد يكون جارياً» ──────
+
+def test_enrich_leads_grace_is_proxy_safe_by_default():
+    """المهلة المتزامنة الافتراضية كانت ٣٠٠ث فتقطعها بوّابة النشر بلا جسم — الآن
+    آمنة للبروكسي (≤٦٠ث)، وخيط الكشط يواصل ويخزّن ذاتياً فإعادة الضغط تجلبه."""
+    src = _read_repo("api.py")
+    import re
+    m = re.search(r'SILK_GMAPS_ENRICH_GRACE_S", "(\d+)"', src)
+    assert m, "مهلة enrich-leads غير موجودة"
+    assert int(m.group(1)) <= 60, f"المهلة الافتراضية {m.group(1)}ث تتجاوز حدّ البروكسي"
+    # الردّ يحمل تصريح «قد يكون جارياً» + اقتراح إعادة المحاولة (لا زعم «لا شيء»).
+    assert '"processing": processing' in src, "علم processing غائب من ردّ enrich-leads"
+    assert "أعد الضغط بعد قليل" in src, "اقتراح إعادة المحاولة غائب"
+
+
+# ── البند #5 — تماثل /diagnostics موثَّق (قرار مقصود لا سهو) ──────────────────
+
+def test_diagnostics_asymmetry_is_documented():
+    """/diagnostics لا يحمل حارس _unprotected_paid_keys 503 كبقية المسارات
+    المدفوعة عمداً (أداة اختبار مفاتيح قبل ضبط المصادقة) — القرار موثَّق صراحةً
+    في المصدر، وحدّه الفعليّ حجزُ السقف المدفوع لا حارس 503."""
+    src = _read_repo("api.py")
+    assert "البند #5" in src and "أداة اختبار المفاتيح قبل ضبط" in src, (
+        "تماثل /diagnostics غير موثَّق كقرار مقصود")
+    # وحدّه الفعليّ قائم: حجز السقف المدفوع (try_reserve_paid_calls) في المسار.
+    diag = src[src.index('@app.get("/diagnostics")'):]
+    assert "try_reserve_paid_calls(1)" in diag[:3000], "حدّ السقف المدفوع غائب"
