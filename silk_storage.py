@@ -295,6 +295,60 @@ def get_research_progress(analysis_id: int, path: str | None = None) -> dict:
         return {}
 
 
+def _reconcile_leaked_usd(analysis_id: int, created_at: object,
+                          progress: dict | None, path: str | None) -> bool:
+    """صالِح حجز دولارٍ متسرّب لتشغيلةٍ فاشلة/عالقة — **ذرّي الفكرة idempotent**
+    عبر وسم `usd_reconciled` في لقطة التقدّم (تدقيق v2 الموجة ٢، البند #3).
+
+    تشغيلةٌ تفشل رشيقاً (استثناء مُلتقَط => `mark_research_failed`) لم تكن تُصالِح
+    حجزها الدولاري (`try_reserve_usd`) أبداً، والمكنَس القديم يمسّ 'running' فقط —
+    فيبقى الحجز محجوزاً حتى دوران الدلو اليومي، فيسدّ السقف على تشغيلاتٍ لم تكتمل.
+    - **idempotent**: صفّ موسوم `usd_reconciled` => لا إعادة خصم (المسار الفاشل
+      والمكنَس قد يلمسان الصفّ نفسه؛ الوسم يمنع الخصم المزدوج).
+    - يُصالَح لحجوزات **دلو اليوم** فقط (`created_at` اليوم) — حجزُ يومٍ سابق زال
+      بدوران الدلو، فيُوسَم دون خصمٍ من اليوم خطأً.
+    يعيد True إن جرى خصمٌ فعليّ، وإلا False."""
+    if (progress or {}).get("usd_reconciled"):
+        return False
+    today = datetime.date.today().isoformat()
+    if (str(created_at or ""))[:10] != today:
+        update_research_progress(analysis_id, path=path, usd_reconciled=True)
+        return False
+    import silk_usage  # lazy: keep silk_storage importable offline/keyless
+    expected = float(os.environ.get("SILK_RESEARCH_EXPECTED_USD", "3.0"))
+    try:
+        actual = float((progress or {}).get("cost_usd_estimate") or 0.0)
+    except (TypeError, ValueError):
+        actual = 0.0
+    silk_usage.reconcile_usd(reserved=expected, actual=actual)
+    update_research_progress(analysis_id, path=path, usd_reconciled=True)
+    return True
+
+
+def reconcile_failed_run_usd(analysis_id: int, path: str | None = None) -> bool:
+    """صالِح حجز تشغيلةٍ فشلت رشيقاً — يُستدعى فور `mark_research_failed` في مسار
+    الاستثناء (تدقيق v2 الموجة ٢، البند #3). يقرأ الصفّ (created_at + لقطة التقدّم)
+    ويفوّض للمُصالِح الـidempotent. فشل القراءة لا يُسقط شيئاً (قناة جانبية)."""
+    path = path or _db_path()
+    try:
+        with _connect(path) as conn:
+            row = conn.execute(
+                "SELECT created_at, progress_json FROM analyses WHERE id = ?",
+                (analysis_id,)).fetchone()
+        if row is None:
+            return False
+        progress = {}
+        if row["progress_json"]:
+            try:
+                progress = json.loads(row["progress_json"])
+            except Exception:  # noqa: BLE001
+                progress = {}
+        return _reconcile_leaked_usd(analysis_id, row["created_at"], progress, path)
+    except Exception as e:  # noqa: BLE001 — المصالحة قناة جانبية لا تُسقط شيئاً
+        log.warning("reconcile_failed_run_usd(%s) failed: %s", analysis_id, e)
+        return False
+
+
 def mark_research_failed(analysis_id: int, error_message: str,
                          path: str | None = None) -> None:
     """سجّل فشل تشغيلة (استثناء غير متوقع خارج الحلقات المحروسة أصلاً) —
@@ -348,27 +402,38 @@ def reap_orphan_research_runs(stale_minutes: int | None = None,
             "SELECT id, created_at, progress_json FROM analyses "
             "WHERE status = 'running' AND updated_at IS NOT NULL "
             "AND updated_at < ?", (cutoff,)).fetchall()
-    if not rows:
-        return []
-    import silk_usage  # lazy: keep silk_storage importable offline/keyless
-    expected = float(os.environ.get("SILK_RESEARCH_EXPECTED_USD", "3.0"))
+        # تدقيق v2 الموجة ٢ (البند #3): المكنَس يمسح أيضاً صفوف 'failed' لم
+        # يُصالَح حجزها بعد — تشغيلةٌ فشلت رشيقاً قبل هذا الإصلاح، أو تعطّلت في
+        # النافذة الضيّقة بين `mark_research_failed` والمصالحة. دلو اليوم فقط
+        # (الحجز خارجه زال بدوران الدلو). الوسم `usd_reconciled` يمنع تكراره.
+        failed_rows = conn.execute(
+            "SELECT id, created_at, progress_json FROM analyses "
+            "WHERE status = 'failed' AND created_at >= ?", (today,)).fetchall()
     reaped: list[int] = []
     for row in rows:
         aid = int(row["id"])
-        actual = 0.0                      # الفعلي-حتى-الآن (لا اختلاق: غائب => 0)
+        progress = {}
         if row["progress_json"]:
             try:
-                actual = float(json.loads(row["progress_json"]).get(
-                    "cost_usd_estimate") or 0.0)
-            except Exception:  # noqa: BLE001 — لقطة فاسدة => 0، لا تكسر الحصاد
-                actual = 0.0
+                progress = json.loads(row["progress_json"])
+            except Exception:  # noqa: BLE001 — لقطة فاسدة => {}، لا تكسر الحصاد
+                progress = {}
         mark_research_failed(
             aid, "orphaned: صفّ 'running' عالق حصده المكنَس (تعطّل عملية/"
             "إعادة نشر منتصف الطريق)", path=path)
-        if (row["created_at"] or "")[:10] == today:   # الحجز في دلو اليوم فقط
-            silk_usage.reconcile_usd(reserved=expected, actual=actual)
+        _reconcile_leaked_usd(aid, row["created_at"], progress, path)
         reaped.append(aid)
-    log.info("orphan reaper: حصد %d تشغيلة عالقة: %s", len(reaped), reaped)
+    # صفوف 'failed' غير المُصالَحة (لا تُوسَم 'reaped' — لم تكن عالقةً 'running').
+    for row in failed_rows:
+        progress = {}
+        if row["progress_json"]:
+            try:
+                progress = json.loads(row["progress_json"])
+            except Exception:  # noqa: BLE001
+                progress = {}
+        _reconcile_leaked_usd(int(row["id"]), row["created_at"], progress, path)
+    if reaped:
+        log.info("orphan reaper: حصد %d تشغيلة عالقة: %s", len(reaped), reaped)
     return reaped
 
 

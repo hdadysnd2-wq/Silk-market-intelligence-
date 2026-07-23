@@ -514,9 +514,29 @@ def create_app():
             return _json(intake.intake_image(req.image_base64, req.media_type,
                                              req.kind))
         allow, reason = _intake_vision_allowed()
-        return _json(intake.intake_image(
+        # البند #6 (تدقيق v2 الموجة ٢): نداء الرؤية كان مقيساً بالعدّاد فقط
+        # (SILK_PAID_DAILY_CAP) لا بالدولار — يجري خارج أيّ `begin_data_counter`
+        # فتُهمَل رموزه (`_record_usage` صامت)، فلا يظهر إنفاقه في السقف الدولاري
+        # ولا في `?economics`. نفتح عدّاداً حول النداء، ثم نسجّل الكلفة الفعلية
+        # في دفتر اليوم الدولاري (record_usd) — فيُحتسَب ضمن الحدّ اليومي المشترك
+        # الذي يقرؤه /research، ويُصبح مرئياً. لا حجز مسبق (النداء الواحد الصغير
+        # محكومٌ أصلاً بالعدّاد؛ التسجيل البعدي يجعله مرئياً/محسوباً بلا اختلاق).
+        import silk_context
+        if allow:
+            silk_context.begin_data_counter()
+        out = intake.intake_image(
             req.image_base64, req.media_type, req.kind,
-            allow_vision=allow, blocked_reason=reason))
+            allow_vision=allow, blocked_reason=reason)
+        if allow:
+            try:
+                from silk_pricing import estimate_cost_usd
+                _c = silk_context.data_counter() or {}
+                _cost = estimate_cost_usd(_c.get("llm_usage"))
+                if _cost.get("total_usd"):
+                    silk_usage.record_usd(_cost["total_usd"])
+            except Exception as _e:  # noqa: BLE001 — القياس قناة جانبية لا تُسقط الردّ
+                log.warning("intake vision cost metering failed: %s", _e)
+        return _json(out)
 
     def _classify_general_allow_claude() -> bool:
         """هل نداءُ التصنيف العام (`silk_hs_classifier.classify_general`)
@@ -1533,8 +1553,11 @@ def create_app():
             _finish_research_run(analysis_id, result)
         except Exception as e:  # noqa: BLE001 — خيط خلفي: هذا آخر حزام أمان
             log.error("background /research run %s failed: %s", analysis_id, e)
-            from silk_storage import mark_research_failed
+            from silk_storage import mark_research_failed, reconcile_failed_run_usd
             mark_research_failed(analysis_id, f"{type(e).__name__}: {e}")
+            # البند #3 (تدقيق v2 الموجة ٢): تشغيلةٌ تفشل رشيقاً تُصالِح حجزها
+            # الدولاري للفعلي-حتى-الآن، فلا يبقى محجوزاً يسدّ السقف حتى الدوران.
+            reconcile_failed_run_usd(analysis_id)
 
     def _readiness_checks(product: str, market_ref, hs_code) -> list[dict]:
         """لوحةُ «جاهزية الدراسة» (Wave 1.5، عائلة D) — كلُّ تدهورٍ معروفٍ **قبل
@@ -2014,8 +2037,10 @@ def create_app():
         except Exception as e:  # noqa: BLE001 — P0: فشل لا يخسر البعثات المكتملة
             log.error("sync /research run %s failed: %s", analysis_id, e)
             if analysis_id is not None:
-                from silk_storage import mark_research_failed
+                from silk_storage import (mark_research_failed,
+                                          reconcile_failed_run_usd)
                 mark_research_failed(analysis_id, f"{type(e).__name__}: {e}")
+                reconcile_failed_run_usd(analysis_id)  # البند #3 الموجة ٢
                 raise HTTPException(status_code=500, detail={
                     "error": "research_run_failed",
                     "reason": f"{type(e).__name__}: {e}",
@@ -2158,6 +2183,14 @@ def create_app():
         # فقط حين السقف مضبوط (بلا سقف: لا شيء يُحمى، فالسلوك الافتراضي غير
         # متأثّر). المالك يُعفيه صراحةً بـ SILK_DIAG_EXEMPT=1 (تشخيص متكرر أثناء
         # تصحيح النشر بلا استهلاك السقف — موثَّق في .env.example).
+        # البند #5 (تدقيق v2 الموجة ٢) — لماذا لا حارس `_unprotected_paid_keys`
+        # 503 هنا كبقية المسارات المدفوعة: قرارٌ مقصود موثَّق لا سهو. تلك
+        # المسارات تُحجَب حين تُضبَط مفاتيح مدفوعة بلا SILK_API_KEY لأنها
+        # إنتاجية العميل؛ أمّا /diagnostics فهو **أداة اختبار المفاتيح قبل ضبط
+        # المصادقة** — غرضه أن يخبرك «أيّ مفتاح يعمل» على نشرٍ لم تُضبَط فيه
+        # SILK_API_KEY بعد، فحجبُه عند غيابها يُبطِل وظيفته. حدّه الفعليّ حجزُ
+        # السقف المدفوع أعلاه (اضبط SILK_PAID_DAILY_CAP حتى قبل SILK_API_KEY)
+        # + حدّ المعدّل، لا حارس 503 — الفرق تعاقديّ لا ثغرة.
         _diag_exempt = os.environ.get("SILK_DIAG_EXEMPT", "").strip().lower() in (
             "1", "true", "yes", "on")
         if (not _diag_exempt and silk_usage.daily_cap() is not None
@@ -2635,16 +2668,20 @@ def create_app():
         mission_reports = silk_storage.load_mission_checkpoints(analysis_id) or {}
         web_cands = silk_gmaps.extract_web_candidates(mission_reports)
 
-        # كشط متزامن بمهلة سخيّة (نداء المالك اليدوي، لا مسار البوّابة الحسّاس
-        # للزمن) — قابلة للضبط. الخيط يخزّن النتائج فور اكتمالها فنداء لاحق
-        # يستعملها من التخزين المؤقت بلا كشط جديد.
-        grace = float(os.environ.get("SILK_GMAPS_ENRICH_GRACE_S", "300"))
+        # البند #4 (تدقيق v2 الموجة ٢): الكشط كان يحجب الطلب متزامناً حتى ٣٠٠ث،
+        # فبوّابة النشر (Railway/بروكسي) تقطعه عند ~٣٠-٦٠ث فيصل العميل ٥٠٢/٥٠٤
+        # بلا جسم — لا يُميّزه عن فشلٍ صلب. المهلة الآن **آمنة للبروكسي** افتراضياً
+        # (٢٥ث)، وخيط الكشط يواصل ويخزّن نتائجه ذاتياً عند الاكتمال (silk_gmaps
+        # `_worker`)، فإعادة الضغط تجلبها من المخزن فوراً (نمط 202-غير-حاجب رخيص
+        # يعتمد التخزين القائم، بلا نظام مهامّ منفصل). env يظلّ ضابطاً لمن يريد أطول.
+        grace = float(os.environ.get("SILK_GMAPS_ENRICH_GRACE_S", "25"))
         fut = silk_gmaps.submit_scrape_async(product, market_ref)
         new_leads = silk_gmaps.finalize_leads(
             fut, product, market_ref, web_cands, timeout_s=grace)
 
         # لا تطمس روابط قائمة بفجوة: نُحدّث فقط إن أتى الكشط بروابط فعلية.
         prev = dr.get("importer_leads") or {"leads": [], "path": "gap"}
+        processing = False
         if new_leads.get("leads"):
             found["deep_research"]["importer_leads"] = new_leads
             found["analysis_id"] = analysis_id
@@ -2653,13 +2690,18 @@ def create_app():
             enriched = True
             note = new_leads.get("note") or "حُدِّثت الروابط عبر كشط الخرائط."
         else:
-            # لا روابط جديدة — نُبقي المخزَّن كما هو (لا اختلاق، لا طمس).
+            # لا روابط ضمن المهلة الآمنة — نُبقي المخزَّن كما هو (لا اختلاق، لا
+            # طمس). الكشط **قد يكون ما زال جارياً** في الخلفية ويخزّن نتائجه عند
+            # الاكتمال، فنُصرّح بذلك ونقترح إعادة المحاولة (لا نزعم «لا شيء»).
             enriched = False
-            note = ("لم تُرصَد جهات اتصال قابلة للتواصل في هذا الكشط — "
+            processing = True
+            note = ("لم تكتمل جهات الاتصال ضمن المهلة الآمنة — قد يكون الكشط "
+                    "ما زال جارياً في الخلفية؛ أعد الضغط بعد قليل لجلب ما اكتمل. "
                     "الروابط السابقة محفوظة كما هي دون تغيير.")
 
         current = found["deep_research"].get("importer_leads") or prev
         return _json({
+            "processing": processing,
             "enriched": enriched,
             "path": current.get("path", "gap"),
             "leads_count": len(current.get("leads") or []),

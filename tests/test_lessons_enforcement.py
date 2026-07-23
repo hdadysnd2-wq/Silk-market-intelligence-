@@ -490,6 +490,17 @@ _SYMBOL_ANCHORS_EXTRA = [
     (55, "tests/conftest.py", ["def _hermetic_env_guard"]),
     (55, "tests/test_wave2_first_pdf_cluster.py",
      ["def test_visual_pdf_lock_production_entrypoint_bare_no_split_no_leaks"]),
+    # البند ٥٩ — خمسة إصلاحات MED من تدقيق v2 (الموجة ٢): مصالحة الحجز الفاشل +
+    # قياس رؤية الاستقبال + تعطيل أزرار التصدير + مهلة enrich الآمنة + توثيق
+    # تماثل /diagnostics؛ الأقفال السلوكية + الحارس الموحّد في السجل.
+    (59, "tests/test_wave2_med_fixes.py",
+     ["def test_failed_research_run_reconciles_reservation",
+      "def test_reaper_also_sweeps_unreconciled_failed_rows",
+      "def test_intake_vision_cost_is_usd_metered",
+      "def test_export_buttons_disable_during_fetch",
+      "def test_enrich_leads_grace_is_proxy_safe_by_default"]),
+    (59, "tests/test_regression_registry.py",
+     ["def _guard_wave2_med_hardening"]),
 ]
 
 
