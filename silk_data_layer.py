@@ -46,6 +46,21 @@ ENDPOINTS = {
 
 _TIMEOUT = 30
 
+
+def _timeout_for(host: str) -> float:
+    """مهلة الاتصال لكل مصدر (WS4) — World Bank أبطأ عادةً من كومتريد فيأخذ
+    نافذةً أوسع؛ الكل قابلٌ للضبط بيئياً بلا كسر توافق (الافتراض = القديم ٣٠).
+
+    Per-source connect/read timeout: the World Bank API is routinely slower
+    than Comtrade, so it gets a longer default. All env-tunable; defaults keep
+    the historical 30s for anything unrecognized so no caller regresses."""
+    if "api.worldbank.org" in host:
+        return float(os.environ.get("SILK_WB_TIMEOUT_S", "45"))
+    if "comtradeapi.un.org" in host:
+        return float(os.environ.get("SILK_COMTRADE_TIMEOUT_S", "30"))
+    return float(os.environ.get("SILK_HTTP_TIMEOUT_S", str(_TIMEOUT)))
+
+
 # مفتاح Comtrade الاختياري — optional free key; switches to the full /data/v1/get
 # endpoint and raises the cap to ~500 requests/day. Set COMTRADE_API_KEY in env/.env.
 COMTRADE_KEY = os.environ.get("COMTRADE_API_KEY", "").strip()
@@ -121,22 +136,55 @@ def _http_get(url: str, params: dict | None = None,
     `headers` (اختياري): ترويسات لمصادر تمرّر مفتاحاً في ترويسة لا في الاستعلام
     (فلا يظهر السرّ في الـURL)؛ None = سلوك قديم بلا ترويسات إضافية."""
     host = url.split("/")[2] if "://" in url else url
-    retries = int(os.environ.get("SILK_HTTP_RETRIES", "3"))
+    timeout = _timeout_for(host)
+    # WS4: قاطع الدائرة لكل مضيف — إن كان مفتوحاً (N فشلٍ 429/5xx متتالٍ حديثاً)
+    # نفشل بسرعة بمحاولةٍ واحدة (بلا حلقة إعادةٍ ونومٍ يعلّق ~١٥٠ نداء fan-out)؛
+    # لا يلفّق استجابةً — الطبقة الأعلى تُعلن الفجوة كالمعتاد. نجاحُ المحاولة
+    # الاستكشافية يغلق الدائرة (record_success).
+    import silk_circuit
+    breaker = silk_circuit.http_breaker
+    retries = 0 if breaker.is_open(host) else int(
+        os.environ.get("SILK_HTTP_RETRIES", "3"))
     resp = None
     for attempt in range(retries + 1):
         _throttle(host)
         # headers شرطيّ: بلا ترويسات يبقى النداء مطابقاً للتوقيع القديم (لا
         # يكسر محاكاة `_session.get` القائمة) — الترويسات مسار WTO الجديد وحده.
         resp = (_session.get(url, params=params, headers=headers,
-                             timeout=_TIMEOUT) if headers is not None
-                else _session.get(url, params=params, timeout=_TIMEOUT))
-        if resp.status_code not in _RETRYABLE or attempt >= retries:
+                             timeout=timeout) if headers is not None
+                else _session.get(url, params=params, timeout=timeout))
+        if resp.status_code not in _RETRYABLE:
+            breaker.record_success(host)
+            return resp
+        if attempt >= retries:
+            # استُنفدت المحاولات على حالةٍ قابلةٍ للإعادة — سجّل فشلاً في القاطع
+            # وحدثاً بنيوياً في التتبّع (لا `ops_errors` — قرار عدم إغراق
+            # عالي التردّد، docs/EXTERNAL_SERVICES_FAILURE_AUDIT.md).
+            breaker.record_failure(host)
+            _record_fetch_failure_event(host, url, status=resp.status_code,
+                                        attempt=attempt + 1)
             return resp
         delay = _backoff_delay(attempt, resp.headers.get("Retry-After") or "")
         log.warning("HTTP %s from %s — retry %d/%d in %.1fs",
                     resp.status_code, host, attempt + 1, retries, delay)
         _time.sleep(delay)
     return resp
+
+
+def _record_fetch_failure_event(host: str, endpoint: str, *, status=None,
+                                error_repr: str = "", attempt: int = 0) -> None:
+    """حدث فشلٍ بنيويّ للجلب (WS4) — {source_id, endpoint, status, error_repr,
+    attempt} في التتبّع لكل تشغيلة (no-op صامت خارج سياق تتبّع، تكلفة صفر).
+
+    يستعمل `repr(exc)` لا `exc.args` العارية — فلا سلسلةُ خطأٍ فارغةُ العناصر
+    («(), , ()») تظهر أبداً (WS4، نظافة الأخطاء). لا يرفع أبداً."""
+    try:
+        import silk_trace
+        silk_trace.record_event(
+            event="source_fetch_failed", source_id=host, endpoint=endpoint,
+            status=status, error_repr=error_repr, attempt=int(attempt))
+    except Exception:  # noqa: BLE001 — تشخيص لا شرط تنفيذ
+        pass
 
 
 @dataclass
