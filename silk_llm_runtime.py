@@ -814,6 +814,7 @@ def _parse_output(text: str | None, registry: dict[str, DataPoint]) -> dict:
 
     kept: list[dict] = []
     dropped: list[dict] = []
+    zero_conf_gaps: list[str] = []
     for it in obj.get("findings") or []:
         if not isinstance(it, dict):
             continue
@@ -830,11 +831,24 @@ def _parse_output(text: str | None, registry: dict[str, DataPoint]) -> dict:
             conf = float(it.get("confidence"))
         except (TypeError, ValueError):
             conf = min(registry[i].confidence for i in valid_ids)
+        conf = round(max(0.0, min(1.0, conf)), 2)
+        if conf <= 0.0:
+            # عقد عدم الاختلاق (بلاغ حي — حارس المراقبة، demand_trends):
+            # قيمة غير فارغة بثقة 0.0 زوج متناقض؛ يحدث حين يصرّح النموذج
+            # بثقة صفرية أو حين تُورَث `min()` من نقطة فجوة مستشهَد بها
+            # (ثقتها 0.0 بحكم العقد). ادعاء بلا ثقة ليس بنداً — فجوة تُعلَن.
+            log.warning("LLM agent zero-confidence claim declared as gap: %r",
+                        claim)
+            dropped.append({"claim": claim, "cited": raw_ids,
+                            "reason": "zero-confidence claim -> declared gap"})
+            zero_conf_gaps.append(claim)
+            continue
         kept.append({"claim": claim, "datapoint_ids": valid_ids,
-                    "confidence": round(max(0.0, min(1.0, conf)), 2),
+                    "confidence": conf,
                     "category": str(it.get("category") or "").strip()})
 
     gaps = [str(g).strip() for g in (obj.get("gaps") or []) if str(g).strip()]
+    gaps.extend(g for g in zero_conf_gaps if g not in gaps)
     return {"findings": kept, "gaps": gaps,
             "summary": str(obj.get("summary") or "").strip(), "dropped": dropped}
 

@@ -455,6 +455,15 @@ _SYMBOL_ANCHORS_EXTRA = [
     (53, "silk_watchdog.py", ["def record_override",
                               "def override_records_for"]),
     (53, "silk_quality_gate.py", ["def run_client_artifact_text_gate"]),
+    # البند ٥٤ — بند بثقة 0.0 (خرق حارس المراقبة الحي على demand_trends):
+    # ادعاء بثقة صفرية يُعلَن فجوة لا يُشحَن بنداً.
+    (54, "silk_llm_runtime.py", ["zero_conf_gaps",
+                                 "zero-confidence claim -> declared gap"]),
+    (54, "silk_watchdog.py", ["def _check_no_fabrication"]),
+    (54, "tests/test_zero_confidence_finding_gap.py",
+     ["def test_model_stated_zero_confidence_claim_becomes_declared_gap",
+      "def test_inherited_zero_confidence_from_cited_gap_datapoint_not_shipped",
+      "def test_watchdog_no_fabrication_holds_on_parse_output_shape"]),
 ]
 
 
