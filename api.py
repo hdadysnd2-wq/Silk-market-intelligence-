@@ -2589,6 +2589,49 @@ def create_app():
         return PlainTextResponse(text,
                                  media_type="text/markdown; charset=utf-8")
 
+    @app.get("/analyses/{analysis_id}/writer-diagnostics")
+    def writer_diagnostics(analysis_id: int, request: Request):
+        """أحداث `report_call` الخام لتشغيلة — الدليل غير المُطهَّر لفشل الكاتب.
+
+        القضية المفتوحة (كاتب التقرير، PRs 69/70/71): كل سطوح الـHTTP الأخرى
+        (`/ops/last-errors`، `/diagnostics`، متن التقرير) تُطهِّر `error_type`/
+        `stop_reason`/`status_code` قبل العرض — فيستحيل على المالك قراءة نوع
+        الاستثناء الفعلي عن بُعد، ويصير أي إصلاح تخميناً. هذه النقطة تكشف أحداث
+        `report_call` كما كُتبت في الأثر (‏`data/traces/{trace_id}.jsonl`):
+        `stage`/`timeout`/`elapsed_ms`/`success`/`error_type`/`error_message`/
+        `status_code`/`response_body` — فيُميَّز ReadTimeout (المهلة فعلاً) من
+        ConnectTimeout (شبكة) من 429/529 (حصّة/ازدحام) من 400 (حمولة). محروسة
+        بالمفتاح كبقية سطوح المشغّل؛ الأحداث **مُنقّاة من الأسرار مسبقاً** عند
+        الكتابة (`silk_trace._redacted`) فلا مفتاح يتسرّب — لكنها **غير مُطهَّرة
+        من التفصيل التقني** عمداً: هذا هو الغرض (قياس لا تخمين).
+        """
+        _require_key(request)
+        _rate_limit(request)
+        found = silk_storage.get_analysis(analysis_id)
+        if found is None:
+            raise HTTPException(status_code=404,
+                                detail=f"analysis {analysis_id} not found")
+        trace_id = (found.get("deep_research") or {}).get("trace_id")
+        report_calls: list = []
+        if trace_id:
+            import silk_trace
+            report_calls = [e for e in silk_trace.read_trace(trace_id)
+                            if e.get("kind") == "report_call"]
+        # سبب الفشل كما هو مخزَّن (قد يكون مُطهَّراً في البلوب) — للمقارنة فقط.
+        dr = found.get("deep_research") or {}
+        rep = dr.get("report") if isinstance(dr.get("report"), dict) else {}
+        return _json({
+            "analysis_id": analysis_id,
+            "trace_id": trace_id,
+            "report_present": bool((rep or {}).get("report")),
+            "failure_reason_stored": (rep or {}).get("failure_reason"),
+            "report_calls": report_calls,
+            "note": ("لا trace_id (تشغيلة أقدم من التتبّع أو تحليل كلاسيكي)"
+                     if not trace_id else
+                     ("لا أحداث report_call — الكاتب لم يُستدعَ أو الأثر مُنمَحٍ"
+                      if not report_calls else None)),
+        })
+
     @app.post("/analyses/{analysis_id}/report")
     def regenerate_report(analysis_id: int, request: Request):
         """أعد توليد التقرير الكامل من بحث محفوظ — نداء كاتب واحد (+مراجع)

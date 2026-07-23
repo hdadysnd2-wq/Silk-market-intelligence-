@@ -273,3 +273,61 @@ def test_reopening_stored_analyses_never_calls_claude():
             assert r.status_code == 200
             r_eco = client.get(f"/analyses/{aid}?economics=1", headers=hdr)
             assert r_eco.status_code == 200
+
+
+def test_writer_diagnostics_exposes_raw_report_call_error_type():
+    """القضية المفتوحة (كاتب التقرير، PRs 69/70/71): نقطة writer-diagnostics
+    تكشف `error_type` الخام (ReadTimeout/429/…) **دون تطهير** — كي يُميَّز نوع
+    فشل الكاتب عن بُعد. كل سطوح الـHTTP الأخرى تُطهّره، فهذه نافذة الدليل
+    الوحيدة للمالك؛ الإصلاح الصحيح = ما يشير إليه هذا الدليل، لا تخمين."""
+    import silk_storage as ST
+    import silk_trace
+    base = tempfile.mkdtemp()
+    db = os.path.join(base, "silk.db")
+    trace_dir = os.path.join(base, "traces")
+    os.makedirs(trace_dir, exist_ok=True)
+    trace_id = "diag-test-trace-1"
+    result = _research_result()
+    result["deep_research"]["trace_id"] = trace_id
+    # الكاتب فشل: report=None + سبب مخزَّن مُطهَّر، بينما الأثر يحمل الخام.
+    result["deep_research"]["report"] = {
+        "report": None, "review_cycles": 0, "unresolved_notes": [],
+        "failure_reason": "فشل نداء التحليل الآلي (تعذّر الاتصال بالمصدر)"}
+    with _env(SILK_API_KEY="secret", SILK_DB=db, SILK_TRACE_DIR=trace_dir):
+        silk_trace.append_event(trace_id, kind="report_call", stage="draft",
+                                timeout=300, elapsed_ms=300123, success=False,
+                                error_type="ReadTimeout",
+                                error_message="Read timed out. (read timeout=300)")
+        aid = ST.save_analysis(result, path=db)
+        client = _client()
+        hdr = {"X-API-Key": "secret"}
+        r = client.get(f"/analyses/{aid}/writer-diagnostics", headers=hdr)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["trace_id"] == trace_id
+        assert body["report_present"] is False
+        calls = body["report_calls"]
+        assert len(calls) == 1 and calls[0]["success"] is False
+        # الدليل الخام يمرّ بلا تطهير — هذا هو الغرض (قياس لا تخمين).
+        assert calls[0]["error_type"] == "ReadTimeout"
+        assert "300" in str(calls[0].get("error_message", ""))
+        # محروسة بالمفتاح كبقية سطوح المشغّل.
+        assert client.get(f"/analyses/{aid}/writer-diagnostics").status_code == 401
+
+
+def test_writer_diagnostics_404_for_missing_and_empty_for_no_trace():
+    """404 لتحليل غائب؛ وقائمة report_calls فارغة + ملاحظة لتحليل بلا trace_id
+    (تشغيلة أقدم من التتبّع) — بلا استثناء ولا اختلاق."""
+    import silk_storage as ST
+    db = os.path.join(tempfile.mkdtemp(), "silk.db")
+    result = _research_result()          # بلا trace_id
+    with _env(SILK_API_KEY="secret", SILK_DB=db):
+        aid = ST.save_analysis(result, path=db)
+        client = _client()
+        hdr = {"X-API-Key": "secret"}
+        assert client.get("/analyses/999999/writer-diagnostics",
+                          headers=hdr).status_code == 404
+        body = client.get(f"/analyses/{aid}/writer-diagnostics",
+                          headers=hdr).json()
+        assert body["trace_id"] is None and body["report_calls"] == []
+        assert body["note"]
