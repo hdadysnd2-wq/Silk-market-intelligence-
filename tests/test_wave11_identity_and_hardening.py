@@ -258,11 +258,19 @@ def test_eval_harness_runs_citation_axis_against_sample_result(monkeypatch):
     assert out["note"]  # فجوة معلنة صراحة: محاور كلود غير محسوبة بلا مفتاح
 
 
-def test_golden_cases_still_declared_empty_not_fabricated():
+def test_golden_case_is_structural_not_fabricated():
+    # WS10 (إغلاق الفجوة النظامية): الملف لم يعد فارغاً — يحمل حالةً قياسية
+    # **بنيوية** (قطر × 200811) تعمل بلا مفتاح/شبكة. عقد عدم الاختلاق محفوظ:
+    # لا رقم مرجعيّ مُختلَق — الحالة بلا `expected` (بوّابة بنيوية بحتة).
     import json
     path = os.path.join(_root(), "evals", "golden_cases.json")
     cases = json.load(open(path, encoding="utf-8"))
-    assert cases == []  # فجوة معلنة — لا حالة مُختلَقة لسدّ الفراغ
+    assert len(cases) >= 1
+    for c in cases:
+        # كل حالة إمّا بنيوية أو بأرقامٍ بمصدرٍ حقيقي — لا فراغ زائف ولا اختلاق.
+        assert "structural" in c or "expected" in c
+        for k, v in (c.get("expected") or {}).items():
+            assert v.get("source_url"), f"رقم {k} بلا مصدر محقَّق (اختلاق)"
 
 
 def test_release_notes_document_exists_with_required_sections():

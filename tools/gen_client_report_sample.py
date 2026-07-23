@@ -344,11 +344,13 @@ result = {
     },
 }
 
-os.environ["SILK_HERMETIC"] = "1"
-view = build_view(result)
-view["test_run"] = True  # نموذج توضيحي — يظهر شارة «نموذج توضيحي»
-
-_repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-out_path = os.path.join(_repo_root, "samples", "client_report_latest.docx")
-render_client_docx(view, out_path)
-print("wrote", out_path)
+# الكتابة تحت حارس __main__ فقط — استيراد الوحدة (لجلب `result` النظيف في
+# الاختبارات) لم يعد يكتب العيّنة كأثرٍ جانبيّ عند الاستيراد (نمطٌ سيّئ سابق).
+if __name__ == "__main__":
+    os.environ["SILK_HERMETIC"] = "1"
+    view = build_view(result)
+    view["test_run"] = True  # نموذج توضيحي — يظهر شارة «نموذج توضيحي»
+    _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out_path = os.path.join(_repo_root, "samples", "client_report_latest.docx")
+    render_client_docx(view, out_path)
+    print("wrote", out_path)

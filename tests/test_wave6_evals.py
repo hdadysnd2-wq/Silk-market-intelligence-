@@ -60,7 +60,9 @@ def test_golden_case_validation_rejects_incomplete_case():
 
     errors = ev.validate_case({"key": "x"})
     assert "missing field: product" in errors
-    assert "missing field: expected" in errors
+    # WS10: `expected` صار اختيارياً — حالةٌ بلا `expected` **ولا** `structural`
+    # مرفوضة (بلا معيار قبول)؛ حالةٌ بنيوية بحتة مقبولة.
+    assert any("expected" in e and "structural" in e for e in errors)
 
 
 def test_golden_case_validation_accepts_well_formed_case():
@@ -99,14 +101,20 @@ def test_load_golden_cases_skips_invalid_rows_without_crashing(tmp_path):
     assert cases[0]["key"] == "good"
 
 
-def test_committed_golden_cases_file_is_honestly_empty():
-    # لا أرقام ذهبية مُختلَقة في هذه البيئة (بلا مفتاح/شبكة) — الملف
-    # المُلتزَم يجب أن يبقى فارغاً صراحةً لا يحوي بيانات وهمية.
+def test_committed_golden_cases_file_has_structural_case_no_fabricated_numbers():
+    # WS10 (إغلاق الفجوة النظامية): الملف لم يعد فارغاً — يحمل الحالة القياسية
+    # (قطر × 200811) بوّابةً **بنيوية** هرمتية. عقد عدم الاختلاق محفوظ: لا رقم
+    # مرجعيّ (`expected`) مُختلَق بلا مصدرٍ محقَّق — أيّ حالة تحمل `expected`
+    # يجب أن يكون كل صفٍّ فيه بـ source_url حقيقي (يُفحَص بـ validate_case).
     import silk_evals as ev
 
-    with open(ev._GOLDEN_PATH, encoding="utf-8") as f:
-        raw = json.load(f)
-    assert raw == []
+    cases = ev.load_golden_cases()          # يرفض أيّ حالة فاسدة الشكل
+    assert cases, "الحالة القياسية يجب أن تُحمَّل (الفجوة النظامية مُغلقة)"
+    qatar = next((c for c in cases if c["key"] == "qatar_peanut_butter"), None)
+    assert qatar is not None and "structural" in qatar
+    # لا أرقام مُختلَقة: هذه الحالة بنيوية بحتة (بلا `expected`) — أو، إن أُضيف
+    # `expected` لاحقاً، فبـ source_url حقيقي (يفرضه validate_case، أعلاه).
+    assert "expected" not in qatar
 
 
 def test_regression_detected_when_score_drops_more_than_threshold():
