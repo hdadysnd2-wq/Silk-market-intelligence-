@@ -1702,3 +1702,39 @@ data_dir_set_but_not_a_real_mount, test_create_app_boots_nonmount_when_escape_
 hatch_set, test_persistence_status_configured_but_not_mounted, test_persistence_
 status_unwritable_path, test_persistence_status_configured_real_mount}` +
 تحديث اختباري الإقلاع القائمين لمحاكاة وحدة مركَّبة. LESSONS البند ٤ (مُقوّى).
+
+## resilience الكاتب: إعادة محاولة + backoff على 429/529 (2026-07-23)
+
+**المصدر:** تقرير الكويت رجع `report=None` → PRELIMINARY. تصنيف الدليل:
+**static code review** (`silk_llm_provider.py` — `complete`/`complete_tools`
+نداء POST واحد بلا أي إعادة محاولة؛ أول رفض عابر = None فوري) +
+**strong contextual** (رُصد مباشرةً بلوغ حدّ جلسة الحساب نفسه في نفس نافذة
+الساعة — «session limit resets 10:10 UTC» — والنمط «34 نداء نجح ثم فشل الأخير
+الثقيل» يطابق بلوغ حصّة أثناء التشغيل). **لم يُقرأ أثر `report_call` الخام بعد**
+(محبوس على قرص الإنتاج؛ نقطة writer-diagnostics في PR #156 ستؤكّد النوع الدقيق
+عند الحدوث التالي).
+
+**لماذا يُشحن قبل التأكيد الكامل بالأثر (وليس تخميناً):** جدول قرار القضية
+المفتوحة (writer-timeout-open-case §3) يربط 529 صراحةً بـ«retry policy /
+backoff»، و429 نظيره. وهذا الإصلاح **متعامد** على المرشّحات المتنازَع عليها
+(رفع المهلة / streaming / تقليص الحمولة — كلها حول ReadTimeout ومحظورة بلا
+دليل)؛ إعادة المحاولة على 429/529 نمطٌ عام آمن: كلاهما يُرفض **قبل** التوليد
+فكلفة الرموز صفر، والعدّاد المالي يُحجَز مرّة قبل التشغيلة لا لكل محاولة HTTP.
+المزوّد كان بلا أي إعادة محاولة (فجوة robustness حقيقية مؤكّدة بالكود).
+
+**التغيير:** `AnthropicProvider._post` (‏`silk_llm_provider.py`) — حلقة POST مع
+backoff أسّي على `_RETRYABLE_STATUS=(429,529)` فقط، احترام `Retry-After` (مقيّد
+بـ60ث)، حدّ `SILK_LLM_MAX_RETRIES` (افتراضي 2 → ≤3 محاولات) و`SILK_LLM_RETRY_
+BASE_S` (افتراضي 1.0). `=0` يعطّل (سلوك ما قبل الإصلاح بالضبط). بعد الاستنفاد:
+`raise_for_status` كالسابق → None + `last_error` بـstatus 429/529 (مطابق). غير
+العابر (400/401/رفض/مهلة/شبكة) لا يُعاد — فشل فوري. `getattr` دفاعي على
+`status_code` كي لا ينهار على شكل ردٍّ غريب. `complete`/`complete_tools`/
+`complete_vision` كلها تمرّ عبر `_post`.
+
+**النطاق (معلَن):** هذا يُنقذ الفشل **العابر** (الأرجح). لو كشف الأثر لاحقاً
+سبباً صلباً (ReadTimeout مع payload كبير دائماً، أو 400) فذاك إصلاح مستهدَف
+مستقل يشير إليه دليل writer-diagnostics — لا يُخمَّن هنا.
+
+**الأقفال:** `tests/test_llm_provider_retry.py` (٨ حالات: 429/529→نجاح،
+استنفاد→None+status، MAX_RETRIES=0→لا إعادة، 400→لا إعادة، Retry-After محترم
+ومقيّد، complete_tools ينتفع). هرمتي: requests.post مُحاكى، time.sleep مُرقَّع.

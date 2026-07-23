@@ -126,6 +126,70 @@ class AnthropicProvider(LLMProvider):
         ReadTimeout) يوضّح تلقائياً أيّ طَوري الفشل وقع — بلا تخمين."""
         return (min(10.0, timeout), timeout)
 
+    # الحالات العابرة التي تُعاد محاولتها فقط — 429 (تجاوز حصّة/معدّل) و529
+    # (ازدحام Anthropic). كلاهما يُرفض **قبل** التوليد فكلفة الرموز صفر، وإعادة
+    # المحاولة بـbackoff هي النمط الموصى به. غير هذين (400 حمولة/401 مفتاح/رفض/
+    # مهلة/شبكة) لا يُعاد — فشل فوري كما كان (لا تخمين، لا حرق رموز على مهلة).
+    _RETRYABLE_STATUS = (429, 529)
+
+    @staticmethod
+    def _retry_after(resp, cap: float = 60.0) -> float | None:
+        """ثوانٍ من ترويسة Retry-After إن وُجدت (Anthropic يرسلها على 429) —
+        مقيّدة بـcap كي لا ننام دهراً. None حين غيابها/تعذّر تحليلها."""
+        val = None
+        try:
+            val = (resp.headers or {}).get("retry-after")
+        except Exception:  # noqa: BLE001 — ترويسة اختيارية
+            return None
+        if not val:
+            return None
+        try:
+            return max(0.0, min(cap, float(val)))
+        except (TypeError, ValueError):
+            return None
+
+    def _post(self, key: str, payload: dict, timeout: float):
+        """POST واحد مع إعادة محاولة + backoff أسّي على الحالات العابرة فقط.
+
+        يُرجع `resp` (بعد raise_for_status) أو يرمي آخر استثناء — فيلتقطه
+        المستدعي و`_error_detail` كما اليوم (فبعد استنفاد المحاولات، السلوك
+        مطابق للسابق تماماً: None + خطأ مُسجَّل). SILK_LLM_MAX_RETRIES=0 يعطّل
+        الإعادة (سلوك اليوم بالضبط). العدّاد المالي يُحجَز مرّة قبل التشغيلة لا
+        لكل محاولة HTTP، و429/529 صفر رموز — فالكلفة ~صفر."""
+        import time
+        import requests  # lazy: keep core import offline-safe
+        try:
+            max_retries = max(0, int(os.environ.get(
+                "SILK_LLM_MAX_RETRIES", "2").strip() or "2"))
+        except ValueError:
+            max_retries = 2
+        try:
+            base = max(0.0, float(os.environ.get(
+                "SILK_LLM_RETRY_BASE_S", "1.0").strip() or "1.0"))
+        except ValueError:
+            base = 1.0
+        attempt = 0
+        while True:
+            resp = requests.post(
+                self._ENDPOINT, timeout=self._timeout_pair(timeout),
+                headers=self._headers(key), json=payload)
+            # getattr دفاعي: كائن ردٍّ بلا status_code (نادر) يُعامَل كغير عابر
+            # فيمرّ لـraise_for_status كالسابق — لا انهيار على شكل ردٍّ غريب.
+            if (getattr(resp, "status_code", None) in self._RETRYABLE_STATUS
+                    and attempt < max_retries):
+                wait = self._retry_after(resp)
+                if wait is None:
+                    wait = base * (2 ** attempt)
+                log.warning("AI call transient %s (attempt %d/%d) — retry in "
+                            "%.1fs", resp.status_code, attempt + 1,
+                            max_retries + 1, wait)
+                if wait > 0:
+                    time.sleep(wait)
+                attempt += 1
+                continue
+            resp.raise_for_status()
+            return resp
+
     def complete(self, system, user, max_tokens, model, timeout):
         _last_error.set(None)       # نظافة الحالة من أول سطر — لا تسريب بين نداءات
         _last_stop_reason.set(None)
@@ -133,22 +197,18 @@ class AnthropicProvider(LLMProvider):
         if not key:
             return None
         try:
-            import requests  # lazy: keep core import offline-safe
-            resp = requests.post(
-                self._ENDPOINT, timeout=self._timeout_pair(timeout),
-                headers=self._headers(key),
-                # WP-1 §1: temperature مثبّتة صفراً على كل نداءات `complete`
-                # (التوليف/الكاتب/المراجع/المحلل النصي) — الافتراضي 1.0 أنتج
-                # حكمين مختلفين لنفس المدخلات في يوم واحد (WATCH ثم GO).
-                # لا top_p معها — Anthropic توصي بضبط أحدهما لا كليهما.
-                # حلقة الأدوات (`complete_tools`) تبقى على افتراضها: مخرجاتها
-                # لا تحدّد الحكم المعروض مباشرة (الحكم من المحرّك الحتمي).
-                json={"model": model, "max_tokens": max_tokens,
-                     "temperature": 0,
-                     "system": [{"type": "text", "text": system,
-                                "cache_control": {"type": "ephemeral"}}],
-                     "messages": [{"role": "user", "content": user}]})
-            resp.raise_for_status()
+            # WP-1 §1: temperature مثبّتة صفراً على كل نداءات `complete`
+            # (التوليف/الكاتب/المراجع/المحلل النصي) — الافتراضي 1.0 أنتج
+            # حكمين مختلفين لنفس المدخلات في يوم واحد (WATCH ثم GO). لا top_p
+            # معها — Anthropic توصي بضبط أحدهما لا كليهما. حلقة الأدوات
+            # (`complete_tools`) تبقى على افتراضها: مخرجاتها لا تحدّد الحكم
+            # المعروض مباشرة (الحكم من المحرّك الحتمي).
+            payload = {"model": model, "max_tokens": max_tokens,
+                       "temperature": 0,
+                       "system": [{"type": "text", "text": system,
+                                   "cache_control": {"type": "ephemeral"}}],
+                       "messages": [{"role": "user", "content": user}]}
+            resp = self._post(key, payload, timeout)
             data = resp.json()
             self._record_usage(model, data)
             stop_reason = data.get("stop_reason")
@@ -185,7 +245,6 @@ class AnthropicProvider(LLMProvider):
         if not key:
             return None
         try:
-            import requests  # lazy: keep core import offline-safe
             payload = {"model": model, "max_tokens": max_tokens,
                       "system": [{"type": "text", "text": system,
                                  "cache_control": {"type": "ephemeral"}}],
@@ -197,10 +256,7 @@ class AnthropicProvider(LLMProvider):
                 payload["tools"] = [*tools[:-1],
                                     {**tools[-1],
                                      "cache_control": {"type": "ephemeral"}}]
-            resp = requests.post(
-                self._ENDPOINT, timeout=self._timeout_pair(timeout),
-                headers=self._headers(key), json=payload)
-            resp.raise_for_status()
+            resp = self._post(key, payload, timeout)
             data = resp.json()
             self._record_usage(model, data)
             _last_error.set(None)
@@ -223,21 +279,17 @@ class AnthropicProvider(LLMProvider):
         if not key:
             return None
         try:
-            import requests  # lazy: keep core import offline-safe
-            resp = requests.post(
-                self._ENDPOINT, timeout=self._timeout_pair(timeout),
-                headers=self._headers(key),
-                json={"model": model, "max_tokens": max_tokens,
-                      "temperature": 0,   # WP-1 §1: استخلاص حتمي كالنصّي
-                      "system": [{"type": "text", "text": system,
-                                  "cache_control": {"type": "ephemeral"}}],
-                      "messages": [{"role": "user", "content": [
-                          {"type": "image",
-                           "source": {"type": "base64",
-                                      "media_type": media_type,
-                                      "data": image_b64}},
-                          {"type": "text", "text": text}]}]})
-            resp.raise_for_status()
+            payload = {"model": model, "max_tokens": max_tokens,
+                       "temperature": 0,   # WP-1 §1: استخلاص حتمي كالنصّي
+                       "system": [{"type": "text", "text": system,
+                                   "cache_control": {"type": "ephemeral"}}],
+                       "messages": [{"role": "user", "content": [
+                           {"type": "image",
+                            "source": {"type": "base64",
+                                       "media_type": media_type,
+                                       "data": image_b64}},
+                           {"type": "text", "text": text}]}]}
+            resp = self._post(key, payload, timeout)
             data = resp.json()
             self._record_usage(model, data)
             stop_reason = data.get("stop_reason")
