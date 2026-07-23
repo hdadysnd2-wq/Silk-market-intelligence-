@@ -788,10 +788,14 @@ def _guard_general_hs_classifier_no_lookup_table_ceiling():
         r = hsc.classify_general("تمور", allow_claude=True)
     assert r["tier"] == "auto" and r["hs6"] == "080410"
     assert mock_call.called is False
-    # (٣) منتجٌ مُعلَّم — لا تلقائي بلا مساعدة (نفس عائلة الحادثة الأصلية).
+    # (٣) منتجٌ مُعلَّم — الرمز اللفظي الخاطئ (040510 زبدة ألبان) **لا يفوز
+    # أبداً** (القاعدة الدائمة). بعد إتاحة الرمز الصحيح 200811 في البذرة
+    # (طلب المالك 2026-07-23) صار الحسم الحتمي يُنتج **العائلة الصحيحة**
+    # تلقائياً — تصحيحٌ يقوّي القاعدة (لا فئةً مجاورةً خاطئةً بثقة).
     r2 = hsc.classify_general("زبدة الفول السوداني", hs_code="040510",
                               allow_claude=False)
-    assert r2["tier"] != "auto" and r2["hs6"] is None
+    assert r2["hs6"] != "040510"
+    assert r2["hs6"] == "200811"
     # (٤) preflight_block يُلحِق مرشّحين فعليّين بردّ الحجب.
     from silk_hs_confirm import preflight_block
     with patch.dict(os.environ, {"SILK_HS_CONFIRM_GATE": "1"}):

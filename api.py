@@ -1125,6 +1125,16 @@ def create_app():
         # الرمز تُرجِع 422 حين لا تشمل صفةُ الرمز صفةَ المنتج المميّزة؛ إرسالُ
         # hs_confirmed=true بعد مراجعة المستخدم يُكمِل التشغيلة على مسؤوليته.
         hs_confirmed: bool = False
+        # نمط كتابة التقرير (طلب المالك 2026-07-23): "academic" يجعل الكاتب
+        # يكتب بسجلٍّ بحثيٍّ علمي (نفس الأقسام/الحكم/قواعد الصدق، النثر وحده
+        # يتغيّر). غيابه => الافتراضي من البيئة `SILK_REPORT_STYLE`
+        # (المضبوط "academic"). قيمة صريحة في الطلب تتقدّم على البيئة.
+        report_style: str | None = None
+
+    def _default_report_style() -> str:
+        """نمط الكتابة الافتراضي للتوليد — `SILK_REPORT_STYLE` (طلب المالك:
+        الافتراضي "academic"). أيّ قيمةٍ غير "academic" تعني السجل التجاري."""
+        return (os.environ.get("SILK_REPORT_STYLE", "academic") or "").strip().lower()
 
     def _research_budget_status(economics: dict) -> dict:
         """حالة الميزانية على مستوى التشغيلة كاملة — P1، حادثة نفاد
@@ -1345,7 +1355,8 @@ def create_app():
                                ai_ok: bool, ai_note: str, prefs: dict | None,
                                ready: bool, ready_reason: str,
                                analysis_id: int | None,
-                               resume_reports: dict | None) -> dict:
+                               resume_reports: dict | None,
+                               report_style: str | None = None) -> dict:
         """جسم التشغيلة الثقيل — بعثات + محلل + توليف + كاتب/مراجع + بوابة
         جودة. مستخرَج من مسار /research المتزامن السابق **بلا تغيير سلوكي**
         كي يُستدعى إما مباشرة (وضع متزامن) أو من خيط خلفي (async_run=true)
@@ -1450,10 +1461,14 @@ def create_app():
                 hs_conf = confirm_hs(product, hs_code) if hs_code else None
             except Exception:
                 hs_conf = None
+            # نمط الكتابة (طلب المالك): يُمرَّر للكاتب فيبدّل عقد السجل اللغوي
+            # وحده (الأكاديمي مقابل التجاري) — نفس الأقسام/الحكم/قواعد الصدق.
+            eff_report_style = (report_style or _default_report_style())
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
                 product, market_ref.name_en, max_cycles=tail_max_cycles,
                 trace_id=trace_id, hs_code=hs_code, hs_confirmation=hs_conf,
+                style=eff_report_style,
                 on_stage=lambda s: silk_context.snapshot_research_progress(
                     analysis_id, s)) if ai_ok else
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
@@ -1533,6 +1548,9 @@ def create_app():
             "deep_research": {
                 "missions": mission_reports, "analyst": analyst_out,
                 "verdict": verdict, "report": report_out,
+                # نمط الكتابة المستعمَل فعلاً — يُخزَّن كي تتّسق طبقة العرض
+                # وإعادة التوليد/التصدير مع ما كُتب به التقرير أول مرّة.
+                "report_style": eff_report_style,
                 # C5 (Command #5b): قائمة مستوردين/موزعين قابلين للتواصل
                 # (خرائط قوقل/Places + مرشّحو ويب) — تُعرَض في قسم الدخول.
                 "importer_leads": importer_leads,
@@ -1586,7 +1604,7 @@ def create_app():
     def _research_background(market_ref, product, hs_code, hs_note,
                              product_card_dict, ai_ok, ai_note, prefs,
                              ready, ready_reason, analysis_id,
-                             resume_reports) -> None:
+                             resume_reports, report_style=None) -> None:
         """جسم الخيط الخلفي (async_run=true) — يُغلَّف باستثناء شامل عمداً:
         خيط بايثون غير المُمسوك يفشل صامتاً (لا كسر عملية، لا تحديث حالة)
         فتبقى التشغيلة عالقة على 'running' للأبد — بلاغ التحقيق (P0) يمنع
@@ -1596,7 +1614,7 @@ def create_app():
             result = _run_research_pipeline(
                 market_ref, product, hs_code, hs_note, product_card_dict,
                 ai_ok, ai_note, prefs, ready, ready_reason, analysis_id,
-                resume_reports)
+                resume_reports, report_style)
             _finish_research_run(analysis_id, result)
         except Exception as e:  # noqa: BLE001 — خيط خلفي: هذا آخر حزام أمان
             log.error("background /research run %s failed: %s", analysis_id, e)
@@ -2069,7 +2087,7 @@ def create_app():
                 target=_research_background,
                 args=(market_ref, product, hs_code, hs_note, product_card_dict,
                      ai_ok, ai_note, prefs, ready, ready_reason, analysis_id,
-                     resume_reports),
+                     resume_reports, req.report_style),
                 daemon=True).start()
             return JSONResponse(status_code=202, content={
                 "analysis_id": analysis_id, "status": "running",
@@ -2080,7 +2098,7 @@ def create_app():
             result = _run_research_pipeline(
                 market_ref, product, hs_code, hs_note, product_card_dict,
                 ai_ok, ai_note, prefs, ready, ready_reason, analysis_id,
-                resume_reports)
+                resume_reports, req.report_style)
         except Exception as e:  # noqa: BLE001 — P0: فشل لا يخسر البعثات المكتملة
             log.error("sync /research run %s failed: %s", analysis_id, e)
             if analysis_id is not None:
