@@ -1176,6 +1176,7 @@ _LESSONS = {
     52: _guard_wp6_injector_adversarial_locks,  # WP-6 — أقفال الحاقنات العدائية
     53: _guard_wp7_delivery_gate_hardening,    # WP-7 — تصليب بوابة التسليم
     54: _guard_zero_confidence_finding_declared_gap,  # بند بثقة 0.0 => فجوة معلنة لا بند (خرق حارس المراقبة الحي)
+    55: _needles("tests/conftest.py", "def _hermetic_env_guard"),  # عزل SILK_HERMETIC لكل اختبار — لا تسرّب لافتة «نموذج توضيحي»
 }
 
 _TRAPS = [

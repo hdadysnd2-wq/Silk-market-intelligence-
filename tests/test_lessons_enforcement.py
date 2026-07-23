@@ -464,6 +464,11 @@ _SYMBOL_ANCHORS_EXTRA = [
      ["def test_model_stated_zero_confidence_claim_becomes_declared_gap",
       "def test_inherited_zero_confidence_from_cited_gap_datapoint_not_shipped",
       "def test_watchdog_no_fabrication_holds_on_parse_output_shape"]),
+    # البند ٥٥ — تسرّب SILK_HERMETIC الخام بين الاختبارات (لافتة «نموذج
+    # توضيحي» في PDF عميل): عازل autouse مضمون الاسترجاع في conftest.
+    (55, "tests/conftest.py", ["def _hermetic_env_guard"]),
+    (55, "tests/test_wave2_first_pdf_cluster.py",
+     ["def test_visual_pdf_lock_production_entrypoint_bare_no_split_no_leaks"]),
 ]
 
 
