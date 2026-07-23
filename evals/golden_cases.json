@@ -16,6 +16,8 @@
       ],
       "clean_body": true,
       "references_integrity": true,
+      "no_truncation_artifacts": true,
+      "plausibility_reconciled": true,
       "gap_rate_max": 0.3
     },
     "verified_at": "2026-07-23",
@@ -39,6 +41,8 @@
       ],
       "clean_body": true,
       "references_integrity": true,
+      "no_truncation_artifacts": true,
+      "plausibility_reconciled": true,
       "gap_rate_max": 0.3
     },
     "verified_at": "2026-07-23",
@@ -62,6 +66,8 @@
       ],
       "clean_body": true,
       "references_integrity": true,
+      "no_truncation_artifacts": true,
+      "plausibility_reconciled": true,
       "gap_rate_max": 0.45
     },
     "verified_at": "2026-07-23",
@@ -85,6 +91,8 @@
       ],
       "clean_body": true,
       "references_integrity": true,
+      "no_truncation_artifacts": true,
+      "plausibility_reconciled": true,
       "gap_rate_max": 0.35
     },
     "verified_at": "2026-07-23",

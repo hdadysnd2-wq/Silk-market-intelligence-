@@ -2534,6 +2534,8 @@ def create_app():
         # التصدير الكامل التشغيلي للمدقّق فقط عند طلب صريح.
         internal = str(request.query_params.get("internal") or "").lower() in (
             "1", "true", "yes")
+        # HF4.2: علِّم النموذجَ بالجمهور — سطرُ إفصاح التنقية للمدقّق فقط.
+        view["internal"] = internal
         is_research = bool(view.get("deep_research"))
         if is_research and not internal:
             _block_client_export_if_gate_failed(
@@ -2609,6 +2611,8 @@ def create_app():
         view = build_view(found)
         internal = str(request.query_params.get("internal") or "").lower() in (
             "1", "true", "yes")
+        # HF4.2: علِّم النموذجَ بالجمهور — سطرُ إفصاح التنقية للمدقّق فقط.
+        view["internal"] = internal
         is_research = bool(view.get("deep_research"))
         if is_research and not internal:
             _block_client_export_if_gate_failed(

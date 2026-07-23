@@ -120,9 +120,13 @@ def test_tool_comtrade_imports_no_unit_value_without_weight():
             "market": market, "hs_code": "080410", "product": "تمور",
             "extra_findings": [], "extra_context": ""})
 
-    # بند واحد فقط (إجمالي الاستيراد) — لا محاولة قسمة على وزن غائب.
-    assert len(dps) == 1
+    # HF4.4 (بلاغ قطر): بندان — إجمالي الاستيراد + فجوةُ وزنٍ **مصرَّحة** بدقّة
+    # (المُبلِّغ لا يودع الوزن، لا «لم نطلبه»). لا سعرَ وحدةٍ مُختلَق من وزنٍ غائب.
+    assert len(dps) == 2
     assert dps[0].value == 1_000_000.0
+    gap = dps[1]
+    assert gap.value is None and gap.status == "no_record"
+    assert "لا يودع بيانات الوزن" in gap.note  # صياغةٌ صادقة: المصدرُ لا المستهلك
 
 
 # ── ٤) customs_requirements ──────────────────────────────────────────────

@@ -1197,6 +1197,57 @@ def _guard_wave2_med_hardening():
     assert _exists("tests/test_wave2_med_fixes.py"), "ملف أقفال الموجة ٢ مفقود"
 
 
+def _guard_composite_source_id_attribution():
+    """LESSONS ٦٠ — إسنادٌ مركّب (بلاغ قطر): معرّفُ المصدر ذرّيّ، الإسنادُ
+    المتعدّد قائمةٌ لا سلسلةٌ مدموجة؛ المراجع تُسطّح فيُسنِد كلٌّ لرابطه."""
+    from silk_data_layer import (atomic_source_ids, is_atomic_source_id,
+                                 public_source_url)
+    assert not is_atomic_source_id("IMF WEO، World Bank")   # فاصلُ دمجٍ مرفوض
+    assert is_atomic_source_id("WITS/WTO Tariff")           # «/» مشروع
+    assert atomic_source_ids("A", ("A", "B")) == ["A", "B"]
+    # أمانةُ GAFTA لها رابطٌ ذرّيّ مستقلّ (كانت تعيش داخل مركّبٍ بلا رابط).
+    assert public_source_url("GAFTA secretariat") == "https://www.lasportal.org"
+    assert public_source_url("GCC secretariat") != public_source_url(
+        "GAFTA secretariat")
+    _needles("silk_llm_runtime.py", "source_ids=tuple(pub_sources)")()
+    _needles("silk_evals.py", "listed-but-unused", "معرّفُ مصدرٍ **مركّب**")()
+    _needles("tests/test_hf_attribution_truncation_plausibility.py",
+             "def test_three_source_finding_yields_three_atomic_references")()
+
+
+def _guard_renderer_truncation_and_empty_parens():
+    """LESSONS ٦١ — بترٌ داخل رقمٍ + قوسٌ فارغ (بلاغ قطر): القصُّ لا ينتهي داخل
+    رقم، وحذفُ الاستشهاد لا يترك «()»."""
+    import re as _re
+    from silk_reports import _trim_sentence, _client_sanitize
+    from silk_render import _strip_internal_plumbing
+    out = _trim_sentence("تعافٍ جزئيّ إلى 7.12 مليون دولار مؤكَّد", 22)
+    assert not _re.search(r"[0-9٠-٩][.،]\s*$", out), out
+    assert _client_sanitize("قيمة (/) مؤكَّدة") == "قيمة مؤكَّدة"
+    assert "()" not in _strip_internal_plumbing("المتاجر (dp3) كارفور")
+    _needles("silk_render.py", "_DP_GROUP_RE", "_EMPTY_CITATION_GROUP_RE")()
+    _needles("tests/test_hf_attribution_truncation_plausibility.py",
+             "def test_trim_sentence_never_ends_inside_a_number")()
+
+
+def _guard_cross_source_plausibility():
+    """LESSONS ٦٢ — مقدارٌ غيرُ مُصالَح (بلاغ قطر): حارسُ معقوليةٍ يقارن المقاديرَ
+    بمرتكزات التشغيلة ويُوسَم/يُتحفَّظ عليه، ويُسجَّل في المانيفست."""
+    import silk_plausibility as P
+    result = {"deep_research": {"missions": {
+        "trade_flow": {"findings": [{"value": 7_000_000.0, "source": "UN Comtrade",
+                                    "note": "إجمالي استيراد قطر من العالم USD"}]},
+        "consumer_culture": {"findings": [{"value": "497 مليون دولار",
+            "source": "ويب", "note": "حجم سوق الفول السوداني الكامل"}]}}}}
+    flags = P.check_magnitudes(result)
+    assert flags and flags[0]["detail"]["import_ratio"] > 20
+    assert P.check_magnitudes({"deep_research": {"missions": {}}}) == []  # فشلٌ آمن
+    _needles("silk_render.py", "silk_plausibility.annotate")()
+    _needles("silk_evals.py", "def _plausibility_reconciled")()
+    _needles("tests/test_hf_attribution_truncation_plausibility.py",
+             "def test_plausibility_flags_implausible_market_size")()
+
+
 _LESSONS = {
     1: _needles("docs/LIVE_PROOF_RUNBOOK.md", "لا يُشغَّل هيرمتياً"),
     2: _needles("silk_render.py", "_deep_research_view"),
@@ -1263,6 +1314,9 @@ _LESSONS = {
                  "self-review catches what hermetic tests structurally cannot"),
     55: _needles("tests/conftest.py", "def _hermetic_env_guard"),  # عزل SILK_HERMETIC لكل اختبار — لا تسرّب لافتة «نموذج توضيحي»
     59: _guard_wave2_med_hardening,   # الموجة ٢ — خمسة إصلاحات MED من تدقيق v2
+    60: _guard_composite_source_id_attribution,   # بلاغ قطر HF1 — إسنادٌ ذرّيّ لا مركّب
+    61: _guard_renderer_truncation_and_empty_parens,  # بلاغ قطر HF2 — لا بترٌ داخل رقم/قوسٌ فارغ
+    62: _guard_cross_source_plausibility,         # بلاغ قطر HF3 — حارسُ معقوليةٍ عبر المصادر
 }
 
 _TRAPS = [

@@ -9,6 +9,7 @@ import datetime
 import functools
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 import requests
@@ -205,6 +206,12 @@ class DataPoint:
     # (البنك الدولي/كومتريد/المنافسون)، و`silk_staleness.fact_year` يقرؤه أولاً
     # فيُقرَّر التقادُم دون تحليل نثرٍ ودون تسريب «year=» لأيّ سطح.
     data_year: "int | None" = None
+    # HF1 (بلاغ إسناد مركّب — تقرير قطر ٢٠٢٦-٠٧-٢٣): حين تُسنِد النقطةَ عدّةُ
+    # مصادر، تُحفَظ قائمةُ المعرّفات **الذرّية** هنا صراحةً — لا تُدمَج في حقل
+    # `source` (الذي يبقى ذرّياً: المصدر الأساسيّ وحده). المستهلِكون (المراجع/
+    # المنهجية) يسطّحون هذه القائمة فيُسنِد كلُّ مصدرٍ لرابطه الصحيح، بلا معرّفٍ
+    # مركّبٍ يُخطئ الإسناد أو يُكرِّر المصدر. `()` = مصدرٌ واحد (السلوك القديم).
+    source_ids: tuple = ()
 
 
 # السجلّ العمومي لروابط المصادر (§6، أمر العمل الرئيس) — كل مصدرٍ عموميّ مسمّى
@@ -228,7 +235,59 @@ SOURCE_PUBLIC_URL = {
     # الموجة: دمج مصادر جديدة — مصدران جديدان بواجهة رسمية (لا كشط).
     "imf weo": "https://www.imf.org/external/datamapper/",
     "wto ttd": "https://ttd.wto.org/",
+    # HF1 (سلامة المراجع WS9): أماناتُ الاتفاقيات التجارية مصادرُ مسمّاةٌ ذاتُ
+    # روابطَ رسمية (منقولةٌ حرفياً من `data/agreements_l1.csv`، لا اختلاق) —
+    # كانت تظهر داخل معرّفٍ مركّبٍ («GCC secretariat، GAFTA secretariat») بلا
+    # مدخلٍ ذرّيٍّ مستقلّ، فيُخطئ إسنادُها (تُوجَّه بيانات GAFTA لرابط GCC).
+    # المفاتيح الذرّية أدناه تحلّ كلٌّ لرابطه الصحيح.
+    "gcc secretariat": "https://gcc-sg.org",
+    "gafta secretariat": "https://www.lasportal.org",
+    "oic secretariat": "https://www.oic-oci.org",
+    "afcfta secretariat": "https://au-afcftahub.au.int",
+    "wto secretariat": "https://www.wto.org/",
 }
+
+
+# HF1: الفواصلُ التي كانت تُنتِج معرّفاً **مركّباً** في حقل `source` الذرّيّ.
+# `silk_llm_runtime` كان يدمج مصادرَ عدّةٍ بـ«، »؛ والفاصلة المنقوطة «؛»
+# فاصلُ ملاحظاتٍ مشابه. **لا** نُدرِج «/» ولا «,» الإنجليزية: أسماءُ مصادرَ
+# مفردةٌ مشروعةٌ تحملها («WITS/WTO Tariff»، «BRC/IFS») فليست دمجاً.
+_SOURCE_ID_JOIN_RE = re.compile(r"\s*[،؛]\s*")
+
+
+def is_atomic_source_id(source_id: object) -> bool:
+    """هل المعرّف ذرّيّ (مصدرٌ واحد)؟ يرفض أيّ فاصلَ دمجٍ («، » أو «؛») — الفخّ
+    الذي أنتج «IMF WEO، World Bank» كمعرّفٍ واحدٍ فأخطأ الإسناد وكرّر المصدر."""
+    return not _SOURCE_ID_JOIN_RE.search(str(source_id or ""))
+
+
+def atomic_source_ids(source: object, source_ids: object = None) -> list:
+    """قائمةُ المعرّفات **الذرّية** لبندٍ — يُفضَّل `source_ids` الصريحةُ (HF1)؛
+    وإلا يُقسَّم `source` القديم على فاصل الدمج (توافقيةٌ خلفيةٌ لبياناتٍ سابقة).
+    فريدةٌ (بلا حساسيةِ حالة) محفوظةُ الترتيب، بلا فراغات؛ وأيُّ معرّفٍ مركّبٍ
+    تسرّب — ولو في القائمة الصريحة — يُفكَّك دفاعياً فلا يبقى دمجٌ أبداً."""
+    raw: list = []
+    if source_ids:
+        for s in source_ids:
+            t = str(s or "").strip()
+            if t:
+                raw.append(t)
+    if not raw:
+        s = str(source or "").strip()
+        if s:
+            raw = [s]
+    flat: list = []
+    for x in raw:
+        parts = [p.strip() for p in _SOURCE_ID_JOIN_RE.split(x) if p.strip()]
+        flat.extend(parts or ([x] if x.strip() else []))
+    seen: set = set()
+    uniq: list = []
+    for x in flat:
+        k = x.casefold()
+        if k not in seen:
+            seen.add(k)
+            uniq.append(x)
+    return uniq
 
 # البوّابة العربية للبنك الدولي (الموجة: دمج مصادر جديدة، Wave 3) — **ليست
 # مصدر بيانات جديداً**: هي واجهة عربية لنفس قاعدة البنك الدولي المدمَجة أصلاً
@@ -407,6 +466,11 @@ def comtrade_trade(
     ردّ ناجح بلا سجلات يعيد [] — فيميّز المستهلك «تعذّر الجلب» من
     «لا سجل فعلاً» بدل عرض كليهما «لا بيانات».
     """
+    # HF4.4 (بلاغ قطر — فجوةُ الوزن): معاينةُ كومتريد تُرجِع **مجموعةَ الأعمدة
+    # الكاملة** بما فيها `netWgt` (الوزن الصافي بالكجم) لكلِّ سجل يودعه المُبلِّغ
+    # — لا تدعم الواجهةُ انتقاءَ أعمدةٍ ولا نُسقِط الوزن، فهو يصل تلقائياً
+    # (`primary_qty` يقرؤه). لذا غيابُ الوزن في الردّ يعني أنّ المُبلِّغ لا يودعه
+    # لهذا البند/السنة — لا أنّنا لم نطلبه (المستهلك يُصرِّح الفجوةَ بهذه الدقّة).
     params = {
         "period": str(year),
         "cmdCode": str(hs_code),
