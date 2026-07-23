@@ -382,13 +382,18 @@ def _tool_web_search(args: dict, ctx: dict) -> list[DataPoint]:
 
 
 def _tool_gdelt_news(args: dict, ctx: dict) -> list[DataPoint]:
-    from silk_gdelt_agent import gdelt_news
+    # WS8: سلسلة تعطيلٍ نظيفة GDELT → Google News RSS → Serper — فشل GDELT
+    # (429/حجب IP سحابي/لا نتيجة) لم يعد يسقط الخط إلى فجوة مباشرةً؛ التِير
+    # المجاني بلا مفتاح (Google News RSS) يتوسّط قبل Serper، والفجوة تُعلَن
+    # فقط بعد استنفاد السلسلة كاملةً (لا اختلاق).
+    from silk_google_news_agent import news_with_fallback
     query = str(args.get("query") or "").strip()
     if not query:
         return [DataPoint(None, "GDELT", 0.0, "استعلام فارغ", _today())]
     market = ctx["market"]
     months = int(args.get("months") or 12)
-    return gdelt_news(query, market=market.name_en, months=months)
+    return news_with_fallback(query, market=market.name_en, months=months,
+                              gl=_locale_gl(ctx), hl=_locale_hl(ctx))
 
 
 def _tool_openalex_search(args: dict, ctx: dict) -> list[DataPoint]:

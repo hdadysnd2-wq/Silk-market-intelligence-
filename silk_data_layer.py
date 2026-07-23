@@ -173,6 +173,9 @@ SOURCE_PUBLIC_URL = {
     "faostat": "https://www.fao.org/faostat/en/",
     "eurostat": "https://ec.europa.eu/eurostat/",
     "gdelt": "https://www.gdeltproject.org/",
+    # WS8: التِير الأوسط في سلسلة الأخبار (مجاني بلا مفتاح) — مصدرٌ عموميٌّ
+    # مسمّى، فيحلّ رابطه الرسمي في قسم المراجع لا كنائبٍ عام (WS9).
+    "google news": "https://news.google.com/",
     "wits": "https://wits.worldbank.org/",
     # الموجة: دمج مصادر جديدة — مصدران جديدان بواجهة رسمية (لا كشط).
     "imf weo": "https://www.imf.org/external/datamapper/",
