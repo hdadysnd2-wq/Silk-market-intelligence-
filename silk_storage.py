@@ -34,6 +34,79 @@ def _db_path() -> str:
     return _DEFAULT_PATH
 
 
+def _resolve_data_dir() -> str | None:
+    """المجلّد الجذر للتخزين الدائم — the root persistent-storage directory.
+
+    `SILK_DATA_DIR` مباشرةً، وإلا مجلّد `SILK_DB` الصريح. None حين لا توجيه.
+    Used by the boot guard and /health to verify the target is a REAL disk.
+    """
+    base = os.environ.get("SILK_DATA_DIR", "").strip()
+    if base:
+        return base
+    db = os.environ.get("SILK_DB", "").strip()
+    if db:
+        return os.path.dirname(os.path.abspath(db)) or os.sep
+    return None
+
+
+def _nearest_mountpoint(path: str) -> str:
+    """أقرب نقطة تركيب صاعدةً — the nearest mount point at or above `path`.
+
+    يصعد الآباء حتى `os.path.ismount` يصدق؛ يرجّع جذر نظام الملفات إن لم يجد.
+    Walks parents until a mount point is found; returns the fs root otherwise.
+    """
+    p = os.path.abspath(path)
+    while p != os.path.dirname(p):
+        if os.path.ismount(p):
+            return p
+        p = os.path.dirname(p)
+    return p
+
+
+def persistence_status() -> dict:
+    """حالة القرص الدائم الفعلية — actual persistent-storage status.
+
+    يستخدمها حارس الإقلاع و/health للتمييز بين «المتغيّر مكتوب» و«قرص دائم
+    حقيقي مركّب وقابل للكتابة». حادثة حيّة (بلاغ المالك): `SILK_DATA_DIR`
+    كان مضبوطًا لكن **لا وحدة تخزين مركّبة على مساره** — فكل تحليل مدفوع كان
+    يُكتب على جذر حاوية Railway الفاني ويُمحى عند كل إعادة نشر، والحارس القديم
+    (فحص أن المتغيّر غير فارغ فقط) لم ينتبه.
+
+    الحقول:
+    - `configured`: أيّ متغيّر تخزين موجَّه أصلًا.
+    - `path`: المجلّد الجذر المحلول (أو None).
+    - `mountpoint`: أقرب نقطة تركيب فوق المسار.
+    - `is_mount`: المسار على وحدة تخزين مركّبة فعلًا (لا جذر الحاوية `/` الفاني).
+    - `writable`: نجحت كتابة ملف مجسّ فعليّ ثم حذفه.
+    """
+    d = _resolve_data_dir()
+    st: dict = {"configured": bool(d), "path": d, "mountpoint": None,
+                "is_mount": False, "writable": False}
+    if not d:
+        return st
+    mp = _nearest_mountpoint(d)
+    st["mountpoint"] = mp
+    # جذر الحاوية (overlay على `/`) ليس قرصًا دائمًا؛ وحدة Railway تُركَّب على
+    # مسارها الخاص فتظهر كنقطة تركيب منفصلة. تساوي المسار الجذر = لا وحدة.
+    st["is_mount"] = os.path.abspath(mp) != os.path.abspath(os.sep)
+    # مجسّ كتابة فعلي باسم فريد (mkstemp) — /health قد يُنادى بالتوازي، فاسمٌ
+    # ثابت يجعل نداءين يتسابقان على نفس الملف (حذفٌ أثناء كتابة) فيُبلَّغ
+    # writable=False زورًا. mkstemp يضمن التفرّد ولا تصادم.
+    try:
+        import tempfile
+        os.makedirs(d, exist_ok=True)
+        fd, probe = tempfile.mkstemp(prefix=".silk_persist_probe_", dir=d)
+        try:
+            os.write(fd, b"ok")
+        finally:
+            os.close(fd)
+            os.remove(probe)
+        st["writable"] = True
+    except OSError:
+        st["writable"] = False
+    return st
+
+
 def _connect(path: str) -> sqlite3.Connection:
     """افتح اتصالًا وأنشئ المجلد — open a connection, making parent dir if needed."""
     parent = os.path.dirname(path)

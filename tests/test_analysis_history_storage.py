@@ -124,12 +124,17 @@ def test_health_no_storage_warning_when_silk_data_dir_set():
 
 def test_health_exposes_persist_guard_state():
     """PART E (أمر العمل الرئيس): حالة SILK_REQUIRE_PERSISTENT_DATA_DIR
-    مرئية من /health — كانت غير قابلة للتفتيش عن بُعد إطلاقاً."""
+    مرئية من /health — كانت غير قابلة للتفتيش عن بُعد إطلاقاً.
+
+    تقوية البند ٤: المصيدة صارت ترفض الإقلاع على مسارٍ ليس وحدة مركّبة، لذا
+    نحاكي وحدة تخزين حقيقية (ismount=True) كي يقلع تحت العلَم المفعّل."""
+    from unittest.mock import patch
     tmp = tempfile.mkdtemp()
     with _env(SILK_DATA_DIR=tmp, SILK_REQUIRE_PERSISTENT_DATA_DIR="1",
               SILK_API_KEY=None, ANTHROPIC_API_KEY=None, VOLZA_API_KEY=None,
               EXPLEE_API_KEY=None, LOCALPRICE_API_KEY=None):
-        on = _client().get("/health").json()
+        with patch("os.path.ismount", return_value=True):
+            on = _client().get("/health").json()
     with _env(SILK_DATA_DIR=tmp, SILK_REQUIRE_PERSISTENT_DATA_DIR=None,
               SILK_API_KEY=None, ANTHROPIC_API_KEY=None, VOLZA_API_KEY=None,
               EXPLEE_API_KEY=None, LOCALPRICE_API_KEY=None):
