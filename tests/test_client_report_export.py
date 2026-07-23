@@ -78,7 +78,10 @@ def _mock_view(missing_categories=None, report_text=None):
                 "report": AgentReport("LLMAgent:market_analyst",
                                       demand + price, False, "تحليل مكتمل"),
                 "by_category": by_cat, "missing_categories": missing},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحكم المعروض من الحقل الحتمي حصراً — المدوّنة تحاكي
+            # تشغيلة النظام الجديد (الكاتب مقيَّد بالحكم الحتمي فيطابقه السرد)؛
+            # قراءة كلود (ai) استشارية متوافقة، لا مصدر الحكم.
+            "verdict": {"verdict": "CONDITIONAL-GO", "confidence": 0.66,
                        "ai": {"verdict": "دخول مشروط", "confidence": 0.66,
                              "reasoning": "دخول مشروط بتأمين الأهلية أولاً."}},
             "report": {"report": report_text or default_report,
@@ -106,6 +109,29 @@ def test_client_export_has_zero_forbidden_terms(tmp_path):
     text = docx_all_text(out)
     hits = R._client_forbidden_hits(text)
     assert hits == [], f"forbidden telemetry leaked into client export: {hits}"
+
+
+def test_client_export_zero_hits_for_A_terms(tmp_path):
+    """§A (حزمة الفكس v2.1، بند ٦): تقرير العميل خالٍ تماماً من سجلّ الأدلة
+    القديم/جدول مزيج الثقة/تسميات المصدر الداخلية — استُبدلت أو أُسقطت من
+    بناء العميل (تبقى في ?internal=1 فقط).
+
+    ملاحظة نطاق (قرار تنفيذ واعٍ يخالف حرفية §A-4): «جدول خرائط قوقل» طلبت
+    الحزمة إسقاطه من بناء العميل بالكامل — أُبقي عمداً (راجع التعليق أعلى
+    استدعاء `_docx_leads` في `render_client_docx`) لأنه محتوًى تجاريٌّ فعلي
+    (جهات اتصال موزّعين) يخدم قرار العميل، وثلاثة اختبارات قائمة تُثبِته
+    قراراً منتجاً متعمَّداً سابقاً (C5) — فلا يُفحَص غيابه هنا. كذلك رمزا
+    «◐»/«○» استُبعِدا من قائمة الحجب لأنهما استعمال سردي مشروع قائم فعلاً في
+    متن الكاتب (مثال: «موزّع حلال (○ يحتاج تحققاً)»)، لا رمزا الجدول المحذوف
+    حصراً — الفحص هنا يستهدف العنوان/الجدول المحذوفين بنصّهما الفعلي."""
+    import silk_reports as R
+    with block_network():
+        out = _render(_mock_view(), tmp_path)
+    text = docx_all_text(out)
+    for term in ("سجل الأدلة", "للمدققين", "مؤشّر ثقة الدراسة", "قوة الدليل",
+                "Silk L1", "مرجع سلك"):
+        assert term not in text, f"forbidden §A term leaked: {term!r}"
+    assert "المراجع" in text
 
 
 def test_each_forbidden_category_absent_explicitly(tmp_path):
@@ -171,7 +197,7 @@ def test_client_structure_headings_in_order(tmp_path):
     text = docx_all_text(out)
     order = ["القرار وأساسه", "السوق بالأرقام", "المنافسة والتسعير والهامش",
              "مسار الدخول والمتطلبات", "المخاطر",
-             "ما لم يكتمل للقرار", "المنهجية وسجل الأدلة للمدققين"]
+             "ما لم يكتمل للقرار", "المراجع"]
     positions = [text.find(h) for h in order]
     for h, pos in zip(order, positions):
         assert pos >= 0, f"client section missing: {h}"
@@ -188,7 +214,7 @@ def test_missions_table_replaced_by_methodology_paragraph(tmp_path):
     assert "مسار بحث" not in text        # §2.5: لا نسبة الحقائق لمسار بحث داخلي
     assert "مصادر رسمية عامة" in text     # الصياغة العامة الجديدة
     assert "من مصدرها العمومي" in text  # أسلوب التحقّق
-    assert "سجل الأدلة للمدققين" in text  # الملحق المُعاد تسميته
+    assert "المراجع" in text  # §A: الملحق أعيد تسميته "المراجع"
     # لا عمود «الحالة» التشغيلي (كان في جدول ملخّص مصادر البحث القديم)
     assert "الحالة" not in text or "ناجحة" not in text
 
@@ -209,11 +235,40 @@ def test_empty_intersections_become_commercial_phrasing(tmp_path):
 
 
 def test_no_missing_categories_gives_positive_line_not_empty(tmp_path):
+    """السطر الإيجابي «لا فجوة جوهرية» يظهر فقط حين لا تقاطع ناقص **ولا شرط
+    قلب حكم غير محقَّق** (§H-1). هنا نُفرِّغ شروط قلب الحكم (كلها محقَّقة/لا
+    شرط) مع إبقاء حكم المدوّنة كما هو، فيبقى المسار الإيجابي النقيّ محفوظاً
+    بلا تناقض شارة/متن."""
+    view = _mock_view(missing_categories=[])
+    view["deep_research"]["flip_conditions"] = []
     with block_network():
-        out = _render(_mock_view(missing_categories=[]), tmp_path)
+        import silk_reports as R
+        out = os.path.join(str(tmp_path), "client.docx")
+        R.render_client_docx(view, out)
     text = docx_all_text(out)
     assert "لا فجوة جوهرية" in text
     assert "لم نتمكّن من توثيق" not in text
+
+
+def test_conditional_verdict_unmet_flip_condition_surfaces_as_gap(tmp_path):
+    """§H-1 (حزمة الفكس v2.1): بلاغ حي — «لا فجوة جوهرية» نُشرت بينما شرط
+    قلب الحكم المهيكل (موزّع متعاقَد) غير محقَّق. الآن: حكمٌ مشروط بشرط قلبٍ
+    غير محقَّق يُظهِر الشرط كفجوة صريحة، لا نفياً كاذباً للفجوة."""
+    view = _mock_view(missing_categories=[])
+    view["deep_research"]["verdict"]["ai"]["verdict"] = "CONDITIONAL-GO"
+    view["deep_research"]["verdict"]["verdict"] = "CONDITIONAL-GO"
+    # شرط قلب حكم غير محقَّق (لا موزّع مؤكَّد بجهة اتصال حقيقية)
+    view["deep_research"]["flip_conditions"] = [{
+        "condition": "التعاقد مع موزّع محلي مؤكَّد بالاسم في هولندا",
+        "closes_via": "خدمة تحقّق جهات الاتصال المدفوعة ثم عقد موزّع",
+        "met": False}]
+    with block_network():
+        import silk_reports as R
+        out = os.path.join(str(tmp_path), "client.docx")
+        R.render_client_docx(view, out)
+    text = docx_all_text(out)
+    assert "لم يتحقّق بعد" in text
+    assert "لا فجوة جوهرية" not in text
 
 
 # ── لا اختلاق: تقرير بلا سرد كاتب يتدهور تجارياً بلا تِلِمِتري ──────────────
@@ -225,15 +280,29 @@ def test_missing_writer_report_degrades_cleanly(tmp_path):
     text = docx_all_text(out)
     assert R._client_forbidden_hits(text) == []       # نظيف رغم غياب السرد
     assert "التوصية:" in text                         # الحكم حاضر دوماً
-    assert "المنهجية وسجل الأدلة للمدققين" in text     # الملحق حاضر
+    assert "المراجع" in text                           # §A: الملحق حاضر
 
 
 # ── نقطة النهاية: /research → تقرير العميل النظيف؛ ?internal=1 → الكامل ────
 
-def _store_deep_research(db):
+def _store_deep_research(db, report_text=None, full_sections=True):
     """خزّن نتيجة بحث عميق بشكل JSON-safe (بعثات كقواميس) — كما يصل من
-    التخزين فعلاً؛ build_view يطبّعها عبر _report_fields."""
+    التخزين فعلاً؛ build_view يطبّعها عبر _report_fields.
+
+    §0 (الفكس الجذري — الحزمة v2.1): نقطتا التصدير الآن تحجبان تسليم العميل
+    حين تُعيد بوابة الجودة FAIL. `full_sections=True` (الافتراضي) يستعمل
+    تقرير المدوّنة القانونية الحقيقية الشكل (١١ قسماً كاملة،
+    `tools/canonical_netherlands.REPORT_TEXT`) الذي يمرّ ببوابة الجودة
+    (PASS-WITH-WARNINGS)، فتبقى نقاط النهاية الافتراضية 200. `full_sections=
+    False` (أو `report_text` صريح) يبني تقريراً بقسم واحد فقط — يُفشِل فحص
+    `section_structure` عمداً لاختبار الحجب §0."""
     import silk_storage as storage
+    if report_text is None:
+        if full_sections:
+            from tools.canonical_netherlands import REPORT_TEXT
+            report_text = REPORT_TEXT
+        else:
+            report_text = "## 1. الخلاصة التنفيذية\nنص تجريبي نظيف.\n"
     dp = {"value": "واردات هولندا 38 مليون دولار (2023)", "source": "UN Comtrade",
           "confidence": 0.9, "note": "[demand] تدفق مباشر",
           "retrieved_at": "2026-07-02"}
@@ -255,10 +324,11 @@ def _store_deep_research(db):
                        "missing_categories": ["entry_cost",
                                              "price_competitiveness",
                                              "entry_door", "swot"]},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحقل الحتمي هو الحكم المعروض — المدوّنة بنظام ما بعد WP-1.
+            "verdict": {"verdict": "CONDITIONAL-GO", "confidence": 0.6,
                        "ai": {"verdict": "دخول مشروط", "confidence": 0.6,
                              "reasoning": "دخول مشروط بالأهلية."}},
-            "report": {"report": "## 1. الخلاصة التنفيذية\nنص تجريبي نظيف.\n",
+            "report": {"report": report_text,
                       "review_cycles": 1, "unresolved_notes": []},
         },
     }
@@ -338,7 +408,7 @@ def test_committed_client_sample_is_clean_and_structured():
     assert R._client_forbidden_hits(text) == [], "النموذج المحفوظ يحوي تِلِمِتري"
     for h in ("القرار وأساسه", "السوق بالأرقام", "المنافسة والتسعير والهامش",
               "مسار الدخول والمتطلبات", "المخاطر", "ما لم يكتمل للقرار",
-              "سجل الأدلة للمدققين"):
+              "المراجع"):
         assert h in text, f"قسم مفقود من النموذج المحفوظ: {h}"
 
 
@@ -372,7 +442,7 @@ def test_research_docx_endpoint_serves_clean_client_report(tmp_path):
                 fh.write(r.content)
             text = docx_all_text(path)
             assert R._client_forbidden_hits(text) == []
-            assert "المنهجية وسجل الأدلة للمدققين" in text
+            assert "المراجع" in text                # §A: الملحق أعيد تسميته
             assert "قسم البحث العميق" not in text  # لا عنوان تشغيلي
 
             # ?internal=1: التصدير التشغيلي الكامل (للمدقّق) — يحوي التِلِمِتري
@@ -383,5 +453,147 @@ def test_research_docx_endpoint_serves_clean_client_report(tmp_path):
                 fh.write(r2.content)
             text2 = docx_all_text(path2)
             assert "قسم البحث العميق" in text2  # التصدير الكامل يحتفظ به
+    finally:
+        storage._DEFAULT_PATH = saved
+
+
+# ── §0 (حزمة الفكس v2.1) — البوابة شرط تسليم، لا تحسين اختياري ─────────────
+#
+# الجذر: `_attach_quality_gate` كانت «تحسين لا شرط تسليم» (تعليق قديم في
+# api.py) و`report_pdf`/`report_docx` كانا يصدّران تقرير العميل بلا أي فحص
+# لحكم البوابة — تقرير FAIL كان يصل العميل. الآن: FAIL على قالب العميل
+# (غير `internal=1`) ⇒ 409 مع ملخّص النتائج؛ `?override=1` يتخطّى الحجب؛
+# `internal=1` معفًى تماماً من هذا الفحص (يبقى متاحاً للمدقّق دوماً).
+
+def _seed_client_export(tmp_path, full_sections):
+    import silk_storage as storage
+    db = os.path.join(str(tmp_path), "research.db")
+    os.environ["SILK_HERMETIC"] = "1"
+    aid = _store_deep_research(db, full_sections=full_sections)
+    return db, aid
+
+
+def test_client_docx_export_blocked_409_when_gate_fails(tmp_path):
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import api
+    import silk_storage as storage
+
+    db, aid = _seed_client_export(tmp_path, full_sections=False)
+    saved = storage._DEFAULT_PATH
+    storage._DEFAULT_PATH = db
+    try:
+        client = TestClient(api.create_app())
+        with patch("requests.sessions.Session.request",
+                   side_effect=OSError("network disabled for offline test")):
+            r = client.get(f"/analyses/{aid}/report.docx")
+            assert r.status_code == 409
+            body = r.json()["detail"]
+            assert body["error"] == "quality_gate_fail"
+            assert body["findings"]
+            assert any(f["check"] == "section_structure" for f in body["findings"])
+
+            # WP-7 §1: ?override=1 يتطلّب سلطة المالك المنفصلة — مفتاح API
+            # العادي وحده يُرفَض 403؛ ومع X-Owner-Key المطابقة يمرّ.
+            r_no_owner = client.get(f"/analyses/{aid}/report.docx?override=1")
+            assert r_no_owner.status_code == 403
+            assert r_no_owner.json()["detail"]["error"] == \
+                "owner_override_required"
+            os.environ["SILK_OWNER_KEY"] = "owner-secret"
+            try:
+                r_override = client.get(
+                    f"/analyses/{aid}/report.docx?override=1",
+                    headers={"X-Owner-Key": "owner-secret"})
+                assert r_override.status_code in (200, 501)
+            finally:
+                os.environ.pop("SILK_OWNER_KEY", None)
+
+            # ?internal=1 معفًى من فحص البوابة تماماً — لا 409 مهما كان الحكم
+            r_internal = client.get(f"/analyses/{aid}/report.docx?internal=1")
+            assert r_internal.status_code == 200
+    finally:
+        storage._DEFAULT_PATH = saved
+
+
+def test_client_pdf_export_blocked_409_when_gate_fails(tmp_path):
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import api
+    import silk_storage as storage
+
+    db, aid = _seed_client_export(tmp_path, full_sections=False)
+    saved = storage._DEFAULT_PATH
+    storage._DEFAULT_PATH = db
+    try:
+        client = TestClient(api.create_app())
+        with patch("requests.sessions.Session.request",
+                   side_effect=OSError("network disabled for offline test")):
+            r = client.get(f"/analyses/{aid}/report.pdf")
+            assert r.status_code == 409
+            body = r.json()["detail"]
+            assert body["error"] == "quality_gate_fail"
+            assert body["findings"]
+            # ?internal=1 معفًى تماماً — أي استجابة أخرى (200/503) مقبولة،
+            # المهم أنها ليست 409 حجب البوابة.
+            r_internal = client.get(f"/analyses/{aid}/report.pdf?internal=1")
+            assert r_internal.status_code != 409
+    finally:
+        storage._DEFAULT_PATH = saved
+
+
+def test_client_docx_export_200_when_gate_passes(tmp_path):
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import api
+    import silk_storage as storage
+
+    db, aid = _seed_client_export(tmp_path, full_sections=True)
+    saved = storage._DEFAULT_PATH
+    storage._DEFAULT_PATH = db
+    try:
+        client = TestClient(api.create_app())
+        with patch("requests.sessions.Session.request",
+                   side_effect=OSError("network disabled for offline test")):
+            r = client.get(f"/analyses/{aid}/report.docx")
+            assert r.status_code in (200, 501)  # لا 409 — البوابة لم تُفشِل
+    finally:
+        storage._DEFAULT_PATH = saved
+
+
+def test_gate_crash_treated_as_fail_for_client_export(tmp_path):
+    """البند ٢ (§0): عطل البوابة نفسها (استثناء غير متوقَّع) = FAIL للعميل،
+    لا «تخطٍّ صامت» — لا يجوز أن يصل تقرير لم يُفحَص فعلياً حتى لو كانت
+    البوابة نفسها معطوبة. نُحاكي العطل بتصحيح `run_quality_gate` ليرفع،
+    على تقرير كان سيمرّ (full_sections=True) لو عملت البوابة فعلياً."""
+    import pytest
+    pytest.importorskip("fastapi")
+    pytest.importorskip("httpx")
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    import api
+    import silk_storage as storage
+    import silk_quality_gate
+
+    db, aid = _seed_client_export(tmp_path, full_sections=True)
+    saved = storage._DEFAULT_PATH
+    storage._DEFAULT_PATH = db
+    try:
+        client = TestClient(api.create_app())
+        with patch("requests.sessions.Session.request",
+                   side_effect=OSError("network disabled for offline test")), \
+             patch.object(silk_quality_gate, "run_quality_gate",
+                          side_effect=RuntimeError("simulated gate crash")):
+            r = client.get(f"/analyses/{aid}/report.docx")
+            assert r.status_code == 409
+            assert r.json()["detail"]["error"] == "quality_gate_fail"
     finally:
         storage._DEFAULT_PATH = saved

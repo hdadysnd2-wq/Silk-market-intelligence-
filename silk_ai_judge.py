@@ -199,6 +199,12 @@ def _call_tools(system: str, messages: list, tools: list | None = None,
 def _facts(reports: list) -> str:
     """حوّل تقارير الوكلاء إلى حقائق نصّية موسومة — agents' findings as tagged facts."""
     lines: list[str] = []
+    # القاعدة العامة (قرار المالك): الحقيقة المتقادِمة تُذيَّل بوسم الإفصاح
+    # عند جمعها للكاتب. الاستيراد مرّة واحدة (لا لكل نقطة — مراجعة الشيفرة #5).
+    try:
+        from silk_staleness import is_stale_fact, fact_year, stale_tag
+    except Exception:  # noqa: BLE001 — الإفصاح تحسيني لا يكسر الجمع
+        is_stale_fact = None
     for rep in reports or []:
         name = getattr(rep, "agent_name", "agent")
         if getattr(rep, "failed", False):
@@ -209,9 +215,19 @@ def _facts(reports: list) -> str:
             if val is None:
                 lines.append(f"- [{name}] قيمة غير متوفّرة ({getattr(dp, 'note', '')})")
             else:
+                # الحقيقة المتقادِمة تحمل وسم الإفصاح عند جمعها للكاتب (نقطة
+                # الاختناق الوحيدة)، فيحمله الكاتب حرفياً مهما كانت صياغته.
+                stale = ""
+                if is_stale_fact is not None:
+                    try:
+                        if is_stale_fact(dp):
+                            stale = f" [{stale_tag(fact_year(dp))}]"
+                    except Exception:  # noqa: BLE001
+                        stale = ""
                 lines.append(
                     f"- [{name}] {val} | المصدر: {getattr(dp, 'source', '?')} | "
-                    f"ثقة {getattr(dp, 'confidence', '?')} | {getattr(dp, 'note', '')}")
+                    f"ثقة {getattr(dp, 'confidence', '?')} | "
+                    f"{getattr(dp, 'note', '')}{stale}")
     return "\n".join(lines) or "(لا حقائق)"
 
 
@@ -686,11 +702,13 @@ def _summarize_verdict(verdict: dict) -> str:
     فئات الوكلاء (data_gaps) بالإنجليزية. هنا نلخّص بعربية بشرية فقط —
     الحكم المُعرَّب، الثقة كعبارة، عدد المؤشرات المساهمة (رقم لا كائنات)،
     والفجوات مُعرَّبة."""
-    from silk_narrative import confidence_phrase, internal_ar, verdict_ar
+    from silk_narrative import (authoritative_verdict, confidence_phrase,
+                                internal_ar, verdict_ar)
     v = verdict or {}
     ai = v.get("ai") or {}
-    verdict_token = ai.get("verdict") or v.get("verdict")
-    confidence = ai.get("confidence", v.get("confidence"))
+    # WP-1: الكاتب يستلم الحكم الحتمي المعتمد نفسه المعروض على كل سطح —
+    # لا حكم كلود الاستشاري (كانا قد يختلفان فيعيد الكاتب الحكم بنفسه).
+    verdict_token, confidence = authoritative_verdict(v)
     gaps = ", ".join(internal_ar(g) for g in v.get("data_gaps", [])) or "لا شيء"
     parts = [
         f"الحكم: {verdict_ar(verdict_token)}",
@@ -745,11 +763,47 @@ def _product_category(hs_code: object) -> "tuple[str, str] | None":
     return None
 
 
+def rephrase_client_sections(dr: dict) -> dict:
+    """WP-2 §3 — نداء الصياغة التجارية المصغّر لكل قسم عميل بلا سرد كاتب.
+
+    قيم التقاطعات/بعثة المخاطر الخام لم تعد تُسرَد نقاطاً حرفية للعميل
+    (كانت تُسرِّب سقالة «إذن ماذا؟» وبتر «…»)؛ بدلها نداء كاتب واحد لكل
+    قسم (temperature=0 عبر المزوّد — WP-1) يعيد صياغتها فقرة تجارية.
+    فشل النداء/غياب المفتاح = قسم بلا نثر → بوابة الجودة تُفشِل التسليم
+    (409) بدل تسليم بنود خام. لا اختلاق: البنود معزولة والقاعدة «لا رقم
+    غير وارد فيها». يعيد {عنوان القسم: النثر} للأقسام التي نجحت فقط."""
+    if not available():
+        return {}
+    from silk_reports import _client_missing_narrative_heads
+    needs = _client_missing_narrative_heads(dr or {})
+    out: dict[str, str] = {}
+    for head, items in needs.items():
+        if not items:
+            continue
+        joined = "\n".join(f"- {i}" for i in items[:8])
+        user = (
+            f"أعد صياغة البنود التالية فقرة تجارية موجزة (٣-٥ جمل) لقسم "
+            f"«{head}» في دراسة سوق تُسلَّم لعميل غير تقني. قواعد إلزامية: "
+            "لا تذكر أي رقم أو اسم غير وارد في البنود حرفياً؛ لا مصطلحات "
+            "تشغيلية (بعثة/وكيل/نداء/JSON)؛ يُمنَع حرفياً «إذن ماذا» و"
+            "«So what»؛ لا نقاط حذف «...»؛ أعد النص العربي الصِرف فقط بلا "
+            "ترويسات ولا Markdown ولا JSON.\n"
+            f"البنود:\n{_isolate(joined)}")
+        text = _call(_PRINCIPLE, user, max_tokens=600, model=_FAST_MODEL,
+                     timeout=30)
+        text = (text or "").strip()
+        if text and not text.lstrip().startswith(("{", "```")):
+            out[head] = text
+    return out
+
+
 def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
                 product: str, market_name: str,
                 review_notes: list | None = None,
                 trace_id: str | None = None,
-                hs_code: str | None = None) -> str | None:
+                hs_code: str | None = None,
+                hs_confirmation: dict | None = None,
+                style: str | None = None) -> str | None:
     """اكتب تقرير البحث العميق — the 11-section international-structure report
     (وكيل الكتابة، الموجة ١٠ — أسلوب Euromonitor/ESOMAR).
 
@@ -763,14 +817,30 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
     """
     if not available():
         return None
-    from silk_style_contract import WRITER_STYLE_CONTRACT  # B1: عقد لغة التاجر
+    # قرار المالك (متابعة القالب الأكاديمي): style="academic" يبدّل عقد
+    # السجل اللغوي وحده — نفس الأقسام الأحد عشر، نفس الحكم المعتمد، نفس
+    # قواعد الصدق/العملة؛ النثر يخرج بنبرة البحث العلمي وخاتمة كل قسم
+    # «دلالة هذه النتيجة:» بدل «ماذا يعني هذا لقرارك».
+    from silk_style_contract import (ACADEMIC_SECTION_CLOSER,
+                                     ACADEMIC_WRITER_CONTRACT,
+                                     WRITER_STYLE_CONTRACT)
+    academic = (str(style or "").lower() == "academic")
+    contract = ACADEMIC_WRITER_CONTRACT if academic else WRITER_STYLE_CONTRACT
     facts = _isolate(_facts(list(mission_reports.values())))
     sections = "\n".join(f"{i}. {s}" for i, s in enumerate(_REPORT_SECTIONS, 1))
     parts = [
         f"المنتج: {_isolate(product)}. السوق: {_isolate(market_name)}.",
-        WRITER_STYLE_CONTRACT,
-        f"الحكم الجاهز (من طبقة التوليف — لا تُصدر حكماً مختلفاً، اشرحه): "
-        f"{_isolate(_summarize_verdict(verdict))}",
+        contract,
+        # WP-1 §3: الحكم المعتمد قيد صلب — لا يجوز للكاتب إصدار توصية مختلفة
+        # ولا «توصية أولية» موازية؛ دوره الشرح والتقييد فقط. درجة الثقة
+        # المعروضة هي ثقة المحرّك الحتمي المرفقة حصراً — يُمنَع اختراع نسبة
+        # أو تسمية نطاق («عالية/متوسطة/منخفضة») غير المشتقّة منها.
+        f"الحكم المعتمد (قيد إلزامي — يُمنَع إصدار أي توصية مختلفة أو "
+        f"«توصية أولية» موازية؛ اشرح هذا الحكم وقيّده فقط، وأي سيناريو "
+        f"بديل يُصاغ كشرط قلبٍ افتراضي لا كتوصية): "
+        f"{_isolate(_summarize_verdict(verdict))}. "
+        "درجة الثقة الوحيدة المسموح ذكرها هي المذكورة أعلاه حرفياً — لا "
+        "تخترع نسبة ثقة أو تسمية نطاق أخرى.",
         f"مسوّدة المحلل الشامل (خمس تقاطعات + SWOT):\n{_isolate(analyst_summary)}",
         f"حقائق البعثات الاثنتي عشرة (لا تتجاوزها، كل رقم من هنا فقط):\n{facts}",
     ]
@@ -780,6 +850,61 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
             f"فئة المنتج (من فصل HS): {cat[0]}. **كيّف تركيز اشتراطات القسم "
             f"٧ على هذه الفئة تحديداً: {cat[1]}** — لا تفترض اشتراطات فئة "
             "أخرى (المنصّة تخدم كل المنتجات لا الغذاء وحده).")
+    # Wave 1.3/4.1 (تدقيق زبدة الفول السوداني/اليمن): رمز HS غير مؤكَّد (صفة
+    # المنتج المميّزة غائبة عن وصف الرمز) => كل رقم مشتقّ من كومتريد «مؤشر
+    # سياقي لا مقياس فعلي»، يُصرَّح بذلك **مرة واحدة** في المنهجية (لا تكرار
+    # التحذير في كل قسم — طبقة العرض تُلحِق سطر المنهجية آلياً أيضاً).
+    if isinstance(hs_confirmation, dict) and hs_confirmation.get("confirmed") is False:
+        _miss = "، ".join(hs_confirmation.get("missing_terms") or [])
+        parts.append(
+            "تنبيه تصنيف حاسم: رمز HS المستخدم غير مؤكّد لهذا المنتج — وصفه "
+            f"«{_isolate(str(hs_confirmation.get('code_desc') or ''))}» لا يشمل "
+            f"صفة المنتج المميّزة{(' (' + _isolate(_miss) + ')') if _miss else ''}. "
+            "**اذكر هذا مرة واحدة فقط في قسم المنهجية (٢) كملاحظة منهجية واحدة**، "
+            "وأطِّر كل رقم مشتقّ من كومتريد (حجم الاستيراد، CAGR، HHI، حصص "
+            "المورّدين، **متوسط سعر الاستيراد/الجملة**) بوصفه «مؤشراً سياقياً "
+            "لفئة مجاورة لا مقياساً فعلياً»؛ **بند سعر الاستيراد تحديداً**: "
+            "إن ظهر متناقضاً مع أسعار التجزئة المرصودة فعلياً (سلّم الأسعار) "
+            "— كأن يكون أدنى منها بفارق كبير — فهذا **ليس خطأً يُصحَّح تخميناً**، "
+            "بل نتيجة متوقَّعة لكونه محسوباً لفئة كومتريد مجاورة؛ صرِّح بالتناقض "
+            "والسبب في جملة واحدة عند أول ذكر، ولا تُصلحه برقم مختلَق؛ "
+            "**لا تُكرّر التحذير في كل قسم** — أشِر إليه لاحقاً بإحالة موجزة "
+            "«(انظر الملاحظة المنهجية)». وبنبرة مهنية مقيسة لا تنبيهية: قل "
+            "«ينبغي التعامل مع هذه الأرقام كمؤشر سياقي» لا «تبطل كل الأرقام».")
+    # Wave 2 (جودة البيانات — تدقيق زبدة الفول السوداني/اليمن):
+    parts.append(
+        "إفصاح جودة البيانات (إلزامي):\n"
+        "- **2.1 بيانات قديمة**: أيّ حقيقة في القائمة أعلاه مُذيَّلة بوسم "
+        "«[بيانات <السنة> — الأحدث المتاح]» فهي مُتقادِمة — **احمل هذا الوسم "
+        "حرفياً** حيثما ذكرت تلك الحقيقة في السرد (اذكر سنتها ثم «— الأحدث "
+        "المتاح») كي لا تُقرأ كأنها راهنة. لا تخترع وسماً لحقيقةٍ غير مُعلَّمة.\n"
+        "- **2.2 غياب الموسمية**: إن غابت بيانات موسمية/رمضانية من مؤشرات "
+        "البحث، أعلِن ذلك **مرة واحدة** في تحليل الطلب (٥) واقترح خطوة "
+        "الإغلاق العملية (بحث ميداني/مقابلات موزّعين) — لا تُكرّر الاعتذار.\n"
+        "- **2.3 طلب الصفة الدقيقة الضعيف**: إن سجّل المصطلح الدقيق طلباً "
+        "شبه معدوم بينما مصطلح أعمّ ذو صلة قوي، أطِّرها «الطلب على الفئة "
+        "موجود؛ الصفة الدقيقة غير مبحوثة» — لا تستنتج «لا طلب» من استعلامٍ "
+        "مفرطٍ في التخصيص، واذكر كلا الرقمين.\n"
+        "- **3.1 صفوف الأسعار الناقصة**: كل صفّ في جدول المنافسة يتعذّر "
+        "حساب سعره/كجم يحمل **سبباً صريحاً في خليّته** («وزن غير مذكور» أو "
+        "«وحدة غامضة») لا خانةً فارغة؛ واذكر مُدخَل الفتح الوحيد «بطاقة "
+        "منتجك (التكلفة/كجم)» **مرّة واحدة** في قسم التسعير لا مبعثراً.\n"
+        "- **3.2 التركّز تحت رمز مُعلَّم**: إن كان رمز HS غير مؤكَّداً، اعرض "
+        "HHI/التركّز بوصفه **سياقاً** لا إشارة قرارٍ لهذا المنتج تحديداً "
+        "(«مؤشر سياقي») — لا تبنِ عليه ترجيحاً في التوصية.")
+    # Wave 6 (عقد الحكم وخارطة الطريق):
+    parts.append(
+        "عقد الحكم المشروط (إلزامي حين يكون الحكم «مراقبة» أو «مشروط»):\n"
+        "- **6.1 شرطا قلب الحكم**: داخل قسم التوصيات، قبل خارطة الطريق مباشرة، "
+        "أضف فرعاً بعنوان '### شرطا قلب الحكم' يسمّي **شرطين محدّدين** يحوّلان "
+        "الحكم إلى GO (مثل: بيانات استيراد موثوقة تحت الرمز الصحيح؛ موزّع "
+        "محلي مؤكَّد تعاقدياً بالاسم) — كلّ شرط جملة قابلة للقياس لا عبارة "
+        "عامة. **ثم اربط كل خطوة في خارطة الـ٩٠ يوماً بأيّ الشرطين تُغلق** "
+        "('الخطوة ← الشرط الذي تُقفله').\n"
+        "- **6.2 سقف الخلاصة التنفيذية**: أبقِ 'الخلاصة التنفيذية' في حدود "
+        "صفحتين كحدّ أقصى، وتتضمّن دائماً: الحكم + شرطي قلب الحكم + ثلاثة "
+        "أرقام مفتاحية + ثلاثة مخاطر رئيسية — لا أكثر (اقطع التكرار لا "
+        "الدليل).")
     if review_notes:
         parts.append("ملاحظات المراجع من دورة سابقة — عالجها في هذه المسوّدة:\n"
                      + _isolate("\n".join(f"- {n}" for n in review_notes)))
@@ -799,8 +924,8 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "مورّدين/منافسين/تنظيم/لوجستيات/مخاطر/موسمية) كلما كانت الحقائق "
         "تدعم ذلك؛ رقم بلا سياق مقارِن يُفقِد التقرير طابعه الاستشارية. "
         "لكل ادّعاء رئيسي في كل قسم: (أ) إن ورد رقم متعارض بين مصدرين "
-        "بين الحقائق، صرّح بالتعارض صراحة بدل اختيار أحدهما بصمت، "
-        "(ب) قارنه برقم مرجعي إن وُجد بين الحقائق (سوق بديل، متوسط "
+        "ضمن الحقائق، صرّح بالتعارض صراحة بدل اختيار أحدهما بصمت، "
+        "(ب) قارنه برقم مرجعي إن وُجد ضمن الحقائق (سوق بديل، متوسط "
         "إقليمي، منافس آخر)، (ج) اختم بأثره المباشر على قرار المصدّر "
         "السعودي — لا استعادة للحقيقة الخام دون تفسير دلالتها، "
         "(د) ميّز لغوياً بين رقم مرصود مباشرة من مصدر ('وفق UN Comtrade') "
@@ -923,7 +1048,7 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "لقسم غير فارغ. إن وُجدت أسعار سوق مرصودة **بلا** بطاقة منتج بين "
         "الحقائق، اكتب حرفياً 'أسعار السوق مرصودة؛ موقعك السعري يتطلب بطاقة منتجك "
         "(التكلفة/كجم)' — لا تكتب 'لا تسعير' أو ما يُفهم منه غياب الأسعار "
-        "فعلياً. وإن وُجدت بطاقة منتج/سعر مستهدف بين الحقائق، أضف بعد الجدول "
+        "فعلياً. وإن وُجدت بطاقة منتج/سعر مستهدف ضمن الحقائق، أضف بعد الجدول "
         "سطراً يحدّد **موقع سعرك ضمن أسعار المنافسين** المرصودة (أدنى منها/ضمن "
         "نطاقها/أعلى — بمئين تقريبي إن أمكن) كي يُقرأ التموضع السعري من داخل "
         "قسم المنافسة نفسه.\n"
@@ -998,6 +1123,14 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "متن السرد** — هذا تقرير حكم تجاري لا مخرجات نظام تصنيف؛ درجات "
         "الحكم الرقمية تبقى محصورة بجدولها الصغير أسفل التوصيات (بند ١٠ "
         "أدناه) والملحق التقني فقط.\n\n"
+        "سرّية معمارية (§2 — بلاغ حيّ 'تسريب بنية النظام للعميل'): **لا تكشف "
+        "أبداً أيّ تفصيل عن كيفية إنتاج هذا التقرير** — لا أسماء وكلاء أو "
+        "مهامّ أو أدوات، لا عبارة 'مسار بحث' أو خطوات جمعٍ داخلية، لا 'Claude' "
+        "أو 'Anthropic' أو أيّ اسم نموذج، ولا متغيّرات بيئةٍ أو رموزٍ تقنية. "
+        "اكتب نثراً موجّهاً للقارئ يستشهد بالمصادر العمومية بأسمائها فقط "
+        "(UN Comtrade، World Bank …)؛ القارئ يرى **النتيجة ومصدرها** لا آلة "
+        "إنتاجها. عند الإحالة إلى المعطيات قل 'المصادر المتاحة' لا صياغةً "
+        "تصف قائمةً داخلية.\n\n"
         "قسم 'الخلاصة التنفيذية' (رقم ١) يذكر **أطروحة** لا وصفاً: "
         "'التوصية <X> لأن <أقوى ثلاثة أسباب بأرقامها المستشهَد بها>؛ وتتحول "
         "إلى GO إذا <شرطان قابلان للقياس>' — جملة واحدة حاسمة، لا سرد عام. "
@@ -1014,6 +1147,16 @@ def deep_report(mission_reports: dict, analyst_summary: str, verdict: dict,
         "التقرير كله** — واحدة تختم الخلاصة التنفيذية، وواحدة تختم خارطة "
         "طريق الدخول؛ ما عدا ذلك انسِج الأثر في السرد دون تذييل معنون "
         "ولا تكرار للسرد أعلاه.")
+    if academic:
+        # السجل الأكاديمي يتقدّم عند التعارض الصياغي فقط — البنية والحكم
+        # وقواعد الصدق أعلاه كلها تبقى كما هي حرفياً.
+        parts.append(
+            "تعليمة السجل الأكاديمي (تتقدّم عند التعارض الصياغي فقط): "
+            "حيثما سمحت التعليمات أعلاه بعبارة «ماذا يعني هذا لقرارك» "
+            f"استعمل بدلها «**{ACADEMIC_SECTION_CLOSER}**» بنفس القيود "
+            "(مرّتين على الأكثر في التقرير كله)، وانسِج بقية الآثار في "
+            "النثر بصيغة الدراسة («وتشير هذه النتيجة إلى…») لا بخطاب "
+            "القارئ المباشر.")
     # تصعيد سقف الإخراج عند الاقتطاع — كل محاولة نداءٌ مُتتبَّع مستقل
     # (report_call + عدّ + قياس رموز)، لا حلقة صامتة داخل المزوّد. يُعاد أوفى
     # نص أُنتِج (نص مقتطع مفيد خير من None)؛ التصعيد يقتصر على الاقتطاع
@@ -1126,6 +1269,39 @@ def _section_order_issues(draft: str) -> list[str]:
     return issues
 
 
+def _alarmist_issues(draft: str) -> list[str]:
+    """Wave 5.1 — فحص نبرة حتمي (لا كلود، لا نداء مدفوع): أي عبارة تنبيهية/
+    مبالِغة من `silk_style_contract.ALARMIST_PHRASES` تُدرَج مشكلةَ أسلوب
+    (غير حاجبة) مع البديل المقيس. إنفاذ داخل الدورة القائمة لا دورة إضافية."""
+    try:
+        from silk_style_contract import ALARMIST_PHRASES, MEASURED_TONE_HINT
+    except Exception:  # pragma: no cover
+        return []
+    s = str(draft or "")
+    hits = [p for p in ALARMIST_PHRASES if p in s]
+    if not hits:
+        return []
+    return [f"نبرة تنبيهية «{p}» — استبدلها بصياغة مقيسة "
+            f"(مثل: {MEASURED_TONE_HINT})" for p in hits]
+
+
+def _repeated_key_figure_issues(draft: str) -> list[str]:
+    """فحص حتمي (لا كلود) لتكرار رقم مفتاحي أكثر من مرّتين (§8 — عقد الكاتب
+    أعلاه: 'اذكره كاملاً مرّة ثم أَحِل إليه') — بلاغ حي (تدقيق «تحليل #1»
+    DZA): المراجع السريع كان يُطالَب بهذا الفحص نثراً فقط (راجع تعليمات
+    المراجع أدناه) فقد يفوته؛ حارس حتمي مستقل يعيد استعمال نفس عدّاد
+    silk_quality_gate.style_digest (مصدر حقيقة واحد للعتبة، لا تكرار منطق)
+    فيُضاف للمشاكل دوماً بمعزل عن نجاح/فشل نداء المراجع نفسه."""
+    try:
+        from silk_quality_gate import style_digest
+    except Exception:  # pragma: no cover
+        return []
+    figures = style_digest(draft or "").get("key_figures") or {}
+    return [f"رقم مفتاحي «{tok}» تكرّر {n} مرّات في المتن (الحدّ مرّتان) — "
+            "اذكره كاملاً مرّة ثم أحِل إليه لاحقاً بإحالة موجزة"
+            for tok, n in figures.items() if n > 2]
+
+
 def review_report(draft: str, mission_reports: dict,
                   trace_id: str | None = None) -> dict | None:
     """راجع مسوّدة التقرير — المراجع (نموذج سريع): هل كل رقم مسنود؟ تناقضات؟
@@ -1134,6 +1310,12 @@ def review_report(draft: str, mission_reports: dict,
     if not available() or not (draft or "").strip():
         return None
     structural_issues = _section_order_issues(draft)
+    # Wave 5.1: نبرة تنبيهية مشكلةُ أسلوب (غير حاجبة) — تُضاف للـissues لا
+    # للـblocking (لا دورة تنقيح مدفوعة إضافية، اتفاق D-01/E1).
+    tone_issues = _alarmist_issues(draft)
+    # تدقيق «تحليل #1» DZA — بند ٣+٤: فحص حتمي مستقلّ لتكرار رقم مفتاحي
+    # (لا يعتمد وحده على ملاحظة المراجع النثرية في user prompt أدناه).
+    keyfig_issues = _repeated_key_figure_issues(draft)
     facts = _isolate(_facts(list(mission_reports.values())))
     user = (
         f"الحقائق الخام المرجعية (لا غيرها):\n{facts}\n\n"
@@ -1169,6 +1351,10 @@ def review_report(draft: str, mission_reports: dict,
         "أكثر من مرّتين، وأي ترقيم إنجليزي '(1)…(2)' داخل فقرة، وأي اختزال "
         "عملة 'م$' أو تحويل ريالي — كلّها مشاكل سطرية صريحة تُدرَج في issues "
         "باقتراح الإصلاح المطابق.\n"
+        "دقّق النبرة والطول (Wave 5): هل توجد صياغة تنبيهية/مبالِغة ('يجب "
+        "التوقف فوراً'، 'يبطل كل الأرقام'، 'سوق مضطربة') بدل صياغة مقيسة؟ "
+        "هل توجد جُمَل مسترسِلة تتجاوز ~٢٥ كلمة كان يمكن قسمها؟ أدرِجها "
+        "issues أسلوبية (غير حاجبة) مع اقتراح الصياغة المقيسة/القِصار.\n"
         "دقّق قابلية القراءة للتاجر (B2، أمر العمل الرئيس — الجمهور صاحب "
         "قرار تجاري غير متخصص): هل يظهر أي مصطلح تقني أو اختصار (HHI، CAGR، "
         "LPI، MFN، TRACES، CHED، EORI، WGI، TAM/SAM/SOM أو غيرها) **بلا شرح "
@@ -1184,14 +1370,16 @@ def review_report(draft: str, mission_reports: dict,
         lambda: _call(_PRINCIPLE, user, max_tokens=900, model=_FAST_MODEL,
                      timeout=30))
     if not raw:
-        return {"issues": structural_issues, "blocking": structural_issues,
-               "approved": not structural_issues} if structural_issues else None
+        _fb = structural_issues + tone_issues + keyfig_issues
+        return {"issues": _fb, "blocking": structural_issues,
+               "approved": not _fb} if _fb else None
     obj = _extract_json(raw)  # noqa: BLE001 — رد غير-JSON = لا مراجعة، لا اختلاق
     if obj is None:
-        return {"issues": structural_issues, "blocking": structural_issues,
-               "approved": not structural_issues} if structural_issues else None
+        _fb = structural_issues + tone_issues + keyfig_issues
+        return {"issues": _fb, "blocking": structural_issues,
+               "approved": not _fb} if _fb else None
     llm_issues = [str(i) for i in (obj.get("issues") or []) if str(i).strip()]
-    issues = structural_issues + llm_issues
+    issues = structural_issues + tone_issues + keyfig_issues + llm_issues
     # PART C1 (أمر العمل الرئيس — انحدار التكلفة $1.6→$2.0): المشاكل «الحاجبة»
     # وحدها تبرّر دورة تنقيح ثانية (نداء كاتب Opus كامل إضافي). الحاجب =
     # مشاكل البنية الحتمية (أقسام ناقصة/بترتيب خاطئ) دوماً + ما صنّفه المراجع
@@ -1222,7 +1410,9 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
                           max_cycles: "int | None" = None,
                           trace_id: str | None = None,
                           hs_code: str | None = None,
-                          on_stage: Callable[[str], None] | None = None) -> dict:
+                          on_stage: Callable[[str], None] | None = None,
+                          hs_confirmation: dict | None = None,
+                          style: str | None = None) -> dict:
     """حلقة الكتابة والمراجعة — Writer → Reviewer.
 
     `max_cycles=None` (الافتراضي) يقرأ SILK_MAX_REVIEW_CYCLES (افتراضياً ١،
@@ -1255,7 +1445,8 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
 
     _stage("writer")
     draft = deep_report(mission_reports, analyst_summary, verdict, product,
-                        market_name, trace_id=trace_id, hs_code=hs_code)
+                        market_name, trace_id=trace_id, hs_code=hs_code,
+                        hs_confirmation=hs_confirmation, style=style)
     if not draft:
         return {"report": None, "review_cycles": 0, "unresolved_notes": [],
                 "failure_reason": failure_reason()}
@@ -1278,7 +1469,8 @@ def write_reviewed_report(mission_reports: dict, analyst_summary: str,
         _stage("writer")
         fixed = deep_report(mission_reports, analyst_summary, verdict,
                             product, market_name, review_notes=notes,
-                            trace_id=trace_id, hs_code=hs_code)
+                            trace_id=trace_id, hs_code=hs_code,
+                            hs_confirmation=hs_confirmation, style=style)
         if fixed:
             draft = fixed
     return {"report": draft, "review_cycles": cycles, "unresolved_notes": notes}

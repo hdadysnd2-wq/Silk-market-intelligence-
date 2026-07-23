@@ -276,7 +276,8 @@ def decide(bundle: dict, weights_option: str | None = None) -> dict:
         why = "لا عمود واحداً قابلاً للحساب — بيانات غير كافية للقرار"
     elif critical:
         verdict = "NO-GO"
-        why = "بوابة خطر حرجة: PV.EST < −1.5 (قاعدة §8 المعلنة)"
+        why = ("بوابة خطر حرجة: مؤشر الاستقرار السياسي دون العتبة الحرجة "
+               "(قاعدة الحكم المعلنة)")
     elif score >= _GO and confidence >= _MIN_CONF_GO and not conditions:
         verdict = "GO"
         why = (f"الدرجة الموزونة {score} بلغت عتبة المضي ({_GO}) والثقة "
@@ -325,7 +326,7 @@ def decide(bundle: dict, weights_option: str | None = None) -> dict:
         "pillars": pillars, "missing_pillars": missing_pillars,
         "critical_risk": critical, "risks": risks, "conditions": conditions,
         "first_steps": first_steps, "why": why,
-        "note": "قرار حتمي قابل للتفسير من حزمة §4b المتحقَّق منها — "
+        "note": "قرار حتمي قابل للتفسير من الحزمة البحثية المتحقَّق منها — "
                 "الأعمدة الغائبة شروط معلنة، لا تخمين",
     }
 

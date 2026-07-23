@@ -122,6 +122,11 @@ def per_capita_supply(
     except Exception as e:  # noqa: BLE001 — network/HTTP; never raise to caller
         note = f"FAOSTAT unavailable: fetch failed for {iso3}/{item}: {e} (may require auth)"
         log.warning(note)
+        try:  # عائلة C (Wave 1.5): إعلان الفشل للمشغّل.
+            import silk_ops_log
+            silk_ops_log.record_service_failure("faostat", note)
+        except Exception:  # noqa: BLE001
+            pass
         return DataPoint(None, "FAOSTAT", 0.0, note, _today())
 
     rows = payload.get("data") if isinstance(payload, dict) else None

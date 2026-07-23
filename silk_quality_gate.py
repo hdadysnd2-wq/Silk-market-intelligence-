@@ -30,7 +30,9 @@ _MARKDOWN_RE = re.compile(r"(^#{1,6}\s)|(```)|(\*\*)", re.M)
 # مفتاح JSON بأي حروف (لا اللاتينية فقط) — بلاغ حي: حكم مسرَّب عُرِّبت
 # مفاتيحه ("{\"الحكم\":...}") فأفلت من [a-zA-Z_]+؛ [^"\s]+ يلتقط الصيغتين.
 _RAW_JSON_RE = re.compile(r'[{]\s*"[^"\s]+"\s*:', re.M)
-_RAW_CONFIDENCE_RE = re.compile(r"\(?ثقة\s*0")
+# §8 (قرار المُشرِف): نمطُ ثقةٍ **سياقيّ** — كلمةٌ مفتاحية (ثقة/confidence) +
+# كسرٌ عشريّ. لا صيدَ كسورٍ مجرّدة: «0.6 مليون» ومقاديرُ البيانات مشروعة.
+_RAW_CONFIDENCE_RE = re.compile(r"(?:ثقة|confidence)\s*[:=]?\s*0\.\d", re.I)
 _TERMINAL_PUNCT = ".!?:؛،؟…\"'”)"
 # بلاغ منتج من المالك: التقرير المعروض للعميل كشف السباكة الداخلية
 # ("LLMAgent:tariffs_agreements"، وسوم استشهاد خام "dp7") — كلود يستشهد
@@ -99,11 +101,436 @@ def _check_trailing_ellipsis(text: str) -> list[dict]:
     findings = []
     for block in re.split(r"\n\s*\n", text):
         s = block.strip()
+        # WP-2 §6(ب): الاقتباس الحرفي (كتلة > أو نصّ داخل «») يُستثنى — فقرة
+        # غير اقتباسية تنتهي بنقاط حذف = بتر يصل العميل => FAIL لا تحذير.
+        if s.startswith(">"):
+            continue
         if s.endswith("…") or s.endswith("..."):
-            findings.append({"check": "trailing_ellipsis", "repairable": True,
+            findings.append({"check": "trailing_ellipsis", "repairable": False,
                              "note": "نصّ ينتهي بنقاط حذف «…» — بتر غير نظيف "
                                      "(§5): يجب القصّ عند حدّ جملة أو العرض كاملاً"})
     return findings
+
+
+# §B-3 (حزمة الفكس v2.1) — شظية حرف/حرفين عربية يتيمة في آخر سطر فقرة، بلا
+# علامة ترقيم ختامية بعدها: أثر بتر منتصف كلمة نجا من فحص علامة الترقيم
+# (بلاغ حي: «تحققا ت» — «تحققات» انقطعت فبقيت شظيتان). لا يلتقط أدوات الربط
+# أحادية الحرف المشروعة («و»/«ف»/«ب») حين تكون الفقرة كلها قصيرة أصلاً —
+# نشترط طولاً كافياً قبل الشظية كي لا يكون التنبيه كاذباً على فقرة قصيرة عادية.
+_ORPHAN_TOKEN_RE = re.compile(r"(?:^|\s)[ء-ي]{1,2}\s*$")
+
+
+def _check_orphan_short_token(text: str) -> list[dict]:
+    """§B-3 — شظية 1-2 حرف عربية يتيمة تختم فقرة بلا علامة ترقيم: أثر بترٍ
+    غير نظيف نجا من `_check_mid_word_truncation` (ذاك يفحص غياب الترقيم
+    فقط، لا شكل الشظية نفسها)."""
+    if not text:
+        return []
+    findings = []
+    for block in re.split(r"\n\s*\n", text):
+        lines = [ln.rstrip() for ln in block.splitlines() if ln.strip()]
+        if not lines:
+            continue
+        s = lines[-1].strip()
+        if not s or s[-1] in _TERMINAL_PUNCT:
+            continue
+        m = _ORPHAN_TOKEN_RE.search(s)
+        if m and len(s) > len(m.group(0)) + 3:
+            findings.append({
+                "check": "orphan_short_token", "repairable": False,
+                "note": f"شظية حرف/حرفين عربية يتيمة تختم فقرة — أثر بتر "
+                       f"منتصف كلمة: '...{s[-25:]}'"})
+    return findings
+
+
+# §B-4 — إحالة معلَّقة: النص يعد بملاحظة/قسم («انظر الملاحظة المنهجية»، أو
+# «انظر «عنوان بين قوسين»») لا وجود له فعلياً في التقرير.
+_METHOD_NOTE_REF_RE = re.compile(r"انظر\s+الملاحظة\s+المنهجية")
+_QUOTED_SECTION_REF_RE = re.compile(r"(?:انظر|راجع)\s+[^.\n]{0,20}«([^»]+)»")
+_HEADING_RE = re.compile(r"^#{2,3}\s+(?:\d+\.\s*)?(.+?)\s*$", re.M)
+
+
+def _check_dangling_cross_reference(text: str) -> list[dict]:
+    """§B-4 — كل عبارة إحالة («انظر»/«راجع») يجب أن تُشير إلى قسم/ملاحظة
+    موجودة فعلياً في نفس التقرير، لا وعداً معلَّقاً."""
+    if not text:
+        return []
+    findings = []
+    if _METHOD_NOTE_REF_RE.search(text) and "ملاحظة منهجية" not in text \
+            and "قسم المنهجية" not in text:
+        findings.append({
+            "check": "dangling_cross_reference", "repairable": False,
+            "note": "النص يحيل إلى «الملاحظة المنهجية» لكن لا ملاحظة/قسم "
+                   "بهذا المضمون موجود فعلياً في التقرير"})
+    headings = _HEADING_RE.findall(text)
+    for m in _QUOTED_SECTION_REF_RE.finditer(text):
+        ref = m.group(1).strip()
+        if not any(ref == h or ref in h or h in ref for h in headings):
+            findings.append({
+                "check": "dangling_cross_reference", "repairable": False,
+                "note": f"إحالة معلَّقة إلى «{ref}» — لا عنوان قسم بهذا "
+                       "الاسم موجود في التقرير"})
+    return findings
+
+
+# WP-2 §6 — سقالة «إذن ماذا؟»/"So what" الحرفية والنصوص النائبة التقنية:
+# كلتاهما وصلت تقارير عملاء مُسلَّمة فعلاً (تدقيق 2026-07-22). FAIL لا تحذير.
+_SO_WHAT_LEAK_RE = re.compile(r"إذن\s*،?\s*ماذا|So\s+what", re.I)
+# مراجعة شيفرة PR #147: الإبرة العارية «أثر التتبع» كانت (أ) تُطابِق نثراً
+# مشروعاً («أثر التتبع الرقمي…») و(ب) **تفوّت هدفها الفعلي** — النص النائب
+# الحقيقي مُشكَّل («أثر التتبّع» بالشدّة) فلا يطابق الإبرة غير المشكَّلة.
+# الفكس: عبارات مميِّزة كاملة + مقارنة بعد تجريد التشكيل من الطرفين.
+_AR_DIACRITICS_STRIP_RE = re.compile("[ً-ْٰ]")
+
+
+def _strip_ar_diacritics(s: str) -> str:
+    """جرّد التشكيل العربي للمقارنة النصية فقط — لا يغيّر نصاً معروضاً."""
+    return _AR_DIACRITICS_STRIP_RE.sub("", s or "")
+
+
+_PLACEHOLDER_STRINGS = (
+    "بند تقني غير قابل للعرض المباشر",
+    "التفاصيل في أثر التتبع",
+    "التفاصيل الكاملة في أثر التتبع",
+    "التحليل السردي التفصيلي لهذا القسم غير متاح",
+)
+
+
+_GAPS_TRIGGER_RE = re.compile(r"فجوة بيانات|(?<![ء-ي])فجوات\s*:")
+
+
+def _check_gaps_closing_contradiction(dr: dict) -> list[dict]:
+    """WP-4 §3 — تناقض الختام مع المتن: القسم الختامي سيطبع «لا فجوة
+    جوهرية…» (كل مدخلات الفجوات الأربعة خالية — نفس المصدر الواحد
+    `silk_reports._client_gap_inputs`) بينما نص التقرير يعلن «فجوة بيانات»
+    صراحةً. الحالة المُسلَّمة فعلاً (2026-07-22): الختام نفى الفجوات بينما
+    قسم المخاطر عدّد ثلاثاً (حوكمة البنك الدولي/الموسمية/سعر الصرف)."""
+    text = ((dr.get("report") or {}).get("text") or "")
+    summaries = " ".join(str((m or {}).get("summary") or "")
+                         for m in (dr.get("missions") or {}).values())
+    combined = text + "\n" + summaries
+    # مراجعة شيفرة PR #147: «فجوات:» العارية كانت تطابق «الفجوات:» داخل
+    # سردٍ سليم («الفجوات: لا توجد فجوات جوهرية») فتُفشِل تقريراً صحيحاً —
+    # المُشغِّل الآن كلمة مستقلة (لا يسبقها حرف عربي) أو «فجوة بيانات».
+    if not _GAPS_TRIGGER_RE.search(combined):
+        return []
+    try:
+        from silk_reports import _client_gap_inputs
+        critical, informational = _client_gap_inputs(dr)
+    except Exception:  # noqa: BLE001 — فحص إضافي لا يكسر البوابة
+        return []
+    if critical or informational:
+        return []   # الختام لن يطبع النفي — لا تناقض
+    return [{"check": "gaps_closing_contradiction", "repairable": False,
+             "note": "التقرير يعلن «فجوة بيانات» في متنه بينما القسم "
+                    "الختامي سيطبع «لا فجوة جوهرية تمنع اتخاذ القرار» — "
+                    "تناقض فجوات حاجب للتسليم"}]
+
+
+def _check_client_scaffold_leak(text: str) -> list[dict]:
+    """WP-2 §6(أ) — العبارة السقالية الحرفية «إذن ماذا»/"So what" في نص
+    يواجه العميل: أثر تعليمة المحلل القديمة، نُزِعت في المصدر والمُنظِّف —
+    ظهورها هنا انحدار حاجب."""
+    if text and _SO_WHAT_LEAK_RE.search(text):
+        return [{"check": "client_scaffold_leak", "repairable": False,
+                 "note": "العبارة السقالية الحرفية «إذن ماذا»/So what "
+                        "ظهرت في نص التقرير — تُصاغ الآثار نثراً مدمجاً، "
+                        "لا سقالة تعليمات تصل العميل"}]
+    return []
+
+
+def _check_placeholder_leak(text: str) -> list[dict]:
+    """WP-2 §6(ج) — نصّ نائب تقني («بند تقني غير قابل للعرض المباشر»/«أثر
+    التتبع»/سطر عدم التوفّر العام) في نص يواجه العميل = فشل توليد سُلِّم
+    بدل أن يُعاد أو يُحجَب — FAIL."""
+    findings = []
+    plain = _strip_ar_diacritics(text or "")
+    for ph in _PLACEHOLDER_STRINGS:
+        if plain and _strip_ar_diacritics(ph) in plain:
+            findings.append({
+                "check": "placeholder_leak", "repairable": False,
+                "note": f"نصّ نائب تقني وصل نص التقرير: «{ph}» — فشل "
+                       "التوليد يُعاد أو يُحجَب التسليم، لا يُسلَّم نائب"})
+    return findings
+
+
+# §B-2 — بدل نصّ عام ثابت («التحليل السردي التفصيلي لهذا القسم غير متاح…»)
+# حين يخلو قسم عميل من سرد الكاتب: FAIL يمنع التسليم (§0) بدل نصّ عام دائم
+# يوهم بتحليل لم يحدث فعلياً. WP-2 §3: حقائق التقاطع الخام لم تعد تكفي
+# وحدها (كانت تُسرَد نقاطاً حرفية بسقالة «إذن ماذا» وبتر) — القسم بلا سرد
+# كاتب يمرّ فقط إن حمل نثر الصياغة التجارية المُحضَّر
+# (`dr["client_fallback_prose"]`، نداء كاتب مصغّر قبل البوابة).
+
+
+def _check_client_section_would_be_placeholder(dr: dict) -> list[dict]:
+    """يُعيد استعمال منطق تجميع أقسام العميل الفعلي (`silk_reports`) للتحقّق
+    مسبقاً: هل سيُصادف أيّ قسم من الأقسام الخمسة النهائية غياب سرد الكاتب
+    **و** غياب حقائق تقاطع مهيكلة معاً؟ تلك هي بالضبط الحالة التي كانت
+    تُغطّى بنصّ عام ثابت بدل تحليل حقيقي (البند §B-2)."""
+    text = ((dr.get("report") or {}).get("text") or "")
+    if not text:
+        return []  # فشل الكاتب كاملاً محكوم عبر analyst_layer_failed/agent_failed
+    try:
+        from silk_reports import (_CLIENT_SECTION_MAP, _CLIENT_SECTION_ORDER,
+                                  _parse_writer_sections, _split_at_roadmap)
+    except Exception:  # noqa: BLE001 — فحص إضافي، لا يكسر البوابة
+        return []
+    sections = _parse_writer_sections(text)
+    buckets: dict[str, list[list[str]]] = {c: [] for c in _CLIENT_SECTION_ORDER}
+    for title, body in sections:
+        if title == "التوصيات الاستراتيجية":
+            decision_part, roadmap_part = _split_at_roadmap(body)
+            buckets["القرار وأساسه"].append(decision_part)
+            if roadmap_part:
+                buckets["مسار الدخول والمتطلبات"].append(roadmap_part)
+            continue
+        head = _CLIENT_SECTION_MAP.get(title)
+        if head:
+            buckets[head].append(body)
+    prose_map = dr.get("client_fallback_prose") or {}
+    findings = []
+    for head in _CLIENT_SECTION_ORDER:
+        has_body = any(any(str(ln).strip() for ln in body)
+                      for body in buckets[head])
+        if has_body:
+            continue
+        # WP-2 §3: القسم بلا سرد كاتب يمرّ فقط بنثر الصياغة التجارية
+        # المُحضَّر — لا تكفي حقائق التقاطع الخام (كانت تُسرَد نقاطاً حرفية).
+        if str(prose_map.get(head) or "").strip():
+            continue
+        findings.append({
+            "check": "client_section_placeholder", "repairable": False,
+            "note": f"قسم «{head}» سيُعرَض للعميل بنصٍّ عام ثابت بدل "
+                   "تحليل حقيقي — لا سرد كاتب ولا نثر صياغة تجارية "
+                   "مُحضَّر له في هذه التشغيلة"})
+    return findings
+
+
+# §D-5 (حزمة الفكس v2.1) — بلاغ حي: «بنسبة .%68» (نقطة قبل علامة النسبة
+# قبل الرقم). حارس انحدار: `silk_render._fix_stray_percent_punctuation`
+# تُصلح هذا فعلاً؛ ظهوره هنا يعني ثغرة في التطبيع لا حالة طبيعية.
+_STRAY_PERCENT_DOT_BEFORE_RE = re.compile(r"\.\s*%")
+_STRAY_PERCENT_DOT_AFTER_DIGIT_RE = re.compile(r"%\s*\.\d")
+
+
+def _check_stray_percent_punctuation(text: str) -> list[dict]:
+    """§D-5 — ترقيمٌ ملتصقٌ خاطئ حول علامة النسبة (بلاغ حي: «بنسبة .%68»)."""
+    if not text:
+        return []
+    if _STRAY_PERCENT_DOT_BEFORE_RE.search(text) or \
+            _STRAY_PERCENT_DOT_AFTER_DIGIT_RE.search(text):
+        return [{"check": "stray_percent_punctuation", "repairable": True,
+                 "note": "ترقيمٌ ملتصقٌ خاطئ حول علامة النسبة «%» "
+                        "(نقطة في موضع الرقم) — أثر تنسيقٍ غير مُصلَح"}]
+    return []
+
+
+# §F-1 (حزمة الفكس v2.1) — سجلّ كيانات لكل تقرير: اسمان لاتينيان متعدّدا
+# الكلمات بنفس مجموعة الكلمات بترتيب مختلف ("Taste of Nature" مقابل "Nature
+# of Taste") على الأرجح نفس الكيان مكتوباً بصيغتين — WARN لا FAIL (خطر
+# إيجابٍ كاذبٍ حقيقي على شركات مختلفة تتشارك كلمات شائعة).
+_LATIN_ENTITY_RE = re.compile(
+    r"\b[A-Z][a-zA-Z]+(?:\s+(?:of|de|&|and|the)?\s*[A-Z][a-zA-Z]+){1,3}\b")
+_ENTITY_STOPWORDS = {"of", "de", "and", "the", "for"}
+
+
+def _check_entity_near_duplicates(text: str) -> list[dict]:
+    """§F-1 — اسمان يتشاركان نفس مجموعة الكلمات بترتيبٍ مختلف: على الأرجح
+    نفس الكيان مكتوباً بصيغتين لم تُوحَّدا (سجلّ كيانات واحد لكل تقرير)."""
+    if not text:
+        return []
+    seen: dict = {}
+    findings = []
+    for m in _LATIN_ENTITY_RE.finditer(text):
+        name = m.group(0).strip()
+        words = frozenset(w.lower() for w in re.findall(r"[A-Za-z]+", name)
+                          if w.lower() not in _ENTITY_STOPWORDS)
+        if len(words) < 2:
+            continue
+        prior = seen.get(words)
+        if prior and prior != name:
+            findings.append({
+                "check": "entity_near_duplicate", "repairable": False,
+                "note": f"اسمان متقاربان على الأرجح لنفس الكيان بترتيب "
+                       f"كلمات مختلف: «{prior}» و«{name}» — وحِّدهما في "
+                       "سجلّ كيانات واحد لكل تقرير"})
+        else:
+            seen.setdefault(words, name)
+    return findings
+
+
+# §F-3 (حزمة الفكس v2.1) — بلاغ حي: «ثقة عالية (68%)» بجانب 90%/75% بلا
+# مقياس متّسق. النطاقات المعتمدة (silk_narrative.confidence_phrase): عالية
+# ≥80% / متوسطة 60-79% / منخفضة <60%. حارس انحدار مستقلّ لا يعتمد على أن
+# كل مكان في الكود يستدعي confidence_phrase فعلياً.
+_CONFIDENCE_BAND_RE = re.compile(r"(عالية|متوسطة|منخفضة)\s*\((\d{1,3})%\)")
+
+
+def _check_confidence_band_label(text: str) -> list[dict]:
+    """§F-3 — كل تسمية «عالية/متوسطة/منخفضة» تُطابِق نطاقها الرقمي المعتمد."""
+    if not text:
+        return []
+    findings = []
+    for m in _CONFIDENCE_BAND_RE.finditer(text):
+        label, pct_s = m.group(1), m.group(2)
+        try:
+            pct = int(pct_s)
+        except ValueError:
+            continue
+        # WP-1 §4: العتبات من سُلَّم المعايرة الواحد — لا نسخة محلية.
+        from silk_style_contract import confidence_band_label
+        expected = confidence_band_label(pct)
+        if label != expected:
+            findings.append({
+                "check": "confidence_band_mismatch", "repairable": False,
+                "note": f"تسمية ثقة «{label} ({pct}%)» لا تطابق النطاق "
+                       f"المعتمد (عالية ≥80% / متوسطة 60-79% / منخفضة "
+                       f"<60%) — المتوقَّع «{expected}»"})
+    return findings
+
+
+# §G-1 (حزمة الفكس v2.1) — بلاغ حي: «LPI 3.2 لعام 2022» — لا نسخة LPI لعام
+# 2022 فعلياً (نسخ مؤشر أداء اللوجستيات للبنك الدولي: 2007/2010/2012/2014/
+# 2016/2018/2023 فقط؛ الأعوام بين نسخة وأخرى لا نسخة منشورة لها). حارس
+# حتمي: سنة مذكورة مباشرة مع «LPI» ضمن إحدى الفجوات المعروفة بين نسخ حقيقية.
+_LPI_INVALID_EDITION_YEARS = {"2019", "2020", "2021", "2022", "2024"}
+# نافذة قصيرة لا تعبر سطراً؛ تسمح بالنقاط العشرية («3.2») بين «LPI» والسنة
+# لكنها قصيرة (≤25 محرفاً) فلا تقفز جملةً كاملة.
+_LPI_YEAR_NEAR_RE = re.compile(
+    r"LPI[^\n]{0,25}?(19\d\d|20\d\d)|(19\d\d|20\d\d)[^\n]{0,25}?LPI")
+
+
+def _check_lpi_edition_year(text: str) -> list[dict]:
+    """§G-1 — سنةٌ مذكورة مع LPI ضمن فجوة معروفة بين نسخ حقيقية منشورة."""
+    if not text:
+        return []
+    findings = []
+    for m in _LPI_YEAR_NEAR_RE.finditer(text):
+        yr = m.group(1) or m.group(2)
+        if yr in _LPI_INVALID_EDITION_YEARS:
+            findings.append({
+                "check": "lpi_invalid_edition_year", "repairable": False,
+                "note": f"سنة {yr} مذكورة مع LPI لكن لا نسخة LPI منشورة "
+                       "لهذا العام فعلياً (نسخ البنك الدولي المنشورة: "
+                       "2007/2010/2012/2014/2016/2018/2023) — تحقّق من "
+                       "السنة الصحيحة قبل الاستشهاد"})
+    return findings
+
+
+# §H-2 (حزمة الفكس v2.1) — بلاغ حي: شُحن «التوصية بالدخول» (تسمية درجة
+# «دخول قوي») بجانب «يتحول إلى دخول قوي إذا تحقق شرطان» بينما الحكم
+# القانوني الفعلي «دخول مشروط» — سلّم الدرجات مُعرَّف مرّة واحدة
+# (`silk_render._VERDICT_LABELS_AR`)؛ هذا حارس انحدار: أيّ ذكرٍ لتسمية درجة
+# **أعلى** من الدرجة الفعلية في متن التقرير يجب أن يُصاغ شرطاً مستقبلياً،
+# لا حكماً حالياً.
+def _check_recommendation_tier_label_consistency(dr: dict) -> list[dict]:
+    """§H-2 — الحكم الفعلي «دخول مشروط» لكن المتن يذكر تسمية «دخول قوي»
+    («التوصية بالدخول») بلا تأطيرها كشرطٍ مستقبلي."""
+    text = ((dr.get("report") or {}).get("text") or "")
+    if not text:
+        return []
+    try:
+        from silk_render import _verdict_tone
+    except Exception:  # noqa: BLE001 — فحص إضافي، لا يكسر البوابة
+        return []
+    verdict = dr.get("verdict") or {}
+    # مراجعة شيفرة PR #147: الحكم من المصدر الواحد (الحتمي أولاً) — القراءة
+    # القديمة (ai أولاً) كانت تُفشِل تقريراً صحيحاً أو تتخطّى خطأً حقيقياً
+    # كلما اختلفت قراءة كلود عن الحكم الحتمي المعروض.
+    from silk_narrative import authoritative_verdict
+    v_raw, _ = authoritative_verdict(verdict)
+    if _verdict_tone(v_raw or "") != "conditional":
+        return []
+    if "التوصية بالدخول" in text:
+        return [{
+            "check": "recommendation_tier_mislabel", "repairable": False,
+            "note": "الحكم القانوني الحالي «دخول مشروط» لكن المتن يذكر "
+                   "تسمية درجة أعلى «التوصية بالدخول» — صف الترقية كشرطٍ "
+                   "مستقبلي («يتحول إلى X إذا تحقق كذا») لا حكماً حالياً"}]
+    return []
+
+
+# §C (حزمة الفكس v2.1) — مدقّق الاتساق الرقمي: أرقامٌ يُفترَض أنها **نفس
+# المؤشر** لكنها اختُلفت بمقدار ضئيل يستحيل تفسيره إحصائياً (بلاغ حي: واردات
+# 2023 شُحنت 6,733,369 في موضع و6,733,376 في آخر — فارق تحريف/خطأ حساب لا
+# مصدرين مختلفين شرعاً). لا يلتقط أرقاماً متقاربة صدفةً بمصادر مختلفة
+# (فارقٌ نسبي ≤0.5% فقط، وأكبر من صفر — التطابق التامّ ليس تناقضاً).
+_LARGE_NUMBER_RE = re.compile(r"\b\d{1,3}(?:,\d{3}){2,}(?:\.\d+)?\b")
+
+
+def _check_near_duplicate_figures(text: str) -> list[dict]:
+    """§C-3 — رقمان كبيران متقاربان جداً (≤0.5% فارقاً نسبياً) في نفس
+    التقرير على الأرجح نفس المؤشر بقيمتين متضاربتين، لا مصدرين مختلفين."""
+    if not text:
+        return []
+    nums = []
+    for m in _LARGE_NUMBER_RE.finditer(text):
+        try:
+            v = float(m.group(0).replace(",", ""))
+        except ValueError:
+            continue
+        nums.append(v)
+    findings = []
+    seen_pairs = set()
+    for i, a in enumerate(nums):
+        for b in nums[i + 1:]:
+            if a == b or a <= 0 or b <= 0:
+                continue
+            rel = abs(a - b) / max(a, b)
+            if 0 < rel <= 0.005:
+                key = (round(min(a, b)), round(max(a, b)))
+                if key in seen_pairs:
+                    continue
+                seen_pairs.add(key)
+                findings.append({
+                    "check": "near_duplicate_figure", "repairable": False,
+                    "note": f"رقمان كبيران متقاربان جداً ({a:,.0f} و{b:,.0f}، "
+                           f"فارق {rel*100:.3f}%) على الأرجح نفس المؤشر بقيمة "
+                           "واحدة قانونية لا قيمتين متضاربتين — وحِّدهما"})
+    return findings
+
+
+# §C-1 (حزمة الفكس v2.1) — بلاغ حي: HHI شُحن بدقّة عشرية مختلَقة («2184.7»)
+# رغم أن المقياس معياريّاً رقمٌ صحيح بعد الضرب ×10000 (0-10000). دقّةٌ عشرية
+# على HHI = وهم دقّة لم يُحسَب فعلياً بهذا التفصيل.
+_HHI_DECIMAL_RE = re.compile(r"HHI[^0-9]{0,10}(\d{3,5}\.\d+)")
+
+
+def _check_hhi_false_precision(text: str) -> list[dict]:
+    """§C-1 — قيمة HHI (مقياس 0-10000 بعد الضرب) بدقّة عشرية مختلَقة."""
+    if not text:
+        return []
+    findings = []
+    for m in _HHI_DECIMAL_RE.finditer(text):
+        findings.append({
+            "check": "hhi_false_precision", "repairable": False,
+            "note": f"قيمة HHI «{m.group(1)}» بدقّة عشرية على مقياس 0-10000 "
+                   "— يجب أن تكون رقماً صحيحاً مقرَّباً (وهم دقّة غير محسوب "
+                   "فعلياً بهذا التفصيل)"})
+    return findings
+
+
+# §C-2 (حزمة الفكس v2.1) — بلاغ حي: شُحنت مراتب موردين #1،#2،#5،#6 متخطّية
+# #3،#4 — جدول موردين يجب أن يكون متصلاً (top-N كاملاً) لا صفوفاً منتقاة.
+_SUPPLIER_RANK_RE = re.compile(r"#(\d{1,2})\b")
+
+
+def _check_supplier_rank_contiguity(text: str) -> list[dict]:
+    """§C-2 — مراتب موردين مذكورة بترقيم «#N» يجب أن تكون متصلة من ١."""
+    if not text:
+        return []
+    ranks = sorted({int(m.group(1)) for m in _SUPPLIER_RANK_RE.finditer(text)})
+    if len(ranks) < 2:
+        return []
+    expected = list(range(ranks[0], ranks[-1] + 1))
+    if ranks != expected:
+        missing = sorted(set(expected) - set(ranks))
+        return [{
+            "check": "supplier_rank_gap", "repairable": False,
+            "note": f"مراتب موردين مذكورة بترقيم غير متصل ({ranks}) — "
+                   f"مراتب مفقودة {missing}؛ جدول أعلى الموردين يجب أن يكون "
+                   "متصلاً (top-N كاملاً) لا صفوفاً منتقاة"}]
+    return []
 
 
 def _check_internal_plumbing_leak(text: str) -> list[dict]:
@@ -169,7 +596,10 @@ _CONFIDENTIALITY_LEAK_PATTERNS = [
 #   WARN: «من ناحية» > مرّتين (سقف رابط)، رقم مفتاحي مميَّز مكرَّر > مرّتين.
 _MSHORT_STYLE_RE = re.compile(r"\d\s*م\$")
 _INLINE_ENUM_RE = re.compile(r"(?<![\n(])\s\(\d\)")   # «(1)» وسط سطر لا بدايته
-_CONNECTOR_RE = re.compile(r"من ناحية")
+# §8 (قرار المُشرِف): قائمةُ أدوات الربط الموسَّعة — عباراتٌ متعدّدةُ الكلمات
+# (خطرُ إيجابٍ كاذبٍ ضئيل). تدرّجٌ لكلّ أداة: ≤٢ تمرّ، ٣–٤ WARN، ≥٥ FAIL.
+_CONNECTORS = ("من ناحية", "علاوة على ذلك", "بالإضافة إلى",
+               "من جهة أخرى", "إضافة إلى ذلك")
 # رقم مفتاحي مميَّز: نسبة بكسر عشري («55.28%») أو رقم بفواصل آلاف («61,000,000»)
 # أو قيمة HHI مجاورة للفظها — عادةً لا يتكرّر طبيعياً، فتكراره >مرّتين حشو.
 _KEYFIG_RES = [
@@ -179,9 +609,43 @@ _KEYFIG_RES = [
 ]
 
 
+def style_digest(text: str) -> dict:
+    """عدّادُ أدوات الربط والأرقام المفتاحية (§8) — عدٌّ فقط، لا حكم. يُطبَع
+    **دائمًا** في CI (كمبدأ §4: الأخضر/التحذير مفحوصٌ لا مُستنتَج)."""
+    text = text or ""
+    connectors = {c: len(re.findall(re.escape(c), text)) for c in _CONNECTORS}
+    connectors = {c: n for c, n in connectors.items() if n}
+    figures: dict = {}
+    for rex in _KEYFIG_RES:
+        for m in rex.finditer(text):
+            tok = re.sub(r"\s+", "", m.group(0))
+            figures[tok] = figures.get(tok, 0) + 1
+    figures = {t: n for t, n in figures.items() if n}
+    return {"connectors": connectors, "key_figures": figures}
+
+
+def _style_tier(n: int) -> str:
+    """تدرّجُ الأسلوب: ≥٥ FAIL، ٣–٤ WARN، وإلا ok."""
+    return "FAIL" if n >= 5 else "WARN" if n >= 3 else "ok"
+
+
+def format_style_digest(text: str) -> str:
+    """خُلاصةُ الأسلوب القابلة للفحص — تُطبَع دائمًا في CI (قرار المُشرِف §8)."""
+    d = style_digest(text)
+    out = ["----- §8 style digest (connectors / key-figures) -----"]
+    if not d["connectors"] and not d["key_figures"]:
+        out.append("  (none over threshold-tracked patterns)")
+    for c, n in sorted(d["connectors"].items(), key=lambda kv: -kv[1]):
+        out.append(f"  connector «{c}» ×{n}  [{_style_tier(n)}]")
+    for t, n in sorted(d["key_figures"].items(), key=lambda kv: -kv[1]):
+        out.append(f"  key-figure «{t}» ×{n}  [{_style_tier(n)}]")
+    return "\n".join(out)
+
+
 def _check_style(text: str) -> list[dict]:
     """§8 — جودة الأسلوب الحتمية (بلا كلود). FAIL على اختزال العملة/الترقيم
-    الإنجليزي داخل الفقرة؛ WARN على تجاوز سقف الروابط أو تكرار رقم مفتاحي."""
+    الإنجليزي داخل الفقرة؛ وتدرّجٌ لأدوات الربط والأرقام المفتاحية (٣–٤ WARN،
+    ≥٥ FAIL) — قرار المُشرِف §8: أسلوبٌ لا تسريب، فالتصعيد عند الإفراط فقط."""
     findings = []
     if not text:
         return findings
@@ -192,22 +656,27 @@ def _check_style(text: str) -> list[dict]:
         findings.append({"check": "style_inline_enumeration", "repairable": False,
                          "note": "ترقيم إنجليزي «(1)…(2)» داخل فقرة — استعمل "
                                  "أولاً/ثانياً أو قائمة مرقّمة"})
-    conn = len(_CONNECTOR_RE.findall(text))
-    if conn > 2:
-        findings.append({"check": "style_connector_overuse", "repairable": False,
-                         "note": f"عبارة «من ناحية» تكرّرت {conn} مرّات "
-                                 "(الحدّ مرّتان) — نوّع أدوات الربط"})
-    for rex in _KEYFIG_RES:
-        counts: dict = {}
-        for m in rex.finditer(text):
-            tok = re.sub(r"\s+", "", m.group(0))
-            counts[tok] = counts.get(tok, 0) + 1
-        for tok, n in counts.items():
-            if n > 2:
-                findings.append({
-                    "check": "style_repeated_key_figure", "repairable": False,
-                    "note": f"رقم مفتاحي «{tok}» تكرّر {n} مرّات في المتن "
-                            "(الحدّ مرّتان) — اذكره كاملاً مرّة ثم أحِل إليه"})
+    dg = style_digest(text)
+    for c, n in dg["connectors"].items():
+        if n >= 5:
+            findings.append({"check": "style_connector_excess", "repairable": False,
+                             "note": f"أداة الربط «{c}» تكرّرت {n} مرّات "
+                                     "(≥٥ = حشوٌ أسلوبيّ يُفشِل) — نوّع أدوات الربط"})
+        elif n >= 3:
+            findings.append({"check": "style_connector_overuse", "repairable": False,
+                             "note": f"أداة الربط «{c}» تكرّرت {n} مرّات "
+                                     "(الحدّ المريح مرّتان) — نوّع أدوات الربط"})
+    for tok, n in dg["key_figures"].items():
+        if n >= 5:
+            findings.append({
+                "check": "style_repeated_key_figure_excess", "repairable": False,
+                "note": f"رقم مفتاحي «{tok}» تكرّر {n} مرّات في المتن "
+                        "(≥٥ = حشوٌ يُفشِل) — اذكره كاملاً مرّة ثم أحِل إليه"})
+        elif n >= 3:
+            findings.append({
+                "check": "style_repeated_key_figure", "repairable": False,
+                "note": f"رقم مفتاحي «{tok}» تكرّر {n} مرّات في المتن "
+                        "(الحدّ مرّتان) — اذكره كاملاً مرّة ثم أحِل إليه"})
     return findings
 
 
@@ -418,27 +887,210 @@ _CURRENCY_LABELS = {
 }
 
 
+_PRICE_HEADER_CUR_RE = re.compile(
+    r"السعر[^|\n]{0,20}?(بالدولار|باليورو|بالجنيه)")
+_HEADER_PHRASE_TO_CUR = {"بالدولار": "USD", "باليورو": "EUR", "بالجنيه": "GBP"}
+
+
 def _check_currency_label_mismatch(dr: dict) -> list[dict]:
     """اكشف عمودَ سعرٍ يَعِد بعملةٍ بينما القيم بعملةٍ أخرى (تحويل غير مُنجَز).
 
-    البلاغ الحيّ: عنوان العمود «السعر/كجم بالدولار» بينما الخلايا يورو. نكتفي
-    بإشارةٍ نصّية حتمية: ذكرُ «بالدولار» (وعدُ عمودٍ بالدولار) مع وجود رموز
-    يورو/جنيه في التقرير نفسه (أو العكس) = وعدُ تحويلٍ لم يُجرَ."""
+    البلاغ الحيّ: عنوان العمود «السعر/كجم بالدولار» بينما الخلايا يورو. البحث
+    عن العملة الأخرى **يقتصر على نافذة الجدول نفسه** (من الترويسة حتى أول
+    سطرٍ فارغ) — لا كامل نص التقرير: تقارير حقيقية تخلط عملات مشروعة بأقسام
+    مختلفة (استيراد بالدولار دوماً §1، تجزئة بعملة الرصد §6) بلا أيّ خطأ؛
+    فحصٌ على كامل النص كان يُبلِّغ تعارضاً زائفاً بين قسمين مستقلّين تماماً.
+    **قابل للإصلاح** فعلياً — راجع silk_render._fix_price_column_currency_label
+    (يُعنوِن العمود بالعملة المرصودة فعلاً قبل وصول النص هنا)؛ هذا الفحص
+    حارس انحدار يتأكّد أنّ الإصلاح نجح فعلاً لهذه التشغيلة."""
     text = (dr.get("report") or {}).get("text") or ""
-    # عنوان عمود يَعِد بعملة صراحةً (صيغة «بالـ…» داخل ترويسة السعر).
-    promised = [cur for cur, pat in _CURRENCY_LABELS.items()
-                if re.search(r"السعر[^|]{0,20}" + {"USD": "بالدولار",
-                             "EUR": "باليورو", "GBP": "بالجنيه"}[cur], text)]
-    for cur in promised:
-        others = [c for c in _CURRENCY_LABELS
-                  if c != cur and _CURRENCY_LABELS[c].search(text)]
-        if others:
-            return [{
-                "check": "currency_label_mismatch", "repairable": False,
-                "note": (f"عمود السعر مُعنوَن بـ{cur} بينما التقرير يحمل قيماً "
-                         f"بعملة أخرى ({'، '.join(others)}) — عنوِن العمود "
-                         "بالعملة المرصودة فعلاً، ولا تَعِد بتحويلٍ لم يُجرَ")}]
+    m = _PRICE_HEADER_CUR_RE.search(text)
+    if not m:
+        return []
+    cur = _HEADER_PHRASE_TO_CUR[m.group(1)]
+    block_end = text.find("\n\n", m.end())
+    block = text[m.start():block_end if block_end != -1 else len(text)]
+    others = [c for c, pat in _CURRENCY_LABELS.items()
+             if c != cur and pat.search(block)]
+    if others:
+        return [{
+            "check": "currency_label_mismatch", "repairable": True,
+            "note": (f"عمود السعر مُعنوَن بـ{cur} بينما جدول الأسعار نفسه يحمل "
+                     f"قيماً بعملة أخرى ({'، '.join(others)}) — عنوِن العمود "
+                     "بالعملة المرصودة فعلاً، ولا تَعِد بتحويلٍ لم يُجرَ")}]
     return []
+
+
+# Master Prompt Part 2 §A3/§C — تناقضٌ رقميٌّ داخليّ: حقيقة في سجل الأدلة
+# (findings البعثات، قيمة DataPoint خام) تخالف رقماً في متن التقرير لنفس
+# المؤشر بأكثر من ٣× (المثال المكتشف: واردات 17K$ في المتن مقابل 11.88
+# مليون$ في سجل الأدلة). سجل الأدلة مصدرٌ **بنيويّ** (قيمة DataPoint رقمية
+# حقيقية) لا نصٌّ حرّ — فالمقارنة أضيق خطراً من CAGR/العملة (نصّ مقابل نصّ):
+# طرفٌ واحد بياناتٌ مؤكَّدة. نافذة تفسيرٍ محلية (٦٠ محرفاً حول الرقم في
+# المتن) تمنع علماً زائفاً حين يُفسَّر التناقض صراحةً (نفس مبدأ فئة كومتريد
+# مجاورة في مدوّنة الكويت القانونية) — مطابقٌ لعقد عدم الاختلاق: كلا الرقمين
+# يُحفَظان، لا يُصحَّح أحدهما صامتاً.
+_RECONCILED_PHRASES = ("مؤشر سياقي", "فئة مجاورة", "فئة كومتريد مجاورة",
+                       "ليس خطأً", "لا يُصلَح برقمٍ مختلَق", "تفسير التناقض",
+                       "التناقض متوقَّع", "مصالحة")
+_IMPORTS_KW_RE = re.compile(r"الواردات|واردات")
+_USD_AMOUNT_RE = re.compile(r"(\d[\d,.]*)\s*(مليار|مليون|ألف|الف)?\s*دولار")
+_USD_MAGNITUDE = {"مليار": 1_000_000_000, "مليون": 1_000_000,
+                  "ألف": 1_000, "الف": 1_000}
+# مراجعة الشيفرة: مذكِّرٌ نموّ/نسبة («نمو الواردات 9% سنوياً») ليس قيمة
+# استيرادٍ مطلقة بالدولار حتى لو ذُكرت كلمة «واردات» في نفس الملاحظة — قيمته
+# الخام (مثال: 9) تعني نسبة مئوية لا مبلغاً، فمقارنتها برقمٍ دولاريّ في المتن
+# تُنتِج نسبة تناقضٍ زائفة (false positive). يُستبعَد من سجل الأدلة هنا.
+_GROWTH_RATE_NOTE_RE = re.compile(r"نمو|معدّل|معدل|CAGR|%|٪", re.I)
+
+
+def _usd_amount_to_float(num_str: str, mag: str) -> "float | None":
+    try:
+        v = float(num_str.replace(",", ""))
+    except ValueError:
+        return None
+    return v * _USD_MAGNITUDE.get(mag, 1)
+
+
+def _check_evidence_body_numeric_consistency(dr: dict) -> list[dict]:
+    """قارن قيمة الواردات المسجَّلة في سجل الأدلة (DataPoint خام في findings
+    البعثات) برقم الواردات المذكور في متن التقرير — تعارضٌ حقيقي (>٣×) بلا
+    تفسيرٍ في نافذة محلية حول الرقم (لا كامل النص) => FAIL."""
+    text = (dr.get("report") or {}).get("text") or ""
+    if not text:
+        return []
+    evidence_values = []
+    for m in (dr.get("missions") or {}).values():
+        for f in (m.get("findings") or []):
+            v = f.get("value")
+            note = str(f.get("note") or "")
+            if isinstance(v, (int, float)) and not isinstance(v, bool) \
+                    and _IMPORTS_KW_RE.search(note) \
+                    and not _GROWTH_RATE_NOTE_RE.search(note):
+                evidence_values.append(float(v))
+    if not evidence_values:
+        return []
+    findings = []
+    seen_pairs = set()
+    for pm in _USD_AMOUNT_RE.finditer(text):
+        ctx = text[max(0, pm.start() - 60):pm.end() + 60]
+        if not _IMPORTS_KW_RE.search(ctx):
+            continue
+        amt = _usd_amount_to_float(pm.group(1), pm.group(2) or "")
+        if amt is None or amt <= 0:
+            continue
+        if any(p in ctx for p in _RECONCILED_PHRASES):
+            continue
+        for ev in evidence_values:
+            if ev <= 0:
+                continue
+            ratio = max(ev, amt) / min(ev, amt)
+            if ratio > 3:
+                key = (round(ev), round(amt))
+                if key in seen_pairs:
+                    continue
+                seen_pairs.add(key)
+                findings.append({
+                    "check": "evidence_body_numeric_contradiction",
+                    "repairable": False,
+                    "note": (f"تناقضٌ رقميٌّ داخليّ: سجل الأدلة يسجّل قيمة "
+                             f"واردات {ev:,.0f}$ بينما متن التقرير يذكر "
+                             f"{amt:,.0f}$ لنفس المؤشر (نسبة {ratio:.1f}× "
+                             "> 3×) بلا تفسيرٍ مجاور — يجب التصالح أو "
+                             "التفسير الصريح قبل التسليم")})
+                break
+    return findings
+
+
+# Master Prompt Part 2 §D — تغطية المصادر: كل مؤشرٍ يحمل مصدراً مسمّى
+# حقيقياً أو وسم «تقدير استرشادي» صريح؛ عتبة القبول ≥٨٥٪. دون العتبة =
+# ضيّق نطاق التقرير وأعلن الفجوة، لا تشحن مؤشرات بلا مصدر (البند ٩).
+def _check_source_coverage(dr: dict) -> list[dict]:
+    from silk_source_coverage import compute_source_coverage, SOURCE_COVERAGE_MIN_PCT
+    cov = compute_source_coverage(dr)
+    if cov["total"] == 0 or cov["pct"] >= SOURCE_COVERAGE_MIN_PCT:
+        return []
+    return [{
+        "check": "source_coverage_below_threshold", "repairable": False,
+        "note": (f"تغطية المصادر {cov['pct']:.0f}% ({cov['backed']}/"
+                 f"{cov['total']} مؤشراً بمصدرٍ مسمّى) دون عتبة القبول "
+                 f"{SOURCE_COVERAGE_MIN_PCT:.0f}% — ضيّق نطاق التقرير أو "
+                 "أعلن الفجوة صراحةً بدل شحن مؤشرات بلا مصدرٍ مسمّى")}]
+
+
+# سدّ تسريب (الطبقة ٧ — مفارقة البوابة): هذه الفحوصات مُعلَّمة repairable=True
+# لأن *صنف* النتيجة يُصلَح عادة في طبقة العرض قبل أن يصل النص هنا (راجع تعليق
+# الوحدة) — لكن حين تُطلِق أحدها فعلياً، فهذا يعني أن الإصلاح **فشل تحديداً في
+# هذه التشغيلة**، والنص الخام وصل بالفعل إلى DOCX المُسلَّم قبل تشغيل البوابة
+# (api.py._attach_quality_gate تُشغَّل بعد بناء العرض لا قبله). تخفيضها بصمت
+# إلى WARN يعني أن البوابة تكتشف تسريباً فعلياً ثم تكتمه — لا يجوز أن يمرّ بحكم
+# أهدأ من فشل بنيوي حقيقي (section_structure/agent_failed). ثابتٌ على مستوى
+# الوحدة كي تُثبِّته الاختبارات (عقد تصعيد §8: …_excess داخله، WARN خارجه).
+_REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
+                           "mission_key_leak", "raw_confidence",
+                           "trailing_ellipsis", "tool_use_leak",
+                           "claude_mention", "env_var_leak",
+                           "research_track_leak", "facts_list_leak",
+                           "ops_warning_leak",
+                           # §8: اختزال العملة والترقيم الإنجليزي داخل الفقرة
+                           # يُفشِلان (FAIL). أدوات الربط/الأرقام المفتاحية
+                           # مُدرَّجة (قرار المُشرِف): ٣–٤ WARN (خارج المجموعة)،
+                           # ≥٥ FAIL (…_excess داخلها).
+                           "style_currency_shorthand",
+                           "style_inline_enumeration",
+                           "style_connector_excess",
+                           "style_repeated_key_figure_excess",
+                           # البند ٥ (تدقيق «تحليل #1» DZA): وعدُ عملةٍ لم
+                           # يُنجَز تحويلها بلاغٌ مضلِّل حقيقي (لا مجرّد أسلوب)
+                           # — الإصلاح الفعلي في silk_render._fix_price_
+                           # column_currency_label؛ ظهوره يعني فشل الإصلاح.
+                           "currency_label_mismatch"}
+
+
+# WP-7 §3 — النصوص النائبة الصلبة التي لا يجوز أن تبلغ **المستند النهائي
+# المبني** أبداً (سطر عدم التوفّر العام مستثنى هنا: مسار التدهور المتعمَّد
+# للاستدعاء المباشر؛ تسليمه عبر API محكوم بفحص القالب client_section_placeholder).
+_ARTIFACT_HARD_PLACEHOLDERS = (
+    "بند تقني غير قابل للعرض المباشر",
+    "التفاصيل في أثر التتبع",
+    "التفاصيل الكاملة في أثر التتبع",
+)
+
+
+def run_client_artifact_text_gate(text: str) -> list[dict]:
+    """WP-7 §3 — بوابة نصّ المُنتَج النهائي: تُشغَّل على النص الكامل
+    المستخرَج من مستند العميل **بعد** بنائه (docx — ومنه يُشتق الـPDF)، لا
+    على القالب فقط: طبقة العرض نفسها قد تُدخِل نصاً لم يمرّ على فحوصات
+    القالب. تعيد قائمة بنود؛ أي بند = رفض التسليم (RuntimeError في
+    `render_client_docx`)."""
+    findings: list[dict] = []
+    if not text:
+        return findings
+    findings += _check_client_scaffold_leak(text)
+    _plain = _strip_ar_diacritics(text)
+    for ph in _ARTIFACT_HARD_PLACEHOLDERS:
+        if _strip_ar_diacritics(ph) in _plain:
+            findings.append({
+                "check": "placeholder_leak", "repairable": False,
+                "note": f"نصّ نائب تقني في المستند النهائي: «{ph}»"})
+    # بتر «…» على مستوى السطر (نص docx المستخرَج سطرٌ لكل فقرة، لا كتل
+    # منفصلة بأسطر فارغة) — الاقتباسات (»/") الخاتمة مستثناة بنيوياً لأن
+    # السطر حينها لا ينتهي بالنقاط نفسها.
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith(">"):
+            continue
+        if len(s) > 25 and (s.endswith("…") or s.endswith("...")):
+            findings.append({
+                "check": "trailing_ellipsis", "repairable": False,
+                "note": f"سطر في المستند النهائي ينتهي بنقاط حذف: "
+                       f"'...{s[-40:]}'"})
+    if "لا فجوة جوهرية" in text and "فجوة بيانات" in text:
+        findings.append({
+            "check": "gaps_closing_contradiction", "repairable": False,
+            "note": "المستند النهائي يعلن «فجوة بيانات» ويطبع «لا فجوة "
+                   "جوهرية» معاً — تناقض فجوات في المُنتَج المبني"})
+    return findings
 
 
 def run_quality_gate(view: dict) -> dict:
@@ -466,6 +1118,20 @@ def run_quality_gate(view: dict) -> dict:
     # التقرير السردي الكامل (كاتب التقرير) حيث التقطيع الحقيقي مرصود فعلاً.
     findings += _check_mid_word_truncation(text)
     findings += _check_trailing_ellipsis(text)
+    findings += _check_orphan_short_token(text)
+    findings += _check_dangling_cross_reference(text)
+    findings += _check_stray_percent_punctuation(text)
+    findings += _check_entity_near_duplicates(text)
+    findings += _check_confidence_band_label(text)
+    findings += _check_lpi_edition_year(text)
+    findings += _check_recommendation_tier_label_consistency(dr)
+    findings += _check_near_duplicate_figures(text)
+    findings += _check_hhi_false_precision(text)
+    findings += _check_supplier_rank_contiguity(text)
+    findings += _check_client_section_would_be_placeholder(dr)
+    findings += _check_client_scaffold_leak(combined_text)
+    findings += _check_placeholder_leak(combined_text)
+    findings += _check_gaps_closing_contradiction(dr)
     findings += _check_internal_plumbing_leak(text)
     findings += _check_english_field_and_mission_key_leak(text)
     findings += _check_confidentiality_leaks(combined_text)
@@ -475,37 +1141,36 @@ def run_quality_gate(view: dict) -> dict:
     findings += _check_section_structure(dr)
     findings += _check_cagr_consistency(dr)
     findings += _check_currency_label_mismatch(dr)
+    findings += _check_evidence_body_numeric_consistency(dr)
+    findings += _check_source_coverage(dr)
     findings += _check_agent_health(dr)
     findings += _check_audit_coverage(dr)
     findings += _check_analyst_layer_failure(dr)
 
     non_repairable = [f for f in findings if not f["repairable"]]
-    # سدّ تسريب (الطبقة ٧ — مفارقة البوابة): هذه الفحوصات مُعلَّمة
-    # repairable=True لأن *صنف* النتيجة يُصلَح عادة في طبقة العرض قبل أن
-    # يصل النص هنا (راجع تعليق الوحدة) — لكن حين تُطلِق أحدها فعلياً، فهذا
-    # يعني أن الإصلاح **فشل تحديداً في هذه التشغيلة**، والنص الخام وصل
-    # بالفعل إلى DOCX المُسلَّم قبل أن تُشغَّل هذه البوابة (راجع
-    # api.py._attach_quality_gate — تُشغَّل بعد بناء العرض لا قبله).
-    # تخفيضها بصمت إلى WARN كان يعني أن البوابة تكتشف تسريباً فعلياً
-    # ثم تكتمه هي نفسها بدل أن تُصعِّده — لا يجوز أن يمرّ هذا بحكم أهدأ من
-    # فشل بنيوي حقيقي (section_structure/agent_failed).
-    _REGRESSION_GUARD_FIRED = {"internal_plumbing_leak", "english_field_leak",
-                               "mission_key_leak", "raw_confidence",
-                               "trailing_ellipsis", "tool_use_leak",
-                               "claude_mention", "env_var_leak",
-                               "research_track_leak", "facts_list_leak",
-                               "ops_warning_leak",
-                               # §8: اختزال العملة والترقيم الإنجليزي داخل
-                               # الفقرة يُفشِلان (FAIL)؛ سقف الروابط وتكرار
-                               # الرقم المفتاحي يبقيان WARN (تحذير أسلوبي).
-                               "style_currency_shorthand",
-                               "style_inline_enumeration"}
     guard_fired = [f for f in findings if f["check"] in _REGRESSION_GUARD_FIRED]
     severe = non_repairable + guard_fired
     if not findings:
         verdict = PASS
     elif any(f["check"] in ("section_structure", "agent_failed",
-                            "analyst_layer_failed") for f in non_repairable) \
+                            "analyst_layer_failed",
+                            "evidence_body_numeric_contradiction",
+                            "source_coverage_below_threshold",
+                            # §B (حزمة الفكس v2.1): بتر/إحالة معلَّقة/قسم
+                            # عميل بلا محتوى فعلي — كل هذه تصل العميل
+                            # كأخطاء بنيوية، لا ملاحظات أسلوبية.
+                            "orphan_short_token", "dangling_cross_reference",
+                            "client_section_placeholder",
+                            # WP-1 §4: تسمية نطاق ثقة لا تطابق رقمها = خطأ
+                            # يصل وجه التقرير — FAIL لا تحذير.
+                            "confidence_band_mismatch",
+                            # WP-2 §6: سقالة «إذن ماذا»/نصّ نائب تقني/بتر
+                            # «…» غير اقتباسي — كلها وصلت عملاء فعلاً.
+                            "client_scaffold_leak", "placeholder_leak",
+                            "trailing_ellipsis",
+                            # WP-4 §3: ختامٌ ينفي الفجوات بينما المتن يعلنها.
+                            "gaps_closing_contradiction")
+            for f in non_repairable) \
             or guard_fired:
         verdict = FAIL
     else:

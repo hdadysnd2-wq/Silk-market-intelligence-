@@ -142,11 +142,16 @@ MISSIONS: dict[str, dict] = {
     "demographics_economy": {
         "key": "demographics_economy", "name": "الديموغرافيا والاقتصاد الكلي",
         "mission": "سكان واقتصاد السوق المستهدف وربطهما بحجم الشريحة المستهدَفة",
-        "allowed_tools": ["worldbank_indicator", "lookup_reference"],
+        "allowed_tools": ["worldbank_indicator", "imf_indicator",
+                          "lookup_reference"],
         "instructions": (
             "اجمع: السكان ونموهم، الدخل للفرد وPPP، نسبة الشباب إن أمكن، "
             "ونسبة المسلمين (lookup_reference جدول demographics). اربطها "
-            "بحجم الشريحة المستهدَفة للمنتج — احسب لا تُقدّر."),
+            "بحجم الشريحة المستهدَفة للمنتج — احسب لا تُقدّر. "
+            # الموجة: دمج مصادر جديدة — IMF WEO للاقتصاد الكلي بجانب البنك الدولي.
+            "أضِف صورة الاقتصاد الكلي من imf_indicator: نمو الناتج الحقيقي "
+            "(indicator='gdp_growth') والتضخم (indicator='inflation') — كل "
+            "قيمة موسومة بمصدرها (IMF WEO) وسنتها؛ الفشل فجوة معلنة لا تقدير."),
     },
     "competitors": {
         "key": "competitors", "name": "تحليل المنافسين",
@@ -245,8 +250,8 @@ MISSIONS: dict[str, dict] = {
     "risk_news": {
         "key": "risk_news", "name": "تقييم المخاطر والمستجدات",
         "mission": "الاستقرار السياسي ومخاطر العملة وآخر الأخبار القطاعية",
-        "allowed_tools": ["worldbank_indicator", "gdelt_news", "web_search",
-                          "openalex_search"],
+        "allowed_tools": ["worldbank_indicator", "imf_indicator", "gdelt_news",
+                          "web_search", "openalex_search"],
         "instructions": (
             "الاستقرار السياسي وسيادة القانون وجودة التنظيم "
             "(worldbank_indicator political_stability/rule_of_law/"
@@ -254,7 +259,13 @@ MISSIONS: dict[str, dict] = {
             "worldbank_indicator indicator='exchange_rate' لثلاث سنوات "
             "مختلفة على الأقل (year=آخر سنة، سنة-١، سنة-٢) واحسب نسبة "
             "التغيّر بينها صراحة — لا تخمين ولا 'تقلّب' بلا سلسلة سنوات "
-            "فعلية تدعمه. وأهم ١٠ عناوين قطاعية من GDELT آخر ١٢ شهراً "
+            "فعلية تدعمه. "
+            # الموجة: دمج مصادر جديدة — IMF WEO يثري صورة المخاطر الكلية.
+            "وأضِف مؤشرات صندوق النقد الدولي عبر imf_indicator: نمو الناتج "
+            "الحقيقي (indicator='gdp_growth')، التضخم (indicator='inflation')، "
+            "ورصيد الحساب الجاري (indicator='current_account') — إشارات هشاشة/"
+            "متانة كلية موسومة بمصدرها (IMF WEO) وسنتها؛ الفشل فجوة معلنة. "
+            "وأهم ١٠ عناوين قطاعية من GDELT آخر ١٢ شهراً "
             "(عنوان/تاريخ/رابط) — إن أعاد GDELT فجوة معلنة (فشل متكرر لا "
             "نتائج)، استخدم web_search كبديل موثَّق: نفّذ عدة استعلامات "
             "أخبار بلغة السوق (اسم السوق + المنتج/القطاع + 'أخبار'/"
@@ -287,6 +298,24 @@ MISSION_ORDER: tuple[str, ...] = (
     "competitors", "customs_requirements", "tariffs_agreements", "logistics",
     "channels_importers", "demand_trends", "risk_news", "opportunity_gaps",
 )
+
+# النطاقات المُفضَّلة لكل بعثة (الموجة: دمج مصادر جديدة، Wave 2) — مواقع
+# محتوائية بلا API تُدمَج عبر انحياز بحثٍ site: (لا كشط). نتائجها تُرتَّب أولاً
+# وتُوسَم دليلاً ثانوياً ◐ برابط. المصدر يبقى «بحث ويب» (Serper) — لا استخراج
+# محتوى جُملة (انضباط حقوق النشر). المفتاح = مفتاح البعثة، وكل مفتاح **يجب** أن
+# يملك أداة web_search في allowed_tools (وإلا كان الانحياز إعداداً ميتاً — درس
+# ٩؛ يُنفَّذ في tests/test_wave_datasources_integration.py). لذا الاقتصاد الكلي
+# النقيّ (demographics_economy، أرقام WB/IMF بلا بحث) لا يظهر هنا — انحياز
+# TradingEconomics الكلي/الخطري يركب بعثة risk_news التي تحمل web_search.
+#   • ثقافة المستهلك     → globalbusinessculture.com (ثقافة أعمال/استهلاك)
+#   • الاشتراطات الجمركية → ccacoalition.org (امتثال بيئي/مناخي — ثانوي)
+#   • المخاطر            → ccacoalition.org + tradingeconomics.com (استشهاد
+#     فقط — TradingEconomics واجهته مدفوعة والكشط مخالف لشروطه، فلا جلب جماعي)
+PREFERRED_DOMAINS: dict[str, list[str]] = {
+    "consumer_culture": ["globalbusinessculture.com"],
+    "customs_requirements": ["ccacoalition.org"],
+    "risk_news": ["ccacoalition.org", "tradingeconomics.com"],
+}
 
 # صفوف الكتالوج الإضافية — additive AGENT_CATALOG rows (لوحة «إعدادات
 # الوكلاء»)، مسجَّلة عند استيراد هذا الملف. مفاتيح مختلفة عن الـ١٤ القائمة
@@ -366,10 +395,15 @@ def _product_card_context(product_card: dict | None) -> str:
            + "؛ ".join(parts))
 
 
-def _checkpoint(analysis_id: int | None, key: str, report: AgentReport) -> None:
+def _checkpoint(analysis_id: int | None, key: str, report: AgentReport,
+                market_iso3: str | None = None) -> None:
     """خزّن نقطة تفتيش بعثة فور اكتمالها — no-op بلا analysis_id (استدعاء
     مكتبي مباشر خارج /research، أو `persist=False`). فشل التخزين لا يُسقط
     التشغيلة — نفس مبدأ عدّادات silk_context (قناة جانبية لا شرط).
+
+    `market_iso3` (البلاغ الحي — تسرّب اليمن↔الكويت، 2026-07-21): يُختَم
+    على الصفّ فترفض `load_mission_checkpoints` لاحقاً أيّ استئنافٍ لسوقٍ آخر
+    يستهلك نتيجة هذه البعثة بالخطأ.
 
     التقدّم الحيّ (تدقيق تجربة المستخدم): نفس لحظة اكتمال كل بعثة أيضاً
     لقطةُ تقدّمٍ («المرحلة: بعثات»، عدّادات llm_calls/tool_calls الحالية) —
@@ -380,7 +414,8 @@ def _checkpoint(analysis_id: int | None, key: str, report: AgentReport) -> None:
         return
     try:
         import silk_storage
-        silk_storage.save_mission_checkpoint(analysis_id, key, report)
+        silk_storage.save_mission_checkpoint(analysis_id, key, report,
+                                             market_iso3=market_iso3)
     except Exception as e:  # noqa: BLE001 — نقطة التفتيش تحسين لا شرط تشغيل
         log.warning("checkpoint write failed for %s/%s: %s", analysis_id, key, e)
     import silk_context
@@ -532,12 +567,14 @@ def run_all_missions(market: MarketRef, product: str = "",
                             f"LLMMissionAgent:{key}", [], True,
                             f"{key}: خطأ غير متوقع: {type(e).__name__}: {e}")
                     reports[key] = report
-                    _checkpoint(analysis_id, key, report)
+                    _checkpoint(analysis_id, key, report,
+                               getattr(market, "iso3", None))
             for fut in pending:  # لم تُنجز قبل انتهاء المهلة المشتركة
                 key = futures[fut]
                 log.warning("mission %s timed out after %ss", key, _MISSION_TIMEOUT_S)
                 reports[key] = _timed_out_report(key)
-                _checkpoint(analysis_id, key, reports[key])
+                _checkpoint(analysis_id, key, reports[key],
+                           getattr(market, "iso3", None))
 
     if "opportunity_gaps" not in reports:
         prior_findings = [dp for k in parallel_keys for dp in reports[k].findings]
@@ -545,7 +582,8 @@ def run_all_missions(market: MarketRef, product: str = "",
         reports["opportunity_gaps"] = gaps_agent.run({
             "market": market, "product": product, "hs_code": hs_code,
             "budget": _MISSION_BUDGET, "extra_findings": prior_findings})
-        _checkpoint(analysis_id, "opportunity_gaps", reports["opportunity_gaps"])
+        _checkpoint(analysis_id, "opportunity_gaps", reports["opportunity_gaps"],
+                   getattr(market, "iso3", None))
 
     # D3 (SPEC-v2): أرقام WGI للحوكمة تُلحَق حتماً ببعثة المخاطر — §9 لا
     # تعتمد على نداء كلود وحده (تشغيلات كانت تخرج §9 بلا أرقام استقرار/
@@ -553,6 +591,14 @@ def run_all_missions(market: MarketRef, product: str = "",
     # فمسار الاستئناف من نقطة تفتيش بلا WGI يحصل عليها أيضاً.
     if "risk_news" in reports:
         _augment_risk_news_wgi(reports["risk_news"], getattr(market, "iso3", ""))
+        # الموجة: دمج مصادر جديدة — IMF WEO (نمو/تضخم/حساب جارٍ) يصل بعثة المخاطر
+        # عبر أداة imf_indicator + تعليمات البعثة (لا إلحاق حتمي غير مشروط).
+        # قرار مقصود (منسجم مع حساسية التكلفة/السرعة، D-06): لا نضيف ٣ نداءات
+        # شبكة متزامنة غير مشروطة لكل تشغيلة كما يفعل D3 للحوكمة — WGI مخزَّن
+        # أولاً (رخيص) بينما IMF لا مخزن له، فالإلحاق الحتمي كان يضيف زمناً
+        # للمسار الحار في كل تشغيلة. الأداة مُحاكاة في الاختبارات (صفر زمن)
+        # وحيّة في الإنتاج (حين يستدعيها كلود، وهو مُوجَّه لذلك في تعليمات
+        # البعثة). demographics_economy (الكلي) يحصل على IMF بنفس النمط.
     return reports
 
 

@@ -42,7 +42,8 @@ def _deep_research_result():
                        "missing_categories": ["entry_cost",
                                               "price_competitiveness",
                                               "entry_door", "swot"]},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحكم المعروض من الحقل الحتمي حصراً.
+            "verdict": {"verdict": "WATCH", "confidence": 0.5,
                        "ai": {"verdict": "WATCH", "confidence": 0.5,
                              "reasoning": "سبب تجريبي"}},
             "report": {"report": ("## 1. الخلاصة التنفيذية\nنص تجريبي.\n"

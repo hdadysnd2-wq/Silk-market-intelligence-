@@ -65,7 +65,8 @@ def _deep_research_result():
                                       "entry_cost": [], "price_competitiveness": [],
                                       "entry_door": [], "swot": []},
                        "missing_categories": ["entry_cost"]},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحكم المعروض من الحقل الحتمي حصراً.
+            "verdict": {"verdict": "WATCH", "confidence": 0.5,
                        "ai": {"verdict": "WATCH", "confidence": 0.5,
                              "reasoning": "سبب"}},
             "report": {"report": report_text, "review_cycles": 1,
@@ -85,7 +86,7 @@ def test_cover_wordmark_is_real_not_bracketed_placeholder(monkeypatch):
     render_docx(view, path)
     text = docx_all_text(path)
     assert "[شعار سِلك]" not in text and "شعار سِلك" not in text
-    assert "سِلك" in text
+    assert "سلك" in text  # Wave 2: تشكيل آمن (بلا كسرة مُركَّبة)
 
 
 def test_page_header_and_footer_present(monkeypatch):
@@ -101,12 +102,12 @@ def test_page_header_and_footer_present(monkeypatch):
     header_text = "\n".join(p.text for p in section.header.paragraphs)
     footer_text = "\n".join(p.text for p in section.footer.paragraphs)
     assert "تمور" in header_text
-    assert "سِلك لذكاء الأسواق" in footer_text
+    assert "سلك لذكاء الأسواق" in footer_text  # Wave 2
 
 
 def test_table_header_row_shaded_with_primary_color(monkeypatch):
     from silk_render import build_view
-    from silk_reports import render_docx, _load_branding
+    from silk_reports import render_docx, _TABLE_HEADER_FILL
     from docx import Document
     from docx.oxml.ns import qn
     monkeypatch.setenv("SILK_HERMETIC", "1")
@@ -114,12 +115,13 @@ def test_table_header_row_shaded_with_primary_color(monkeypatch):
     path = os.path.join(tempfile.mkdtemp(), "shaded.docx")
     render_docx(view, path)
     doc = Document(path)
-    primary = _load_branding()["primary_color"].upper()
+    # §7 (ترقية الطباعة): رأس الجدول أخضرُ سِلك #166534 (كان لون العلامة الأساس).
+    header_fill = _TABLE_HEADER_FILL.upper()
     found = False
     for table in doc.tables:
         hdr_cell = table.rows[0].cells[0]
         shd = hdr_cell._tc.get_or_add_tcPr().find(qn("w:shd"))
-        if shd is not None and shd.get(qn("w:fill")).upper() == primary:
+        if shd is not None and shd.get(qn("w:fill")).upper() == header_fill:
             found = True
             break
     assert found
@@ -146,7 +148,7 @@ def test_sample_docx_regenerated_reflects_new_branding_and_structure():
     assert "[شعار سِلك]" not in text  # §7: لا نصّ نائب مُقوَّس
     assert "منهجية البحث ونطاقه" in text
     assert "التوصيات الاستراتيجية" in text
-    assert "سِلك لذكاء الأسواق" in text
+    assert "سلك لذكاء الأسواق" in text  # Wave 2: تشكيل آمن
 
 
 # ── ١١.٢أ: تصليب وكيل المنافسين — تحقّق ضد إسبانيا ────────────────────

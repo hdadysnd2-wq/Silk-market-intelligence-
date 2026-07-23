@@ -114,14 +114,22 @@ def _backoff_delay(attempt: int, retry_after: str = "") -> float:
     return min(base + random.uniform(0.0, base), 30.0)
 
 
-def _http_get(url: str, params: dict | None = None):
-    """جلب مرن عبر الجلسة المجمّعة — throttled GET with 429/5xx backoff (1b)."""
+def _http_get(url: str, params: dict | None = None,
+              headers: dict | None = None):
+    """جلب مرن عبر الجلسة المجمّعة — throttled GET with 429/5xx backoff (1b).
+
+    `headers` (اختياري): ترويسات لمصادر تمرّر مفتاحاً في ترويسة لا في الاستعلام
+    (فلا يظهر السرّ في الـURL)؛ None = سلوك قديم بلا ترويسات إضافية."""
     host = url.split("/")[2] if "://" in url else url
     retries = int(os.environ.get("SILK_HTTP_RETRIES", "3"))
     resp = None
     for attempt in range(retries + 1):
         _throttle(host)
-        resp = _session.get(url, params=params, timeout=_TIMEOUT)
+        # headers شرطيّ: بلا ترويسات يبقى النداء مطابقاً للتوقيع القديم (لا
+        # يكسر محاكاة `_session.get` القائمة) — الترويسات مسار WTO الجديد وحده.
+        resp = (_session.get(url, params=params, headers=headers,
+                             timeout=_TIMEOUT) if headers is not None
+                else _session.get(url, params=params, timeout=_TIMEOUT))
         if resp.status_code not in _RETRYABLE or attempt >= retries:
             return resp
         delay = _backoff_delay(attempt, resp.headers.get("Retry-After") or "")
@@ -144,6 +152,66 @@ class DataPoint:
     # تمييز بنيوي — "fetch_failed" (تعذّر الجلب: حد معدل/شبكة، أعد المحاولة)
     # مقابل "no_record" (ردّ ناجح بلا سجل فعلاً). "" = غير محدد (سلوك قديم).
     status: str = ""
+    # سنة البيانات البنيوية (قرار المالك — «حلِّل المصدر لا النثر»، الدرس ٣٣):
+    # فِنتيج الحقيقة كحقلٍ صريح لا كوسمٍ نصّيّ داخل note. الجامعون يضبطونه
+    # (البنك الدولي/كومتريد/المنافسون)، و`silk_staleness.fact_year` يقرؤه أولاً
+    # فيُقرَّر التقادُم دون تحليل نثرٍ ودون تسريب «year=» لأيّ سطح.
+    data_year: "int | None" = None
+
+
+# السجلّ العمومي لروابط المصادر (§6، أمر العمل الرئيس) — كل مصدرٍ عموميّ مسمّى
+# ورابطه الرسمي حيث يتحقّق المدقّق من **مجموعة البيانات** (لا رابط استعلامٍ
+# محدّد — لا نختلق رابطًا دقيقًا لا نملكه). المفاتيح بالحروف الصغيرة على الاسم
+# القاعدي (قبل أيّ لاحقة عربية بين قوسين). أضِف مصدرًا هنا فقط برابطه الرسمي
+# الحقيقيّ — كمرجعٍ ثابتٍ يُعامَل بحذر (كـ data/requirements_l1.csv).
+SOURCE_PUBLIC_URL = {
+    "un comtrade": "https://comtradeplus.un.org/",
+    "comtrade": "https://comtradeplus.un.org/",
+    "world bank": "https://data.worldbank.org/",
+    "google trends": "https://trends.google.com/trends/",
+    "openalex": "https://openalex.org/",
+    "faostat": "https://www.fao.org/faostat/en/",
+    "eurostat": "https://ec.europa.eu/eurostat/",
+    "gdelt": "https://www.gdeltproject.org/",
+    "wits": "https://wits.worldbank.org/",
+    # الموجة: دمج مصادر جديدة — مصدران جديدان بواجهة رسمية (لا كشط).
+    "imf weo": "https://www.imf.org/external/datamapper/",
+    "wto ttd": "https://ttd.wto.org/",
+}
+
+# البوّابة العربية للبنك الدولي (الموجة: دمج مصادر جديدة، Wave 3) — **ليست
+# مصدر بيانات جديداً**: هي واجهة عربية لنفس قاعدة البنك الدولي المدمَجة أصلاً
+# عبر api.worldbank.org. تُستعمل حصراً في سجلّ أدلة **العميل** لسهولة قراءة
+# المالك/العميل العربي — رابط تحقّق بلغته لا مصدر رقمٍ ثانٍ (القرار موثَّق في
+# docs/DECISIONS.md). المسار الافتراضي/التشغيلي يبقى على data.worldbank.org.
+WORLD_BANK_AR_PORTAL = "https://data.albankaldawli.org/"
+
+
+def public_source_url(source_label: object, arabic: bool = False) -> str:
+    """رابطٌ عموميٌّ رسميٌّ للمصدر المسمّى، أو «» إن لم يكن مصدرًا عموميًّا معروفًا.
+
+    لا اختلاق: مصدرٌ مدفوع/بحثٌ/مجهول => «» (المتصل يعرض «—»). يُطابَق الاسمُ
+    القاعديُّ (قبل أوّل قوس، بلا لواحق عربية) تطابقًا تامًّا ثمّ ببادئة — فـ
+    «UN Comtrade (مخزن الحقائق)» و«World Bank (لقطة مضمّنة)» يُصيبان السجلّ.
+
+    `arabic=True` (Wave 3): استشهادات البنك الدولي في تقرير **العميل** تُوجَّه
+    للبوّابة العربية `data.albankaldawli.org` (نفس القاعدة، واجهة عربية أسهل
+    قراءةً) — لا يغيّر أي مصدر آخر ولا المسار الافتراضي/التشغيلي."""
+    base = str(source_label or "").split("(")[0].strip().lower()
+    if not base:
+        return ""
+    # تطابق تامّ حصرًا: «World Bank» وحده (لواحق الأقواس مُنزَعة أصلًا فـ
+    # «World Bank (لقطة)» => «world bank»). **لا** يشمل «World Bank WITS» —
+    # WITS أداة تعريفة مستقلّة بوّابتها wits.worldbank.org، لا تُحوَّل للبوّابة
+    # العربية (التي لا تعرض جداول WITS بنفس المسار).
+    if arabic and base == "world bank":
+        return WORLD_BANK_AR_PORTAL
+    if base in SOURCE_PUBLIC_URL:
+        return SOURCE_PUBLIC_URL[base]
+    for key, url in SOURCE_PUBLIC_URL.items():
+        if base.startswith(key):
+            return url
+    return ""
 
 
 def _today() -> str:
@@ -438,9 +506,18 @@ def _world_bank_for_year(iso3: str, indicator: str,
         records = payload[1] or []
         for rec in records:  # WB returns newest-first; take first non-null
             if isinstance(rec, dict) and rec.get("value") is not None:
+                _dy = None
+                try:
+                    _dy = int(str(rec.get("date"))[:4])
+                except (TypeError, ValueError):
+                    _dy = None
+                # سنة البيانات حقلٌ بنيويّ (data_year) لا وسمٌ نصّيّ «year=»
+                # (الدرس ٣٣ + مراجعة الشيفرة): الملاحظة تُبقي السنة بصيغة بشرية
+                # مقروءة «(2013)»، والفِنتيج يُقرأ من الحقل لا من النثر.
                 return DataPoint(
                     value=rec["value"], source="World Bank", confidence=0.95,
-                    note=f"{indicator} year={rec.get('date')}", retrieved_at=_today(),
+                    note=f"{indicator} ({rec.get('date')})", retrieved_at=_today(),
+                    data_year=_dy,
                 )
         note = f"{indicator}: no value returned for {iso3}"
         log.warning(note)

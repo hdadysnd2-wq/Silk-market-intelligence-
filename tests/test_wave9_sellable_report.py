@@ -383,7 +383,9 @@ def _report_with_table_and_markdown():
                            "demand", "entry_cost", "price_competitiveness",
                            "entry_door", "swot")},
                        "missing_categories": []},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحكم المعروض من الحقل الحتمي حصراً.
+            "verdict": {"verdict": "WATCH — مراقبة قبل الدخول",
+                       "confidence": 0.55,
                        "ai": {"verdict": "WATCH — مراقبة قبل الدخول",
                              "confidence": 0.55, "reasoning": "سبب"}},
             "report": {"report": (
@@ -467,11 +469,11 @@ def test_cover_page_has_verdict_badge_and_branding(monkeypatch):
     view = build_view(_report_with_table_and_markdown())
     path = render_docx(view, os.path.join(tempfile.mkdtemp(), "cover.docx"))
     text = docx_all_text(path)
-    assert "أُعد بواسطة منصة سِلك لذكاء الأسواق" in text
+    assert "أُعد بواسطة منصة سلك لذكاء الأسواق" in text  # Wave 2
     # الشارة مُعرَّبة بالكامل — لا رمز آلة WATCH خام (سدّ تسريب).
     assert "مراقبة السوق" in text
     assert "WATCH" not in text
-    idx = text.find("سِلك — تقرير بحث عميق")
+    idx = text.find("سلك — تقرير بحث عميق")  # Wave 2
     assert idx != -1
     # الشارة قريبة من الغلاف (أول ٥٠٠ حرف) لا مدفونة في آخر المستند.
     assert "مراقبة السوق" in text[idx:idx + 500]
@@ -522,7 +524,8 @@ def _deep_research_result_for_badges():
                                       "entry_cost": [], "price_competitiveness": [],
                                       "entry_door": [], "swot": []},
                        "missing_categories": []},
-            "verdict": {"verdict": "PRELIMINARY GO",
+            # WP-1: الحكم المعروض من الحقل الحتمي حصراً.
+            "verdict": {"verdict": "WATCH", "confidence": 0.5,
                        "ai": {"verdict": "WATCH", "confidence": 0.5,
                              "reasoning": "سبب"}},
             "report": {"report": (
@@ -697,4 +700,4 @@ def test_research_sample_docx_meets_wave9_delivery_gate():
     assert "##" not in text and "**" not in text and "```" not in text
     assert "ثقة 0" not in text  # لا رقم ثقة خام مسرَّب للسرد
     assert "سجل الأدلة للمدققين" in text  # §6: الملحق المُعاد تسميته
-    assert "منصة سِلك لذكاء الأسواق" in text  # سطر الهوية على الغلاف
+    assert "منصة سلك لذكاء الأسواق" in text  # Wave 2  # سطر الهوية على الغلاف

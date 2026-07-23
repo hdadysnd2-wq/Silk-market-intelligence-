@@ -77,6 +77,11 @@ def gdelt_news(query: str, market: str = "", months: int = 12,
     except Exception as e:  # noqa: BLE001 — never raise to caller
         note = f"GDELT fetch failed for {full_query!r}: {type(e).__name__}: {e}"
         log.warning(note)
+        try:  # عائلة C (Wave 1.5): لا فشلٌ صامت — أعلِنه للمشغّل.
+            import silk_ops_log
+            silk_ops_log.record_service_failure("gdelt", note)
+        except Exception:  # noqa: BLE001
+            pass
         return [DataPoint(None, "GDELT", 0.0, note, _today())]
     try:
         payload = resp.json()

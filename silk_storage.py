@@ -75,9 +75,18 @@ def init_db(path: str | None = None) -> None:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS research_missions ("
             "analysis_id INTEGER, mission_key TEXT, status TEXT, "
-            "report_json TEXT, completed_at TEXT, "
+            "report_json TEXT, completed_at TEXT, market_iso3 TEXT, "
             "PRIMARY KEY (analysis_id, mission_key))"
         )
+        # ترحيل قواعد أقدم بلا العمود (البلاغ الحي — تسرّب اليمن↔الكويت،
+        # 2026-07-21): additive migration; existing rows untouched (market_iso3
+        # NULL لصفوفٍ قديمة => `load_mission_checkpoints` لا تُطأطئها، فقط
+        # الصفوف الجديدة تُختَم بسوقها).
+        _rm_cols = {r[1] for r in conn.execute(
+            "PRAGMA table_info(research_missions)")}
+        if "market_iso3" not in _rm_cols:
+            conn.execute(
+                "ALTER TABLE research_missions ADD COLUMN market_iso3 TEXT")
         # جدول خامل: لم يبقَ مستدعٍ لدوالّه. يُبقى إنشاؤه (CREATE IF NOT
         # EXISTS، إضافي) حفاظاً على أي صفوف قديمة على القرص الدائم (قاعدة
         # عدم حذف بيانات silk.db)؛ لا كتابة/قراءة جديدة عليه بعد اليوم.
@@ -386,10 +395,16 @@ def get_research_run(analysis_id: int, path: str | None = None) -> dict | None:
 
 
 def save_mission_checkpoint(analysis_id: int, mission_key: str, report: object,
-                            path: str | None = None) -> None:
+                            path: str | None = None,
+                            market_iso3: str | None = None) -> None:
     """خزّن نتيجة بعثة واحدة فور اكتمالها — the checkpoint write itself
     (P0). `report`: AgentReport حيّ — يُسلسَل كما تُسلسَل نتائج التحليل
-    الكاملة (`_json_default`، dataclasses.asdict)."""
+    الكاملة (`_json_default`، dataclasses.asdict).
+
+    `market_iso3` (البلاغ الحي — تسرّب اليمن↔الكويت، 2026-07-21): يُختَم
+    على كل صفّ كي تستطيع `load_mission_checkpoints` رفض أيّ نقطة تفتيش
+    محفوظة لسوقٍ آخر — نقطة اختناق شبكة أمان بنيوية، لا تعتمد وحدها على
+    ضبط طبقة `/research` العليا."""
     path = path or _db_path()
     init_db(path)
     now = datetime.datetime.now().isoformat(timespec="seconds")
@@ -398,12 +413,13 @@ def save_mission_checkpoint(analysis_id: int, mission_key: str, report: object,
     with _connect(path) as conn:
         conn.execute(
             "INSERT INTO research_missions "
-            "(analysis_id, mission_key, status, report_json, completed_at) "
-            "VALUES (?, ?, ?, ?, ?) "
+            "(analysis_id, mission_key, status, report_json, completed_at, "
+            "market_iso3) VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(analysis_id, mission_key) DO UPDATE SET "
             "status = excluded.status, report_json = excluded.report_json, "
-            "completed_at = excluded.completed_at",
-            (analysis_id, mission_key, status, blob, now))
+            "completed_at = excluded.completed_at, "
+            "market_iso3 = excluded.market_iso3",
+            (analysis_id, mission_key, status, blob, now, market_iso3))
 
 
 def _agent_report_from_dict(d: dict):
@@ -421,19 +437,34 @@ def _agent_report_from_dict(d: dict):
 
 
 def load_mission_checkpoints(analysis_id: int,
-                             path: str | None = None) -> dict:
+                             path: str | None = None,
+                             market_iso3: str | None = None) -> dict:
     """كل نقاط تفتيش البعثات المكتملة لتشغيلة — {mission_key: AgentReport}.
-    قاموس فارغ إن لم توجد قاعدة/تشغيلة — لا استثناء، لا اختلاق."""
+    قاموس فارغ إن لم توجد قاعدة/تشغيلة — لا استثناء، لا اختلاق.
+
+    `market_iso3` (شبكة أمان تحدّد النطاق — البلاغ الحي: تسرّب اليمن↔الكويت،
+    2026-07-21): إن مُرِّر، أيّ صفّ مختوم بسوقٍ **آخر** يُرفَض ويُسجَّل تحذيراً
+    بدل أن يُعاد كأنه صحيح — البعثة تُعامَل كغير مكتملة فتُعاد لاحقاً على
+    السوق الصحيح لا تُسلَّم بيانات سوقٍ خاطئ. صفوفٌ قديمة بلا ختم
+    (`market_iso3 IS NULL`، من قبل هذه الميزة) تمرّ كما كانت — لا انحدار
+    على تشغيلات محفوظة سابقاً."""
     path = path or _db_path()
     if not os.path.exists(path):
         return {}
     with _connect(path) as conn:
         rows = conn.execute(
-            "SELECT mission_key, report_json FROM research_missions "
-            "WHERE analysis_id = ?", (analysis_id,)
+            "SELECT mission_key, report_json, market_iso3 "
+            "FROM research_missions WHERE analysis_id = ?", (analysis_id,)
         ).fetchall()
     out = {}
     for r in rows:
+        stored_iso3 = r["market_iso3"] if "market_iso3" in r.keys() else None
+        if market_iso3 and stored_iso3 and stored_iso3 != market_iso3:
+            log.warning(
+                "checkpoint %s/%s belongs to market %s, not requested %s — "
+                "rejected (cross-market leak guard)",
+                analysis_id, r["mission_key"], stored_iso3, market_iso3)
+            continue
         try:
             out[r["mission_key"]] = _agent_report_from_dict(
                 json.loads(r["report_json"]))
@@ -441,6 +472,23 @@ def load_mission_checkpoints(analysis_id: int,
             log.warning("corrupt checkpoint %s/%s ignored: %s",
                        analysis_id, r["mission_key"], e)
     return out
+
+
+def checkpoint_market_iso3s(analysis_id: int, path: str | None = None) -> set[str]:
+    """أسواق **مختلفة** مختومة على نقاط تفتيش التشغيلة — قراءة خام بلا فلترة
+    (على النقيض من `load_mission_checkpoints`)، للحارس (`silk_watchdog`):
+    كشف أي بقايا سوقٍ آخر وصلت الجدول رغم بوّابة API (البند ٣٦، تسرّب
+    اليمن↔الكويت) — شبكة أمان قابلة للرصد لا الرفض وحده. صفوفٌ قديمة بلا
+    ختم (`market_iso3 IS NULL`) تُهمَل — لا انحدار."""
+    path = path or _db_path()
+    if not os.path.exists(path):
+        return set()
+    with _connect(path) as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT market_iso3 FROM research_missions "
+            "WHERE analysis_id = ? AND market_iso3 IS NOT NULL", (analysis_id,)
+        ).fetchall()
+    return {r["market_iso3"] for r in rows if r["market_iso3"]}
 
 
 def mission_status_map(analysis_id: int, path: str | None = None) -> dict:

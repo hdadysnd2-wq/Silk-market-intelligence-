@@ -22,6 +22,15 @@ from silk_data_layer_v2 import market_imports_cached, ppp_per_capita, market_imp
 
 log = logging.getLogger(__name__)
 
+
+def _dyear(year: object) -> "int | None":
+    """سنة البيانات كعددٍ للحقل البنيويّ data_year (الدرس ٣٣) — None عند التعذّر."""
+    try:
+        return int(str(year)[:4])
+    except (TypeError, ValueError):
+        return None
+
+
 _SAUDI_M49 = "682"
 
 # أسواق سِلك المستهدفة — Silk target markets (iso3 + M49). Real codes; GCC,
@@ -126,6 +135,87 @@ def top_import_markets(hs_code: str, year: int, n: int = 38) -> list[dict]:
             for t in world_import_totals(hs_code, year)[:n]]
 
 
+# ═══ استشارة بلد المنشأ (SILK_PRODUCER_ADVISORY) — producer-country advisory ═══
+# قاعدةٌ عامّةٌ مبنيّةٌ على البيانات لا حالةَ منتج: قبل حجز دراسةِ دخولِ سوقٍ ما،
+# إن كانت تلك السوق من **أكبر مصدّري هذا الرمز عالميًا** (منشأ لا مستورِد) فالدخول
+# تنافسيٌّ جدًّا — نُحذّر ونطلب موافقةً صريحة. المصدر: نداءُ عالمٍ واحدٌ بتدفّق
+# التصدير (`flow="X"`, partner=0) — نظيرُ نداء الاستيراد تمامًا، صفر نداء كلود/
+# سقفٍ مدفوع (كومتريد فقط، مقيسٌ بميزانيته). صفر رمز دولة/HS مكتوب صلبًا هنا.
+
+def world_export_totals(hs_code: str, year: int) -> list[dict]:
+    """كل مصدّري هذا الرمز عالميًا بقيمهم — every world EXPORTER of this HS, ONE call.
+
+    نظيرُ `world_import_totals` بتدفّق التصدير (`flow="X"`, كل الدول المبلّغة،
+    partner=0=العالم): يُعدِّد كلَّ **بلد منشأ** يُصدِّر هذا الرمز مع إجمالي
+    صادراته، مرتَّبًا تنازليًا. يُستعمَل لاستشارة بلد المنشأ (هل السوق المستهدفة
+    من أكبر المنتِجين؟). نداءُ كومتريد واحدٌ مُخبّأٌ (cache) — صفر نداء مدفوع
+    (كلود/سقف). فشل/غياب الشبكة => [] فتصمت الاستشارة (فشلٌ آمن مفتوح).
+
+    Mirror of `world_import_totals` with the export flow — the world-producers
+    ranking by reporter for a given HS. Returns [{iso3, m49, total_usd}] desc.
+    """
+    from silk_data_layer import M49_TO_ISO3, comtrade_trade, primary_value
+    recs = comtrade_trade(hs_code, None, year, flow="X", partner=0) or []
+    rows: list[tuple[float, str, str]] = []
+    for rec in recs or []:
+        m49 = str(rec.get("reporterCode") or "").strip()
+        if not m49:
+            continue
+        val = primary_value(rec)
+        if val is None:
+            continue
+        iso3 = (str(rec.get("reporterISO") or "").strip().upper()
+                or M49_TO_ISO3.get(m49, ""))
+        if len(iso3) != 3:
+            continue
+        rows.append((val, iso3, m49))
+    rows.sort(reverse=True)
+    seen: set[str] = set()
+    out: list[dict] = []
+    for val, iso3, m49 in rows:
+        if iso3 in seen:
+            continue
+        seen.add(iso3)
+        out.append({"iso3": iso3, "m49": m49, "total_usd": val})
+    return out
+
+
+def _producer_advisory_topn() -> int:
+    """عتبة «من أكبر المصدّرين» قابلةٌ للضبط بالبيئة فقط — SILK_PRODUCER_ADVISORY_TOPN
+    (افتراضيًا ٥). لا رقم مكتوب صلبًا في المنطق العام."""
+    try:
+        n = int(os.environ.get("SILK_PRODUCER_ADVISORY_TOPN", "5") or "5")
+    except ValueError:
+        n = 5
+    return max(1, n)
+
+
+def top_world_exporters(hs_code: str, year: int, n: int | None = None) -> list[dict]:
+    """أكبر n مصدّرًا عالميًا لهذا الرمز — thin slice over `world_export_totals`."""
+    n = _producer_advisory_topn() if n is None else max(1, n)
+    return world_export_totals(hs_code, year)[:n]
+
+
+def is_top_world_exporter(hs_code, iso3: str, year: int,
+                          n: int | None = None) -> tuple[bool, list]:
+    """هل السوق ضمن أكبر مصدّري هذا الرمز عالميًا؟ — (is_top, top_exporters).
+
+    قاعدةٌ مبنيّةٌ على البيانات: نُرتّب أكبر المصدّرين من نداء العالم الواحد
+    (تصدير) ونفحص عضوية `iso3`. تعذّرُ التحديد (بلا رمز/شبكة/كومتريد) =>
+    `(False, [])`: **تصمت الاستشارة** بدل تحذيرٍ كاذب (فشلٌ آمن مفتوح، نظير
+    `_market_in_coverage`). صفر اسم دولة/HS مكتوب صلبًا — كلّه من البيانات.
+    """
+    iso3 = (iso3 or "").strip().upper()
+    if not hs_code or len(iso3) != 3:
+        return False, []
+    try:
+        top = top_world_exporters(hs_code, year, n)
+    except Exception as e:  # noqa: BLE001 — عطل قياس لا يُطلق تحذيرًا كاذبًا
+        log.warning("producer advisory probe failed: %s", e)
+        return False, []
+    return iso3 in {t["iso3"] for t in top}, top
+
+
 # ═══ تغطية العالم (SILK_WORLD_MARKETS) — two-tier world coverage ═══
 # الفئة-١: الأسواق المنسّقة (تسجيل محلّي كامل). الفئة-٢: بقية العالم، تُسجَّل
 # **حصراً** على بياناتٍ متاحةٍ عالمياً (إجمالي وارداتها من نداء العالم الواحد +
@@ -187,7 +277,7 @@ def _tier2_gather_row(hs_code: str, entry: dict, year: int) -> dict:
     ms = (DataPoint(float(total), "UN Comtrade", _TIER2_CONF_CAP,
                     note=f"إجمالي واردات HS{hs_code} {year} (USD) — {TIER2_LABEL}"
                          " · من نداء استيراد العالم الواحد",
-                    retrieved_at=_today())
+                    retrieved_at=_today(), data_year=_dyear(year))
           if total is not None else
           DataPoint(None, "UN Comtrade", 0.0,
                     note=f"{TIER2_LABEL} — لا إجمالي واردات لهذا السوق",
@@ -243,7 +333,7 @@ def _market_size_component(total_usd: object, hs_code: str, m49: str,
     conf = 0.7 if xval else 0.9      # تباين مصادر >20% => ثقة أدنى (Stage 2A)
     return DataPoint(float(total_usd), "UN Comtrade", conf,
                      note=f"total imports HS{hs_code} {year} (USD){xval}",
-                     retrieved_at=_today())
+                     retrieved_at=_today(), data_year=_dyear(year))
 
 
 def _competitor_list(comps: list[DataPoint], top: int = 5) -> list[dict]:

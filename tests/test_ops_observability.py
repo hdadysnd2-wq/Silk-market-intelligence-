@@ -208,6 +208,11 @@ def test_export_failure_reason_sanitized_before_ops_log():
     تسريب خام لا يلتقطها مُطهِّر السباكة العام — «algorithm_language:
     «درجة الثقة»» عربية أصلاً، لا EN يُعرَّب) — يُسجَّل بسبب ثابت عام لا
     نص الاستثناء الخام؛ ردّ الـHTTP نفسه يبقى يحمل str(e) كاملاً كالمعتاد."""
+    # §0 (حزمة الفكس v2.1): تصدير العميل يمرّ ببوابة الجودة أولاً — هذا
+    # الاختبار يتحقّق من مسار فشل *لاحق* (render_client_docx يرفع RuntimeError
+    # بتسريب)، فتقرير المدوّنة هنا يجب أن يكون كاملاً (١١ قسماً) كي يمرّ
+    # ببوابة الجودة (لا 409 حجب) ويصل فعلاً إلى render_client_docx المموَّه.
+    from tools.canonical_netherlands import REPORT_TEXT
     db = os.path.join(tempfile.mkdtemp(), "ops.db")
     with _env(SILK_API_KEY="x", SILK_RATE_LIMIT="0", SILK_OPS_LOG_DB=db):
         client, api = _client()
@@ -215,7 +220,7 @@ def test_export_failure_reason_sanitized_before_ops_log():
                "market": {"name_en": "Netherlands"}, "markets": [],
                "deep_research": {
                    "missions": {}, "analyst": {}, "verdict": {},
-                   "report": {"report": "## 1. الخلاصة\nتقرير."},
+                   "report": {"report": REPORT_TEXT},
                    "trace_id": "t"}}
         leak = ("تصدير العميل يحوي مصطلحات ممنوعة — رُفض التوليد: "
                "algorithm_language: «درجة الثقة» LLMMissionAgent: pricing_scout")

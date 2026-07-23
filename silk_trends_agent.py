@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+import os
 
 from silk_data_layer import DataPoint, _today
 from silk_agents import BaseAgent, AgentReport
@@ -53,6 +54,12 @@ def trends_interest(
                          f"tf='{timeframe}' n={len(series)}", _today())
     except Exception as e:  # noqa: BLE001 — never raise to caller
         log.warning("Google Trends fetch failed ('%s', geo=%s): %s", keyword, geo, e)
+        try:  # عائلة C (Wave 1.5): إعلان الفشل للمشغّل.
+            import silk_ops_log
+            silk_ops_log.record_service_failure(
+                "trends", f"pytrends fetch failed ('{keyword}', geo={geo}): {e}")
+        except Exception:  # noqa: BLE001
+            pass
         return DataPoint(None, "Google Trends", 0.0,
                          f"pytrends unavailable / no network: {e}", _today())
 
@@ -225,6 +232,62 @@ def _seasonality(keyword: str, geo: str | None, timeframe: str) -> DataPoint:
                          f"pytrends unavailable / no network: {e}", _today())
 
 
+def _weak_threshold() -> float:
+    """عتبة «الطلب شبه المعدوم» على الصفة الدقيقة — config-driven."""
+    try:
+        v = float(os.environ.get("SILK_TRENDS_WEAK_THRESHOLD", "5"))
+        return v if v > 0 else 5.0
+    except (TypeError, ValueError):
+        return 5.0
+
+
+def _broaden_max_candidates() -> int:
+    """سقف عدد المصطلحات الأعمّ المُستعلَمة — يحرس ميزانية pytrends المحدودة
+    (429 مرصود حياً، مراجعة الشيفرة #2). config: SILK_TRENDS_BROADEN_MAX (٢)."""
+    try:
+        n = int(os.environ.get("SILK_TRENDS_BROADEN_MAX", "2"))
+        return n if n > 0 else 2
+    except (TypeError, ValueError):
+        return 2
+
+
+def broaden_if_weak(keyword: str, geo: str | None, timeframe: str,
+                    interest: DataPoint) -> DataPoint | None:
+    """Wave 2.3 — حين تُسجِّل الصفةُ الدقيقة طلباً شبه معدوم (≤ العتبة) بينما
+    الفئة الأعمّ قوية، استعلِم عائلة المصطلح الأعمّ **آلياً** وأعِد كليهما،
+    مؤطَّراً «الطلب على الفئة موجود؛ الصفة الدقيقة غير مبحوثة» — لا استنتاج
+    «لا طلب» من استعلامٍ مفرطٍ في التخصيص (تدقيق زبدة الفول السوداني/اليمن:
+    «زبدة الفول السوداني»=0.4 بينما «فوائد زبدة الفول السوداني»=100).
+
+    المصطلح الأعمّ **مبنيّ على البيانات** (أقوى استعلام مرتبط من Trends نفسها،
+    لا قائمة مكتوبة صلباً). لا إشارة أعمّ أقوى => None (لا اختلاق طلب)."""
+    if interest.value is None or float(interest.value) > _weak_threshold():
+        return None
+    ctx = trends_context(keyword, geo, timeframe)
+    # سقفٌ على عدد المرشّحين المُستعلَمين — لا حلقة غير محدودة تُغرِق pytrends
+    # المحدود (429 مرصود حياً، مراجعة الشيفرة #2).
+    cands = ((ctx.get("related_top") or [])
+             + (ctx.get("related_rising") or []))[:_broaden_max_candidates()]
+    for cand in cands:
+        broader = (cand.get("label") or "").strip()
+        if not broader or broader == keyword:
+            continue
+        bi = trends_interest(broader, geo, timeframe)
+        if bi.value is not None and float(bi.value) > float(interest.value):
+            return DataPoint(
+                bi.value, "Google Trends", 0.6,
+                f"مصطلح أعمّ '{broader}' متوسط اهتمامه {bi.value}/100 — "
+                f"الطلب على الفئة موجود؛ الصفة الدقيقة '{keyword}' غير مبحوثة",
+                _today())
+    return None
+
+
+# رسالة إغلاق فجوة الموسمية (Wave 2.2) — خطوة عملية مقترحة في «ما لم يكتمل».
+SEASONALITY_GAP_CLOSURE = ("الموسمية (رمضان/الأعياد) غير مرصودة من مؤشرات "
+                           "البحث — إغلاقها يتطلّب بحثاً ميدانياً أوّلياً "
+                           "(مقابلات موزّعين أو استبيان طلب موسمي).")
+
+
 class TrendsAgent(BaseAgent):
     """وكيل الاتجاهات — Google Trends demand signal for a product keyword."""
 
@@ -248,10 +311,24 @@ class TrendsAgent(BaseAgent):
         if interest.value is None:
             return AgentReport(self.name, [interest], True,
                                "لا توجد بيانات اتجاهات — no Google Trends data available")
+        findings = [interest]
+        # Wave 2.3: توسيع المصطلح آلياً حين تكون الصفة الدقيقة شبه معدومة.
+        broadened = broaden_if_weak(keyword, geo, timeframe, interest)
+        summary = f"interest={interest.value}/100 for '{keyword}' (geo={geo or 'WW'})"
+        if broadened is not None:
+            findings.append(broadened)
+            summary += ("؛ الطلب على الفئة الأعمّ موجود — الصفة الدقيقة "
+                        "غير مبحوثة")
         season = _seasonality(keyword, geo, timeframe)
-        findings = [interest, season] if season.value is not None else [interest]
-        return AgentReport(self.name, findings, False,
-                           f"interest={interest.value}/100 for '{keyword}' (geo={geo or 'WW'})")
+        if season.value is not None:
+            findings.append(season)
+        else:
+            # Wave 2.2: فجوة الموسمية تُعلَن مرة واحدة مع خطوة الإغلاق (لا
+            # تُسقَط صامتةً) — DataPoint فجوة معلنة يقرؤها السرد/الحدود.
+            findings.append(DataPoint(None, "Google Trends", 0.0,
+                                      SEASONALITY_GAP_CLOSURE, _today(),
+                                      status="fetch_failed"))
+        return AgentReport(self.name, findings, False, summary)
 
 
 if __name__ == "__main__":

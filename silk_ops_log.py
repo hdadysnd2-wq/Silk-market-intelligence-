@@ -83,6 +83,22 @@ def record_error(kind: str, reason: str, context: dict | None = None,
         log.warning("ops error log write failed (kind=%s): %s", kind, e)
 
 
+def record_service_failure(service: str, reason: str,
+                           context: dict | None = None,
+                           path: str | None = None) -> None:
+    """سجّل فشلَ خدمةٍ خارجية للمشغّل (Wave 1.5، عائلة C) — one operator-visible
+    line per external-service failure, so a silent no-op never hides again.
+
+    `service`: اسم الخدمة العمومي (scraper/comtrade/worldbank/vision/…). يُلفّ
+    `record_error` بنوعٍ موحّد `service_failure` وسياقٍ يحمل اسم الخدمة، فيمكن
+    فرز كل أعطال الخدمات الخارجية من جدول `ops_errors` بنوعٍ واحد. قناة جانبية
+    صامتة (لا تكسر مسار الاستدعاء)."""
+    ctx = dict(context or {})
+    ctx.setdefault("service", service)
+    record_error("service_failure", f"[{service}] {reason}", context=ctx,
+                 path=path)
+
+
 def last_errors(n: int = 20, path: str | None = None) -> list[dict]:
     """آخر `n` خطأ (الأحدث أولاً) — `[]` بلا قاعدة/بلا صفوف، لا استثناء أبداً
     (سجل تشخيصي، ليس حارساً مالياً — القراءة تتدهور بأمان لا ترفض)."""

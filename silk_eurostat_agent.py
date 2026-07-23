@@ -97,6 +97,12 @@ def _fetch_jsonstat(dataset: str, params: dict) -> dict | None:
         payload = r.json()
     except Exception as e:  # noqa: BLE001 — شبكة/HTTP/تنسيق، لا يُرفَع للمستدعي
         log.warning("Eurostat fetch failed (%s, %s): %s", dataset, q, e)
+        try:  # عائلة C (Wave 1.5): إعلان الفشل للمشغّل.
+            import silk_ops_log
+            silk_ops_log.record_service_failure(
+                "eurostat", f"Eurostat fetch failed ({dataset}): {e}")
+        except Exception:  # noqa: BLE001
+            pass
         return None
     if not isinstance(payload, dict) or "value" not in payload:
         log.warning("Eurostat unexpected payload shape (%s, %s)", dataset, q)

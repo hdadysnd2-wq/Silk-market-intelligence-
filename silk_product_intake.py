@@ -141,9 +141,18 @@ def _vision_extract(image_b64: str, media_type: str, kind: str) -> str | None:
     `_isolate` احترازاً — والاستخلاص العائد يُطهَّر لاحقاً في `intake_image`."""
     from silk_llm_provider import get_provider
     steer = _isolate(_PROMPT.get(kind, _PROMPT["product"]))
-    return get_provider().complete_vision(
+    out = get_provider().complete_vision(
         _SYSTEM, steer, image_b64, media_type,
         max_tokens=_MAX_TOKENS, model=_INTAKE_MODEL, timeout=_INTAKE_TIMEOUT)
+    if not out:   # عائلة C (Wave 1.5): نداء رؤية أُتيح لكنه لم يُرجِع شيئًا — أعلِنه.
+        try:
+            import silk_ops_log
+            silk_ops_log.record_service_failure(
+                "vision", "نداء الرؤية أُتيح لكنه أرجع ردًّا فارغًا (فشل/مهلة)",
+                context={"kind": kind})
+        except Exception:  # noqa: BLE001
+            pass
+    return out
 
 
 def _read_failed(reason: str) -> dict:

@@ -253,6 +253,9 @@ def create_app():
         # كلود حصراً داخل العزل — لا يغيّر رقماً ولا يصل وكيل بيانات.
         agent_prefs: dict | None = None
         persist: bool = False
+        # hs_confirmed=true بعد مراجعة المستخدم يتجاوز بوّابة تأكيد HS
+        # (الموجة ٢ — نفس عقد /research، silk_hs_confirm.preflight_block).
+        hs_confirmed: bool = False
 
     class IntakeRequest(BaseModel):
         """طلب استقبال منتج متعدّد الوسائط — {name} أو {image_base64,kind}.
@@ -264,6 +267,17 @@ def create_app():
         image_base64: str | None = None
         kind: str = "product"                 # "product" | "ingredients_label"
         media_type: str = "image/jpeg"        # jpeg/png/webp
+
+    class ClassifyRequest(BaseModel):
+        """طلب تصنيف HS (Wave 1) — {product, ingredients?, category?}.
+
+        خطوةٌ ما قبل التشغيل: تُعيد **اقتراح** HS6 (حتمي واثق، أو نداءُ كلود
+        مقيسٌ مُرسًى على المرجع، أو منتقٍ يدوي) — لا تبدأ تحليلًا ولا تحجز شيئًا
+        هنا؛ المستخدم يؤكّد الرمز ثم يدخل `/research`.
+        """
+        product: str | None = None
+        ingredients: list[str] | None = None      # من استخلاص الصورة إن وُجد
+        category: str | None = None
 
     class DeepenRequest(BaseModel):
         """طلب تعميق (المسار المدفوع) — the /deepen request body (wave 2).
@@ -393,6 +407,24 @@ def create_app():
                     "تُركَّب وحدة تخزين (Volume) وتُوجَّه إليها هذا المتغيّر")
         except Exception as _e:  # noqa: BLE001 — تشخيص لا شرط
             log.debug("storage health section skipped: %s", _e)
+        # اللائحة ٤٣ (بلاغ حي متكرّر — رمز HS خاطئ رغم إصلاح المُصنِّف العام):
+        # صمّام `SILK_HS_CLASSIFIER` نفسه لم يكن قابلاً للتفتيش عن بُعد، فلا
+        # يعرف المالك أن الإصلاح المدموج فعلياً لا يعمل على النشر الفعلي —
+        # نفس عائلة `persist_guard` أعلاه (سطح مراقبة، لا تخمين). فشل-آمنٌ
+        # افتراضياً الآن، لكن يبقى قابلاً للتعطيل الصريح؛ هذا الحقل يُظهر
+        # الحالة الفعلية الحيّة بدل انتظار بلاغٍ حيٍّ آخر لاكتشافها.
+        try:
+            import silk_hs_classifier as _hsc
+            _hs_enabled = _hsc.enabled()
+            health["hs_classifier"] = {"enabled": _hs_enabled}
+            if not _hs_enabled and _claude_key:
+                _warnings.append(
+                    "SILK_HS_CLASSIFIER مُعطَّل صراحةً — المُصنِّف العام "
+                    "(تصنيف HS الدقيق لمنتجات متعدّدة الصفات) لن يستدعي "
+                    "كلود؛ يعتمد على جدول بحثٍ جزئي وحده وقد يُخطئ الفصل "
+                    "(نفس عائلة بلاغ «زبدة الفول السوداني»)")
+        except Exception as _e:  # noqa: BLE001 — تشخيص لا شرط
+            log.debug("hs_classifier health section skipped: %s", _e)
         unprotected = _unprotected_paid_keys()
         if unprotected:
             _warnings.append(
@@ -421,9 +453,16 @@ def create_app():
         القيَم أعلامٌ بيئية علنية لا مفاتيح، فآمنٌ كشفها بلا مصادقة."""
         _rate_limit(request)
         import silk_product_intake as intake
+        import silk_hs_classifier as hsc
         from silk_market_ranker import _world_markets_enabled
+        # أعلام Wave 1 العلنية — الواجهة تُفعّل خطوة التصنيف/الاستشارة بحسبها.
         return _json({"image_intake": intake.enabled(),
-                      "world_markets": _world_markets_enabled()})
+                      "world_markets": _world_markets_enabled(),
+                      "hs_classifier": hsc.enabled(),
+                      "producer_advisory": _producer_advisory_enabled(),
+                      "require_hs6": _require_hs6(),
+                      "prerun_advisories": __import__(
+                          "silk_prerun").advisories_enabled()})
 
     def _intake_vision_allowed() -> tuple[bool, str]:
         """هل يُسمح نداء الرؤية الواحد؟ — (allowed, reason). يعكس منطق
@@ -478,6 +517,43 @@ def create_app():
         return _json(intake.intake_image(
             req.image_base64, req.media_type, req.kind,
             allow_vision=allow, blocked_reason=reason))
+
+    def _classify_general_allow_claude() -> bool:
+        """هل نداءُ التصنيف العام (`silk_hs_classifier.classify_general`)
+        مسموحٌ نظرياً؟ — فحصٌ رخيصٌ **بلا حجز**: يُستدعى على **كل** طلبٍ ذي
+        رمزٍ مُعلَّم عند `preflight_block`، فحجزٌ هنا يُهدر تفعيلةً حتى حين
+        يكفي المُحلِّل الحتمي (بذرة CSV) أو ذاكرة المنتج بلا أيّ نداء فعلي.
+        الحجزُ الذرّي الحقيقي (count + dollar) يعيش **داخل**
+        `silk_hs_classifier._reserve_llm_call` — نقطة اختناقٍ واحدة يستدعيها
+        `classify_general` سواءً من `/classify_hs` أو من `preflight_block`
+        (كلا مساري `/analyze`/`/research`)، فيُستدعى فقط حين يثبت فعلاً أن
+        نداءً حياً لا مفرّ منه — لا ازدواج حجزٍ بين نقطتَي نهاية."""
+        return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()) \
+            and not _unprotected_paid_keys()
+
+    @app.post("/classify_hs")
+    def classify_hs(req: ClassifyRequest, request: Request):
+        """صنّف منتجًا إلى HS6 — the general-purpose HS classifier step
+        (الموجة ٣، systemic fix). لا يبدأ أيّ تحليل ولا يحجز ميزانيةَ بحث —
+        الاقتراح فقط، لكنه **نفس عقد `classify_general`** الذي تستدعيه بوّابة
+        `preflight_block` وقت الإرسال — نقطة اختناقٍ منطقية واحدة، لا نسخة
+        مسبَقة أضيق تعطي نتيجةً مختلفة عمّا يراه المستخدم لاحقاً عند الحجب.
+
+        الحجزُ الذرّي (count + dollar) يعيش الآن **داخل** `classify_general`
+        نفسها (`_reserve_llm_call`) — لا حجزٌ استكشافيٌّ هنا؛ يُستدعى فقط حين
+        يثبت فعلاً أن نداءً حياً لا مفرّ منه (لا إصابة ذاكرة ولا مُحلِّل حتمي
+        كافٍ)."""
+        _require_key(request)
+        _rate_limit(request)
+        import silk_hs_classifier as hsc
+        product = (req.product or "").strip()
+        if not product:
+            raise HTTPException(status_code=422, detail={
+                "error": "product_required", "reason": "مرّر اسم منتج."})
+        out = hsc.classify_general(
+            product, ingredients=req.ingredients, category=req.category,
+            allow_claude=_classify_general_allow_claude())
+        return _json(out)
 
     @app.get("/index")
     def index(request: Request, q: str = "", limit: int = 20):
@@ -698,6 +774,16 @@ def create_app():
                            "مستنفد — أعد المحاولة غداً أو ارفع السقف.")
         return True, ""
 
+    def _require_hs6() -> bool:
+        """صمّام البوّابة الصلبة (Wave 1) — SILK_REQUIRE_HS6=1 يرفض بدءَ /research
+        برمز HS فارغ (422). افتراضيًا مُطفأ => السلوك كاليوم (تُقبَل فجوة معلنة)."""
+        return os.environ.get("SILK_REQUIRE_HS6", "0").strip() == "1"
+
+    def _producer_advisory_enabled() -> bool:
+        """صمّام استشارة بلد المنشأ (Wave 1) — SILK_PRODUCER_ADVISORY=1 يفعّل
+        تحذيرَ «سوق منتِجة» (422 حتى موافقة). افتراضيًا مُطفأ => السلوك كاليوم."""
+        return os.environ.get("SILK_PRODUCER_ADVISORY", "0").strip() == "1"
+
     def _market_in_coverage(hs_code, iso3: str) -> tuple[bool, bool]:
         """هل السوق ضمن التغطية لهذا الرمز؟ — (covered, determinable).
 
@@ -737,6 +823,32 @@ def create_app():
         """
         _require_key(request)
         _rate_limit(request)
+        # بوّابة تأكيد رمز HS (الموجة ٢، تدقيق المُشرِف 2026-07-21 — نفس
+        # نقطة الاختناق المشتركة `silk_hs_confirm.preflight_block` التي
+        # يستدعيها `/research`؛ إصلاحٌ سابقٌ اقتصر على `/research` وحده
+        # فعاود الظهور — «إصلاحٌ على مسارٍ واحد نصفُ إصلاح» — LESSONS ٣٦).
+        # رمزٌ صريح يُفحَص كما هو؛ رمزٌ غائب يُحسَم حتميّاً (بلا نداء كلود،
+        # نفس مُحلِّل `/research`) قبل أيّ عملٍ فعليّ. تُتخطّى بتأكيد المستخدم
+        # الصريح (hs_confirmed=True) — لا يُنفَق زمن/ميزانية كومتريد على
+        # فئة مجاورة خاطئة دلالياً.
+        _analyze_hs_code = req.hs_code
+        if not _analyze_hs_code and req.product:
+            from silk_hs_resolver import resolve as _resolve_hs_preflight
+            _analyze_hs_code = _resolve_hs_preflight(req.product).value
+        from silk_hs_confirm import preflight_block
+        _blocked = preflight_block(
+            req.product, _analyze_hs_code, req.hs_confirmed,
+            allow_claude=_classify_general_allow_claude())
+        if _blocked is not None:
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "hs_confirmation_blocked",
+                f"رُفض بدءُ تحليلٍ برمز HS غير مؤكَّد لمنتج {req.product!r}: "
+                f"{_blocked['hs_confirmation'].get('reason')}",
+                context={"product": req.product, "hs_code": _analyze_hs_code,
+                         "missing_terms":
+                             _blocked["hs_confirmation"].get("missing_terms")})
+            raise HTTPException(status_code=422, detail=_blocked)
         policy = _source_policy()
         ai_ok, ai_note = _free_ai_extras_allowed()
         # P5 (بلاغ المالك: «كلود العادي يتفوق على المنصة»): حكم كلود
@@ -766,6 +878,7 @@ def create_app():
         if not ai_ok:
             result["ai_extras_note"] = ai_note   # الغياب مُعلَن لا صامت
         result["view"] = _view(result)
+        _attach_watchdog(result, result.get("analysis_id"), "analyze")
         return _json(result)
 
     def _clean_agent_prefs(raw: dict | None) -> dict | None:
@@ -933,6 +1046,18 @@ def create_app():
         allow_degraded: bool = False
         resume: int | None = None
         async_run: bool = False
+        # استشارة بلد المنشأ (Wave 1): موافقةٌ صريحة على إكمال دراسةِ سوقٍ من
+        # أكبر مصدّري هذا الرمز عالميًا. غيابها + سوقٌ منتِجة + الصمّام مُفعَّل
+        # => 422 استشاري قبل أيّ حجز؛ إرسالها بعد موافقة المستخدم يُكمِل التشغيلة.
+        producer_ack: bool = False
+        # موافقةٌ صريحة موحّدة على أشقّاء استشارات ما قبل التشغيل (Wave 1.5،
+        # عائلة A): تصدير إلى بلد المنشأ / سوق تحت عقوبات / فصل مقيَّد قانونيًا.
+        # لوحةُ «جاهزية الدراسة» تجمعها؛ زرّ التأكيد الواحد يرسلها true.
+        advisories_ack: bool = False
+        # تأكيدٌ صريح على رمز HS رغم تحذير التطابق (Wave 1.2): بوّابةُ تأكيد
+        # الرمز تُرجِع 422 حين لا تشمل صفةُ الرمز صفةَ المنتج المميّزة؛ إرسالُ
+        # hs_confirmed=true بعد مراجعة المستخدم يُكمِل التشغيلة على مسؤوليته.
+        hs_confirmed: bool = False
 
     def _research_budget_status(economics: dict) -> dict:
         """حالة الميزانية على مستوى التشغيلة كاملة — P1، حادثة نفاد
@@ -970,6 +1095,158 @@ def create_app():
                     finding_count=len(gate_out["findings"]))
         except Exception as e:  # noqa: BLE001 — البوابة تحسين لا شرط تسليم
             log.warning("quality gate skipped: %s", e)
+
+    def _gate_verdict_for_client_export(view: dict) -> tuple[str, dict]:
+        """شغّل بوابة الجودة الحتمية على القالب المُصدَّر لجمهور العميل وأعد
+        (verdict, gate_out) — الفكس الجذري §0: هذه البوابة **شرط تسليم** لا
+        تحسيناً اختيارياً على مسار التصدير للعميل (خلافاً لـ`_attach_quality_
+        gate` أعلاه التي تبقى «أفضل جهد» على مسار بناء التشغيلة نفسها).
+        عطلٌ داخلي في البوابة نفسها (استثناء غير متوقَّع) يُعامَل كـFAIL —
+        لا «تخطٍّ صامت» يسمح بتسريب تقرير لم يُفحَص فعلياً."""
+        try:
+            import silk_quality_gate
+            gate_out = silk_quality_gate.run_quality_gate(view)
+            return gate_out.get("verdict", silk_quality_gate.FAIL), gate_out
+        except Exception as e:  # noqa: BLE001 — عطل البوابة = FAIL للعميل، ليس تخطّياً
+            log.warning("quality gate crashed during client export: %s", e)
+            return "FAIL", {
+                "verdict": "FAIL",
+                "findings": [{
+                    "check": "gate_crash", "repairable": False,
+                    "note": f"عطل داخلي في بوابة الجودة أثناء التصدير "
+                            f"({type(e).__name__}) — عومل التقرير كأنه FAIL "
+                            "لحماية العميل من محتوى لم يُفحَص فعلياً."}],
+                "methodology_notes": [],
+            }
+
+    def _block_client_export_if_gate_failed(
+            view: dict, analysis_id: int, found: dict, fmt: str,
+            request: "Request") -> None:
+        """يرفع 409 إن رصدت بوابة الجودة FAIL على قالب تصدير العميل — البند
+        §0 (الفكس الجذري): البوابة كانت «تحسين لا شرط تسليم»
+        (`_attach_quality_gate`)؛ تقرير FAIL كان يصل العميل بلا أي حجب.
+        `?override=1` يتخطّى الحجب (نفس مصادقة `X-API-Key` — لا سلطة مالك
+        منفصلة في هذه النقطة). `internal=1` لا يمرّ من هنا إطلاقاً (يبقى
+        متاحاً دوماً للمدقّق)."""
+        # WP-2 §3: قبل البوابة — حضِّر نثر الصياغة التجارية للأقسام بلا سرد
+        # كاتب (نداء مصغّر لكل قسم، temperature=0). نجاحه يملأ
+        # dr["client_fallback_prose"] فيمرّ القسم من البوابة ويعرضه
+        # `_client_body_or_fallback`؛ فشله يترك القسم خاوياً فتُفشِله
+        # البوابة (409) — لا بنود `dp.value` خام تصل العميل بعد الآن.
+        #
+        # مراجعة شيفرة PR #147: (أ) هذا نداء كلود على مسارٍ مجاني — يمرّ
+        # عبر بوابة إضافات كلود نفسها (`_free_ai_extras_allowed`: حجب النشر
+        # غير المحمي + حجز ذرّي واحد من SILK_PAID_DAILY_CAP) كأي إضافة
+        # مسار مجاني، لا نداء غير محكوم؛ (ب) النثر الناجح **يُخزَّن على
+        # السجل** (save_analysis بمعرّفه = تحديث في المكان) فلا يُعاد دفع
+        # نفس النداءات مع كل تصدير docx/pdf — build_view يعيد حمله من
+        # المدوّنة عبر view["deep_research"]["client_fallback_prose"].
+        dr = view.get("deep_research") or {}
+        if dr and not dr.get("client_fallback_prose"):
+            try:
+                from silk_reports import _client_missing_narrative_heads
+                needs = {h: items for h, items in
+                         _client_missing_narrative_heads(dr).items() if items}
+            except Exception:  # noqa: BLE001 — تعذّر الفحص = لا نداء
+                needs = {}
+            ai_ok = False
+            if needs:
+                ai_ok, _rephrase_note = _free_ai_extras_allowed()
+            if needs and ai_ok:
+                try:
+                    from silk_ai_judge import rephrase_client_sections
+                    prose = rephrase_client_sections(dr)
+                    if prose:
+                        dr["client_fallback_prose"] = prose
+                        try:
+                            stored_dr = (found or {}).get("deep_research")
+                            if isinstance(stored_dr, dict) and analysis_id:
+                                stored_dr["client_fallback_prose"] = prose
+                                silk_storage.save_analysis(
+                                    found, analysis_id=analysis_id)
+                        except Exception as e:  # noqa: BLE001 — تخزين اختياري
+                            log.warning("prose cache persist failed: %s", e)
+                except Exception as e:  # noqa: BLE001 — فشل التحضير تحكمه البوابة
+                    log.warning("client fallback rephrase failed: %s", e)
+        verdict, gate_out = _gate_verdict_for_client_export(view)
+        if verdict != "FAIL":
+            return
+        findings = gate_out.get("findings") or []
+        digest = [{"check": f.get("check"), "note": f.get("note")}
+                  for f in findings if not f.get("repairable", True)] or [
+            {"check": f.get("check"), "note": f.get("note")} for f in findings]
+        override = str(request.query_params.get("override") or "").lower() in (
+            "1", "true", "yes")
+        if override:
+            # WP-7 §1: التجاوز يتطلّب سلطة مالكٍ منفصلة (SILK_OWNER_KEY عبر
+            # ترويسة X-Owner-Key) — مفتاح API العادي لم يعد يكفي. كل تجاوز
+            # ناجح يُسجَّل في الحارس (kind=export_override) فتُختَم النسخ
+            # الداخلية اللاحقة «سُلِّم بتجاوز مالك — ملاحظات البوابة مرفقة».
+            owner_key = os.environ.get("SILK_OWNER_KEY", "").strip()
+            supplied = (request.headers.get("X-Owner-Key") or "").strip()
+            if not owner_key or supplied != owner_key:
+                raise HTTPException(status_code=403, detail={
+                    "error": "owner_override_required",
+                    "message": "تجاوز بوابة الجودة يتطلّب سلطة المالك "
+                               "المنفصلة (ترويسة X-Owner-Key المطابقة لـ"
+                               "SILK_OWNER_KEY على الخادم) — مفتاح API "
+                               "العادي لا يكفي.",
+                })
+            try:
+                import silk_watchdog
+                silk_watchdog.record_override(
+                    analysis_id, found.get("product"),
+                    (found.get("market") or {}).get("name_en"), findings, fmt)
+            except Exception as e:  # noqa: BLE001 — تسجيل التجاوز لا يُسقِطه
+                log.warning("watchdog override record failed: %s", e)
+            return
+        try:
+            import silk_watchdog
+            silk_watchdog.record_blocked_export(
+                analysis_id, found.get("product"),
+                (found.get("market") or {}).get("name_en"), findings, fmt)
+        except Exception as e:  # noqa: BLE001 — تسجيل الحجب لا يُسقِط الحجب نفسه
+            log.warning("watchdog blocked-export record failed: %s", e)
+        import silk_ops_log
+        silk_ops_log.record_error(
+            "quality_gate_blocked_export",
+            f"تصدير العميل ({fmt}) مُنِع: بوابة الجودة أعادت FAIL",
+            context={"analysis_id": analysis_id, "findings": digest})
+        raise HTTPException(status_code=409, detail={
+            "error": "quality_gate_fail",
+            "message": "تعذّر تسليم هذا التقرير للعميل: بوابة الجودة رصدت "
+                       "مشاكل حاجبة قبل التسليم. استخدم ?internal=1 للنسخة "
+                       "التشغيلية الكاملة للمدقّق، أو ?override=1 لتخطّي "
+                       "الحجب (مسؤولية من يملك مفتاح API).",
+            "findings": digest,
+        })
+
+    def _attach_override_history(view: dict, analysis_id: int | None) -> None:
+        """WP-7 §1: حمِّل سجلّات تجاوز المالك (إن وُجدت) على القالب قبل بناء
+        النسخة الداخلية — يختمها `silk_reports._render_research_docx` بسطر
+        «سُلِّمت نسخة عميل بتجاوز مالكٍ — ملاحظات البوابة مرفقة»."""
+        try:
+            import silk_watchdog
+            ov = silk_watchdog.override_records_for(analysis_id)
+            if ov:
+                view["owner_override_history"] = ov[:3]
+        except Exception as e:  # noqa: BLE001 — الختم توثيق، لا شرط تصدير
+            log.warning("override history attach failed: %s", e)
+
+    def _attach_watchdog(result: dict, analysis_id: int | None,
+                         kind: str) -> None:
+        """نقطةُ اختناقٍ مشتركةٌ واحدة يستدعيها **كلا** المسارين (/analyze
+        و/research) — الحارس («كاميرا مراقبة»، طلب المُشرِف): سجلّ صحّةٍ
+        حتميٌّ (صفر نداء كلود) يُخزَّن في مخزنه المستقل (`silk_watchdog.py`)
+        لسطح مالكٍ منفصل تماماً («تقرير الحارس»). **لا يمسّ `result` إطلاقاً**
+        (لا حقل يُضاف لنتيجة التحليل) — مبدأ عدم التلوّث: صفر سطر حارسٍ يصل
+        أي سطح عميل. فشلها الداخلي مُعزولٌ بالفعل (`silk_watchdog.observe`
+        لا ترفع أبداً)؛ هذا `try` طبقة حمايةٍ إضافية فقط."""
+        try:
+            import silk_watchdog
+            silk_watchdog.observe(result, kind, analysis_id)
+        except Exception as e:  # noqa: BLE001 — مراقبة لا تُسقِط تحليلاً أبداً
+            log.warning("watchdog skipped: %s", e)
 
     def _collect_importer_leads(scrape_future, product: str, market_ref,
                                 mission_reports: dict, scrape_t0: float,
@@ -1097,10 +1374,19 @@ def create_app():
                 _scrape_future, product, market_ref, mission_reports,
                 _scrape_t0, _mono)
             _stage_marks["writer"] = _mono.monotonic()  # E3: نهاية الإكمال
+            # Wave 1.2/1.3 (تدقيق زبدة الفول السوداني/اليمن): عقد تأكيد رمز HS
+            # — يُقاس تداخل صفات المنتج المميّزة مع وصف الرمز؛ رمز غير مؤكَّد
+            # يُمرَّر للكاتب فيؤطّر أرقام كومتريد «مؤشر سياقي»، ويُخزَّن في
+            # النتيجة فتعيد طبقة العرض تأطيرها + تسقف الثقة (silk_render).
+            try:
+                from silk_hs_confirm import confirm_hs
+                hs_conf = confirm_hs(product, hs_code) if hs_code else None
+            except Exception:
+                hs_conf = None
             report_out = (write_reviewed_report(
                 mission_reports, analyst_input.get("summary", ""), verdict,
                 product, market_ref.name_en, max_cycles=tail_max_cycles,
-                trace_id=trace_id, hs_code=hs_code,
+                trace_id=trace_id, hs_code=hs_code, hs_confirmation=hs_conf,
                 on_stage=lambda s: silk_context.snapshot_research_progress(
                     analysis_id, s)) if ai_ok else
                 {"report": None, "review_cycles": 0, "unresolved_notes": []})
@@ -1192,6 +1478,10 @@ def create_app():
         }
         if hs_note:
             result["hs_resolution_note"] = hs_note
+        # Wave 1.3: عقد تأكيد الرمز يُخزَّن في النتيجة — تعيد طبقة العرض تأطير
+        # أرقام كومتريد وتسقف الثقة عند التعليم (silk_render._deep_research_view).
+        if isinstance(hs_conf, dict):
+            result["hs_confirmation"] = hs_conf
         if not ai_ok:
             result["ai_extras_note"] = ai_note
         # التدهور الفعلي = عدم الجهوزية (ready=False، بلاغ حي: _free_ai_
@@ -1208,6 +1498,7 @@ def create_app():
         # النهائي **قبل** أي عرض docx، فتلحَق نتيجتها بالتتبّع وبقسم
         # "منهجية البحث ونطاقه" داخل التقرير (طبقة العرض، silk_reports.py).
         _attach_quality_gate(result, research_run.get("trace_id"))
+        _attach_watchdog(result, analysis_id, "research")
         return result
 
     def _finish_research_run(analysis_id: int | None, result: dict) -> None:
@@ -1244,6 +1535,131 @@ def create_app():
             log.error("background /research run %s failed: %s", analysis_id, e)
             from silk_storage import mark_research_failed
             mark_research_failed(analysis_id, f"{type(e).__name__}: {e}")
+
+    def _readiness_checks(product: str, market_ref, hs_code) -> list[dict]:
+        """لوحةُ «جاهزية الدراسة» (Wave 1.5، عائلة D) — كلُّ تدهورٍ معروفٍ **قبل
+        الحجز** كسطرٍ ✓/⚠/✗، فلا يعرف المالكُ تدهورًا **بعد** الدفع أبدًا.
+
+        كلُّ سطر `{key, label_ar, status, detail_ar, blocking}`:
+        status ∈ {ok, advisory, blocked, info}؛ blocking=True => يمنع التشغيل
+        (رمز HS/خارج التغطية)؛ advisory => يتطلّب موافقة؛ info => إخباري فقط.
+        قراءةٌ فقط — لا حجز ولا إنفاق. يشارك api البوّابةَ نفسها (مصدر واحد).
+        """
+        import datetime as _dt
+        checks: list[dict] = []
+        iso3 = getattr(market_ref, "iso3", "") or ""
+        year = _dt.date.today().year - 1
+        # (١) رمز HS محسوم — حجرُ الأساس (بوّابة صلبة).
+        checks.append({
+            "key": "hs_resolved", "label_ar": "رمز HS محسوم",
+            "status": "ok" if hs_code else "blocked",
+            "detail_ar": (f"HS {hs_code}" if hs_code
+                          else "لم يُحسَم رمز HS — صنِّف المنتج أو اختر يدويًا"),
+            "blocking": not bool(hs_code)})
+        # (١ب) رمز HS **مؤكَّد دلالياً** — البلاغ الحيّ 2026-07-21 (زبدة الفول
+        # السوداني/040510): رمزٌ محسومٌ لكنه خاطئ دلالياً كان يمرّ كـ«ok» لأن
+        # اللوحة تفحص الحسم لا المطابقة. البوّابة (فشل-آمن) تحجبه الآن؛ فتظهر
+        # هنا **قبل** الحجز اتّساقاً مع بوّابة `/research` (لا تدهورٌ بعد الدفع).
+        if hs_code:
+            from silk_hs_confirm import confirm_hs, is_flagged, gate_enabled
+            _c = confirm_hs(product or "", hs_code)
+            if is_flagged(_c):
+                checks.append({
+                    "key": "hs_confirmed", "label_ar": "مطابقة رمز HS للمنتج",
+                    "status": "blocked" if gate_enabled() else "advisory",
+                    "detail_ar": (f"رمز HS {hs_code} («{_c.get('code_desc')}») "
+                                  "قد لا يطابق المنتج — صفة مميّزة غير مشمولة: "
+                                  + "، ".join(_c.get("missing_terms") or [])),
+                    "blocking": gate_enabled()})
+        # (٢) السوق ضمن التغطية.
+        from silk_market_ranker import _world_markets_enabled
+        if _world_markets_enabled() and hs_code and iso3:
+            _cov, _det = _market_in_coverage(hs_code, iso3)
+            checks.append({
+                "key": "coverage", "label_ar": "السوق ضمن التغطية",
+                "status": "ok" if (not _det or _cov) else "blocked",
+                "detail_ar": ("ضمن التغطية" if (not _det or _cov)
+                              else "خارج التغطية الحالية — تواصل معنا لإضافتها"),
+                "blocking": bool(_det and not _cov)})
+        # (٣) استشارةُ بلد المنشأ (Wave 1) — سوقٌ من أكبر المصدّرين.
+        if _producer_advisory_enabled() and hs_code and len(iso3) == 3:
+            from silk_market_ranker import is_top_world_exporter
+            _is_top, _top = is_top_world_exporter(hs_code, iso3, year)
+            checks.append({
+                "key": "producer_country", "label_ar": "بلد المنشأ",
+                "status": "advisory" if _is_top else "ok",
+                "detail_ar": ("من أكبر مصدّري هذا الرمز عالميًا — دخول تنافسي جدًّا"
+                              if _is_top else "ليست من كبار المصدّرين"),
+                "blocking": False})
+        # (٤) أشقّاء عائلة A (Wave 1.5) — بلد المنشأ نفسه/عقوبات/فصل مقيَّد.
+        import silk_prerun
+        if silk_prerun.advisories_enabled() and len(iso3) == 3:
+            for a in silk_prerun.sibling_advisories(hs_code, iso3):
+                checks.append({
+                    "key": a["kind"],
+                    "label_ar": {"self_origin": "بلد المنشأ نفسه",
+                                 "sanction": "عقوبات/حظر",
+                                 "restricted_chapter": "فئة مقيَّدة قانونيًا"
+                                 }.get(a["kind"], a["kind"]),
+                    "status": "advisory",
+                    "detail_ar": a.get("detail") or a.get("message") or "",
+                    "blocking": False})
+        # (٥) ميزانية كومتريد (إخباري — لا يمنع، لكن يُعلَن قبل الدفع).
+        try:
+            from silk_collectors import comtrade_budget_left
+            _left = comtrade_budget_left()
+            checks.append({
+                "key": "comtrade_budget", "label_ar": "ميزانية كومتريد اليومية",
+                "status": "ok" if _left > 0 else "advisory",
+                "detail_ar": f"المتبقّي ~{_left} نداء",
+                "blocking": False})
+        except Exception:  # noqa: BLE001 — قياس اختياري
+            pass
+        # (٦) حالة مكشطة الخرائط (إخباري).
+        _scraper = bool(os.environ.get("SILK_GMAPS_SCRAPER_URL", "").strip())
+        checks.append({
+            "key": "scraper_state", "label_ar": "مكشطة جهات الاتصال",
+            "status": "ok" if _scraper else "info",
+            "detail_ar": ("مُهيَّأة" if _scraper
+                          else "غير مُهيَّأة — هواتف/عناوين قد تغيب"),
+            "blocking": False})
+        # (٧) حماية المفاتيح المدفوعة (إخباري/تحذيري).
+        _unprot = _unprotected_paid_keys()
+        checks.append({
+            "key": "key_protection", "label_ar": "حماية المفاتيح",
+            "status": "advisory" if _unprot else "ok",
+            "detail_ar": ("مفاتيح مدفوعة بلا SILK_API_KEY — نداءات محجوبة"
+                          if _unprot else "محميّة"),
+            "blocking": False})
+        return checks
+
+    @app.get("/research/readiness")
+    def research_readiness(request: Request, product: str = "",
+                           market: str = "", hs_code: str = ""):
+        """جاهزيةُ الدراسة قبل الحجز — the pre-reservation readiness panel (D).
+
+        قراءةٌ فقط (لا حجز/إنفاق): تُعيد كلَّ تدهورٍ معروفٍ كسطرٍ ✓/⚠/✗ +
+        `can_run`/`needs_ack` كي تعرضها الواجهة **قبل زرّ التأكيد**. رمزُ HS
+        يُحلّ حتميًا إن غاب (بلا نداء كلود)."""
+        _rate_limit(request)
+        from silk_market_resolver import resolve_market
+        market_ref, suggestions = resolve_market(market) if market else (None, [])
+        hs = (hs_code or "").strip()
+        if not hs and product:
+            from silk_hs_resolver import resolve as _rhs
+            hs = _rhs(product).value or ""
+        if market_ref is None:
+            return _json({"checks": [{
+                "key": "market", "label_ar": "السوق المستهدفة",
+                "status": "blocked",
+                "detail_ar": "سوق غير معروفة/غامضة — اختر من القائمة",
+                "blocking": True}], "can_run": False, "needs_ack": False,
+                "suggestions": suggestions})
+        checks = _readiness_checks(product, market_ref, hs)
+        return _json({
+            "checks": checks,
+            "can_run": not any(c["blocking"] for c in checks),
+            "needs_ack": any(c["status"] == "advisory" for c in checks)})
 
     @app.post("/research")
     def research(req: ResearchRequest, request: Request):
@@ -1300,15 +1716,40 @@ def create_app():
                     "error": "not_a_research_run",
                     "reason": f"analysis {req.resume} is not a /research "
                               "run — resume only applies to /research"})
+            stored_request = run_row.get("request") or {}
+            # بوّابة نطاق السوق (البلاغ الحي — تسرّب اليمن↔الكويت،
+            # 2026-07-21) — **تسبق** مسار «مكتملة => أعِدها كما هي» أدناه
+            # عمداً: ذلك المسار كان يُعيد نتيجة اليمن المخزَّنة بصمتٍ متجاهلاً
+            # `req.market="Kuwait"` (لا تسريب تسمية، لكن تجاهل صامت لطلب
+            # المستخدم يخفي بالضبط الخطأ الذي أدّى للحادثة الحية عبر مسارٍ
+            # آخر — تشغيلة غير مكتملة استؤنفت بسوقٍ مختلف). رفضٌ صريح هنا
+            # أوضح من إرجاعٍ صامت لبيانات سوقٍ لم يُطلَب.
+            _stored_iso3 = stored_request.get("market_iso3")
+            if req.market and _stored_iso3:
+                from silk_market_resolver import resolve_market as _rm_check
+                _req_ref, _ = _rm_check(req.market)
+                if (_req_ref is not None and _req_ref.iso3
+                        and _req_ref.iso3 != _stored_iso3):
+                    raise HTTPException(status_code=409, detail={
+                        "error": "resume_market_mismatch",
+                        "reason": (f"analysis {req.resume} was created for "
+                                  f"market {_stored_iso3}, not "
+                                  f"{_req_ref.iso3} — resuming under a "
+                                  "different market would reuse that "
+                                  "market's mission checkpoints. start a "
+                                  "fresh /research run instead."),
+                        "stored_market_iso3": _stored_iso3,
+                        "requested_market_iso3": _req_ref.iso3})
             if run_row.get("status") == "completed":
                 # مكتملة فعلاً — أعِدها كما هي، لا إعادة تشغيل ولا حرق
                 # اعتمادات إضافي (استئناف مكتمل يجب أن يكون آمناً للتكرار).
                 existing = get_analysis(req.resume)
                 if existing is not None:
                     return _json(existing)
-            stored_request = run_row.get("request") or {}
             analysis_id = req.resume
-            resume_reports = load_mission_checkpoints(req.resume)
+            # نقاط تفتيش البعثات تُحمَّل **بعد** حسم السوق أدناه (لا هنا) —
+            # كي تُفلتَر بسوق التشغيلة المحسوم لا تُقرأ خاماً هنا. راجع
+            # البوّابة أسفل حسم market_ref.
 
         product = req.product or stored_request.get("product")
         market_name = req.market or stored_request.get("market")
@@ -1325,6 +1766,74 @@ def create_app():
                 "error": f"unknown or ambiguous market {market_name!r}",
                 "suggestions": suggestions})
 
+        if req.resume is not None:
+            # نقاط تفتيش البعثات تُحمَّل هنا بعد حسم `market_ref` — مُفلترة
+            # بسوقه (شبكة أمان بنيوية، `silk_storage.load_mission_checkpoints`)
+            # فوق بوّابة الرفض الصريحة أعلاه (البلاغ الحي — تسرّب اليمن↔الكويت):
+            # حتى لو مرّت بوّابة الرفض بطريقةٍ ما (تعارض غير مُكتشَف)، أيّ صفّ
+            # مختوم بسوقٍ آخر لن يُعاد من المخزن أصلاً.
+            from silk_storage import load_mission_checkpoints
+            resume_reports = load_mission_checkpoints(
+                req.resume, market_iso3=market_ref.iso3)
+
+        # ── تحديد رمز HS مرّةً واحدة قبل أيّ بوّابة/حجز (Wave 1) ──────────────
+        # نظامٌ عام: كلُّ البوّابات (التغطية، بلد المنشأ، الحجز الدولاري) تعمل
+        # على رمزٍ محسوم — لا دراسةَ على HS مجهول. صريحٌ/مخزَّن أولًا، وإلا
+        # المُحلِّل الحتمي (لا اختلاق رمز عند فشله — فجوة معلنة في hs_note).
+        hs_code = req.hs_code or stored_request.get("hs_code")
+        hs_note = None
+        if not hs_code and product:
+            from silk_hs_resolver import resolve as resolve_hs
+            dp = resolve_hs(product)
+            hs_code = dp.value
+            if hs_code is None:
+                hs_note = dp.note  # فجوة معلنة — لا اختلاق رمز HS
+
+        # بوّابة HS الصلبة (Wave 1، عائلة unresolved-hs-silent-spend): رفضُ
+        # الحجز/الإنفاق ما دام hs6 فارغًا — 422 **قبل** أيّ تفعيلة أو دولار.
+        # تُغلق حادثةَ الفيتوتشيني (أُنفِق $ والغلاف «—» والركيزة التجارية فجوة
+        # حرجة): لا تعود ممكنة حين يُفعَّل الصمّام. المُصنِّف (`/classify_hs`)
+        # يمنع الوصولَ لهنا فارغًا في التدفّق. مُطفأ افتراضيًا (SILK_REQUIRE_HS6)
+        # => السلوك كاليوم. يُتخطّى عند الاستئناف (رمزُه محسومٌ وقت الإنشاء).
+        if req.resume is None and not hs_code and _require_hs6():
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "unresolved_hs_blocked",
+                f"رُفض بدءُ بحثٍ برمز HS غير محسوم لمنتج {product!r} "
+                f"(السوق {market_ref.iso3})",
+                context={"product": product, "market_iso3": market_ref.iso3,
+                         "hs_note": hs_note})
+            raise HTTPException(status_code=422, detail={
+                "error": "unresolved_hs",
+                "message": "تعذّر تحديد رمز HS لهذا المنتج — صنِّفه أولًا "
+                           "(/classify_hs) أو اختر الرمز يدويًا قبل بدء البحث.",
+                "hs_note": hs_note})
+
+        # بوّابة تأكيد رمز HS (Wave 1.2، عائلة unresolved-hs-silent-spend
+        # موسَّعةً — تدقيق زبدة الفول السوداني/اليمن؛ الموجة ٢ (2026-07-21):
+        # المنطق يعيش الآن في `silk_hs_confirm.preflight_block` — نقطة
+        # اختناق واحدة يستدعيها **كل** من `/research` و`/analyze` (أدناه)
+        # بلا نسخ؛ إصلاحٌ سابق على `/research` وحده عاود الظهور فتوحّد
+        # هنا). رمزٌ محسومٌ لكنه **خاطئ دلالياً** يُوقِف **قبل** أيّ حجز/دولار
+        # ويطلب تأكيد المستخدم. فشل-آمن: مفعّلة افتراضياً (`gate_enabled`).
+        # تُتخطّى عند الاستئناف وعند تأكيد المستخدم الصريح (hs_confirmed=True).
+        if req.resume is None:
+            from silk_hs_confirm import preflight_block
+            _blocked = preflight_block(
+                product, hs_code, getattr(req, "hs_confirmed", False),
+                allow_claude=_classify_general_allow_claude())
+            if _blocked is not None:
+                import silk_ops_log
+                silk_ops_log.record_error(
+                    "hs_confirmation_blocked",
+                    f"رُفض بدءُ بحثٍ برمز HS غير مؤكَّد لمنتج {product!r}: "
+                    f"{_blocked['hs_confirmation'].get('reason')}",
+                    context={"product": product, "hs_code": hs_code,
+                             "market_iso3": market_ref.iso3,
+                             "missing_terms":
+                                 _blocked["hs_confirmation"].get("missing_terms")})
+                raise HTTPException(status_code=422, detail=_blocked)
+
         # بوابة «خارج التغطية» (اتفاق المالك) — تسبق الجهوزية/الحجز: مع تفعيل
         # تغطية العالم، سوقٌ ليس Tier-1 ولا ضمن مجموعة أكبر مستوردي هذا الرمز
         # (Tier-2 الديناميكية) يُعاد برسالةٍ صادقة «تواصل معنا لإضافتها» بدل
@@ -1332,26 +1841,87 @@ def create_app():
         # الصمّام مُطفأ => السلوك كاليوم (أيّ دولة تعمل، فجوات معلنة) بلا انحدار.
         from silk_market_ranker import _world_markets_enabled
         if _world_markets_enabled():
-            _cov_hs = req.hs_code or stored_request.get("hs_code")
-            if not _cov_hs and product:
-                from silk_hs_resolver import resolve as _resolve_hs_cov
-                _cov_hs = _resolve_hs_cov(product).value
             _covered, _determinable = _market_in_coverage(
-                _cov_hs, market_ref.iso3)
+                hs_code, market_ref.iso3)
             if _determinable and not _covered:
                 import silk_ops_log
                 silk_ops_log.record_error(
                     "out_of_coverage_demand",
                     f"طلب بحث لسوقٍ خارج التغطية الحالية: "
                     f"{market_ref.name_en} ({market_ref.iso3}) "
-                    f"لرمز HS {_cov_hs}",
+                    f"لرمز HS {hs_code}",
                     context={"product": product,
                              "market_iso3": market_ref.iso3,
-                             "hs_code": _cov_hs})
+                             "hs_code": hs_code})
                 raise HTTPException(status_code=422, detail={
                     "error": "out_of_coverage",
                     "message": "هذه السوق خارج التغطية الحالية — "
                                "تواصل معنا لإضافتها"})
+
+        # استشارة بلد المنشأ (Wave 1، قاعدة عامّة مبنيّة على البيانات): سوقٌ من
+        # أكبر مصدّري هذا الرمز عالميًا => تحذيرٌ استشاري (422) حتى موافقةٍ صريحة
+        # (`producer_ack`). زيرو نداء مدفوع (كلود/سقف) — كومتريد فقط بميزانيته.
+        # الاستشارة تُسجَّل (shown/consent). الصمّام مُطفأ (SILK_PRODUCER_ADVISORY)
+        # => السلوك كاليوم. يُتخطّى عند الاستئناف (وافق المستخدم وقت الإنشاء).
+        if req.resume is None and hs_code and _producer_advisory_enabled():
+            import silk_ops_log
+            import datetime as _dt
+            from silk_market_ranker import is_top_world_exporter
+            _is_top, _top = is_top_world_exporter(
+                hs_code, market_ref.iso3, _dt.date.today().year - 1)
+            if _is_top and not req.producer_ack:
+                silk_ops_log.record_error(
+                    "producer_advisory_shown",
+                    f"استشارةُ بلد المنشأ: {market_ref.iso3} من أكبر مصدّري "
+                    f"HS {hs_code} عالميًا — دراسةُ دخولها تنافسية جدًّا",
+                    context={"product": product,
+                             "market_iso3": market_ref.iso3, "hs_code": hs_code,
+                             "top_exporters": [t["iso3"] for t in _top]})
+                raise HTTPException(status_code=422, detail={
+                    "error": "producer_country_advisory",
+                    "message": "⚠ هذه الدولة من أكبر مصدّري هذا المنتج عالميًا "
+                               "— دراسة دخولها تنافسية جدًّا. أكمل؟",
+                    "top_exporters": [t["iso3"] for t in _top],
+                    "needs_ack": True})
+            if _is_top and req.producer_ack:
+                silk_ops_log.record_error(
+                    "producer_advisory_consent",
+                    f"موافقةٌ صريحة على دراسة {market_ref.iso3} (من أكبر "
+                    f"مصدّري HS {hs_code} عالميًا)",
+                    context={"product": product,
+                             "market_iso3": market_ref.iso3, "hs_code": hs_code})
+
+        # أشقّاء عائلة «الدراسة بالاتجاه الخاطئ» (Wave 1.5، عائلة A): تصدير إلى
+        # بلد المنشأ / سوق تحت عقوبات / فصل مقيَّد قانونيًا — config-driven، صفر
+        # نداء مدفوع. تحذيرٌ (422) حتى موافقةٍ موحّدة (`advisories_ack`). مُطفأ
+        # افتراضيًا (SILK_PRERUN_ADVISORIES) => السلوك كاليوم. يُتخطّى عند الاستئناف.
+        if req.resume is None:
+            import silk_prerun
+            if silk_prerun.advisories_enabled():
+                _sib = silk_prerun.sibling_advisories(hs_code, market_ref.iso3)
+                if _sib and not req.advisories_ack:
+                    import silk_ops_log
+                    silk_ops_log.record_error(
+                        "prerun_advisory_shown",
+                        f"استشارةُ ما قبل التشغيل ({market_ref.iso3}): "
+                        + "؛ ".join(a["kind"] for a in _sib),
+                        context={"product": product,
+                                 "market_iso3": market_ref.iso3,
+                                 "hs_code": hs_code,
+                                 "kinds": [a["kind"] for a in _sib]})
+                    raise HTTPException(status_code=422, detail={
+                        "error": "prerun_advisory",
+                        "message": _sib[0]["message"],
+                        "advisories": _sib, "needs_ack": True})
+                if _sib and req.advisories_ack:
+                    import silk_ops_log
+                    silk_ops_log.record_error(
+                        "prerun_advisory_consent",
+                        f"موافقةٌ صريحة على أشقّاء استشارة {market_ref.iso3}",
+                        context={"product": product,
+                                 "market_iso3": market_ref.iso3,
+                                 "hs_code": hs_code,
+                                 "kinds": [a["kind"] for a in _sib]})
 
         # بوابة ما قبل التشغيل بعد التحقق من صحة الإدخال (422 على خطأ
         # الطالب يسبق 409 على جهوزية الخادم — خطأ العميل يستحق أن يُشرَح
@@ -1388,15 +1958,7 @@ def create_app():
                           f"أُنفِق {round(silk_usage.usd_spent_today(), 2)}$ اليوم؛ "
                           f"تشغيلة /research متوقَّعة بنحو {_expected_usd}$."})
 
-        hs_code = req.hs_code or stored_request.get("hs_code")
-        hs_note = None
-        if not hs_code:
-            from silk_hs_resolver import resolve as resolve_hs
-            dp = resolve_hs(product)
-            hs_code = dp.value
-            if hs_code is None:
-                hs_note = dp.note  # فجوة معلنة — لا اختلاق رمز HS
-
+        # (رمز HS + hs_note حُسِما أعلاه قبل البوّابات والحجز — Wave 1.)
         ai_ok, ai_note = _free_ai_extras_allowed()
         prefs = _clean_agent_prefs(req.agent_prefs)
         if prefs is None:
@@ -1416,7 +1978,10 @@ def create_app():
         if analysis_id is None and req.persist:
             from silk_storage import create_research_run
             request_snapshot = {
-                "product": product, "market": market_name, "hs_code": hs_code,
+                "product": product, "market": market_name,
+                # الموجة ٢ (بوّابة نطاق السوق أعلاه): iso3 مُخزَّن بنيوياً —
+                # لا استنتاج لاحق من اسمٍ عربي/إنجليزي غامض عند الاستئناف.
+                "market_iso3": market_ref.iso3, "hs_code": hs_code,
                 "product_card": product_card_dict, "own_price": own_price,
                 "agent_prefs": prefs, "allow_degraded": req.allow_degraded}
             analysis_id = create_research_run(
@@ -1626,6 +2191,33 @@ def create_app():
         import silk_ops_log
         return _json({"errors": silk_ops_log.last_errors(n)})
 
+    @app.get("/watchdog")
+    def watchdog(request: Request, n: int = 50):
+        """الحارس — سطحُ مالكٍ منفصلٌ تماماً (LAW: تسلسل القيادة، «تقرير
+        الحارس» ليس جزءاً من أي تحليل). آخر `n` سجلّ صحّةٍ + الشارة العامة +
+        اتجاهات آخر التشغيلات. محروسة كبقية سطوح المشغّل."""
+        _require_key(request)
+        _rate_limit(request)
+        import silk_watchdog
+        records = silk_watchdog.list_records(n)
+        return _json({
+            "badge": silk_watchdog.overall_badge(records),
+            "records": records,
+            "trend": silk_watchdog.trend_report(records),
+            "known_backlog_note": silk_watchdog.KNOWN_OPEN_BACKLOG_NOTE,
+        })
+
+    @app.get("/watchdog/report.md")
+    def watchdog_report_md(request: Request, n: int = 50):
+        """تقرير مراقبة المنصّة — ملفٌّ مستقلٌّ تماماً بذاته (PART 2-2: لا
+        علاقة بأي مُصدِّر تحليل/عميل). محروسة، نفس عقد `report.md`."""
+        _require_key(request)
+        _rate_limit(request)
+        import silk_watchdog
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(silk_watchdog.render_report_md(n=n),
+                                 media_type="text/markdown; charset=utf-8")
+
     @app.get("/sources")
     def sources(request: Request):
         """خريطة حالة طبقات المصادر الاثنتي عشرة — 12-layer data-source status map.
@@ -1777,8 +2369,25 @@ def create_app():
         internal = str(request.query_params.get("internal") or "").lower() in (
             "1", "true", "yes")
         is_research = bool(view.get("deep_research"))
+        if is_research and not internal:
+            _block_client_export_if_gate_failed(
+                view, analysis_id, found, "docx", request)
+        if is_research and internal:
+            _attach_override_history(view, analysis_id)
+        # القالب الأكاديمي (قرار المالك 2026-07-22): ?style=academic يبدّل
+        # ترتيب/نبرة تقرير العميل فقط — نفس النموذج القانوني ونفس بوابة
+        # التسليم أعلاه ونفس مُطهِّرات العميل؛ صفر نداء كلود إضافي.
+        # أسلوب مخزَّن مع السجل (إعادة توليد أكاديمية سابقة) = الافتراضي.
+        style = (str(request.query_params.get("style") or "").lower()
+                 or str((view.get("deep_research") or {})
+                        .get("report_style") or "").lower())
         try:
-            if is_research and not internal:
+            if is_research and not internal and style == "academic":
+                from silk_reports import render_academic_docx
+                path = render_academic_docx(
+                    view, os.path.join(tempfile.mkdtemp(), "report.docx"))
+                fname = f"silk_academic_report_{analysis_id}.docx"
+            elif is_research and not internal:
                 path = render_client_docx(
                     view, os.path.join(tempfile.mkdtemp(), "report.docx"))
                 fname = f"silk_client_report_{analysis_id}.docx"
@@ -1828,9 +2437,21 @@ def create_app():
         internal = str(request.query_params.get("internal") or "").lower() in (
             "1", "true", "yes")
         is_research = bool(view.get("deep_research"))
+        if is_research and not internal:
+            _block_client_export_if_gate_failed(
+                view, analysis_id, found, "pdf", request)
+        if is_research and internal:
+            _attach_override_history(view, analysis_id)
         out = os.path.join(tempfile.mkdtemp(), "report.pdf")
+        style = (str(request.query_params.get("style") or "").lower()
+                 or str((view.get("deep_research") or {})
+                        .get("report_style") or "").lower())
         try:
-            if is_research and not internal:
+            if is_research and not internal and style == "academic":
+                from silk_reports import render_academic_pdf
+                path = render_academic_pdf(view, out)
+                fname = f"silk_academic_report_{analysis_id}.pdf"
+            elif is_research and not internal:
                 path = render_client_pdf(view, out)
                 fname = f"silk_client_report_{analysis_id}.pdf"
             else:
@@ -1862,7 +2483,19 @@ def create_app():
         from silk_render import build_view
         from silk_reports import render_markdown
         from fastapi.responses import PlainTextResponse
-        return PlainTextResponse(render_markdown(build_view(found)),
+        try:
+            text = render_markdown(build_view(found))
+        except RuntimeError as e:
+            # نفس عقد report.docx (البند أعلاه): تناقض حكمٍ أو تسريبٌ يستحيل
+            # تنقيته يُفشِل التوليد داخلياً — 501 نظيف لا 500 غير مُدار.
+            import silk_ops_log
+            silk_ops_log.record_error(
+                "export_failure",
+                "فشل تصدير Markdown (محتوى رفضه حارس التصدير) — التفصيل "
+                "الكامل في استجابة الطلب الأصلي، لا هنا",
+                context={"analysis_id": analysis_id})
+            raise HTTPException(status_code=501, detail=str(e))
+        return PlainTextResponse(text,
                                  media_type="text/markdown; charset=utf-8")
 
     @app.post("/analyses/{analysis_id}/report")
@@ -1907,10 +2540,15 @@ def create_app():
         verdict = dr.get("verdict") or {}
         market_name = (found.get("market") or {}).get("name_en", "")
         trace_id = dr.get("trace_id")
+        # قرار المالك (متابعة القالب الأكاديمي): ?style=academic يعيد كتابة
+        # النثر نفسه بالسجل الأكاديمي (نداء كاتب واحد — قروش لا دولارات)؛
+        # الأسلوب يُخزَّن مع السجل فتتبعه التصديرات افتراضياً.
+        regen_style = str(request.query_params.get("style") or "").lower() \
+            or None
         report_out = write_reviewed_report(
             mission_reports, analyst_summary, verdict,
             found.get("product", ""), market_name, trace_id=trace_id,
-            hs_code=found.get("hs_code"))
+            hs_code=found.get("hs_code"), style=regen_style)
         # H1 (تدقيق): إعادة التوليد كانت تطمس التقرير المخزَّن بـreport_out حتى
         # لو فشل الكاتب هذه المرة (report=None) — فيُفقَد تقرير سابق ناجح كلّفت
         # تشغيلته الكاملة، وهو بالضبط ما تُنقِذه هذه النقطة. الآن: لا نحفظ null
@@ -1934,6 +2572,8 @@ def create_app():
                           "failure_reason": _strip_internal_plumbing(
                               report_out.get("failure_reason") or "")})
         found["deep_research"]["report"] = report_out
+        if regen_style:
+            found["deep_research"]["report_style"] = regen_style
         found["analysis_id"] = analysis_id
         found["view"] = _view(found)
         _attach_quality_gate(found, trace_id)

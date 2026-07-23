@@ -68,6 +68,11 @@ def openalex_search(query: str, max_records: int = 5) -> list[DataPoint]:
     except Exception as e:  # noqa: BLE001 — لا رفع للمستدعي أبداً
         note = f"OpenAlex fetch failed for {q!r}: {type(e).__name__}: {e}"
         log.warning(note)
+        try:  # عائلة C (Wave 1.5): إعلان الفشل للمشغّل.
+            import silk_ops_log
+            silk_ops_log.record_service_failure("openalex", note)
+        except Exception:  # noqa: BLE001
+            pass
         return [DataPoint(None, "OpenAlex", 0.0, note, _today())]
 
     results = payload.get("results") if isinstance(payload, dict) else None
