@@ -93,7 +93,10 @@ def test_committed_client_sample_shows_competing_products_table():
     # competing_products_table) لا صياغة عيّنة قديمة سابقة للإصلاح.
     assert "السعر/كجم (بعملة الرصد)" in text        # عمود التطبيع
     assert "السعر/كجم بالدولار" not in text
-    assert "✓" in text and "◐" in text              # شارتا الدليل
+    # WS10 (قرار المالك): لا عمود «مستوى التوثيق» ولا شارة دليل ✓/◐/○ في المتن.
+    assert "مستوى التوثيق" not in text
+    for sym in ("✓", "◐", "○"):
+        assert sym not in text
     # يهبط داخل قسم العميل الصحيح
     assert "المنافسة والتسعير والهامش" in text
     # يبقى خالياً من التِلِمِتري رغم الإضافة
