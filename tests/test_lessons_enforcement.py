@@ -525,6 +525,15 @@ _SYMBOL_ANCHORS_EXTRA = [
       "def test_all_eu_consumers_are_the_single_source_by_identity"]),
     (63, "tests/test_regression_registry.py",
      ["def _guard_bloc_list_single_source"]),
+    # DEF-1/G4.1 (التدقيق المعماري ٢٠٢٦-٠٧-٢٤) — مرتكزُ الإنتاج المحليّ.
+    (64, "silk_plausibility.py",
+     ["_domestic_production_significant", "plausibility_exemptions",
+      "guard_relaxed_domestic_producer"]),
+    (64, "tests/test_g41_domestic_production_plausibility.py",
+     ["def test_producer_market_not_flagged_nigeria",
+      "def test_non_producer_market_still_flagged_qatar"]),
+    (64, "tests/test_regression_registry.py",
+     ["def _guard_g41_domestic_production"]),
 ]
 
 

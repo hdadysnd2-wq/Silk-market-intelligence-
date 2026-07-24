@@ -15,8 +15,14 @@
   مرتكزٍ مُتحقَّقٍ لا حكم (لا اتهامَ رقمٍ بلا مرجعٍ نقارنه به).
 - **كلُّ علامةٍ تُسجَّل في مانيفست التشغيلة** (`view["deep_research"]
   ["plausibility_flags"]` + حدث تتبّعٍ أفضلَ جهدٍ) — قابليةُ تدقيقٍ كاملة.
+- **G4.1 (DEF-1): الإنتاجُ المحليّ يُعفي، لا مضاعِفٌ أعمى.** حين يكون المنتَجُ
+  مُنتَجاً محلياً في السوق (`product.production_category ∈
+  market.domestic_production` من بروفايل #169)، حجمُ سوقٍ يفوق الوارداتِ
+  بأضعافٍ **مشروع** (نيجيريا/الهند) فلا يُفحَص — عكسُ افتراض قطر «السوق ≈
+  الواردات». الإعفاءُ مُسجَّل (لا صامت)؛ قطر (بلا إنتاجٍ محلّيّ) تبقى مضبوطة.
 
-هرمتيّ بالكامل: صفرُ شبكةٍ وصفرُ مفتاح — يقرأ حقائقَ البعثات المُجمَّعة فقط.
+هرمتيّ بالكامل: صفرُ شبكةٍ وصفرُ مفتاح — يقرأ حقائقَ البعثات المُجمَّعة + ملفّي
+البروفايل (قرص) فقط.
 """
 from __future__ import annotations
 
@@ -144,30 +150,93 @@ def _anchors(dr: dict) -> dict:
             "gdp_per_capita_usd": gdp_pc}
 
 
-def check_magnitudes(result: dict) -> list:
-    """علاماتُ المعقولية — قائمةُ dicts، أو [] إن لا تعارض/لا مرتكز/معطَّل.
+def _domestic_production_significant(result: dict) -> "tuple[bool, str]":
+    """هل المنتجُ مُنتَجٌ محلياً في السوق المستهدفة؟ (G4.1، حاملُ #169:
+    `product.production_category ∈ market.domestic_production`).
 
-    لكلِّ مقدارِ «حجم سوق» مرشّح: يُقارَن بإجمالي الواردات (مضاعِفٌ مفرطٌ لسوقٍ
-    قليلةِ الإنتاج المحليّ) وبالسكان (نصيبٌ للفرد خارج نطاقٍ سليمٍ لصنفٍ واحد).
+    الباعث (DEF-1): كان الحارسُ يفترض «حجم السوق ≈ الواردات» — صحيحٌ لقطر
+    (إنتاجٌ محليٌّ ضئيل) لكنّه **خطأٌ لنيجيريا والهند** حيث حجمُ سوقٍ يفوق
+    الواردات بأضعافٍ مشروعٌ لأنّ المنتَج يُزرَع/يُصنَّع محلياً. فحين يكون كذلك،
+    الأرمُ القائم على الواردات (وعلى نصيب الفرد) لا يُطبَّق — لا يُتّهَم رقمٌ
+    صحيحٌ زوراً.
+
+    يقرأ ملفّي البروفايل G1/G2 (`data/market_profiles.json` /
+    `product_profiles.json`). **فشلٌ آمنٌ محافِظ**: عند غياب البروفايل أو
+    الرمز يعيد `(False, سبب)` فيبقى الحارسُ عاملاً كما كان (لا انحدار — قطر
+    تبقى مضبوطة)؛ لا شبكةَ ولا اختلاق."""
+    try:
+        import silk_profiles
+    except Exception:  # noqa: BLE001 — البروفايل غير متاح => لا إعفاء
+        return False, "طبقة البروفايل غير متاحة"
+    m = (result or {}).get("market")
+    iso3 = (str(m.get("iso3") or "") if isinstance(m, dict)
+            else str(getattr(m, "iso3", "") or ""))
+    hs = str((result or {}).get("hs_code") or "")
+    if not iso3 or not hs:
+        return False, "لا سوق/رمز في النتيجة"
+    try:
+        mp = silk_profiles.market_profile(iso3)
+        pp = silk_profiles.product_profile(hs)
+    except Exception:  # noqa: BLE001
+        return False, "تعذّر قراءة البروفايل"
+    if not mp or not pp:
+        return False, f"لا ملفّ بروفايل ({iso3}/{hs})"
+    cat = silk_profiles.cited_value(pp.get("production_category"))
+    dom = mp.get("domestic_production")
+    dom = dom if isinstance(dom, list) else silk_profiles.cited_value(dom)
+    dom_list = [str(x).strip().lower() for x in (dom or [])]
+    if cat and str(cat).strip().lower() in dom_list:
+        return True, f"«{cat}» ضمن الإنتاج المحلي المُوثَّق لـ{iso3}"
+    return False, f"«{cat or '؟'}» ليس ضمن الإنتاج المحلي لـ{iso3}"
+
+
+def _scan(result: dict) -> "tuple[list, list]":
+    """المسحُ الداخليّ — يعيد `(flags, exemptions)`.
+
+    `flags`: مقاديرُ «حجم سوق» متعارضةٌ مع المرتكزات (تُوسَم/تُسقَط للعميل).
+    `exemptions`: مقاديرُ أُعفيَت لأنّ المنتَجَ مُنتَجٌ محلياً (G4.1) — **تُسجَّل
+    في المانيفست** («guard_relaxed_domestic_producer») فيرى المراجعُ أنّ الحارسَ
+    وقف جانباً ولماذا. الإعفاءُ مرئيٌّ أبداً لا صامت.
+
+    **حدّ معروف (graduation، لا بوّابة ثنائية):** الإعفاءُ اليوم كامل — سوقٌ تُنتِج
+    حجماً هامشياً من الفئة تُعفى كنيجيريا تماماً، فيُعطَّل الأرمُ هناك. المانيفست
+    يجعل ذلك مرئياً للمراجع؛ والإصلاحُ السليم (سقفٌ يتدرّج بحجم الإنتاج المحليّ
+    المرصود) مؤجَّلٌ لـG4.x (سجلّ القرارات، صفّ «graduation»).
     """
     if not enabled():
-        return []
+        return [], []
     dr = (result or {}).get("deep_research") or {}
     if not dr:
-        return []
+        return [], []
     anchors = _anchors(dr)
     imports = anchors.get("imports_usd")
     population = anchors.get("population")
     max_mult = _f_env("SILK_PLAUSIBILITY_MAX_IMPORT_MULT", _DEF_MAX_IMPORT_MULT)
     max_pc = _f_env("SILK_PLAUSIBILITY_MAX_PER_CAPITA_USD", _DEF_MAX_PER_CAPITA)
+    domestic, dom_reason = _domestic_production_significant(result)
     act = action()
     flags: list = []
+    exemptions: list = []
     for key, f in _iter_findings(dr):
         blob = f"{f.get('note') or ''} {f.get('value') or ''} {f.get('claim') or ''}"
         if not _kw_hit(blob, _MARKET_SIZE_KW):
             continue
         val = _num_usd(f.get("value"), f.get("note"))
         if val is None or val <= 0:
+            continue
+        # G4.1: السوقُ المُنتِجة محلياً — حجمٌ يفوق الواردات مشروعٌ، لا يُفحَص
+        # بأرمِ الواردات/نصيب الفرد. الإعفاءُ مُسجَّل في المانيفست (لا صامت).
+        if domestic:
+            exemptions.append({
+                "kind": "guard_relaxed_domestic_producer",
+                "mission": key,
+                "source": f.get("source"),
+                "claimed_usd": val,
+                "reason": dom_reason,
+                "note": ("الحارسُ وقف جانباً: سوقٌ مُنتِجةٌ محلياً — الأرمُ القائم "
+                         "على الواردات معطَّلٌ هنا (حدُّ graduation، مؤجَّلٌ لـG4.x)"),
+                "severity": "info",
+            })
             continue
         reasons: list = []
         detail: dict = {}
@@ -201,23 +270,37 @@ def check_magnitudes(result: dict) -> list:
             "action": act,
             "severity": "high",
         })
-    return flags
+    return flags, exemptions
+
+
+def check_magnitudes(result: dict) -> list:
+    """علاماتُ المعقولية — قائمةُ dicts، أو [] إن لا تعارض/لا مرتكز/معطَّل.
+    (غلافٌ رقيقٌ حول `_scan`؛ الإعفاءاتُ تُقرأ عبر `annotate`/`exemptions`.)"""
+    return _scan(result)[0]
+
+
+def exemptions(result: dict) -> list:
+    """إعفاءاتُ G4.1 المرئية — قائمةُ «guard_relaxed_domestic_producer»."""
+    return _scan(result)[1]
 
 
 def annotate(result: dict) -> list:
-    """افحصْ ثمّ سجّلِ العلاماتِ في مانيفست التشغيلة (`deep_research
-    ["plausibility_flags"]`) + حدثَ تتبّعٍ أفضلَ جهد. يعيد العلامات.
+    """افحصْ ثمّ سجّلِ العلاماتِ والإعفاءاتِ في مانيفست التشغيلة + حدثَ تتبّع.
+    يعيد العلامات (`flags`).
 
-    عند `action="drop"`: يُعلَّم البندُ المُسبِّب `plausibility_dropped=True`
-    فيُسقطه المُصدِّرون (لا حذفٌ صامت — سببُه في المانيفست)."""
-    flags = check_magnitudes(result)
-    if not flags:
-        return flags
+    - `deep_research["plausibility_flags"]`: المقاديرُ المتعارضة (للعميل).
+    - `deep_research["plausibility_exemptions"]`: مقاديرُ أُعفيَت (G4.1) —
+      **مرئيةٌ للمراجع، ليست تحفّظاً للعميل** (لا تدخل `caveat_lines`).
+    عند `action="drop"`: يُعلَّم البندُ المُسبِّب `plausibility_dropped=True`."""
+    flags, exempt = _scan(result)
     dr = (result or {}).get("deep_research")
     if isinstance(dr, dict):
-        dr["plausibility_flags"] = flags
-        if action() == "drop":
-            _mark_dropped(dr, flags)
+        if flags:
+            dr["plausibility_flags"] = flags
+            if action() == "drop":
+                _mark_dropped(dr, flags)
+        if exempt:
+            dr["plausibility_exemptions"] = exempt
     for fl in flags:
         log.warning("plausibility flag [%s] %s: %s",
                     fl.get("mission"), fl.get("claimed_usd"), fl.get("reason"))
@@ -226,6 +309,15 @@ def annotate(result: dict) -> list:
             silk_trace.record_event(event="plausibility_flag", **fl)
         except Exception:  # noqa: BLE001
             pass
+    for ex in exempt:  # الإعفاءُ مرئيٌّ في السجلّ + التتبّع (لا صامت).
+        log.info("plausibility exempt [%s] %s: %s",
+                 ex.get("mission"), ex.get("claimed_usd"), ex.get("reason"))
+        try:
+            import silk_trace
+            silk_trace.record_event(event="plausibility_domestic_exempt", **ex)
+        except Exception:  # noqa: BLE001
+            pass
+    return flags
     return flags
 
 

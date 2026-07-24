@@ -2010,6 +2010,12 @@ def build_view(result: dict) -> dict:
                 dr_view["plausibility_flags"] = _pflags
                 dr_view["limits"] = (silk_plausibility.caveat_lines(_pflags)
                                      + list(dr_view.get("limits") or []))
+            # G4.1: إعفاءُ الإنتاج المحليّ — مرئيٌّ للمراجع في العرض (لا تحفّظَ
+            # عميل، لا يدخل limits). فيرى المراجعُ أنّ الحارسَ وقف جانباً ولماذا.
+            _pexempt = (result.get("deep_research") or {}).get(
+                "plausibility_exemptions")
+            if _pexempt:
+                dr_view["plausibility_exemptions"] = _pexempt
         except Exception:  # noqa: BLE001
             pass
         limits = dr_view["limits"] + limits
