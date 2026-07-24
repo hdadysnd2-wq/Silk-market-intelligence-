@@ -205,6 +205,19 @@ def _tool_comtrade_imports(args: dict, ctx: dict) -> list[DataPoint]:
                 "(القيمة الإجمالية ÷ الوزن الصافي بالكجم) — نطاق جملة "
                 "مرجعي من كومتريد، لا سعر تجزئة فعلياً",
                 _today()))
+        else:
+            # HF4.4 (بلاغ قطر — فجوةُ الوزن): كومتريد يُرجِع عمودَ netWgt مع
+            # السجلات ضمن مجموعة الأعمدة الافتراضية (لا نُسقِطه ولا نمتنع عن
+            # طلبه — راجع `silk_data_layer.comtrade_trade`)؛ فغيابُه هنا يعني
+            # أنّ **المُبلِّغ لا يودع بيانات الوزن** لهذا البند/السنة، لا أنّنا
+            # لم نطلبها. فجوةٌ حقيقيةٌ في إيداع المُبلِّغ — تُصرَّح بدقّةٍ لا
+            # تُخمَّن، فلا يُقرأ «لم نطلب» مكان «المصدر لا يودع».
+            out.append(DataPoint(
+                None, "UN Comtrade", 0.0,
+                f"HS{hs} كميات الوزن (طن/كجم) لواردات {market.name_en} {year}: "
+                "المُبلِّغ لا يودع بيانات الوزن لدى كومتريد (قِيَمٌ بالدولار فقط) "
+                "— يتعذّر اشتقاق سعر وحدةٍ مرجعيّ منها",
+                _today(), status="no_record"))
     return out
 
 
@@ -1157,11 +1170,18 @@ def run_llm_agent(mission: dict, market: MarketRef, product: str = "",
         pub_sources = list(dict.fromkeys(
             str(getattr(c, "source", "") or "").strip() for c in cited
             if str(getattr(c, "source", "") or "").strip()))
-        public_source = "، ".join(pub_sources) if pub_sources else label
+        # HF1 (بلاغ إسناد مركّب — تقرير قطر): **لا تدمج** المصادر في سلسلةٍ
+        # واحدة. كان «، ».join يُنتج معرّفاً مركّباً («IMF WEO، World Bank»)
+        # يُعامَل لاحقاً كمعرّفٍ ذرّيٍّ واحد، فيُخطئ إسنادَ الرابط (يوجّه بيانات
+        # البنك الدولي لرابط IMF) ويُكرِّر المصدرَ في المراجع. الآن: `source`
+        # يبقى ذرّياً (المصدر الأساسيّ الأول)، والقائمةُ الكاملةُ تُحفَظ في
+        # `source_ids` ليسطّحها المُصدِّر فيُسنِد كلَّ مصدرٍ لرابطه الصحيح.
+        primary_source = pub_sources[0] if pub_sources else label
         prefix = f"[{f['category']}] " if f.get("category") else ""
         findings.append(DataPoint(
-            f["claim"], public_source, f["confidence"],
-            _truncate_at_word(f"{prefix}مبني على: {cited_notes}", 500), today))
+            f["claim"], primary_source, f["confidence"],
+            _truncate_at_word(f"{prefix}مبني على: {cited_notes}", 500), today,
+            source_ids=tuple(pub_sources)))
 
     failed = not findings
     summary = result.get("summary") or ("لا نتائج مبنية على استشهاد — "

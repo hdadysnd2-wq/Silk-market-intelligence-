@@ -286,7 +286,11 @@ _REQUIRED_CASE_FIELDS = ("key", "product", "market", "hs_code",
                          "verified_at", "verified_by")
 
 _STRUCTURAL_KEYS = ("required_sections", "clean_body", "references_integrity",
-                    "gap_rate_max")
+                    "gap_rate_max",
+                    # الهوتفكس (بلاغ قطر ٢٠٢٦-٠٧-٢٣):
+                    "no_truncation_artifacts",   # HF2: لا خليةٌ مبتورةٌ داخل رقم/
+                                                 # قوسٌ غير متوازن/مجموعةٌ فارغة
+                    "plausibility_reconciled")   # HF3: لا مقدارٌ متعارضٌ بلا تحفّظ
 
 
 def validate_case(case: dict) -> list[str]:
@@ -319,7 +323,8 @@ def validate_case(case: dict) -> list[str]:
             if gm is not None and not (isinstance(gm, (int, float))
                                        and 0.0 <= float(gm) <= 1.0):
                 errors.append("structural.gap_rate_max must be a number in [0,1]")
-            for b in ("clean_body", "references_integrity"):
+            for b in ("clean_body", "references_integrity",
+                      "no_truncation_artifacts", "plausibility_reconciled"):
                 if b in struct and not isinstance(struct[b], bool):
                     errors.append(f"structural.{b} must be a boolean")
     # حالةٌ بلا `expected` **ولا** `structural` = بلا معيار قبول (مرفوضة).
@@ -435,12 +440,19 @@ def _rendered_client_body(result: dict):
     doc = Document(path)
     parts = [p.text for p in doc.paragraphs]
     headers: list[str] = []
+    cells: list[str] = []
     for t in doc.tables:
         if t.rows:
             headers += [c.text for c in t.rows[0].cells]
         for row in t.rows:
-            parts += [c.text for c in row.cells]
-    return "\n".join(parts), headers
+            row_cells = [c.text for c in row.cells]
+            cells += row_cells
+            parts += row_cells
+    # HF2: خلايا الجداول وحداتٌ **ذرّية** (حدُّها حقيقيّ) — تُفحَص فيها نهايةُ
+    # الرقم/توازنُ الأقواس. الفقراتُ النثريةُ يُقسِّمها المُصيِّر للعرض فلا يصحّ
+    # فحصُ توازنِها الموضعيّ (تعارضٌ مشروعٌ عبر حدود الفقرة) — تُفحَص فيها
+    # المجموعةُ الفارغة فقط (لا تُشرَّع أبداً)، وذلك على المتن الكامل أدناه.
+    return "\n".join(parts), headers, cells
 
 
 def gap_rate(result: dict) -> tuple:
@@ -463,7 +475,7 @@ def gap_rate(result: dict) -> tuple:
 def structural_checks(result: dict, case: dict) -> dict:
     """بوّابة بنيوية هرمتية — {passed, checks, failures}. لا نموذج، لا مفتاح."""
     struct = case.get("structural") or {}
-    text, headers = _rendered_client_body(result)
+    text, headers, cells = _rendered_client_body(result)
     checks: dict = {}
     failures: list[str] = []
 
@@ -489,6 +501,25 @@ def structural_checks(result: dict, case: dict) -> dict:
         if not ok:
             failures.append(f"سلامة المراجع (WS9): {detail}")
 
+    # HF2: لا أثرَ بترٍ — خليةُ جدولٍ تنتهي داخل رقم أو بقوسٍ غير متوازن،
+    # أو مجموعةُ استشهادٍ فارغة «()»/«(/)»/«(///)» في أيّ موضعٍ من المتن.
+    if struct.get("no_truncation_artifacts"):
+        hits = _truncation_hits(cells)
+        if _EVAL_EMPTY_GROUP_RE.search(text):
+            hits.append("مجموعةُ استشهادٍ فارغةٌ في المتن")
+        checks["no_truncation_artifacts"] = {"hits": hits[:12],
+                                             "passed": not hits}
+        if hits:
+            failures.append(f"آثارُ بترٍ في المتن (HF2): {hits[:6]}")
+
+    # HF3: كلُّ مقدارٍ متعارضٍ مع مرتكزات التشغيلة إمّا مُسقَطٌ أو مُتحفَّظٌ عليه
+    # صراحةً — لا رقمٌ غيرُ مُصالَحٍ يصل العميلَ صامتاً.
+    if struct.get("plausibility_reconciled"):
+        ok, detail = _plausibility_reconciled(result, text)
+        checks["plausibility_reconciled"] = {"passed": ok, "detail": detail}
+        if not ok:
+            failures.append(f"مقدارٌ غيرُ مُصالَح (HF3): {detail}")
+
     if "gap_rate_max" in struct:
         rate, g, tot = gap_rate(result)
         passed = rate <= float(struct["gap_rate_max"])
@@ -503,10 +534,16 @@ def structural_checks(result: dict, case: dict) -> dict:
 
 
 def _references_integrity(result: dict, body_text: str) -> tuple:
-    """WS9 — قسم المراجع حاضر وغير فارغ حين توجد نتائج قابلة للاستشهاد، وبلا
-    مصدرٍ نائبٍ عام («Web Search»/«مرجع سلك»/«Silk L1»). لا يُكرِّر بناء الاتحاد
-    (يفعله `_client_references_section` أصلاً) — يتحقّق من المخرَج."""
-    missions = (result.get("deep_research") or {}).get("missions") or {}
+    """WS9 (+HF1) — قسم المراجع حاضرٌ حين توجد نتائجُ قابلةٌ للاستشهاد، بلا
+    مصدرٍ نائبٍ عام، **بلا معرّفٍ مركّب**، واتّحادُ المصادر مُتحقَّقٌ في الاتجاهين:
+    كلُّ مصدرٍ مُستعمَلٍ يظهر (used-but-missing) وكلُّ مصدرٍ مُدرَجٍ مُستعمَلٌ فعلاً
+    (listed-but-unused — يلتقط «OpenAlex مُدرَجٌ ولم يُستعمَل»)."""
+    # HF1: اقرأ حقائقَ **النموذج المُصيَّر** (view["deep_research"]) لا النتيجةَ
+    # الخام — فممرّ المصالحة (WP-3) في build_view يكتب وسومَ عرضٍ (شارة الدليل)
+    # على بنود العرض، فتطابق مجموعةُ المراجع المُعاد حسابُها هنا ما يُصيَّر فعلاً.
+    import silk_render
+    missions = ((silk_render.build_view(result) or {}).get("deep_research")
+                or {}).get("missions") or {}
     has_citable = any(
         isinstance(f, dict) and f.get("value") is not None
         for m in missions.values() if isinstance(m, dict)
@@ -519,7 +556,98 @@ def _references_integrity(result: dict, body_text: str) -> tuple:
                         "Silk requirements"):
         if placeholder in body_text:
             return False, f"مصدرٌ نائبٌ عامٌّ في المراجع: {placeholder!r}"
-    return True, "قسم المراجع حاضر بمصادر مسمّاة بلا نائب"
+
+    # HF1: أعِدْ حسابَ اتحاد المصادر الذرّية المُستعمَلة (نفسُ منطق بناء المراجع)
+    # فنقارنه بالمُدرَج فعلاً في المتن — بلا معرّفٍ مركّب في أيّ اتجاه.
+    import silk_reports as R
+    from silk_data_layer import atomic_source_ids, is_atomic_source_id
+    from silk_narrative import RECONCILED_OUT_TAG, evidence_badge_for
+    expected: dict = {}   # name.casefold -> name
+    for m in missions.values():
+        if not isinstance(m, dict):
+            continue
+        for f in (m.get("findings") or []):
+            if not isinstance(f, dict):
+                continue
+            badge = evidence_badge_for(f)
+            if badge.startswith("○") or badge.startswith(RECONCILED_OUT_TAG):
+                continue
+            for sid in atomic_source_ids(f.get("source"), f.get("source_ids")):
+                if not is_atomic_source_id(sid):
+                    return False, f"معرّفُ مصدرٍ **مركّب** (غير ذرّي): {sid!r}"
+                row = R._reference_row_from_finding(
+                    sid, f.get("value"), f.get("note"))
+                if row:
+                    expected[row[0].strip().casefold()] = row[0]
+    # (أ) used-but-missing: كلُّ مصدرٍ مُستعمَلٍ يحلّ لرابطٍ يجب أن يظهر في المتن.
+    for name in expected.values():
+        if name not in body_text:
+            return False, f"مصدرٌ مُستعمَلٌ غائبٌ عن المراجع: {name!r}"
+    # (ب) listed-but-unused: كلُّ سطرِ مرجعٍ مُدرَجٍ («name — http…») لا بدّ أن
+    # يكون مصدراً مُستعمَلاً فعلاً (WS9 union) — يلتقط مرجعاً مُدرَجاً بلا استعمال.
+    listed = _listed_reference_names(body_text)
+    for name in listed:
+        if name.strip().casefold() not in expected:
+            return False, f"مرجعٌ مُدرَجٌ لم يُستعمَل في أيّ نتيجة: {name!r}"
+    # (ج) لا فاصلَ دمجٍ عربيّ في اسم مرجعٍ مُدرَج (شبكةُ أمانٍ نصّية).
+    for name in listed:
+        if not is_atomic_source_id(name):
+            return False, f"اسمُ مرجعٍ مُدرَجٍ مركّب: {name!r}"
+    return True, (f"المراجع سليمة: {len(expected)} مصدرٌ ذرّيٌّ مُستعمَلٌ "
+                  "بروابطَ صحيحة، بلا مركّبٍ ولا مُدرَجٍ زائد")
+
+
+def _listed_reference_names(body_text: str) -> list:
+    """أسماءُ المصادر المُدرَجةُ فعلاً في قسم «المراجع» من المتن المُصيَّر — أسطرُ
+    «الاسم — https://…» بعد ترويسة «المراجع». (لعكس اتّحاد WS9.)"""
+    lines = str(body_text or "").split("\n")
+    try:
+        start = next(i for i, ln in enumerate(lines) if ln.strip() == "المراجع")
+    except StopIteration:
+        return []
+    out: list = []
+    for ln in lines[start + 1:]:
+        m = re.match(r"\s*(.+?)\s+—\s+https?://", ln)
+        if m:
+            out.append(m.group(1).strip())
+    return out
+
+
+# HF2: أنماطُ آثار البتر — فاصلٌ عشريٌّ متدلٍّ في نهاية خلية، ومجموعةُ استشهادٍ
+# فارغة. القوسُ غيرُ المتوازن يُحسَب عدّاً.
+_EVAL_DANGLING_DECIMAL_RE = re.compile(r"[0-9٠-٩][.,،٬٫]\s*$")
+_EVAL_EMPTY_GROUP_RE = re.compile(r"[\(（]\s*[/／،,;\s]*[\)）]")
+
+
+def _truncation_hits(units: list) -> list:
+    """آثارُ البتر في وحدات المتن (فقرات + خلايا) — HF2. لكلٍّ: لا تنتهي بفاصلٍ
+    عشريٍّ متدلٍّ («…7.»)، لا مجموعةَ استشهادٍ فارغة («()»)، والأقواسُ متوازنة."""
+    hits: list = []
+    for u in units:
+        t = str(u or "").strip()
+        if not t:
+            continue
+        if _EVAL_DANGLING_DECIMAL_RE.search(t):
+            hits.append(f"نهايةٌ داخل رقم: …{t[-20:]!r}")
+        if _EVAL_EMPTY_GROUP_RE.search(t):
+            hits.append(f"مجموعةٌ فارغة: {t[:40]!r}")
+        if (t.count("(") + t.count("（")) != (t.count(")") + t.count("）")):
+            hits.append(f"قوسٌ غير متوازن: {t[:40]!r}")
+    return hits
+
+
+def _plausibility_reconciled(result: dict, body_text: str) -> tuple:
+    """HF3 — كلُّ مقدارٍ متعارضٍ مع مرتكزات التشغيلة إمّا مُسقَطٌ (action=drop)
+    أو مُتحفَّظٌ عليه صراحةً في المتن (تحفّظُ نطاق). لا رقمٌ غيرُ مُصالَحٍ صامت."""
+    import silk_plausibility as P
+    flags = P.check_magnitudes(result)
+    if not flags:
+        return True, "لا مقادير متعارضة مع المرتكزات"
+    if P.action() == "drop":
+        return True, f"{len(flags)} مقدارٌ مُسقَطٌ بسببٍ مُسجَّلٍ في المانيفست"
+    if "تنبيه تحقّق" in body_text or "يتعذّر التوفيق" in body_text:
+        return True, f"{len(flags)} مقدارٌ مُتحفَّظٌ عليه صراحةً في المتن"
+    return False, f"{len(flags)} مقدارٌ متعارضٌ بلا تحفّظٍ ظاهرٍ للعميل"
 
 
 def _has_key() -> bool:

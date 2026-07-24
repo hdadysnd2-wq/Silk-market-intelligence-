@@ -173,7 +173,15 @@ def test_leaked_term_is_redacted_not_a_501(tmp_path):
     text = docx_all_text(out)
     assert R._client_forbidden_hits(text) == []  # نُقّي كل متسرّب
     assert "mission" not in text.lower() and "successful" not in text.lower()
-    assert "نُقّيت بعض المصطلحات" in text        # سطر الإفصاح حاضر
+    # HF4.2 (بلاغ قطر): التنقية تجري، لكن سطرَ الإفصاح عنها **لا يصل العميل** —
+    # يُقصَر على سطح المدقّق (?internal=1). المُسلَّم خالٍ منه.
+    assert "نُقّيت بعض المصطلحات" not in text
+    # سطحُ المدقّق (view["internal"]=True) يُظهره — تغطيةٌ محفوظةٌ للطرفين.
+    iview = _mock_view(report_text=leaky)
+    iview["internal"] = True
+    with block_network():
+        iout = R.render_client_docx(iview, os.path.join(str(tmp_path), "audit.docx"))
+    assert "نُقّيت بعض المصطلحات" in docx_all_text(iout)
 
 
 def test_forbidden_hits_helper_detects_each_pattern():

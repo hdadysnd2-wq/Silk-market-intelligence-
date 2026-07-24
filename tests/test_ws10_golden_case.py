@@ -20,6 +20,8 @@ _CASE = {
                               "المنافسة والتسعير", "مسار الدخول",
                               "المخاطر", "المراجع"],
         "clean_body": True, "references_integrity": True, "gap_rate_max": 0.3,
+        # الهوتفكس (بلاغ قطر): بترٌ/أقواسٌ فارغة (HF2) + مصالحةُ المقادير (HF3).
+        "no_truncation_artifacts": True, "plausibility_reconciled": True,
     }
 }
 
@@ -55,6 +57,9 @@ def test_structural_gate_passes_on_clean_result():
     assert out["checks"]["required_sections"]["passed"]
     assert out["checks"]["references_integrity"]["passed"]
     assert out["checks"]["gap_rate"]["passed"]
+    # الهوتفكس: البوّابة الموسَّعة تنجح على العيّنة النظيفة أيضاً.
+    assert out["checks"]["no_truncation_artifacts"]["passed"]
+    assert out["checks"]["plausibility_reconciled"]["passed"]
 
 
 def test_structural_gate_catches_dirty_body():

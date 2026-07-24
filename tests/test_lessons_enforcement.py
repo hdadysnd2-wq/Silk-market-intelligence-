@@ -501,6 +501,22 @@ _SYMBOL_ANCHORS_EXTRA = [
       "def test_enrich_leads_grace_is_proxy_safe_by_default"]),
     (59, "tests/test_regression_registry.py",
      ["def _guard_wave2_med_hardening"]),
+    # الهوتفكس (بلاغ قطر × HS 200811، ٢٠٢٦-٠٧-٢٣) — عائلات ٦٠/٦١/٦٢.
+    (60, "tests/test_hf_attribution_truncation_plausibility.py",
+     ["def test_three_source_finding_yields_three_atomic_references",
+      "def test_qatar_fixture_references_gafta_and_gcc_distinctly"]),
+    (60, "tests/test_regression_registry.py",
+     ["def _guard_composite_source_id_attribution"]),
+    (61, "tests/test_hf_attribution_truncation_plausibility.py",
+     ["def test_trim_sentence_never_ends_inside_a_number",
+      "def test_strip_internal_plumbing_removes_citation_group_no_empty_parens"]),
+    (61, "tests/test_regression_registry.py",
+     ["def _guard_renderer_truncation_and_empty_parens"]),
+    (62, "tests/test_hf_attribution_truncation_plausibility.py",
+     ["def test_plausibility_flags_implausible_market_size",
+      "def test_build_view_attaches_flags_and_caveat"]),
+    (62, "tests/test_regression_registry.py",
+     ["def _guard_cross_source_plausibility"]),
 ]
 
 

@@ -78,18 +78,39 @@ def _fmt(v: object) -> str:
     return str(v)
 
 
+# HF2 (بلاغ بتر رقميّ — تقرير قطر ٢٠٢٦-٠٧-٢٣): «رمز رقميّ» = رقمٌ (عربيّ/
+# لاتينيّ) متبوعٌ بأرقامٍ وفواصلَ عشرية/آلاف. القصّ **لا يجوز** أن ينتهي داخله
+# («…إلى 7.» بدل «7.12م$»، «…ثابت 3.») ولا أن يترك فاصلاً عشرياً متدلّياً.
+_NUM_TOKEN_TAIL_RE = re.compile(r"[0-9٠-٩][0-9٠-٩.,،٬٫]*$")
+_DANGLING_DECIMAL_RE = re.compile(r"(?<=[0-9٠-٩])[.,،٬٫]+$")
+
+
+def _avoid_mid_number(cut: str, full: str) -> str:
+    """اضبط قصّاً كي لا ينتهي داخل رمزٍ رقميّ (HF2): إن وقع الحدُّ داخل رقمٍ
+    (الحرفُ التالي في النصّ الأصليّ رقمٌ/فاصلٌ عشريّ) تراجَعْ إلى ما قبل بداية
+    الرقم؛ وأزِلْ أيَّ فاصلٍ عشريٍّ متدلٍّ في النهاية («7.»→«7»). فارغ يمرّ."""
+    if not cut:
+        return cut
+    nxt = full[len(cut):len(cut) + 1]
+    if nxt and (nxt.isdigit() or nxt in ".,،٬٫" or "٠" <= nxt <= "٩"):
+        m = _NUM_TOKEN_TAIL_RE.search(cut)
+        if m:
+            return cut[:m.start()].rstrip()
+    return _DANGLING_DECIMAL_RE.sub("", cut).rstrip()
+
+
 def _truncate_at_word(text: str, max_len: int) -> str:
     """قصّ نص عند حدّ كلمة كاملة — بلاغ حي (الموجة ٩): "لا تتوفر من أد"
     (كلمة مقطوعة منتصفها) كانت ناتجة عن قصّ حرفي بلا مراعاة حدود الكلمات
     (هنا، وفي ملاحظة استشهاد `run_llm_agent` — راجع الإصلاح المقابل هناك).
-    لا يقصّ أبداً منتصف كلمة؛ يتراجع لآخر مسافة قبل الحد."""
+    لا يقصّ أبداً منتصف كلمة؛ يتراجع لآخر مسافة قبل الحد. HF2: ولا منتصفَ رقم."""
     if len(text) <= max_len:
         return text
     cut = text[:max_len]
     sp = cut.rfind(" ")
     if sp > max_len * 0.5:  # لا تراجُع مفرط إن كانت الكلمة الأخيرة طويلة جداً
         cut = cut[:sp]
-    return cut.rstrip() + "…"
+    return _avoid_mid_number(cut.rstrip(), text) + "…"
 
 
 def _clean_report_text(s: object, max_len: int = 300) -> str:
@@ -156,23 +177,40 @@ def _trim_sentence(s: object, max_len: int = 240) -> str:
     if len(text) <= max_len:
         return text
     cut = text[:max_len]
-    best = max((cut.rfind(ch) for ch in ".!؟؛،"), default=-1)
+    # HF2: ابحث عن آخر علامة ختامٍ **ليست فاصلاً عشرياً** — نقطة/فاصلة محاطةٌ
+    # برقمين فاصلٌ داخل رقمٍ لا نهايةُ جملة، فالقصّ عندها يبتر الرقم («7.12»→«7.»).
+    best = -1
+    for i in range(len(cut) - 1, -1, -1):
+        ch = cut[i]
+        if ch not in ".!؟؛،":
+            continue
+        prev = cut[i - 1] if i > 0 else " "
+        nxt = cut[i + 1] if i + 1 < len(cut) else (
+            text[i + 1] if i + 1 < len(text) else " ")
+        is_digit = lambda c: c.isdigit() or "٠" <= c <= "٩"  # noqa: E731
+        if ch in ".،٬٫" and is_digit(prev) and is_digit(nxt):
+            continue  # فاصلٌ عشريّ/آلاف — تجاوَزْه
+        best = i
+        break
     if best > max_len * 0.4:
-        return cut[:best + 1].rstrip()
+        return _avoid_mid_number(cut[:best + 1].rstrip(), text)
     sp = cut.rfind(" ")
-    return (cut[:sp] if sp > 0 else cut).rstrip()
+    return _avoid_mid_number((cut[:sp] if sp > 0 else cut).rstrip(), text)
 
 
 # WP-2 §1 — النصّ النائب التقني (يبقى في المسارات الداخلية/?internal=1 فقط).
 _UNRENDERABLE_NOTE = "بند تقني غير قابل للعرض المباشر"
 
 
-def _client_prose(s: object, max_len: int = 400) -> str:
+def _client_prose(s: object, max_len: "int | None" = 400) -> str:
     """نص آمن لمتن **العميل** — WP-2 §1: لا نصّ نائب يصل العميل أبداً.
     كتلة JSON/سياج من ردٍّ خام: يُحاوَل استخلاص المضمون (نفس مستخلص
     `silk_render._strip_raw_json_leak`)، وإن تعذّر تُسقَط الكتلة ("") —
     فيخلو القسم وتلتقطه بوابة الجودة (FAIL يمنع التسليم) بدل تسليم نائبٍ
-    مثل «بند تقني غير قابل للعرض المباشر — التفاصيل في أثر التتبع»."""
+    مثل «بند تقني غير قابل للعرض المباشر — التفاصيل في أثر التتبع».
+
+    HF2: `max_len=None` = **بلا قصٍّ ثابت** — الخليةُ تلتفّ/تتّسع (طلب الأمر:
+    إزالة القصّ الثابت من مسار جدول الخلاصة كي لا تُبتَر خليةٌ داخل رقم)."""
     text = str(s or "").strip()
     if not text:
         return ""
@@ -186,6 +224,8 @@ def _client_prose(s: object, max_len: int = 400) -> str:
                 or "تعذّر تفسير" in extracted):
             return ""
         text = extracted
+    if max_len is None:
+        return text
     return _trim_sentence(text, max_len)
 
 
@@ -2003,8 +2043,13 @@ _CLIENT_SANITIZE = [
     (re.compile(r"بلا استشهاد"), "دون توثيق مصدر"),
     # معرّفات الاستشهاد الداخلية dpN — مجموعة بين قوسين تُحذف كلياً (لا
     # «()» مبتورة)، والمفردة العارية تصير وصفاً تجارياً.
-    (re.compile(r"\(\s*dp\d+(?:\s*[،,;\s]\s*dp\d+)*\s*\)"), ""),
+    (re.compile(r"\(\s*dp\d+(?:\s*[،,;/／\s]\s*dp\d+)*\s*\)"), ""),
     (re.compile(r"\bdp\d+\b"), "مصدر موثّق"),
+    # HF2 (بلاغ أقواسٍ فارغة — تقرير قطر ٢٠٢٦-٠٧-٢٣): بقايا استشهادٍ مُفرَّغ
+    # («()»/«(/)»/«(///)»/«(،)») تصل هذا المُطهِّر وقد فرّغها
+    # `_strip_internal_plumbing` (silk_render) قبله — تُطوى كلياً هنا كشبكة
+    # أمانٍ أخيرة (نفسُ عائلة النائب الفارغ التي عالجها WS4).
+    (re.compile(r"[\(（]\s*[/／،,;\s]*[\)）]"), ""),
     (re.compile(r"\bdatapoints?\b", re.I), "معلومة موثّقة"),
     (re.compile(r"المحلل الشامل"), "فريق التحليل"),
     (re.compile(r"كاتب التقرير"), "فريق الإعداد"),
@@ -2031,7 +2076,13 @@ def _client_sanitize(text: object) -> str:
     s = str(text or "")
     for pat, repl in _CLIENT_SANITIZE:
         s = pat.sub(repl, s)
-    return re.sub(r"[ \t]{2,}", " ", s).strip()
+    # HF2: نظافةُ الفواصل المتخلّفة عن حذف الاستشهاد — مسافةٌ قبل الفاصلة
+    # («المتاجر ،Lulu»)، وفواصلُ مكرّرة، وفاصلةٌ صدارةٍ يتيمة («،Lulu ،Carrefour»
+    # بعد حذف «(dp3)» السابق لها). لا يمسّ الأرقام ولا المصادر.
+    s = re.sub(r"[ \t]{2,}", " ", s)
+    s = re.sub(r"\s+([،,؛])", r"\1", s)          # لا مسافة قبل الفاصلة
+    s = re.sub(r"([،,؛])\s*(?=[،,؛])", "", s)     # فواصل مكرّرة → واحدة
+    return s.strip(" \t،,؛")
 
 
 def _client_forbidden_hits(blob: str) -> list[str]:
@@ -2228,22 +2279,27 @@ def _client_methodology_paragraph(dr: dict) -> str:
     # (silk_render._deep_research_view).
     contributed: dict[str, bool] = {}
     display: dict[str, str] = {}
+    from silk_data_layer import atomic_source_ids
     for m in missions.values():
         for f in (m.get("findings") or []) if isinstance(m, dict) else []:
-            src = _client_sanitize(_clean_source_label(f.get("source")))
-            src = str(src or "").strip()
-            if not src or src == "—" or _client_forbidden_hits(src):
-                continue
-            # اسم مصدر بشري فقط (قبل أيّ شرطة توضيحية).
-            name = re.split(r"\s+[—\-(]", src)[0].strip()
-            norm = re.sub(r"\s+", " ",
-                          re.sub("[\\u200b-\\u200f\\ufeff]", "", name)
-                          ).strip().casefold()
-            if not norm:
-                continue
-            display.setdefault(norm, name)
-            contributed[norm] = contributed.get(norm, False) or (
-                f.get("value") is not None)
+            has_value = f.get("value") is not None
+            # HF1: سطّح المعرّفات الذرّية — بندٌ أسنَده مصدران («GCC secretariat»
+            # و«GAFTA secretariat») يُسهِمان منفصلَين، فلا معرّفٌ مركّبٌ يظهر
+            # كـ«مصدر» واحد ولا يتكرّر اسمٌ في سطر «اعتمد هذا التقرير…».
+            for raw_id in atomic_source_ids(f.get("source"), f.get("source_ids")):
+                src = _client_sanitize(_clean_source_label(raw_id))
+                src = str(src or "").strip()
+                if not src or src == "—" or _client_forbidden_hits(src):
+                    continue
+                # اسم مصدر بشري فقط (قبل أيّ شرطة توضيحية).
+                name = re.split(r"\s+[—\-(]", src)[0].strip()
+                norm = re.sub(r"\s+", " ",
+                              re.sub("[\\u200b-\\u200f\\ufeff]", "", name)
+                              ).strip().casefold()
+                if not norm:
+                    continue
+                display.setdefault(norm, name)
+                contributed[norm] = contributed.get(norm, False) or has_value
     src_list = "، ".join(sorted(
         display[n] for n, ok in contributed.items() if ok)[:6]) \
         or "مصادر رسمية عامة"
@@ -2398,6 +2454,17 @@ def _client_gaps_section(doc, dr: dict) -> None:
     حارس البوابة) — السطر الإيجابي يُطبَع فقط حين تخلو القوائم الأربع معاً."""
     doc.add_heading("ما لم يكتمل للقرار، والخطوة التالية", level=1)
     gap_lines, mission_gap_lines = _client_gap_inputs(dr)
+    # HF3: تحفّظُ نطاقٍ لكلِّ مقدارٍ متعارضٍ مع مرتكزات التشغيلة — يُرصَد في
+    # المانيفست (`plausibility_flags`) ويُصيَّر هنا صراحةً فلا يصل رقمٌ غيرُ
+    # مُصالَحٍ صامتاً. (نفسُ قسم الحدود المعلنة — سطحٌ صادقٌ للتحفّظ.)
+    _pflags = dr.get("plausibility_flags") or []
+    _caveats: list = []
+    if _pflags:
+        try:
+            import silk_plausibility
+            _caveats = silk_plausibility.caveat_lines(_pflags)
+        except Exception:  # noqa: BLE001
+            _caveats = []
 
     if gap_lines:
         doc.add_paragraph(
@@ -2416,12 +2483,15 @@ def _client_gaps_section(doc, dr: dict) -> None:
             "أدناه:")
         for line in mission_gap_lines:
             doc.add_paragraph(line, style="List Bullet")
-    else:
-        # WP-4 §2: السطر الإيجابي فقط حين تخلو القوائم الأربع معاً.
+    elif not _caveats:
+        # WP-4 §2: السطر الإيجابي فقط حين تخلو القوائم الأربع معاً (وبلا تحفّظ).
         doc.add_paragraph(
             "اكتملت التقاطعات التحليلية الأساسية بأدلة موثّقة بمصادرها، ولا "
             "بند حاسم للقرار موسوم بأنه غير محقَّق؛ لا فجوة جوهرية تمنع "
             "اتخاذ القرار ضمن نطاق هذا التقرير.")
+    # HF3: تحفّظاتُ المعقولية تُصيَّر دوماً حين وُجدت (بعد الفجوات أو وحدها).
+    for _cv in _caveats:
+        doc.add_paragraph(_client_sanitize(_cv), style="List Bullet")
     # §F-5 (حزمة الفكس v2.1): دعوة التعميق المدفوع («next_step») أُزيلت من
     # متن الدراسة المُسلَّم للعميل — تبقى دعوةً على سطح التسليم (شارة/زرّ
     # اللوحة، web/index.html) لا داخل المستند نفسه.
@@ -2498,12 +2568,16 @@ _INTERNAL_SOURCE_LABEL_RE = re.compile(
 
 def _reference_row_from_finding(source_raw: object, value: object,
                                 note: object) -> "tuple[str, str] | None":
-    """(اسم مصدر عمومي، رابطه الحقيقي) لبند واحد، أو None إن تعذّر تحديد
-    مصدر عمومي حقيقي — عندها يبقى البند في الملحق الداخلي فقط (§A-2). لا
-    تخمين بالكلمات المفتاحية: إمّا مصدر معروف في `SOURCE_PUBLIC_URL`، أو
-    (لِمراجع طبقة ١ التي تحمل تسمية مصدر داخلية) حقلا `authority`/
-    `source_url` البنيويّان المخزَّنان فعلاً داخل قيمة البند نفسه
-    (`silk_requirements_agent._row_dp`)."""
+    """(اسم مصدر عمومي، رابطه الحقيقي) لِـ**معرّفٍ ذرّيٍّ واحد**، أو None إن
+    تعذّر تحديد مصدر عمومي حقيقي — عندها يبقى البند في الملحق الداخلي فقط
+    (§A-2). لا تخمين بالكلمات المفتاحية: إمّا مصدر معروف في `SOURCE_PUBLIC_URL`،
+    أو (لِمراجع طبقة ١ التي تحمل تسمية مصدر داخلية) حقلا `authority`/`source_url`
+    البنيويّان المخزَّنان فعلاً داخل قيمة البند نفسه.
+
+    HF1: `source_raw` هنا **ذرّيّ** (مصدرٌ واحد) — يُستدعى مرّةً لكل معرّفٍ من
+    `atomic_source_ids`. الأولويةُ للرابط العموميّ المُسجَّل للمعرّف نفسه
+    (إسنادٌ صحيحٌ لكلِّ مصدر) قبل رابطِ القيمة/الملاحظة البنيويّ — فبندٌ أسنَده
+    «GCC secretariat» و«GAFTA secretariat» معاً يحلّ كلٌّ لرابطه لا لرابط الأول."""
     from silk_data_layer import public_source_url
     label = _clean_source_label(source_raw)
     if _INTERNAL_SOURCE_LABEL_RE.search(str(source_raw or "")) or \
@@ -2514,10 +2588,13 @@ def _reference_row_from_finding(source_raw: object, value: object,
         return None  # لا حقل مصدر عمومي بنيوي — يبقى داخلياً فقط
     if not label or label == "—" or _client_forbidden_hits(label):
         return None
-    url = _first_url(note, value)
-    if url == "—":
-        url = public_source_url(label, arabic=True)
+    # HF1: السجلّ العموميّ للمعرّف الذرّيّ أولاً (لا يُخطئ إسنادَ مصدرٍ داخل
+    # بندٍ متعدّد المصادر)؛ ثمّ رابطُ القيمة/الملاحظة البنيويّ (لِمراجع L1
+    # المفردة كـ«EU 2017/625» التي لا مدخلَ لها في السجلّ العام).
+    url = public_source_url(label, arabic=True)
     if not url:
+        url = _first_url(note, value)
+    if not url or url == "—":
         return None
     return (label, url)
 
@@ -2529,6 +2606,7 @@ def _client_references_section(doc, dr: dict) -> None:
     مصدرٌ لم يُتحقَّق منه)."""
     doc.add_heading("المراجع", level=1)
     doc.add_paragraph(_client_methodology_paragraph(dr))
+    from silk_data_layer import atomic_source_ids
     refs: dict[str, dict] = {}
     for m in (dr.get("missions") or {}).values():
         if not isinstance(m, dict):
@@ -2540,16 +2618,20 @@ def _client_references_section(doc, dr: dict) -> None:
             # لا يُعرَض كمرجع للعميل (§A-4).
             if badge.startswith("○") or badge.startswith(RECONCILED_OUT_TAG):
                 continue
-            row = _reference_row_from_finding(
-                f.get("source"), f.get("value"), f.get("note"))
-            if row is None:
-                continue
-            name, url = row
-            key = name.strip().lower()
-            ra = str(f.get("retrieved_at") or "")
-            existing = refs.get(key)
-            if existing is None or ra > existing["retrieved_at"]:
-                refs[key] = {"name": name, "url": url, "retrieved_at": ra}
+            # HF1: سطّح المعرّفات الذرّية — بندٌ أسنَدته عدّةُ مصادرَ يُنتِج سطرَ
+            # مرجعٍ **لكلِّ مصدرٍ برابطه الصحيح** (لا معرّفٌ مركّبٌ يُخطئ الإسناد
+            # أو يُكرِّر المصدر). GAFTA (كانت بلا مدخلٍ مستقلّ) تنال سطرها الآن.
+            for raw_id in atomic_source_ids(f.get("source"), f.get("source_ids")):
+                row = _reference_row_from_finding(
+                    raw_id, f.get("value"), f.get("note"))
+                if row is None:
+                    continue
+                name, url = row
+                key = name.strip().lower()
+                ra = str(f.get("retrieved_at") or "")
+                existing = refs.get(key)
+                if existing is None or ra > existing["retrieved_at"]:
+                    refs[key] = {"name": name, "url": url, "retrieved_at": ra}
     if not refs:
         doc.add_paragraph("لا مصادر عمومية موثّقة قابلة للعرض هنا في هذه "
                           "التشغيلة.")
@@ -2560,6 +2642,57 @@ def _client_references_section(doc, dr: dict) -> None:
         if r["retrieved_at"]:
             line += f" (تاريخ الجمع: {r['retrieved_at']})"
         doc.add_paragraph(line, style="List Bullet")
+
+
+# ── HF4.3: اتساقُ حالة الكيان عبر الأقسام (بلاغ قطر) ─────────────────────────
+# «Five Group Trading Company» عُرِض حقيقةً مرصودةً في نثر §٣٫٢ بينما هو
+# «مرشّح غير موثَّق» في جدول الخلاصة — الكيانُ نفسُه بحالتين. السببُ البنيويّ:
+# نثرُ الكاتب لا يقرأ حقلَ حالةٍ، فيؤكّد اسماً تُصنّفه الجداولُ مرشَّحاً. العلاج
+# (مصالحةٌ على مستوى العرض): تُبنى مجموعةُ الكيانات **غير الموثّقة** من البيانات
+# المهيكلة (leads)، وأيُّ ورودٍ لها في النثر يُوسَم مرّةً بالحالة المحافِظة —
+# فلا يُقدَّم مرشَّحٌ كحقيقةٍ في موضعٍ ومرشَّحٍ في آخر.
+_UNVERIFIED_MARK = " (مرشّح غير موثَّق)"
+_UNVERIFIED_LEAD_RE = re.compile(r"○|غير\s*موثّ?ق|مرشّ?ح")
+
+
+def _unverified_entity_names(dr: dict) -> list:
+    """أسماءُ الكيانات المصنّفةِ غير موثّقةٍ في البيانات المهيكلة (leads) — مصدر
+    الحالة المرجعيّ. الموثَّقُ/المرصود (◐) يُستبعَد فيبقى يُعرَض حقيقةً."""
+    names: list = []
+    leads = (dr.get("importer_leads") or {}).get("leads") or []
+    for ld in leads if isinstance(leads, list) else []:
+        if not isinstance(ld, dict) or ld.get("verified") is True:
+            continue
+        dl = str(ld.get("doc_level") or "")
+        if not (dl.startswith("○") or _UNVERIFIED_LEAD_RE.search(dl)):
+            continue
+        nm = re.split(r"\s*[\(（]", str(ld.get("name") or ""))[0].strip()
+        if len(nm) >= 4:
+            names.append(nm)
+    return list(dict.fromkeys(names))
+
+
+def _annotate_unverified_entities(text: object, dr: dict) -> str:
+    """وسمُ أوّل ورودٍ نثريٍّ لكلِّ كيانٍ غير موثَّقٍ بالحالة المحافِظة (HF4.3) —
+    فيتّسق مع تصنيف الجداول. لا يمسّ كياناً موثَّقاً، ولا يُكرّر الوسمَ إن كان
+    الورودُ متبوعاً أصلاً بإشارةِ ترشيح/عدمِ توثيق خلال نافذةٍ قصيرة."""
+    s = str(text or "")
+    if not s:
+        return s
+    for nm in sorted(_unverified_entity_names(dr), key=len, reverse=True):
+        # مراجعةٌ ذاتية (MEDIUM): مطابقةُ **حدِّ كلمة** لا سلسلةٍ عمياء — وإلّا
+        # اسمٌ قصيرٌ («Nada») يُوسَم داخل كلمةٍ أطول («Nadason») فيُفسِد نثراً
+        # سليماً. الحدُّ يشمل الحرفَ العربيّ واللاتينيّ والرقم.
+        pat = re.compile(r"(?<![\w؀-ۿ])" + re.escape(nm) + r"(?![\w؀-ۿ])")
+        m = pat.search(s)
+        while m:
+            tail = s[m.end(): m.end() + 24]
+            if "موثّق" in tail or "موثَّق" in tail or "مرشّح" in tail:
+                m = pat.search(s, m.end())
+                continue
+            s = s[:m.end()] + _UNVERIFIED_MARK + s[m.end():]
+            break
+    return s
 
 
 def render_client_docx(view: dict, path: str) -> str:
@@ -2613,7 +2746,11 @@ def render_client_docx(view: dict, path: str) -> str:
         ["تاريخ الإعداد", h.get("date")]])
 
     # بنية الأقسام: اجمع أقسام الكاتب المطهَّرة تحت عناوين العميل السبعة.
-    sections = _parse_writer_sections((dr.get("report") or {}).get("text") or "")
+    # HF4.3: مصالحةُ حالة الكيان قبل التقسيم — كيانٌ غير موثَّقٍ في الجداول لا
+    # يُقدَّم حقيقةً في النثر (يُوسَم بالحالة المحافِظة مرّةً).
+    _report_text = _annotate_unverified_entities(
+        (dr.get("report") or {}).get("text") or "", dr)
+    sections = _parse_writer_sections(_report_text)
     buckets: dict[str, list[list[str]]] = {c: [] for c in _CLIENT_SECTION_ORDER}
     for title, body in sections:
         # قسم التوصيات يُقسَم عند "### خارطة طريق الدخول": تعليل الحكم يبقى
@@ -2697,9 +2834,12 @@ def render_client_docx(view: dict, path: str) -> str:
     # هو جدول مزيج الثقة (✓/◐/○) وسجلّ الأدلة القديم (استُبدل بـ«المراجع»).
     _docx_leads(doc, dr, sanitize=_client_sanitize)
 
-    # PART A (عائلة 501): نقِّ أوّلاً (استبدل أيّ متبقٍّ بمحايد + سطر إفصاح)،
-    # ثم الحارس كشبكة أمان أخيرة — فلا يسقط التصدير بـ501 على تسرّب مصطلح.
-    if _client_redact_residual(doc):
+    # PART A (عائلة 501): نقِّ أوّلاً (استبدل أيّ متبقٍّ بمحايد)، ثم الحارس
+    # كشبكة أمان أخيرة — فلا يسقط التصدير بـ501 على تسرّب مصطلح.
+    # HF4.2 (بلاغ قطر): التنقية تجري دائماً، لكن سطرَ الإفصاح عنها («نُقّيت بعض
+    # المصطلحات…») يُعلن للعميل أنّ تنظيفاً داخلياً جرى — لا محلَّ له في المُسلَّم.
+    # يُقصَر على سطح المدقّق (?internal=1) عبر `view["internal"]`.
+    if _client_redact_residual(doc) and view.get("internal"):
         doc.add_paragraph(
             "ملاحظة: نُقّيت بعض المصطلحات التقنية الداخلية من هذا التقرير "
             "تلقائياً لتقديمها بلغة تجارية؛ الأرقام ومصادرها لم تُمَسّ.",
@@ -3041,9 +3181,11 @@ def _academic_headline_table_rows(dr: dict) -> list[list[str]]:
         if not items:
             continue
         top = items[0]
+        # HF2 (بلاغ بتر رقميّ): **لا قصّ ثابت** في مسار جدول الخلاصة — الخليةُ
+        # تلتفّ (طلب الأمر). القصّ عند ٢٠٠ كان يبتر «7.12م$»→«7.» عبر فاصلٍ عشريّ.
         fact = _client_sanitize(_client_prose(
             top.get("value") if isinstance(top, dict)
-            else getattr(top, "value", None), 200))
+            else getattr(top, "value", None), None))
         if not fact:
             continue
         rows.append([label, fact])
@@ -3163,8 +3305,11 @@ def render_academic_docx(view: dict, path: str) -> str:
             "حين إعادة التصنيف وجمع البيانات تحت الرمز الصحيح.")
 
     # ٣) النتائج — سرد الكاتب القائم تحت عناوين فرعية أكاديمية.
+    # HF4.3: مصالحةُ حالة الكيان قبل التقسيم (كالقالب العميل) — لا كيانٌ غير
+    # موثَّقٍ يُقدَّم حقيقةً في نثر §٣.
     sections = dict(_parse_writer_sections(
-        ((dr.get("report") or {}).get("text") or "")))
+        _annotate_unverified_entities(
+            (dr.get("report") or {}).get("text") or "", dr)))
     doc.add_heading("٣. النتائج", level=1)
     _idx = 0
     for writer_title, academic_title in _ACADEMIC_RESULTS_MAP:
@@ -3261,7 +3406,8 @@ def render_academic_docx(view: dict, path: str) -> str:
     _docx_glossary(doc, dr, sanitize=_client_sanitize)
 
     # نفس سلسلة بوابات العميل الختامية حرفياً.
-    if _client_redact_residual(doc):
+    # HF4.2: التنقية تجري دائماً؛ سطرُ الإفصاح عنها لسطح المدقّق فقط (?internal=1).
+    if _client_redact_residual(doc) and view.get("internal"):
         doc.add_paragraph(
             "ملاحظة: نُقّيت بعض المصطلحات التقنية الداخلية من هذا التقرير "
             "تلقائياً لتقديمها بلغة تجارية؛ الأرقام ومصادرها لم تُمَسّ.",

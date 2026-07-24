@@ -96,10 +96,16 @@ def test_render_client_docx_does_not_501_on_english_source_title():
         },
     }
     path = os.path.join(tempfile.mkdtemp(), "client.docx")
+    view = build_view(result)
     # قبل «نقِّ لا ترفض» كان هذا يرفع RuntimeError (يترجمه المسار إلى 501).
-    out = R.render_client_docx(build_view(result), path)
+    out = R.render_client_docx(view, path)
     assert os.path.exists(out)
     reopened = Document(out)               # يُفتَح فعلياً (عقد البند ٣)
     text = "\n".join(p.text for p in reopened.paragraphs)
     assert "status" not in text.lower()    # نُقّي المصطلح التشغيلي
-    assert "نُقّيت بعض المصطلحات" in text   # سطر الإفصاح حاضر
+    # HF4.2 (بلاغ قطر): سطرُ إفصاح التنقية لا يصل العميل — سطحُ المدقّق فقط.
+    assert "نُقّيت بعض المصطلحات" not in text
+    iview = {**view, "internal": True}
+    iout = R.render_client_docx(iview, os.path.join(tempfile.mkdtemp(), "audit.docx"))
+    itext = "\n".join(p.text for p in Document(iout).paragraphs)
+    assert "نُقّيت بعض المصطلحات" in itext   # المدقّق يرى الإفصاح

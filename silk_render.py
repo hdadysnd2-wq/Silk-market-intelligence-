@@ -34,7 +34,10 @@ def _dp(obj: object) -> dict:
             "status": getattr(obj, "status", ""),
             # الحقل البنيويّ لسنة البيانات (الدرس ٣٣) يُحفَظ في التطبيع كي
             # يقرأه silk_staleness.fact_year في طبقة العرض/التصدير.
-            "data_year": getattr(obj, "data_year", None)}
+            "data_year": getattr(obj, "data_year", None),
+            # HF1: قائمةُ المعرّفات الذرّية تُحفَظ في التطبيع كي يسطّحها بناءُ
+            # المراجع/المنهجية فيُسنِد كلُّ مصدرٍ لرابطه (لا معرّفٌ مركّب).
+            "source_ids": tuple(getattr(obj, "source_ids", ()) or ())}
 
 
 def _decision(top: dict | None) -> dict:
@@ -588,6 +591,20 @@ _GAPS_RE = re.compile(r"فجوات:\s*([^|]*)")
 # بمسافة (تسريب مُثبَت في المختصر) — بلا `\s*` كان يفلت (تدقيق، النمط A).
 _INTERNAL_AGENT_RE = re.compile(r"LLM(?:Mission)?Agent:\s*([A-Za-z_]+)")
 _DP_TAG_RE = re.compile(r"\[?dp\d+\]?")
+# HF2 (بلاغ أقواسٍ فارغة — تقرير قطر ٢٠٢٦-٠٧-٢٣): كان `_DP_TAG_RE` يحذف نصَّ
+# الوسم «dp7» ويترك قوسَه «()» هيكلاً فارغاً («)/(»، «()»، «)///(»). العلاج
+# (نفسُ مبدأ WS4: لا قوسٌ حول محذوف): احذفِ **المجموعةَ كاملةً بقوسها** أولاً،
+# ثمّ الوسمَ المفردَ الباقي، ثمّ اطوِ أيَّ قوسٍ فارغٍ متبقٍّ. «/／» ضمن الفواصل
+# لأنّ خلايا markdown تستبدل «|»→«/» (وملء fullwidth «／»).
+_DP_GROUP_RE = re.compile(
+    r"[\(（]\s*\[?dp\d+\]?(?:\s*[،,;/／\s]\s*\[?dp\d+\]?)*\s*[\)）]")
+_EMPTY_CITATION_GROUP_RE = re.compile(r"[\(（]\s*[/／،,;\s]*[\)）]")
+# HF4.1 (تسريب سلسلةٍ إنجليزيةٍ داخلية إلى §5 — تقرير قطر): ملاحظةُ الحكم
+# المبدئيّ ثنائيةُ اللغة («Preliminary only; missing sources flagged, not
+# estimated. تنبيه: …») — النصفُ الإنجليزيّ داخليٌّ لا يصل العميل. يُزال
+# النصفُ الإنجليزيّ فقط (يبدأ بـPreliminary وينتهي بـestimated)، والعربيّ يبقى.
+_PRELIM_EN_NOTE_RE = re.compile(
+    r"Preliminary[^.\n]*?(?:estimated|flagged)[^.\n]*\.\s*", re.I)
 _WHOLE_JSON_RE = re.compile(r"^\s*[{\[].*[}\]]\s*$", re.S)
 # بلاغ حي إنتاجي (تمور/هولندا HS080410): وصلت الواجهةَ أشكالُ JSON خام لم
 # يلتقطها _WHOLE_JSON_RE المُرسَّى: (أ) سياج شيفرة "```json {...}" أو "json
@@ -939,7 +956,12 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     # قبل تعيين المفاتيح، فيُترجَم المفتاح الباقي لاسمه العربي أدناه.
     text = _MISSION_NUM_PREFIX_RE.sub("", text)
     text = _INTERNAL_AGENT_RE.sub(lambda m: _mission_label(m.group(1)), text)
+    # HF2: احذفِ مجموعةَ الاستشهاد «(dp1، dp2)» **كاملةً** قبل الوسم المفرد —
+    # وإلّا يبقى «()»/«(/)» هيكلاً فارغاً على وجه العميل (بلاغ قطر). ثمّ اطوِ
+    # أيَّ قوسٍ فارغٍ متبقٍّ (نفسُ عائلة النائب الفارغ التي عالجها WS4).
+    text = _DP_GROUP_RE.sub("", text)
     text = _DP_TAG_RE.sub("", text)
+    text = _EMPTY_CITATION_GROUP_RE.sub("", text)
     # §٢ (تدقيق «تحليل #1» DZA): تنسيق «**» شارد + رقم ثقة عربي خام — راجع
     # تعليقات الثوابت أعلاه لماذا لا يُمَسّ "## "/"### ".
     text = _strip_stray_markdown(text)
@@ -956,6 +978,9 @@ def _strip_internal_plumbing(text: str | None) -> str | None:
     # §2: لا ذكر لـ«كلود»/Claude في المُسلَّم.
     text = _CLAUDE_JSON_FAIL_RE.sub("تعذّرت قراءة بيانات هذا البند", text)
     text = _CLAUDE_WORD_RE.sub("التحليل الآلي", text)
+    # HF4.1: أزِلِ النصفَ الإنجليزيَّ الداخليَّ من ملاحظة الحكم المبدئيّ (يبقى
+    # نظيرُه العربيّ) — لا سلسلةٌ إنجليزيةٌ داخليةٌ تصل متن العميل (§5).
+    text = _PRELIM_EN_NOTE_RE.sub("", text)
     # WP-2 §2: سقالة «إذن ماذا؟»/"So what" الحرفية (من تعليمة المحلل
     # القديمة) تُنزَع — الأثر يبقى نثراً مدمجاً؛ العنوان السقالي يُحذَف.
     text = _SO_WHAT_SCAFFOLD_RE.sub("", text)
@@ -1974,6 +1999,19 @@ def build_view(result: dict) -> dict:
     # قسم البحث العميق (الموجة ٤، V5) — إضافي بحت؛ None لتحليل /analyze عادي.
     dr_view = _deep_research_view(result)
     if dr_view:
+        # HF3: حارسُ المعقولية عبر المصادر — يقارن المقاديرَ المكشوطة (حجم سوقٍ)
+        # بمرتكزات التشغيلة المُتحقَّقة (واردات/سكان) قبل التصيير، فيُسجّل العلاماتِ
+        # في المانيفست ويُضيف تحفّظَ نطاقٍ للعميل بدل تسريب رقمٍ متعارضٍ صامتاً.
+        # فشلٌ آمنٌ مفتوح: حارسٌ تشخيصيّ لا شرطُ تنفيذ.
+        try:
+            import silk_plausibility
+            _pflags = silk_plausibility.annotate(result)
+            if _pflags:
+                dr_view["plausibility_flags"] = _pflags
+                dr_view["limits"] = (silk_plausibility.caveat_lines(_pflags)
+                                     + list(dr_view.get("limits") or []))
+        except Exception:  # noqa: BLE001
+            pass
         limits = dr_view["limits"] + limits
     # ترويسة 2B: التغطية الإجمالية % = مُسهم/مُحاوَل عبر أقسام السوق الأعلى.
     top_cov = _section_coverage(markets[0]) if markets else {}
@@ -2017,7 +2055,10 @@ def build_view(result: dict) -> dict:
         "provenance": _provenance(result),   # Stage 2A: لا فشل صامتاً
         # اقتصاد البيانات (persist-5): عدّاد مرصود — مخزن/ذاكرة مقابل جلب حي.
         "data_economics": result.get("data_economics"),
-        "note": result.get("note"),
+        # HF4.1: ملاحظةُ التشغيلة تمرّ عبر مُطهِّر المتن (كملخّصات البعثات/المحلل
+        # أصلاً) — فلا يتسرّب نصفُها الإنجليزيُّ الداخليّ لأيّ سطحِ عميل (§5).
+        "note": (_strip_internal_plumbing(result.get("note"))
+                 if isinstance(result.get("note"), str) else result.get("note")),
         # التحليل الاحترافي (silk_ai_judge.ai_report) — يحلّ محل الخلاصة
         # الحتمية (exec_summary) في التقرير المصدَّر حين يتوفر؛ None = غياب
         # مفتاح/فشل النداء (ظاهر لا محذوف)، والقالب يرجع حينها لـ exec_summary.
