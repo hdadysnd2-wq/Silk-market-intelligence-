@@ -15,8 +15,10 @@
 | 1 | **This audit directive** | session message | ✅ | n/a |
 | 2 | **Phase-1 gap elimination** | no standalone directive file on disk; reconstructed from `docs/WS_RECONCILIATION_2026-07-23.md` + `docs/DEEP_RESEARCH_DECISIONS.md` ledger + owner's message | ✅ | **WS1–WS11** (incl. WS4a/b/c). WS2/WS3/WS6 originally "undefined" in-repo; **owner supplied definitions**: WS2 = IndicatorResolver fallback chains, WS3 = snapshot cache for slow-moving official datasets, WS6 = derived-metrics engine. |
 | 3 | **Hotfix directive** | no standalone file; ledger `docs/DEEP_RESEARCH_DECISIONS.md:2095–2136` + PR #168 | ✅ | **HF1–HF4** |
-| 4 | **Generalization directive** | described as attached; **did not materialize as readable content** (no `docs/directives/`, no file carrying `G1`–`G6`, nothing in session context but the owner's prose theme "market generalization") | ⚠️ **theme only** | **G1–G6 item text NOT available** → Part A rows = UNKNOWN (directive text not retained/received) |
-| 5 | **Analysis-depth directive** | as above; **did not materialize** (no file carrying `AWS1`–`AWS6`) | ⚠️ **theme only** | **AWS1–AWS6 item text NOT available** → Part A rows = UNKNOWN |
+| 4 | **Generalization directive (G1–G6)** | attached in session (`silkmigeneralizationdirective.md`), read in full 2026-07-24 | ✅ | **G1–G6** enumerated below (was UNKNOWN in the first pass; now evidenced) |
+| 5 | **Analysis-Depth directive (AWS1–AWS6)** | attached in session (`silkmianalysisdeepeningdirective.md`), read in full 2026-07-24 | ✅ | **AWS1–AWS6** enumerated below (was UNKNOWN; now evidenced) |
+
+> **Update (2026-07-24, post-attachment).** Both previously-missing directives arrived and were read in full. The two UNKNOWN Part A rows are now converted to evidenced statuses (below). Two structural facts from these texts reshape the roadmap: (i) **G explicitly precedes AWS** — Generalization directive line 86: *"Do not begin the analysis-depth mission until this layer lands — deep synthesis over market-specialized plumbing would generalize badly."* (ii) The directives **name my DEF findings as their own workstreams**: DEF-1 = **G4.1**, DEF-4 = **AWS6.2**, DEF-2 is a **G5** hardcode-lint symptom. Roadmap updated accordingly.
 
 **Also read (on `a8abee0`):** `CLAUDE.md`; `docs/WS_RECONCILIATION_2026-07-23.md`; `docs/DEEP_RESEARCH_DECISIONS.md` (HF block + accepted-risk ledger); `docs/LESSONS.md` + `tests/test_regression_registry.py` (62 incident guards) + `tests/test_lessons_enforcement.py`; `docs/EXECUTION_PLAN.md`; `docs/GENERICNESS_AUDIT.md`; `docs/EXTERNAL_SERVICES_FAILURE_AUDIT.md`; the code (`silk_*.py`, `api.py`, `correlation.py`, `web/index.html`, `.github/workflows/*.yml`); `samples/`.
 
@@ -58,8 +60,34 @@ Status vocabulary: **DONE** (merged + guarded) / **PARTIAL** (some shipped, rema
 | **HF2** | Truncation mid-number / empty parens | **DONE** | `silk_reports.py:168 _trim_sentence`; `silk_render.py:599 _DP_GROUP_RE,:601 _EMPTY_CITATION_GROUP_RE`. **PR #168** | — |
 | **HF3** | Cross-source plausibility guard | **DONE — but Qatar/importer-shaped** (see Part B / **DEF-1**) | `silk_plausibility.py` (motivating case Qatar × 200811 in docstring `:6-7`); `:147 check_magnitudes,:207 annotate,:249 caveat_lines`. **PR #168** | Shape defect open — see DEF-1 |
 | **HF4** | Minor fixes (EN prelim-note strip, sanitize disclosure gating, entity annotation, weight-gap wording) | **DONE** | `DEEP_RESEARCH_DECISIONS.md:2129-2136`; tests `test_hf_...`. **PR #168** | — |
-| **G1–G6** | Generalization directive | **UNKNOWN** | **Directive text not on disk / not received.** Cannot enumerate or status the items. | Provide G1–G6 item text to populate this row. Substance (market-agnosticism) is audited from code in Part B / Part F Q1 regardless. |
-| **AWS1–AWS6** | Analysis-depth directive | **UNKNOWN** | **Directive text not on disk / not received.** | Provide AWS1–AWS6 item text. The underlying symptom (data-starved → template report) is characterized in `docs/GENERICNESS_AUDIT.md` and Part F Q3. |
+### Generalization directive (G1–G6) — status on `a8abee0`
+
+> Whole-layer verdict: **NOT STARTED** (data-first profile layer does not exist). A parallel branch is reportedly building this — **excluded from this snapshot**. The DEF findings in Part B are the un-done evidence.
+
+| ID | Intent (one line) | Status | Evidence (file:line / test) | What remains |
+|----|-------------------|--------|-----------------------------|--------------|
+| **G1** | Market Profile Registry `data/market_profiles.yaml` (identity, trade regime, reporting tier, regulatory regime, logistics, source-availability) | **NOT STARTED** | File absent (`ls data/market_profiles.yaml` → not found). Only precursor: `silk_prerun.origin_iso3()` config pattern (`silk_prerun.py:33-35`) | Build the registry + four golden-case markets, each field with `source_url`+`review_date` |
+| **G2** | Product Profile Registry `data/product_profiles.yaml` (HS/class, ingredient class, storage, **plausibility band**, units) | **NOT STARTED** | File absent | Build registry; the per-product-class per-capita band feeds G4.1 |
+| **G3** | Profile-aware `IndicatorResolver` chains (completes WS2) | **NOT STARTED** | No `IndicatorResolver` (grep 0 hits; = WS2). Only inline fallbacks `silk_data_layer.py:549-556,:514` | Compose chains at runtime from profile (mirror-promote on `reporting_quality: weak`, skip unavailable connectors, profile-ordered tariff chain) |
+| **G4.1** | **Plausibility reads profiles, not "imports≈market size"** — domestic-production term; per-capita from product band; remove hardcoded multiplier | **NOT STARTED** | This is exactly **DEF-1** un-done: `silk_plausibility.py:100-103` fixed `20×` multiplier, no domestic-production term | = roadmap #2. Live false-positive risk for Nigeria/India today |
+| **G4.2** | Requirements rules engine keyed `(standards_regime × ingredient_class × product_class)`, each citing its standard (GSO/EU/NAFDAC/FSSAI as one rule over different profile values) | **NOT STARTED** | Current is EU-shaped `_HS_CATEGORY` (`silk_ai_judge.py:729-763` = **DEF-3**) + partial data in `data/requirements_l1.csv`. No profile-keyed engine | = roadmap #7 |
+| **G4.3** | Corridor store keyed `(origin, destination, mode)` w/ transit time + citation | **NOT STARTED** | Only `data/ports_l1.csv`; sea-transit not held (= **WS7 gap**, `silk_research.py:1215-1218`) | Structured corridor store; missing corridor → declared gap, not code change |
+| **G5** | **Enforcement gate:** CI-blocking hardcode lint (no country/ISO/HS/standards-body in logic) + coverage-matrix test + synthetic new-market smoke | **NOT STARTED** | No lint/matrix/smoke test (grep 0 hits). DEF-2/DEF-3/DEF-5 exist **precisely because this gate is absent** | The single control that stops re-specialization. **DEF-2 is a G5-class symptom** — see roadmap #3 |
+| **G6** | Onboarding contract + `docs/ONBOARDING_MARKET.md` (add market = edit data only) | **NOT STARTED** | Doc absent | Publish after G1–G5 land |
+
+### Analysis-Depth directive (AWS1–AWS6) — status on `a8abee0`
+
+> Whole-layer verdict: **NOT STARTED as a synthesis program**, with partial structural precursors. Per directive line 86, **AWS must not begin until the G layer lands** — except its integrity spine (AWS4 + **AWS6.2**), which the directive itself sequences first.
+
+| ID | Intent (one line) | Status | Evidence (file:line) | What remains |
+|----|-------------------|--------|----------------------|--------------|
+| **AWS1** | Machine-checkable section contracts (`section_contracts.yaml`: min content, ≥8 obs IDs, contradiction reconciliation) | **PARTIAL** | No `section_contracts.yaml`. Precursors: `_section_order_issues` (`silk_ai_judge.py:1255`), `_section_substructure_issues` (`:1300`), `_writer_incomplete` (`:1210`) check presence/order/substructure only — not word-count/citation-ratio/required-elements | The contract schema + regenerate-on-fail loop |
+| **AWS2** | Discussion engine — per-axis prompt chain (triangulation / contradiction / so-what / tier-calibrated register) | **NOT STARTED** | Single narrative prompt (`silk_ai_judge.py:917`); hollow §4 is the Qatar-report evidence | The four-axis chain over the observation store |
+| **AWS3** | Recommendations engine — verdict → executable playbook (90-day plan, price band, pilot economics, triggers, KPIs) | **NOT STARTED** | No `price_positioning_band` derived metric (grep 0 hits); §7 is one generic line | Full playbook generator from observations only |
+| **AWS4** | Reproducible confidence rubric (weighted dimensions, printed thresholds, LLM narrates not invents) | **PARTIAL** | Deterministic decision score exists (`silk_decision.py:88-100`) + `JuryCommittee`; but not the 5-dimension rubric w/ gap-rate penalty, printed thresholds in Methodology, narration split | Formalize rubric + print thresholds; kill the "vibes 77%" |
+| **AWS5** | Versioned synthesis prompts (`prompts/synthesis/`) + stable cache prefix | **NOT STARTED** | No `prompts/` dir; prompts inline in `silk_ai_judge.py` | Externalize + cache-prefix |
+| **AWS6.1** | Contract validator loop (word-count, required elements, citation ratio → regenerate, max 2) | **PARTIAL** | Same precursors as AWS1; no citation-ratio/required-element validation or regenerate loop | Build the validator + bounded regenerate |
+| **AWS6.2** | **Deterministic number-provenance check that FAILS THE BUILD** (every analysis numeric matches an observation/derived-metric; orphan → build fail) | **NOT STARTED** | This is exactly **DEF-4** un-done: guard is prompt + probabilistic LLM reviewer only (`silk_ai_judge.py:917-919, 1455-1459`); no deterministic check | = roadmap #1. The hard no-fabrication guarantee for synthesis |
 
 **Cross-cutting facts for Part A**
 
@@ -133,7 +161,7 @@ The PR #168 atomic fix is **present and sound** (`silk_data_layer.py:251-264` re
 ### The spine (single points of failure)
 - **`silk_render.build_view()` (`silk_render.py:1915`) is the one convergence point** — dashboard, terminal `format_result`, Streamlit `app.py`, `silk_reports.py` (docx/client-docx/markdown/brief), and `view["brief"]` all derive from it. A break here blocks **every** output. Reports depend on **the view**, not on a product_card/profile.
 - **Two pipelines, three "research" names** (naming trap): `/analyze` → `silk_engine.analyze`; `/research` → `silk_missions.deep_research` (`api.py:1374,1404`) → `result["deep_research"]` → `_deep_research_view` (`silk_render.py:1621`) → `build_view`. **`silk_research.ResearchOrchestrator` is a dead-ish optional branch** (lazy `silk_engine.py:391`, `silk_decision.py:210`), NOT on the `/research` path — a standing confusion risk, not an active blocker.
-- **There is no "profile layer."** `product_card` (pydantic `ProductCard`, `api.py:279/337/1106`) flows only into `silk_engine.analyze` and **gates correlation** (`correlation.py:141`); absent, correlation is skipped, not blocked. `silk_product_intake.py` is structurally isolated (AST guard `test_regression_registry.py:365-377` forbids it importing the engine). So the AWS-directive question "must the profile layer land before analysis depth?" is **moot as posed — no profile layer exists to block on.**
+- **The "profile layer" is the G-directive's deliverable (G1/G2), and it does not exist yet.** It is distinct from `product_card` (pydantic `ProductCard`, `api.py:279/337/1106`), which flows only into `silk_engine.analyze` and **gates correlation** (`correlation.py:141`); absent, correlation is skipped, not blocked. `silk_product_intake.py` is structurally isolated (AST guard `test_regression_registry.py:365-377`). So the sequencing question resolves cleanly: **the G layer (which builds the market/product profiles) must land before the AWS analysis-depth layer** — this is a real, directive-mandated blocker (Generalization line 86), not a moot one. There is no separate "live baseline" layer to hold on.
 
 ### Blockers vs. safe-parallel vs. cheap-high-impact
 - **Blocker:** DEF-1 producer-market fix needs a **domestic-production signal** — FAOSTAT is already a connector (`silk_faostat_agent.py`), so the anchor can be widened without a new integration. Nothing else blocks it.
@@ -155,21 +183,38 @@ Effort in **agent work-sessions** (S ≈ 1, M ≈ 2–3, L ≈ 4+). **Impact** a
 
 | # | Item | Class | Effort | Impact | Blocks | Rationale |
 |---|------|-------|--------|--------|--------|-----------|
-| **1** | **DEF-4** — deterministic number-provenance verifier on the /research narrative (promote a prose number absent from findings to a *blocking* issue) | ARCH | M | **CLIENT** | — | Only remaining path for a fabricated number to reach a paid client report. Founding-principle breach. Tokenizer already exists (`style_digest`). |
-| **2** | **DEF-1** — de-Qatar-shape the plausibility guard: add a domestic-production anchor (FAOSTAT) or producer-market detection before caveating/dropping market-size | ARCH | M | **CLIENT** | producer-market reports | Today it discredits *true* numbers for every producer market. Owner-flagged. |
-| **3** | **DEF-2** — complete `_EU` to 27 members (or derive from the tariffs module's `_EU_ISO3`); add a guard test that the two EU lists agree | ARCH | S | **CLIENT** | EU compliance chain for 12 states | Cheap; silently drops the whole compliance section for Hungary/Romania/etc. |
+| **1** | **DEF-4 = AWS6.2** — deterministic post-generation number-provenance check that **fails the build**: every numeric in an analysis section must match an observation/derived-metric value; orphan → build fail. **NOT a second LLM reviewer.** | ARCH | M | **CLIENT** | — | Only remaining path for a fabricated number to reach a paid client report. Founding-principle breach. Tokenizer exists (`style_digest`). Directive sequences this in the integrity spine (AWS impl-order #1). |
+| **2** | **DEF-1 = G4.1** — replace the fixed "imports≈market size" premise with `imports + domestic_production − exports`; per-capita from the product profile's band; **remove the hardcoded multiplier** (a domestic-production anchor, not a threshold tweak) | ARCH | M | **CLIENT** | producer-market reports | Today it discredits *true* numbers for every producer market. Owner-flagged. G impl-order #2. Needs a minimal G2 product-band + a `domestic_production_significant` signal (FAOSTAT already wired). |
+| **3** | **DEF-2** — complete `_EU` to 27 (derive from the tariffs module's `_EU_ISO3`) + guard test the two lists agree. **Then sweep every other hardcoded bloc/regime list for the same 15-of-27 incompleteness class** (GCC, GAFTA, animal chapters, `_HS_CATEGORY` regimes) — 15-of-27 is a **symptom of the missing G5 hardcode lint**, not a one-off | ARCH | S→M | **CLIENT** | EU compliance chain for 12 states | Silently drops the whole compliance section for Hungary/Romania/+10. The sweep is the interim manual form of G5 until the lint lands. |
 | **4** | **DEF-8** — lessons-enforcement/AST test asserting every value-bearing collector sets `data_year` | ARCH | S | CLIENT (prevents regression) | — | Locks the Yemen-2008 family shut before the next collector reopens it. |
 | **5** | **DEF-7** — remove or visibly mark the stale wrong-HS sample; record "no real Qatar reports retained" | LOCAL | S | ENG | — | Landmine in `samples/`; also the audit's stated subjects are missing. |
-| **6** | **Genericness / analysis-depth** — make the enrichment layers actually fire for a normal run and raise market-specific content above the ~18–53% floor (this is the substance of the unread **AWS** directive) | ARCH | L | **CLIENT** | v1 "professional" bar | The difference between a real study and a token-substituted template. Scope against `build_view` + flag activation, not a profile layer. **Needs AWS text to finalize scope.** |
+| **6** | **Analysis-Depth program (the full AWS directive)** — section contracts (AWS1), discussion engine (AWS2), recommendations playbook (AWS3), reproducible confidence rubric (AWS4), versioned/cached prompts (AWS5), validator loop (AWS6.1). Raises market-specific content above the ~18–53% floor into decision-grade output | ARCH | L | **CLIENT** | v1 "professional" bar | The difference between a data dump and a study a practitioner executes Monday. **Now scoped = AWS1–AWS6.1** (AWS6.2 is pulled out as #1). **Gated by G:** directive line 86 forbids starting deep synthesis before the G layer lands. AWS4 rubric can proceed alongside the integrity spine. |
+| **6b** | **Report retention + fixture hygiene** — retain real generated client outputs in-repo (the audit's three Qatar × 200811 reports were unrecoverable); mark **every** fixture `TEST-RUN`/`superseded`, starting with the `040510` peanut-butter sample | LOCAL | S | ENG | audit/repro trail | DEF-7: the unmarked wrong-HS fixture proves the hazard; and you cannot audit reports you did not keep. |
+| **6c** | **Packaging defect — bare checkout can't run tests.** Pin `pandas` (currently transitive-only via `pytrends`) as a top-level `requirements.txt` entry; add a CI job that runs the suite from a clean clone | LOCAL | S | ENG | reliable CI on fresh clones | A fresh clone fails collection with 5 `ModuleNotFoundError` — a real onboarding/CI-reproducibility defect, not just fragility. |
 | **7** | **DEF-3 / DEF-9** — move standards/regulation emphasis out of `_HS_CATEGORY`/`silk_research` string-match into `data/requirements_l1.csv`; select by market | ARCH | M | CLIENT (non-EU targets) | correct non-EU compliance language | Removes the EU-shape from the judge for every non-EU market. |
 | **8** | **DEF-10** — widen the plausibility guard beyond market-size and make the caveat unconditional for client exports (remove the `=0` off-switch on the delivery path) | LOCAL | S | CLIENT | — | Closes the price/CAGR/HHI gap and the opt-out. |
-| **9** | pandas → top-level `requirements.txt`; wire **Rung 4** (dry cost-path) into a workflow | LOCAL | S | ENG | reliable CI | Removes transitive-dep CI fragility; closes the one unwired rung. |
+| **9** | Wire **Rung 4** (dry cost-path) into a workflow (pandas-pinning moved to #6c) | LOCAL | S | ENG | — | Closes the one unwired rung. |
 | **10** | **DEF-5 / DEF-6** — route all origin through `origin_iso3()`; rename `saudi_*` pillars to origin-relative | ARCH | L | ENG (today) / CLIENT (if multi-origin) | multi-origin product | **Only if the G directive wants multi-origin.** Otherwise correct-by-premise; do not spend. |
 | **11** | Consolidate WS2 (`IndicatorResolver`), WS3 (snapshot-cache module), WS6 (derived-metrics engine) into named modules | LOCAL | M | ENG | — | Pure label/refactor of working capability. Lowest value. |
 
-**v1 release cut (a report a paying exporter would call professional):** **#1, #2, #3, #4, #5, #6.** These are the items where the client sees a fabricated number, a discredited-true number, a missing compliance section, a stale year, or a generic template. Everything from #7 down is post-v1 polish or engineer-facing, **except** #7/#8 which strengthen non-EU correctness and should land soon after.
+**v1 release cut (a report a paying exporter would call professional):** **#1, #2, #3, #4, #5, #6 (+6b, +6c).** These are the items where the client sees a fabricated number, a discredited-true number, a missing compliance section, a stale year, or a generic template. Everything from #7 down is post-v1 polish or engineer-facing, **except** #7/#8 which strengthen non-EU correctness and should land soon after.
 
-**Post-v1:** #7, #8, #9, #10 (conditional on G), #11.
+**Post-v1:** #7, #8, #9, #10 (conditional on G — DEF-5/6 are the origin half of the G layer), #11.
+
+### Execution order (owner-set, one scoped PR each, stop between)
+
+After **#171 merges**, the immediate three integrity/correctness PRs — pulled forward because each is a live client-facing hazard:
+
+1. **PR-a — #3 (DEF-2, `_EU`→27 + bloc-list sweep).** Interim manual form of **G5**; note the link in the PR so the eventual lint subsumes it.
+2. **PR-b — #2 (DEF-1 = G4.1).** Domestic-production anchor, **not** a threshold tweak. Carries a minimal G2 product-band as its data dependency.
+3. **PR-c — #1 (DEF-4 = AWS6.2).** Deterministic number-provenance check that fails the build. **Not** a second LLM reviewer.
+
+**Then the layer sequence, per the directives' own ordering (do not reorder):**
+
+4. **G layer (G1→G2→G3→G4.2/G4.3→G5→G6).** Data-first. G4.1 already landed as PR-b; G5's lint subsumes PR-a's sweep. This is roadmap #7 + #10 + #11 folded into the directive's G sequence.
+5. **AWS layer (#6: AWS1→AWS2→AWS3→AWS5/AWS6.1; AWS4 may run alongside the spine).** **Hard gate — Generalization directive line 86:** deep synthesis must not begin until the G layer lands, or it re-specializes to today's markets. AWS6.2 already landed as PR-c.
+
+This ordering **corrects** the first-pass roadmap, which listed the analysis-depth work (#6) inside the v1 cut without the G-before-AWS gate. The client-visible integrity fixes (#1–#5, 6b, 6c) still ship first; the *full* AWS synthesis buildout waits on G.
 
 ---
 
@@ -209,7 +254,7 @@ Roadmap **#1–#6**: (a) close the fabricated-number path (#1), (b) stop discred
 **4. Which prior directive items are now obsolete or wrong and should be dropped rather than done?**
 - **HF3 "done"** — drop the "done" status; it encoded the Qatar shape (DEF-1) and needs the producer-market follow-up, not closure.
 - **WS2/WS3/WS6 as label-reconciliation** — drop as busywork; the capability exists (Part A). Only build the named modules if a concrete need appears (roadmap #11, lowest).
-- **The AWS "profile layer → analysis depth → live baseline" sequencing** — wrong as posed; **no profile layer exists** (Part C). Re-scope against `build_view` + enrichment-flag activation.
+- **Not obsolete after all:** the G-before-AWS sequencing (Generalization line 86) is **correct and mandatory** — deep synthesis over market-specialized plumbing would re-specialize. Keep it. (My first-pass claim that "no profile layer exists to block on" is corrected: the profile layer is exactly what G1/G2 build, and it is NOT STARTED — so it genuinely blocks AWS.)
 - **WS1 six-rung enum + `method`** — leave deferred (owner text-decision); not obsolete, just not now.
 
 **5. If you could only do three things next, which three, and why?**
@@ -222,4 +267,4 @@ Roadmap **#1–#6**: (a) close the fabricated-number path (#1), (b) stop discred
 ---
 
 ## Definition-of-done check
-`## Sources Read` is complete and verifiable (SHA-pinned; two directives declared missing, not reconstructed). Part D is the single ordered list; its **v1 cut (#1–#6)** defines "finished" for a ship-worthy report. Remaining gate on full completeness: **G1–G6 and AWS1–AWS6 item text** — supply it to convert those two Part A rows and finalize roadmap #6/#10 scope.
+`## Sources Read` is complete and verifiable (SHA-pinned). All five directives now read in full; the two formerly-UNKNOWN rows (G1–G6, AWS1–AWS6) are converted to evidenced statuses against `a8abee0`. Part D is the single ordered list; its **v1 cut (#1–#5, 6b, 6c)** defines "finished" for a ship-worthy report, with the **full AWS synthesis (#6) gated behind the G layer** per directive line 86. Execution proceeds one scoped PR at a time (owner order: PR-a #3 → PR-b #2 → PR-c #1 → G layer → AWS layer). No further inputs required to begin.
