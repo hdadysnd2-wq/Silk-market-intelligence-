@@ -15,8 +15,14 @@
   مرتكزٍ مُتحقَّقٍ لا حكم (لا اتهامَ رقمٍ بلا مرجعٍ نقارنه به).
 - **كلُّ علامةٍ تُسجَّل في مانيفست التشغيلة** (`view["deep_research"]
   ["plausibility_flags"]` + حدث تتبّعٍ أفضلَ جهدٍ) — قابليةُ تدقيقٍ كاملة.
+- **G4.1 (DEF-1): الإنتاجُ المحليّ يُعفي، لا مضاعِفٌ أعمى.** حين يكون المنتَجُ
+  مُنتَجاً محلياً في السوق (`product.production_category ∈
+  market.domestic_production` من بروفايل #169)، حجمُ سوقٍ يفوق الوارداتِ
+  بأضعافٍ **مشروع** (نيجيريا/الهند) فلا يُفحَص — عكسُ افتراض قطر «السوق ≈
+  الواردات». الإعفاءُ مُسجَّل (لا صامت)؛ قطر (بلا إنتاجٍ محلّيّ) تبقى مضبوطة.
 
-هرمتيّ بالكامل: صفرُ شبكةٍ وصفرُ مفتاح — يقرأ حقائقَ البعثات المُجمَّعة فقط.
+هرمتيّ بالكامل: صفرُ شبكةٍ وصفرُ مفتاح — يقرأ حقائقَ البعثات المُجمَّعة + ملفّي
+البروفايل (قرص) فقط.
 """
 from __future__ import annotations
 
@@ -144,11 +150,55 @@ def _anchors(dr: dict) -> dict:
             "gdp_per_capita_usd": gdp_pc}
 
 
+def _domestic_production_significant(result: dict) -> "tuple[bool, str]":
+    """هل المنتجُ مُنتَجٌ محلياً في السوق المستهدفة؟ (G4.1، حاملُ #169:
+    `product.production_category ∈ market.domestic_production`).
+
+    الباعث (DEF-1): كان الحارسُ يفترض «حجم السوق ≈ الواردات» — صحيحٌ لقطر
+    (إنتاجٌ محليٌّ ضئيل) لكنّه **خطأٌ لنيجيريا والهند** حيث حجمُ سوقٍ يفوق
+    الواردات بأضعافٍ مشروعٌ لأنّ المنتَج يُزرَع/يُصنَّع محلياً. فحين يكون كذلك،
+    الأرمُ القائم على الواردات (وعلى نصيب الفرد) لا يُطبَّق — لا يُتّهَم رقمٌ
+    صحيحٌ زوراً.
+
+    يقرأ ملفّي البروفايل G1/G2 (`data/market_profiles.json` /
+    `product_profiles.json`). **فشلٌ آمنٌ محافِظ**: عند غياب البروفايل أو
+    الرمز يعيد `(False, سبب)` فيبقى الحارسُ عاملاً كما كان (لا انحدار — قطر
+    تبقى مضبوطة)؛ لا شبكةَ ولا اختلاق."""
+    try:
+        import silk_profiles
+    except Exception:  # noqa: BLE001 — البروفايل غير متاح => لا إعفاء
+        return False, "طبقة البروفايل غير متاحة"
+    m = (result or {}).get("market")
+    iso3 = (str(m.get("iso3") or "") if isinstance(m, dict)
+            else str(getattr(m, "iso3", "") or ""))
+    hs = str((result or {}).get("hs_code") or "")
+    if not iso3 or not hs:
+        return False, "لا سوق/رمز في النتيجة"
+    try:
+        mp = silk_profiles.market_profile(iso3)
+        pp = silk_profiles.product_profile(hs)
+    except Exception:  # noqa: BLE001
+        return False, "تعذّر قراءة البروفايل"
+    if not mp or not pp:
+        return False, f"لا ملفّ بروفايل ({iso3}/{hs})"
+    cat = silk_profiles.cited_value(pp.get("production_category"))
+    dom = mp.get("domestic_production")
+    dom = dom if isinstance(dom, list) else silk_profiles.cited_value(dom)
+    dom_list = [str(x).strip().lower() for x in (dom or [])]
+    if cat and str(cat).strip().lower() in dom_list:
+        return True, f"«{cat}» ضمن الإنتاج المحلي المُوثَّق لـ{iso3}"
+    return False, f"«{cat or '؟'}» ليس ضمن الإنتاج المحلي لـ{iso3}"
+
+
 def check_magnitudes(result: dict) -> list:
     """علاماتُ المعقولية — قائمةُ dicts، أو [] إن لا تعارض/لا مرتكز/معطَّل.
 
     لكلِّ مقدارِ «حجم سوق» مرشّح: يُقارَن بإجمالي الواردات (مضاعِفٌ مفرطٌ لسوقٍ
     قليلةِ الإنتاج المحليّ) وبالسكان (نصيبٌ للفرد خارج نطاقٍ سليمٍ لصنفٍ واحد).
+
+    **G4.1 (DEF-1):** حين يكون المنتَجُ مُنتَجاً محلياً في السوق (بروفايل #169)،
+    يُعفى مقدارُ حجم السوق من كلا الأرمَين — حجمٌ يفوق الواردات بأضعافٍ مشروعٌ
+    للسوق المُنتِجة، فلا يُتّهَم رقمٌ صحيحٌ زوراً. الإعفاءُ يُسجَّل (لا حذفٌ صامت).
     """
     if not enabled():
         return []
@@ -160,6 +210,7 @@ def check_magnitudes(result: dict) -> list:
     population = anchors.get("population")
     max_mult = _f_env("SILK_PLAUSIBILITY_MAX_IMPORT_MULT", _DEF_MAX_IMPORT_MULT)
     max_pc = _f_env("SILK_PLAUSIBILITY_MAX_PER_CAPITA_USD", _DEF_MAX_PER_CAPITA)
+    domestic, dom_reason = _domestic_production_significant(result)
     act = action()
     flags: list = []
     for key, f in _iter_findings(dr):
@@ -168,6 +219,19 @@ def check_magnitudes(result: dict) -> list:
             continue
         val = _num_usd(f.get("value"), f.get("note"))
         if val is None or val <= 0:
+            continue
+        # G4.1: السوقُ المُنتِجة محلياً — حجمٌ يفوق الواردات مشروعٌ، لا يُفحَص
+        # بأرمِ الواردات/نصيب الفرد. الإعفاءُ مُسجَّل (auditable، لا صامت).
+        if domestic:
+            log.info("plausibility exempt [%s] %s: %s",
+                     key, val, dom_reason)
+            try:  # حدثُ تتبّعٍ أفضلَ جهد — no-op بهدوء خارج سياق التتبّع.
+                import silk_trace
+                silk_trace.record_event(
+                    event="plausibility_domestic_exempt", mission=key,
+                    claimed_usd=val, reason=dom_reason)
+            except Exception:  # noqa: BLE001
+                pass
             continue
         reasons: list = []
         detail: dict = {}
