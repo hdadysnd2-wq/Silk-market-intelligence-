@@ -440,6 +440,39 @@ def _guard_hardcoded_product_rule():
     assert top is True and bot is False, "القاعدة لا تتبع ترتيب البيانات"
 
 
+def _guard_bloc_list_single_source():
+    """LESSONS ٦٣ — عضويةُ الكتلة التجارية من مصدرٍ واحدٍ لا تتشعّب (DEF-2).
+    الحارس: (١) `silk_blocs.EU27` كاملةٌ ٢٧؛ (٢) كلُّ مستهلكٍ هو الكائنُ نفسُه
+    بالهُويّة (`is`) فلا نسخةَ قد تسقط أعضاءً؛ (٣) لا مستهلكٍ يُعيد تعريفَ مجموعةٍ
+    خامّ (يستورد المصدرَ الواحد)؛ (٤) سلوكيًا عضوٌ كان غائباً (المجر) ينال الطبقةَ
+    الكاملة ويطابق بندَ EU."""
+    import inspect
+    import silk_blocs
+    import silk_requirements_agent as reqs
+    import silk_tariffs_agent as tariffs
+    import silk_eurostat_agent as euro
+
+    assert len(silk_blocs.EU27) == 27, "EU27 ليست ٢٧ عضواً"
+    for iso in ("HUN", "ROU", "BGR", "HRV", "CYP", "EST",
+                "LVA", "LTU", "LUX", "MLT", "SVK", "SVN"):
+        assert iso in silk_blocs.EU27, f"عضوٌ غائبٌ عن EU27: {iso}"
+
+    assert reqs._EU is silk_blocs.EU27, "الاشتراطات لا تشير للمصدر الواحد"
+    assert tariffs._EU_ISO3 is silk_blocs.EU27, "التعريفة لا تشير للمصدر الواحد"
+    assert reqs._GCC is silk_blocs.GCC and tariffs._GCC_MEMBERS is silk_blocs.GCC
+    assert euro.EU_EFTA_MARKETS == silk_blocs.EU27 | silk_blocs.EFTA
+
+    for mod in (reqs, tariffs, euro):
+        assert "silk_blocs" in inspect.getsource(mod), \
+            f"{mod.__name__} لا يستورد المصدر الواحد"
+
+    # سلوكي: المجر (كانت غائبةً) تنال «مقنّن بالكامل» وتطابق بندَ EU.
+    tier, _n = reqs.codification_tier("HUN")
+    assert tier == "مقنّن بالكامل", "المجر سقطت للطبقة الجزئية"
+    eu_row = {"market": "EU", "category": "all", "direction": "import"}
+    assert reqs._matches(eu_row, "HUN", "all", "import", animal=False)
+
+
 def _guard_wrong_direction_study():
     """LESSONS ٢٥ — عائلة wrong-direction-study (Wave 1.5، A): استشارةُ بلد
     المنشأ تُعمَّم لأشقّائها. الحارس السلوكي: (١) تصدير إلى بلد المنشأ نفسه =>
@@ -1317,6 +1350,7 @@ _LESSONS = {
     60: _guard_composite_source_id_attribution,   # بلاغ قطر HF1 — إسنادٌ ذرّيّ لا مركّب
     61: _guard_renderer_truncation_and_empty_parens,  # بلاغ قطر HF2 — لا بترٌ داخل رقم/قوسٌ فارغ
     62: _guard_cross_source_plausibility,         # بلاغ قطر HF3 — حارسُ معقوليةٍ عبر المصادر
+    63: _guard_bloc_list_single_source,           # DEF-2 — عضويةُ الكتلة من مصدرٍ واحد (EU27 كاملة)
 }
 
 _TRAPS = [

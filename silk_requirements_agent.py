@@ -24,6 +24,7 @@ import functools
 import logging
 import os
 
+import silk_blocs
 from silk_data_layer import DataPoint, _today
 from silk_agents import BaseAgent, AgentReport
 
@@ -33,10 +34,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _CSV = os.path.join(_HERE, "data", "requirements_l1.csv")
 _SOURCE = "Silk L1 requirements reference (official portals / EUR-Lex)"
 
-# توسعات وسوم الأسواق — market wildcards in the reference.
-_GCC = {"ARE", "QAT", "KWT", "OMN", "BHR", "SAU"}
-_EU = {"DEU", "FRA", "ITA", "ESP", "NLD", "BEL", "AUT", "SWE", "DNK",
-       "FIN", "POL", "CZE", "PRT", "GRC", "IRL"}
+# توسعات وسوم الأسواق — market wildcards in the reference. عضويةُ الكُتل من
+# المصدر الواحد (`silk_blocs`) لا مكتوبةً صلباً هنا — DEF-2: كانت `_EU` تحمل
+# ١٥ عضواً فقط فتسقط سلسلةُ الامتثال عن ١٢ دولةً عضواً بصمت. الآن EU27 كاملة.
+_GCC = silk_blocs.GCC
+_EU = silk_blocs.EU27
 
 # فصول HS — food (01-24) والحيواني المصدر (§12.2-1).
 _FOOD_CHAPTERS = {f"{n:02d}" for n in range(1, 25)}
