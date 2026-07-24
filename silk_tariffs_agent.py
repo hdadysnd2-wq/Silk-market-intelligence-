@@ -13,6 +13,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 
+import silk_blocs
 from silk_data_layer import DataPoint, ISO3_TO_M49, M49_TO_ISO3, _today
 from silk_agents import BaseAgent, AgentReport
 
@@ -27,10 +28,7 @@ _TIMEOUT = 30
 # الاتحاد الأوروبي (رمز 918) لأن التعريفة الخارجية موحّدة؛ الاستعلام برمز
 # العضو الفردي (هولندا 528 مثلاً) لا يعيد صفوف TRN — هذا أصل فجوة التعريفة
 # المزمنة في تقارير الأسواق الأوروبية (بلاغ حي، تشغيلة تمور/هولندا الثالثة).
-_EU_ISO3 = frozenset({
-    "AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA",
-    "DEU", "GRC", "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD",
-    "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE"})
+_EU_ISO3 = silk_blocs.EU27  # المصدر الواحد لعضوية الاتحاد (DEF-2)
 _EU_WITS_CODE = "918"
 
 
@@ -55,7 +53,7 @@ def _wits_reporter_code(iso3: str) -> tuple[str | None, bool]:
 # الجمركي 2003، gcc-sg.org). السعودية طرف المنشأ فلا صفّ لها في مرجع
 # agreements_l1.csv (نطاقه الأسواق المستهدفة فقط)؛ العضوية هنا للتحقق من
 # الطرفين معاً قبل خدمة الإعفاء البيني الموثّق.
-_GCC_MEMBERS = frozenset({"SAU", "ARE", "KWT", "QAT", "BHR", "OMN"})
+_GCC_MEMBERS = silk_blocs.GCC  # المصدر الواحد لعضوية الخليج (DEF-2)
 
 
 def _gcc_documented_exemption(hs_code: str, market_iso3: str,

@@ -517,6 +517,14 @@ _SYMBOL_ANCHORS_EXTRA = [
       "def test_build_view_attaches_flags_and_caveat"]),
     (62, "tests/test_regression_registry.py",
      ["def _guard_cross_source_plausibility"]),
+    # DEF-2 (التدقيق المعماري ٢٠٢٦-٠٧-٢٤) — عضويةُ الكتلة من مصدرٍ واحد.
+    (63, "silk_blocs.py",
+     ["EU27", "EFTA", "GCC"]),
+    (63, "tests/test_bloc_lists_single_source.py",
+     ["def test_eu27_has_all_twenty_seven_members",
+      "def test_all_eu_consumers_are_the_single_source_by_identity"]),
+    (63, "tests/test_regression_registry.py",
+     ["def _guard_bloc_list_single_source"]),
 ]
 
 

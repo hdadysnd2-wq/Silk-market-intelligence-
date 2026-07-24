@@ -29,6 +29,7 @@ import logging
 
 import requests
 
+import silk_blocs
 from silk_data_layer import DataPoint, _today
 
 log = logging.getLogger(__name__)
@@ -37,16 +38,9 @@ _EUROSTAT_BASE = ("https://ec.europa.eu/eurostat/api/dissemination/"
                   "statistics/1.0/data")
 _TIMEOUT = 30
 
-# أسواق يوروستات المؤهَّلة — EU27 + EFTA (النرويج/سويسرا/آيسلندا/
-# ليختنشتاين). خارج هذه القائمة: يوروستات لا يغطي السوق إطلاقاً.
-EU_EFTA_MARKETS = frozenset({
-    # EU27
-    "AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA",
-    "DEU", "GRC", "HUN", "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD",
-    "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE",
-    # EFTA
-    "ISL", "LIE", "NOR", "CHE",
-})
+# أسواق يوروستات المؤهَّلة — EU27 + EFTA من المصدر الواحد (`silk_blocs`، DEF-2).
+# خارج هذه القائمة: يوروستات لا يغطي السوق إطلاقاً.
+EU_EFTA_MARKETS = silk_blocs.EU_EFTA
 
 # استثناء رمز يوروستات الجغرافي عن ISO2 القياسي — اليونان EL لا GR (الاستثناء
 # التاريخي الوحيد المهم عملياً لأسواق سِلك المتوقّعة).
