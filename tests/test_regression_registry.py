@@ -440,6 +440,31 @@ def _guard_hardcoded_product_rule():
     assert top is True and bot is False, "القاعدة لا تتبع ترتيب البيانات"
 
 
+def _guard_g41_domestic_production():
+    """LESSONS ٦٤ — حارسُ المعقولية يقرأ الإنتاجَ المحليّ من البروفايل
+    (DEF-1/G4.1). الحارس: (١) سوقٌ مُنتِجة (نيجيريا) لا تُوسَم؛ (٢) قطر (لا
+    إنتاجٍ محلّيّ) تبقى مضبوطة (لا انحدار)؛ (٣) الإعفاءُ مرئيٌّ في المانيفست
+    («guard_relaxed_domestic_producer») لا صامت."""
+    import silk_plausibility as P
+
+    def _blob(iso3, market_usd, imports_usd):
+        return {"market": {"iso3": iso3}, "hs_code": "200811",
+                "deep_research": {"missions": {"m": {"findings": [
+                    {"value": imports_usd, "source": "UN Comtrade",
+                     "note": f"إجمالي استيراد {iso3} من العالم"},
+                    {"value": market_usd, "source": "ويب",
+                     "note": "حجم السوق الكامل"}]}}}}
+
+    nga = _blob("NGA", "497 مليون دولار", "7,000,000 دولار")
+    assert P.check_magnitudes(nga) == [], "سوقٌ مُنتِجة (نيجيريا) وُسِمت زوراً"
+    P.annotate(nga)
+    exempt = (nga.get("deep_research") or {}).get("plausibility_exemptions")
+    assert exempt and exempt[0].get("kind") == "guard_relaxed_domestic_producer", \
+        "الإعفاءُ يجب أن يُسجَّل في المانيفست (لا صامت)"
+    qat = _blob("QAT", "497 مليون دولار", "7,000,000 دولار")
+    assert P.check_magnitudes(qat), "قطر (لا إنتاج) يجب أن تبقى مضبوطة — انحدار!"
+
+
 def _guard_bloc_list_single_source():
     """LESSONS ٦٣ — عضويةُ الكتلة التجارية من مصدرٍ واحدٍ لا تتشعّب (DEF-2).
     الحارس: (١) `silk_blocs.EU27` كاملةٌ ٢٧؛ (٢) كلُّ مستهلكٍ هو الكائنُ نفسُه
@@ -1351,6 +1376,7 @@ _LESSONS = {
     61: _guard_renderer_truncation_and_empty_parens,  # بلاغ قطر HF2 — لا بترٌ داخل رقم/قوسٌ فارغ
     62: _guard_cross_source_plausibility,         # بلاغ قطر HF3 — حارسُ معقوليةٍ عبر المصادر
     63: _guard_bloc_list_single_source,           # DEF-2 — عضويةُ الكتلة من مصدرٍ واحد (EU27 كاملة)
+    64: _guard_g41_domestic_production,           # DEF-1/G4.1 — مرتكزُ الإنتاج المحليّ (سوقٌ مُنتِجة لا تُوسَم)
 }
 
 _TRAPS = [
