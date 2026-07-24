@@ -190,21 +190,24 @@ def _domestic_production_significant(result: dict) -> "tuple[bool, str]":
     return False, f"«{cat or '؟'}» ليس ضمن الإنتاج المحلي لـ{iso3}"
 
 
-def check_magnitudes(result: dict) -> list:
-    """علاماتُ المعقولية — قائمةُ dicts، أو [] إن لا تعارض/لا مرتكز/معطَّل.
+def _scan(result: dict) -> "tuple[list, list]":
+    """المسحُ الداخليّ — يعيد `(flags, exemptions)`.
 
-    لكلِّ مقدارِ «حجم سوق» مرشّح: يُقارَن بإجمالي الواردات (مضاعِفٌ مفرطٌ لسوقٍ
-    قليلةِ الإنتاج المحليّ) وبالسكان (نصيبٌ للفرد خارج نطاقٍ سليمٍ لصنفٍ واحد).
+    `flags`: مقاديرُ «حجم سوق» متعارضةٌ مع المرتكزات (تُوسَم/تُسقَط للعميل).
+    `exemptions`: مقاديرُ أُعفيَت لأنّ المنتَجَ مُنتَجٌ محلياً (G4.1) — **تُسجَّل
+    في المانيفست** («guard_relaxed_domestic_producer») فيرى المراجعُ أنّ الحارسَ
+    وقف جانباً ولماذا. الإعفاءُ مرئيٌّ أبداً لا صامت.
 
-    **G4.1 (DEF-1):** حين يكون المنتَجُ مُنتَجاً محلياً في السوق (بروفايل #169)،
-    يُعفى مقدارُ حجم السوق من كلا الأرمَين — حجمٌ يفوق الواردات بأضعافٍ مشروعٌ
-    للسوق المُنتِجة، فلا يُتّهَم رقمٌ صحيحٌ زوراً. الإعفاءُ يُسجَّل (لا حذفٌ صامت).
+    **حدّ معروف (graduation، لا بوّابة ثنائية):** الإعفاءُ اليوم كامل — سوقٌ تُنتِج
+    حجماً هامشياً من الفئة تُعفى كنيجيريا تماماً، فيُعطَّل الأرمُ هناك. المانيفست
+    يجعل ذلك مرئياً للمراجع؛ والإصلاحُ السليم (سقفٌ يتدرّج بحجم الإنتاج المحليّ
+    المرصود) مؤجَّلٌ لـG4.x (سجلّ القرارات، صفّ «graduation»).
     """
     if not enabled():
-        return []
+        return [], []
     dr = (result or {}).get("deep_research") or {}
     if not dr:
-        return []
+        return [], []
     anchors = _anchors(dr)
     imports = anchors.get("imports_usd")
     population = anchors.get("population")
@@ -213,6 +216,7 @@ def check_magnitudes(result: dict) -> list:
     domestic, dom_reason = _domestic_production_significant(result)
     act = action()
     flags: list = []
+    exemptions: list = []
     for key, f in _iter_findings(dr):
         blob = f"{f.get('note') or ''} {f.get('value') or ''} {f.get('claim') or ''}"
         if not _kw_hit(blob, _MARKET_SIZE_KW):
@@ -221,17 +225,18 @@ def check_magnitudes(result: dict) -> list:
         if val is None or val <= 0:
             continue
         # G4.1: السوقُ المُنتِجة محلياً — حجمٌ يفوق الواردات مشروعٌ، لا يُفحَص
-        # بأرمِ الواردات/نصيب الفرد. الإعفاءُ مُسجَّل (auditable، لا صامت).
+        # بأرمِ الواردات/نصيب الفرد. الإعفاءُ مُسجَّل في المانيفست (لا صامت).
         if domestic:
-            log.info("plausibility exempt [%s] %s: %s",
-                     key, val, dom_reason)
-            try:  # حدثُ تتبّعٍ أفضلَ جهد — no-op بهدوء خارج سياق التتبّع.
-                import silk_trace
-                silk_trace.record_event(
-                    event="plausibility_domestic_exempt", mission=key,
-                    claimed_usd=val, reason=dom_reason)
-            except Exception:  # noqa: BLE001
-                pass
+            exemptions.append({
+                "kind": "guard_relaxed_domestic_producer",
+                "mission": key,
+                "source": f.get("source"),
+                "claimed_usd": val,
+                "reason": dom_reason,
+                "note": ("الحارسُ وقف جانباً: سوقٌ مُنتِجةٌ محلياً — الأرمُ القائم "
+                         "على الواردات معطَّلٌ هنا (حدُّ graduation، مؤجَّلٌ لـG4.x)"),
+                "severity": "info",
+            })
             continue
         reasons: list = []
         detail: dict = {}
@@ -265,23 +270,37 @@ def check_magnitudes(result: dict) -> list:
             "action": act,
             "severity": "high",
         })
-    return flags
+    return flags, exemptions
+
+
+def check_magnitudes(result: dict) -> list:
+    """علاماتُ المعقولية — قائمةُ dicts، أو [] إن لا تعارض/لا مرتكز/معطَّل.
+    (غلافٌ رقيقٌ حول `_scan`؛ الإعفاءاتُ تُقرأ عبر `annotate`/`exemptions`.)"""
+    return _scan(result)[0]
+
+
+def exemptions(result: dict) -> list:
+    """إعفاءاتُ G4.1 المرئية — قائمةُ «guard_relaxed_domestic_producer»."""
+    return _scan(result)[1]
 
 
 def annotate(result: dict) -> list:
-    """افحصْ ثمّ سجّلِ العلاماتِ في مانيفست التشغيلة (`deep_research
-    ["plausibility_flags"]`) + حدثَ تتبّعٍ أفضلَ جهد. يعيد العلامات.
+    """افحصْ ثمّ سجّلِ العلاماتِ والإعفاءاتِ في مانيفست التشغيلة + حدثَ تتبّع.
+    يعيد العلامات (`flags`).
 
-    عند `action="drop"`: يُعلَّم البندُ المُسبِّب `plausibility_dropped=True`
-    فيُسقطه المُصدِّرون (لا حذفٌ صامت — سببُه في المانيفست)."""
-    flags = check_magnitudes(result)
-    if not flags:
-        return flags
+    - `deep_research["plausibility_flags"]`: المقاديرُ المتعارضة (للعميل).
+    - `deep_research["plausibility_exemptions"]`: مقاديرُ أُعفيَت (G4.1) —
+      **مرئيةٌ للمراجع، ليست تحفّظاً للعميل** (لا تدخل `caveat_lines`).
+    عند `action="drop"`: يُعلَّم البندُ المُسبِّب `plausibility_dropped=True`."""
+    flags, exempt = _scan(result)
     dr = (result or {}).get("deep_research")
     if isinstance(dr, dict):
-        dr["plausibility_flags"] = flags
-        if action() == "drop":
-            _mark_dropped(dr, flags)
+        if flags:
+            dr["plausibility_flags"] = flags
+            if action() == "drop":
+                _mark_dropped(dr, flags)
+        if exempt:
+            dr["plausibility_exemptions"] = exempt
     for fl in flags:
         log.warning("plausibility flag [%s] %s: %s",
                     fl.get("mission"), fl.get("claimed_usd"), fl.get("reason"))
@@ -290,6 +309,15 @@ def annotate(result: dict) -> list:
             silk_trace.record_event(event="plausibility_flag", **fl)
         except Exception:  # noqa: BLE001
             pass
+    for ex in exempt:  # الإعفاءُ مرئيٌّ في السجلّ + التتبّع (لا صامت).
+        log.info("plausibility exempt [%s] %s: %s",
+                 ex.get("mission"), ex.get("claimed_usd"), ex.get("reason"))
+        try:
+            import silk_trace
+            silk_trace.record_event(event="plausibility_domestic_exempt", **ex)
+        except Exception:  # noqa: BLE001
+            pass
+    return flags
     return flags
 
 

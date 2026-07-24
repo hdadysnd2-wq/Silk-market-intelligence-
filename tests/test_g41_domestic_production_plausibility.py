@@ -89,13 +89,31 @@ def test_fail_safe_unprofiled_market_not_exempt():
     assert ok is False and "بروفايل" in reason
 
 
-def test_exemption_is_logged_not_silent(caplog):
-    """الإعفاءُ مُسجَّل (auditable) لا صامت."""
+def test_exemption_recorded_in_manifest_visible_to_reviewer():
+    """الإعفاءُ مرئيٌّ في المانيفست («guard_relaxed_domestic_producer»)، لا صامت —
+    فيرى المراجعُ أنّ الحارسَ وقف جانباً ولماذا (طلبُ المالك: graduation)."""
+    result = _blob("NGA", "497 مليون دولار", "7,000,000 دولار")
+    flags = P.annotate(result)
+    assert flags == [], "سوقٌ مُنتِجة: لا علامةَ عميل"
+    exempt = result["deep_research"].get("plausibility_exemptions")
+    assert exempt, "الإعفاءُ يجب أن يُسجَّل في المانيفست — لا يختفي"
+    assert exempt[0]["kind"] == "guard_relaxed_domestic_producer"
+    assert exempt[0]["severity"] == "info"
+
+
+def test_exemption_is_not_a_client_caveat():
+    """المانيفستُ للمراجع لا للعميل — الإعفاءُ لا يتسرّب كتحفّظٍ في تقرير العميل."""
+    result = _blob("NGA", "497 مليون دولار", "7,000,000 دولار")
+    flags = P.annotate(result)
+    # `caveat_lines` تُصيَّر للعميل — تقرأ العلاماتِ فقط لا الإعفاءات.
+    assert P.caveat_lines(flags) == []
+
+
+def test_exemption_logged_via_annotate(caplog):
     import logging
     with caplog.at_level(logging.INFO, logger="silk.plausibility"):
-        P.check_magnitudes(_blob("NGA", "497 مليون دولار", "7,000,000 دولار"))
-    assert any("exempt" in r.message for r in caplog.records), \
-        "الإعفاءُ يجب أن يُسجَّل في السجلّ"
+        P.annotate(_blob("NGA", "497 مليون دولار", "7,000,000 دولار"))
+    assert any("exempt" in r.message for r in caplog.records)
 
 
 # ── حراسةٌ على البيانات: البروفايل المستعمَل موجودٌ فعلاً ────────────────────
